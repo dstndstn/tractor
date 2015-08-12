@@ -193,8 +193,22 @@ class PsfExModel(object):
             self.radius = (bh+1)/2.
             self.x0,self.y0 = x0,y0
 
+    @property
+    def shape(self):
+        '''
+        Returns the shape of the PSF
+        '''
+        return self.psfbases[0].shape
+
+    @property
+    def nbases(self):
+        '''
+        Returns the number of eigen-PSFs -- the number of terms in the expansion.
+        '''
+        return self.psfbases.shape[0]
+
     def copy(self):
-        return self.getShifted(0., 0.)
+        return self.shifted(0., 0.)
 
     def shifted(self, dx, dy):
         copy = PsfExModel()
@@ -210,11 +224,16 @@ class PsfExModel(object):
         '''
         return self.psfbases
 
-    def polynomials(self, x, y):
+    def polynomials(self, x, y, powers=False):
         dx = (x - self.x0) / self.xscale
         dy = (y - self.y0) / self.yscale
         nb,h,w = self.psfbases.shape
         terms = np.zeros(nb)
+
+        if powers:
+            xpows = np.zeros(nb, int)
+            ypows = np.zeros(nb, int)
+
         for d in range(self.degree + 1):
             # x polynomial degree = j
             # y polynomial degree = k
@@ -227,6 +246,11 @@ class PsfExModel(object):
                 # It goes: order 0, order 1, order 2, ...
                 # and then j=0, j=1, ...
                 terms[ii] = amp
+                if powers:
+                    xpows[ii] = j
+                    ypows[ii] = k
+        if powers:
+            return (terms, xpows, ypows)
         return terms
 
     def fft_at(self, x, y):
@@ -238,7 +262,9 @@ class PsfExModel(object):
         '''
         psf = np.zeros_like(self.psfbases[0])
 
-        for term,base in zip(self.getPolynomialTerms(x,y), self.psfbases):
+        #print('Evaluating PsfEx at', x,y)
+        for term,base in zip(self.polynomials(x,y), self.psfbases):
+            #print('  polynomial', term, 'x base w/ range', base.min(), base.max())
             psf += term * base
 
         if nativeScale and self.sampling != 1:
@@ -251,9 +277,60 @@ class PsfExModel(object):
         return psf
 
 
+    def plot_bases(self):
+        import pylab as plt
+        N = len(self.psfbases)
+        cols = int(np.ceil(np.sqrt(N)))
+        rows = int(np.ceil(N / float(cols)))
+        plt.clf()
+        plt.subplots_adjust(hspace=0, wspace=0)
+
+        mx = self.psfbases.max()
+        nil, xpows, ypows = self.polynomials(0., 0., powers=True)
+        for i,(xp,yp,b) in enumerate(zip(xpows, ypows, self.psfbases)):
+            plt.subplot(rows, cols, i+1)
+            plt.imshow(b, interpolation='nearest', origin='lower', vmin=-mx, vmax=mx)
+            plt.xticks([])
+            plt.yticks([])
+            plt.title('x^%i y^%i' % (xp,yp))
+        plt.suptitle('PsfEx eigen-bases')
+
+    def plot_grid(self, xx, yy, term=None):
+        '''
+        Parameters
+        ----------
+        term : None or int
+            If None, plot all components.  If an integer, plot that PSF component.
+        '''
+        import pylab as plt
+
+        ima = dict(interpolation='nearest', origin='lower',
+                   vmin=-0.01, vmax=0.01)
+        nil,xpows,ypows = self.polynomials(0., 0., powers=True)
+        plt.clf()
+        i = 1
+        for y in yy:
+            for x in xx:
+                for ip,(xp,yp) in enumerate(zip(xpows, ypows)):
+                    if term is not None and term != ip:
+                        continue
+                    poly = self.polynomials(x, y)
+                    psf = poly[ip] * self.psfbases[ip,:,:]
+                    plt.subplot(len(yy), len(xx), i)
+                    i = i + 1
+                    plt.imshow(psf, **ima)
+                    plt.xticks([]); plt.yticks([])
+        if term is not None:
+            plt.suptitle('PSF component for x^%i y^%i' % (xpows[term], ypows[term]))
+
+
+        
+        
+
+
 class PixelizedPsfEx(PixelizedPSF):
-    def __init__(self, fn, ext=1):
-        self.psfex = PsfExModel(fn=fn, ext=ext)
+    def __init__(self, fn, ext=1, psfexmodel=PsfExModel):
+        self.psfex = psfexmodel(fn=fn, ext=ext)
         print('PsfEx x0,y0', self.psfex.x0, self.psfex.y0)
         # meh
         self.fn = fn
@@ -312,6 +389,8 @@ class PixelizedPsfEx(PixelizedPSF):
         for amp,base in zip(self.psfex.polynomials(px, py), fftbases):
             sumfft += amp * base
         return sumfft, (cx,cy), shape
+
+
 
 
 ### dstn originally misnamed this class "PsfEx".  We keep that name as an alias below.
