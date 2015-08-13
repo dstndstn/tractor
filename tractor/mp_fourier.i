@@ -107,14 +107,6 @@ static PyObject* mixture_profile_fourier_transform(
         }
     }
 
-    for (k=0; k<K; k++) {
-        if ((means[k*D] != means[0]) ||
-            (means[k*D+1] != means[1])) {
-            PyErr_SetString(PyExc_ValueError, "Assume all means are equal");
-            return NULL;
-        }
-    }
-
     double* factors = malloc(K*3 * sizeof(double));
     for (k=0; k<K; k++) {
         double* V = vars + k*D*D;
