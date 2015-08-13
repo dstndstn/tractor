@@ -412,8 +412,100 @@ def OLD_STUFF():
     plt.savefig('conv.png')
 
 
+def test_psfex(ps):
 
+    psf = PixelizedPsfEx('psfex-decam-00392360-S31.fits')
 
+    H,W = 100,100
+
+    cx,cy = W/2., H/2.
+
+    pixpsf = psf.constantPsfAt(cx, cy)
+
+    ph,pw = pixpsf.shape
+    xx,yy = np.meshgrid(np.arange(pw), np.arange(ph))
+    im = pixpsf.img.copy()
+    im /= np.sum(im)
+
+    cenx,ceny = np.sum(im * xx), np.sum(im * yy)
+    print 'Pixpsf centroid:', cenx,ceny
+    print 'shape:', ph,pw
+    
+    dx,dy = cenx - pw/2, ceny - ph/2
+
+    vxx = np.sum(im * (xx - cenx)**2)
+    vxy = np.sum(im * (xx - cenx)*(yy - ceny))
+    vyy = np.sum(im * (yy - ceny)**2)
+
+    gpsf = GaussianMixturePSF(1., dx, dy, vxx, vyy, vxy)
+    
+    tim = Image(data=np.zeros((H,W)), invvar=np.ones((H,W)),
+                psf=psf)
+
+    xx,yy = np.meshgrid(np.arange(W), np.arange(H))
+
+    star = PointSource(PixPos(cx, cy), Flux(100.))
+    gal = ExpGalaxy(PixPos(cx, cy), Flux(100.), EllipseE(1., 0., 0.))
+
+    tr1 = Tractor([tim], [star])
+    tr2 = Tractor([tim], [gal])
+
+    disable_galaxy_cache()
+    tr1.disable_cache()
+    tr2.disable_cache()
+    
+    tim.psf = psf
+    mod = tr1.getModelImage(0)
+
+    im = mod.copy()
+    im /= im.sum()
+    cenx,ceny = np.sum(im * xx), np.sum(im * yy)
+    print 'Star model + PsfEx centroid', cenx, ceny
+    
+    
+    plt.clf()
+    dimshow(mod)
+    plt.title('Star model, PsfEx')
+    ps.savefig()
+
+    tim.psf = pixpsf
+
+    mod = tr1.getModelImage(0)
+    plt.clf()
+    dimshow(mod)
+    plt.title('Star model, pixpsf')
+    ps.savefig()
+
+    tim.psf = gpsf
+
+    mod = tr1.getModelImage(0)
+    plt.clf()
+    dimshow(mod)
+    plt.title('Star model, gpsf')
+    ps.savefig()
+
+    
+    tim.psf = psf
+    mod = tr2.getModelImage(0)
+
+    im = mod.copy()
+    im /= im.sum()
+    cenx,ceny = np.sum(im * xx), np.sum(im * yy)
+    print 'Gal model + PsfEx centroid', cenx, ceny
+    
+    plt.clf()
+    dimshow(mod)
+    plt.title('Gal model, PsfEx')
+    ps.savefig()
+
+    tim.psf = pixpsf
+    mod = tr2.getModelImage(0)
+
+    plt.clf()
+    dimshow(mod)
+    plt.title('Gal model, pixpsf')
+    ps.savefig()
+    
 
 if __name__ == '__main__':
     disable_galaxy_cache()
@@ -422,10 +514,11 @@ if __name__ == '__main__':
     parser = optparse.OptionParser()
     opt,args = parser.parse_args()
 
-    #test_fft(ps)
-    
-    test_model_masks(ps)
+    test_psfex(ps)
     sys.exit(0)
 
+    test_fft(ps)
+    test_model_masks(ps)
     test_galaxy_grid(ps, args)
+
     

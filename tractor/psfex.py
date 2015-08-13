@@ -426,7 +426,7 @@ class PixelizedPsfEx(PixelizedPSF):
             self.fftcache[sz] = (fftbases,cx,cy,shape)
 
         # Now sum the bases by the polynomial coefficients
-        sumfft = np.zeros(fftbases[0].shape)
+        sumfft = np.zeros(fftbases[0].shape, fftbases[0].dtype)
         for amp,base in zip(self.psfex.polynomials(px, py), fftbases):
             sumfft += amp * base
         return sumfft, (cx,cy), shape

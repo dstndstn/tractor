@@ -512,6 +512,12 @@ class ProfileGalaxy(object):
         mux = dx - ix0
         muy = dy - iy0
 
+        # print('px,py', px,py)
+        # print('px0,py0', px0,py0)
+        # print('dx,dy', dx,dy)
+        # print('ix0,iy0,', ix0,iy0)
+        # print('mux,muy', mux,muy)
+        
         amix = self._getAffineProfile(img, mux, muy)
         Fsum = amix.getFourierTransform(w, v)
 
@@ -583,6 +589,13 @@ class ProfileGalaxy(object):
             
         else:
             print 'iFFT', (pW,pH)
+
+            # psfim = np.fft.irfft2(P)
+            # print 'psf iFFT', psfim.shape, psfim.sum()
+            # psfim /= psfim.sum()
+            # xx,yy = np.meshgrid(np.arange(pW), np.arange(pH))
+            # print 'centroid', np.sum(psfim*xx), np.sum(psfim*yy)
+
             G = np.fft.irfft2(Fsum * P, s=(pH,pW))
 
             # print 'Evaluating iFFT with shape', pH,pW
