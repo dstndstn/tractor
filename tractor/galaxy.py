@@ -588,7 +588,7 @@ class ProfileGalaxy(object):
                 assert(G.shape == (mh,mw))
             
         else:
-            print 'iFFT', (pW,pH)
+            #print 'iFFT', (pW,pH)
 
             # psfim = np.fft.irfft2(P)
             # print 'psf iFFT', psfim.shape, psfim.sum()
