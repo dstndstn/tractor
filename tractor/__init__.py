@@ -1,4 +1,4 @@
-from engine import *
+from .engine import *
 from ducks import *
 from basics import *
 #from nasasloan import *

@@ -212,7 +212,8 @@ class PsfExModel(object):
 
     def shifted(self, dx, dy):
         copy = self.__class__()
-        for key in ['sampling', 'psfbases', 'xscale', 'yscale', 'degree', 'radius']:
+        for key in ['sampling', 'psfbases', 'xscale', 'yscale', 'degree', 'radius',
+                    'x0', 'y0']:
             setattr(copy, k, getattr(self, k))
         copy.shift(dx, dy)
         return copy
