@@ -110,6 +110,15 @@ def get_unwise_tractor_image(basedir, tile, band, bandname=None, masked=True,
     roislice = (slice(y0,y1), slice(x0,x1))
 
     img = img[roislice]
+
+    if not os.path.exists(ivfn) and os.path.exists(ivfn.replace('.fits.gz', '.fits')):
+        ivfn = ivfn.replace('.fits.gz','.fits')
+    if not os.path.exists(nifn) and os.path.exists(nifn.replace('.fits.gz', '.fits')):
+        nifn = nifn.replace('.fits.gz','.fits')
+    if not os.path.exists(nufn) and os.path.exists(nufn.replace('.fits.gz', '.fits')):
+        nufn = nufn.replace('.fits.gz','.fits')
+
+
     print 'Reading', ivfn
     invvar = fitsio.FITS(ivfn)[0][roislice]
 
