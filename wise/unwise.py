@@ -127,6 +127,7 @@ def get_unwise_tractor_image(basedir, tile, band, bandname=None, masked=True,
             continue
 
         foundFiles = True
+        break
 
     if not foundFiles:
         raise IOError('unWISE files not found in ' + basedirs + 'for tile' + tile)
