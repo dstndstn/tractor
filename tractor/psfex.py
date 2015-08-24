@@ -360,8 +360,11 @@ class PsfExModel(object):
 
 
 class PixelizedPsfEx(PixelizedPSF):
-    def __init__(self, fn, ext=1, psfexmodel=PsfExModel):
-        self.psfex = psfexmodel(fn=fn, ext=ext)
+    def __init__(self, fn, ext=1, psfexmodel=PsfExModel, psfex=None):
+        if fn is not None:
+            self.psfex = psfexmodel(fn=fn, ext=ext)
+        if psfex is not None:
+            self.psfex = psfex
         print('PsfEx x0,y0', self.psfex.x0, self.psfex.y0)
         # meh
         self.fn = fn
@@ -382,8 +385,8 @@ class PixelizedPsfEx(PixelizedPSF):
         return s
 
     def getShifted(self, dx, dy):
-        s = PixelizedPsfEx(None)
-        s.psfex = self.psfex.shifted(dx, dy)
+        psfex = self.psfex.shifted(dx, dy)
+        s = self.__class__(None, psfex=psfex)
         return s
 
     def shift(self, dx, dy):
