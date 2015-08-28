@@ -491,8 +491,8 @@ class ProfileGalaxy(object):
             halfsize = max(halfsize, max(psfw/2., psfh/2.))
 
         P,(px0,py0),(pH,pW) = psf.getFourierTransform(px, py, halfsize)
-        w = np.fft.rfftfreq(pW)
-        v = np.fft.fftfreq(pH)
+        v = np.fft.rfftfreq(pW)
+        w = np.fft.fftfreq(pH)
 
         # print 'PSF Fourier transform size:', P.shape
         # print 'Padded size:', pH,pW
@@ -519,13 +519,13 @@ class ProfileGalaxy(object):
         # print('mux,muy', mux,muy)
         
         amix = self._getAffineProfile(img, mux, muy)
-        Fsum = amix.getFourierTransform(w, v)
+        Fsum = amix.getFourierTransform(v, w)
 
         if False:
             # for fakedx in []:#0]:#, 1, 10]:
 
             amix2 = self._getAffineProfile(img, mux + fakedx, muy)
-            Fsum2 = amix2.getFourierTransform(w, v)
+            Fsum2 = amix2.getFourierTransform(v, w)
 
             plt.clf()
             plt.subplot(3,3,1)
