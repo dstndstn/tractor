@@ -143,33 +143,39 @@ class MixtureOfGaussians():
             newk = nextnewk
         return MixtureOfGaussians(newamp, newmean, newvar)
 
-    def getFourierTransform(self, w, v, use_mp_fourier=True):
+    def getFourierTransform(self, v, w, use_mp_fourier=True):
+        '''
+        v: FFT frequencies in the x direction
+        w: FFT frequencies in the y direction
+
+        eg,
+
+        H,W = 100,99
+        img = np.zeros((H,W))
+        F = np.fft.rfft2(img)
+        v = np.fft.rfftfreq(W)
+        w = np.fft.fftfreq(H)
+        
+        '''
         if mp_fourier and use_mp_fourier:
             f = mp_fourier.mixture_profile_fourier_transform(
-                self.amp, self.mean, self.var, w, v)
+                self.amp, self.mean, self.var, v, w)
             return f
 
         Fsum = None
 
-        if not hasattr(self, 'ivar'):
-            self.ivar = np.zeros((self.K, self.D, self.D))
-            for k in range(self.K):
-                self.ivar[k,:,:] = np.linalg.inv(self.var[k,:,:])
-
         for k in range(self.K):
-            #V = self.var[k,:,:]
-            #iv = np.linalg.inv(V)
-            iv = self.ivar[k,:,:]
             mu = self.mean[k,:]
             amp = self.amp[k]
-            a,b,d = 0.5 * iv[0,0], 0.5 * iv[0,1], 0.5 * iv[1,1]
-            det = a*d - b**2
-            F = (np.exp(-np.pi**2/det *
-                        (a * v[:,np.newaxis]**2 +
-                         d * w[np.newaxis,:]**2 -
-                         2*b*v[:,np.newaxis]*w[np.newaxis,:]))
-                         * np.exp(-2.*np.pi* 1j *(mu[0]*w[np.newaxis,:] + 
-                                                  mu[1]*v[:,np.newaxis])))
+            a = self.var[k, 0, 0]
+            b = self.var[k, 0, 1]
+            d = self.var[k, 1, 1]
+            F = (np.exp(-2. * np.pi**2 *
+                        (a * v[np.newaxis,:]**2 +
+                         d * w[:,np.newaxis]**2 +
+                         2*b*v[np.newaxis,:]*w[:,np.newaxis]))
+                         * np.exp(-2.*np.pi* 1j *(mu[0]*v[np.newaxis,:] +
+                                                  mu[1]*w[:,np.newaxis])))
 
             if Fsum is None:
                 Fsum = amp * F
@@ -377,7 +383,6 @@ class MixtureOfGaussians():
         return result.reshape((nx, ny))
 
     evaluate = evaluate_2
-    #evaluate_grid = evaluate_grid_hogg
     evaluate_grid = evaluate_grid_dstn
 
 def mixture_to_patch(mixture, x0, x1, y0, y1, minval=0., exactExtent=False):

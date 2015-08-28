@@ -523,9 +523,8 @@ class ProfileGalaxy(object):
         fft_timing.append((timing_id, 'psf_fft', t1.cpu_seconds_since(t0),
                            (haveExtent, halfsize)))
 
-        w = np.fft.rfftfreq(pW)
-        v = np.fft.fftfreq(pH)
-
+        v = np.fft.rfftfreq(pW)
+        w = np.fft.fftfreq(pH)
 
         # print 'PSF Fourier transform size:', P.shape
         # print 'Padded size:', pH,pW
@@ -557,7 +556,7 @@ class ProfileGalaxy(object):
 
         t1 = CpuMeas()
 
-        Fsum = amix.getFourierTransform(w, v)
+        Fsum = amix.getFourierTransform(v, w)
         
         t2 = CpuMeas()
 
@@ -566,13 +565,11 @@ class ProfileGalaxy(object):
         fft_timing.append((timing_id, 'get_ft', t2.cpu_seconds_since(t1),
                            (haveExtent,)))
 
-        # print 'Galaxy FFT:', Fsum.shape
-        
         if False:
             # for fakedx in []:#0]:#, 1, 10]:
 
             amix2 = self._getAffineProfile(img, mux + fakedx, muy)
-            Fsum2 = amix2.getFourierTransform(w, v)
+            Fsum2 = amix2.getFourierTransform(v, w)
 
             plt.clf()
             plt.subplot(3,3,1)

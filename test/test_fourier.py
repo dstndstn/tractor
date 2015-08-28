@@ -13,6 +13,74 @@ from tractor.ellipses import *
 from astrometry.util.plotutils import *
 from astrometry.util.ttime import *
 
+def test_mixture_profiles(ps):
+
+    from tractor.mixture_profiles import MixtureOfGaussians
+
+    W,H = 32,32
+    cx,cy = W/2 + 0.5, H/2
+    
+    vx,vy = 4., 16.
+    vxy = 2.
+    mp = MixtureOfGaussians(1., [cx, cy], np.array([[[vx,vxy],[vxy,vy]]]))
+    print mp
+
+    grid = mp.evaluate_grid_dstn(0, W, 0, H, 0., 0.)
+    print grid
+    grid = grid.patch
+    
+    plt.clf()
+    dimshow(grid)
+    ps.savefig()
+
+    F = np.fft.rfft2(grid)
+    v = np.fft.rfftfreq(W)
+    w = np.fft.fftfreq(H)
+
+    #print 'F', F
+    #print 'w', w
+    #print 'v', v
+    
+    F2 = mp.getFourierTransform(v, w)
+    
+    F3 = mp.getFourierTransform(v, w, use_mp_fourier=False)
+
+    mx = np.absolute(F).max()
+
+    ima = dict(vmin=-mx, vmax=mx)
+
+    for f in [F, F2, F3]:
+        plt.clf()
+        plt.subplot(2,2,1)
+        dimshow(f.real, **ima)
+        plt.subplot(2,2,2)
+        dimshow(f.imag, **ima)
+        plt.subplot(2,2,3)
+        dimshow(np.hypot(f.real, f.imag), **ima)
+        plt.subplot(2,2,4)
+        #dimshow(np.arctan2(F.real, F.imag))
+        dimshow(np.angle(f))
+        ps.savefig()
+
+    I1 = np.fft.irfft2(F)
+    I2 = np.fft.irfft2(F2)
+    I3 = np.fft.irfft2(F3)
+
+    for I in [I1,I2,I3]:
+        plt.clf()
+        plt.subplot(1,2,1)
+        dimshow(I)
+        plt.subplot(1,2,2)
+        dimshow(np.log10(I))
+        ps.savefig()
+
+    for I in [I2,I3]:
+        plt.clf()
+        dimshow(I-I1)
+        ps.savefig()
+
+        
+    
 
 def test_fft(ps):
     # DevGalaxy(pos=RaDecPos[240.14431131092763, 6.1210541865974211], brightness=NanoMaggies: g=22.4, r=21.2, z=20.4, shape=log r_e=3.51358, ee1=-0.0236628, ee2=0.125124
@@ -63,16 +131,19 @@ def test_galaxy_grid(ps, args):
     
     xx = np.linspace(20, W-20, 30)
     yy = np.linspace(20, H-20, 30)
-    #xx = np.linspace(20, W-20, 10)
-    #yy = np.linspace(20, H-20, 10)
+    #xx = np.linspace(20, W-20, 2)
+    #yy = np.linspace(20, H-20, 2)
 
     #gpsf = NCircularGaussianPSF([2.], [1.])
+    # one component
+    #gpsf = GaussianMixturePSF(1.0, 0., 0., 4., 4., 0.)
+
     # two components
-    #gpsf = GaussianMixturePSF(0.9, 0.1, 0., 0., 0., 0.,
-    #                          4., 4., 0., 6., 6., 0.)
+    gpsf = GaussianMixturePSF(0.9, 0.1, 0., 0., 0., 0.,
+                              4., 4., 0., 6., 6., 0.)
     # three components
-    gpsf = GaussianMixturePSF(0.8, 0.1, 0.1, 0., 0., 0., 0., 0., 0.,
-                              4., 4., 0., 6., 6., 0., 8., 8., 0.)
+    #gpsf = GaussianMixturePSF(0.8, 0.1, 0.1, 0., 0., 0., 0., 0., 0.,
+    #                          4., 4., 0., 6., 6., 0., 8., 8., 0.)
     gpsf.radius = 15
     psfimg = gpsf.getPointSourcePatch(0., 0., radius=15)
     print 'PSF image size', psfimg.shape
@@ -118,17 +189,39 @@ def test_galaxy_grid(ps, args):
         t1 = Time()
         print t1 - t0
         return
+
+    # ugal = ExpGalaxy(PixPos(x,y), Flux(100.),
+    #                  EllipseESoft(1., 0., 0.))
+    # 
+    # ugal2 = ExpGalaxy(PixPos(x,y), Flux(100.),
+    #                   EllipseESoft(2., 0., 0.))
+    # 
+    # utr = Tractor([img], [ugal,ugal2])
+    # utr.disable_cache()
+    # 
+    # img.psf = pixpsf
+    # m1 = utr.getModelImage(0)
+    # img.psf = gpsf
+    # m2 = utr.getModelImage(0)
+    # print 'm1 rms', np.sqrt(np.sum(m1**2))
+    # print 'm2 rms', np.sqrt(np.sum(m2**2))
+    # print 'm1-m2 rms', np.sqrt(np.sum((m1-m2)**2))
+    # sys.exit(0)
     
+    t0 = Time()
+    img.psf = pixpsf
+    fmod = tr.getModelImage(0)
+    t1 = Time()
+    tfft = t1 - t0
+
     t0 = Time()
     img.psf = gpsf
     gmod = tr.getModelImage(0)
     t1 = Time()
-    img.psf = pixpsf
-    fmod = tr.getModelImage(0)
-    t2 = Time()
+    tgauss = t1 - t0
 
-    print 'Gaussian convolution:', t1-t0
-    print 'FFT      convolution:', t2-t1
+    print 'Gaussian convolution:', tgauss
+    print 'FFT      convolution:', tfft
 
     mx = gmod.max()
     ima = dict(vmin=-0.01*mx, vmax=0.95*mx)
@@ -145,23 +238,30 @@ def test_galaxy_grid(ps, args):
     plt.title('FFT convolution')
     ps.savefig()
 
+    return
+    
     plt.clf()
     dimshow(gmod - fmod, **diffa)
     plt.title('Gaussian - FFT convolution')
     ps.savefig()
 
     tr.setModelMasks([modelmasks])
+
+    t0 = Time()
+    img.psf = pixpsf
+    fmod = tr.getModelImage(0)
+    t1 = Time()
+    tfft = t1 - t0
+
     t0 = Time()
     img.psf = gpsf
     gmod = tr.getModelImage(0)
     t1 = Time()
-    img.psf = pixpsf
-    fmod = tr.getModelImage(0)
-    t2 = Time()
-    
+    tgauss = t1 - t0
+
     print 'With modelMasks:'
-    print 'Gaussian convolution:', t1-t0
-    print 'FFT      convolution:', t2-t1
+    print 'Gaussian convolution:', tgauss
+    print 'FFT      convolution:', tfft
 
     plt.clf()
     dimshow(gmod, **ima)
@@ -514,11 +614,14 @@ if __name__ == '__main__':
     parser = optparse.OptionParser()
     opt,args = parser.parse_args()
 
-    test_psfex(ps)
+    test_galaxy_grid(ps, args)
     sys.exit(0)
+
+    test_mixture_profiles(ps)
+    
+    test_psfex(ps)
 
     test_fft(ps)
     test_model_masks(ps)
-    test_galaxy_grid(ps, args)
 
     

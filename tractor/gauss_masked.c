@@ -31,7 +31,7 @@ static int c_gauss_2d_masked(int x0, int y0, int W, int H,
     PyObject *np_xderiv=NULL, *np_yderiv=NULL, *np_mask=NULL;
     float tpd;
     float *pxd = NULL, *pyd = NULL;
-    int rtn;
+    int rtn = -1;
     PyArray_Descr* ftype = PyArray_DescrFromType(PyArray_FLOAT32);
 
     tpd = pow(2.*M_PI, D);

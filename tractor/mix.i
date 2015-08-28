@@ -460,7 +460,7 @@ static int c_gauss_2d_grid(int x0, int x1, int y0, int y1, double fx, double fy,
             I[2] =  V[0] / det;
             scale[k] = amp[k] / sqrt(tpd * det);
         }
-    
+
         i = 0;
         for (iy=y0; iy<y1; iy++) {
             for (ix=x0; ix<x1; ix++) {
