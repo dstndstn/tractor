@@ -1,4 +1,4 @@
-all: mix emfit # ceres tsnnls
+all: mix emfit mpf
 
 FORCE:
 
@@ -8,6 +8,8 @@ mix: FORCE
 	$(MAKE) -C tractor mix
 emfit: FORCE
 	$(MAKE) -C tractor emfit
+mpf: FORCE
+	$(MAKE) -C tractor mpf
 
 cython:
 	python setup-cython.py build_ext --inplace

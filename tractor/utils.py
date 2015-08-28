@@ -325,8 +325,7 @@ class NamedParams(object):
         return {}
 
     def __new__(cl, *args, **kwargs):
-        sup = super(NamedParams,cl)
-        self = sup.__new__(cl)
+        self = super(NamedParams,cl).__new__(cl, *args, **kwargs)
         self.namedparams = {}
         self.paramnames = {}
         named = self.getNamedParams()

@@ -521,8 +521,6 @@ class ProfileGalaxy(object):
         amix = self._getAffineProfile(img, mux, muy)
         Fsum = amix.getFourierTransform(w, v)
 
-        # print 'Galaxy FFT:', Fsum.shape
-        
         if False:
             # for fakedx in []:#0]:#, 1, 10]:
 
