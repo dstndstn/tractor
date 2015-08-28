@@ -263,6 +263,10 @@ class Galaxy(MultiParams, SingleProfileSource):
 from astrometry.util.plotutils import *
 psfft = PlotSequence('fft')
 
+from astrometry.util.ttime import *
+fft_timing = []
+fft_timing_id = 0
+
     
 class ProfileGalaxy(object):
     '''
@@ -356,7 +360,15 @@ class ProfileGalaxy(object):
         #####
         global psfft
 
+        global fft_timing
+        global fft_timing_id
 
+        fft_timing_id += 1
+        timing_id = fft_timing_id
+
+        tpatch = CpuMeas()
+        fft_timing.append((timing_id, 'get_unit_patch', 0,
+                           (self,)))
         
         if modelMask is None:
             # now choose the patch size
@@ -374,6 +386,9 @@ class ProfileGalaxy(object):
                 0, img.getHeight())
             if inx == [] or iny == []:
                 # no overlap
+
+                fft_timing.append((timing_id, 'no_overlap', CpuMeas().cpu_seconds_since(tpatch)))
+
                 return None
             x0,x1 = outx.start, outx.stop
             y0,y1 = outy.start, outy.stop
@@ -455,6 +470,7 @@ class ProfileGalaxy(object):
                     neardy = py - y1
                 nearest = np.hypot(neardx, neardy)
                 if nearest > self.getRadius():
+                    fft_timing.append((timing_id, 'source_way_outside', CpuMeas().cpu_seconds_since(tpatch)))
                     return None
 
                 # how far is the furthest point from the source center?
@@ -479,8 +495,16 @@ class ProfileGalaxy(object):
                     bigMask[boffy:boffy+mh, boffx:boffx+mw] = modelMask.patch
                 bigMask = Patch(bigx0, bigy0, bigMask)
 
+                fft_timing.append((timing_id, 'calling_sourceout', None))
+
+                t0 = CpuMeas()
+
                 bigmodel = self._realGetUnitFluxModelPatch(
                     img, px, py, minval, extent=None, modelMask=bigMask)
+
+                t1 = CpuMeas()
+                fft_timing.append((timing_id, 'sourceout', t1.cpu_seconds_since(t0),
+                                   (bigMask.shape, (mh,mw))))
 
                 return Patch(x0, y0,
                              bigmodel.patch[boffy:boffy+mh, boffx:boffx+mw])
@@ -490,9 +514,18 @@ class ProfileGalaxy(object):
             psfh,psfw = psf.shape
             halfsize = max(halfsize, max(psfw/2., psfh/2.))
 
+
+        t0 = CpuMeas()
+
         P,(px0,py0),(pH,pW) = psf.getFourierTransform(px, py, halfsize)
+
+        t1 = CpuMeas()
+        fft_timing.append((timing_id, 'psf_fft', t1.cpu_seconds_since(t0),
+                           (haveExtent, halfsize)))
+
         w = np.fft.rfftfreq(pW)
         v = np.fft.fftfreq(pH)
+
 
         # print 'PSF Fourier transform size:', P.shape
         # print 'Padded size:', pH,pW
@@ -517,9 +550,21 @@ class ProfileGalaxy(object):
         # print('dx,dy', dx,dy)
         # print('ix0,iy0,', ix0,iy0)
         # print('mux,muy', mux,muy)
+
+        t0 = CpuMeas()
         
         amix = self._getAffineProfile(img, mux, muy)
+
+        t1 = CpuMeas()
+
         Fsum = amix.getFourierTransform(w, v)
+        
+        t2 = CpuMeas()
+
+        fft_timing.append((timing_id, 'get_affine', t1.cpu_seconds_since(t0),
+                           (haveExtent,)))
+        fft_timing.append((timing_id, 'get_ft', t2.cpu_seconds_since(t1),
+                           (haveExtent,)))
 
         # print 'Galaxy FFT:', Fsum.shape
         
@@ -578,7 +623,15 @@ class ProfileGalaxy(object):
                 plt.title('iFFT in PSF shape')
                 psfft.savefig()
 
+            t0 = CpuMeas()
+
             G = np.fft.irfft2(Fsum * P, s=(pH,pW))
+
+            t1 = CpuMeas()
+            fft_timing.append((timing_id, 'irfft2', t1.cpu_seconds_since(t0),
+                               (haveExtent, (pH,pW))))
+            
+
             gh,gw = G.shape
             if gh > mh or gw > mw:
                 G = G[:mh,:mw]
@@ -596,7 +649,13 @@ class ProfileGalaxy(object):
             # xx,yy = np.meshgrid(np.arange(pW), np.arange(pH))
             # print 'centroid', np.sum(psfim*xx), np.sum(psfim*yy)
 
+            t0 = CpuMeas()
+
             G = np.fft.irfft2(Fsum * P, s=(pH,pW))
+
+            t1 = CpuMeas()
+            fft_timing.append((timing_id, 'irfft2_b', t1.cpu_seconds_since(t0),
+                               (haveExtent, (pH,pW))))
 
             # print 'Evaluating iFFT with shape', pH,pW
             # print 'G shape:', G.shape
@@ -619,6 +678,9 @@ class ProfileGalaxy(object):
                 G = G[:,:x1-ix0]
             if gh+iy0 > y1:
                 G = G[:y1-iy0,:]
+
+        fft_timing.append((timing_id, 'get_unit_patch_finished', CpuMeas().cpu_seconds_since(tpatch),
+                           (self,)))
 
         return Patch(ix0, iy0, G)
                     
