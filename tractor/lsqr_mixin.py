@@ -1,3 +1,5 @@
+from engine import *
+
 class TractorLsqrMixin(object):
 
     def _optimize_forcedphot_core(
@@ -28,12 +30,11 @@ class TractorLsqrMixin(object):
         self._lsqr_forced_photom(
             result, derivs, mod0, imgs, umodels, rois, scales, priors, sky,
             minFlux, justims0, subimgs, damp, alphas, Nsky, mindlnp,
-            shared_params, use_tsnnls)
+            shared_params)
 
     def _lsqr_forced_photom(self, result, derivs, mod0, imgs, umodels, rois, scales,
                             priors, sky, minFlux, justims0, subimgs,
-                            damp, alphas, Nsky, mindlnp, shared_params,
-                            use_tsnnls):
+                            damp, alphas, Nsky, mindlnp, shared_params):
         # About rois and derivs: we call
         #   getUpdateDirection(derivs, ..., chiImages=[chis])
         # And this uses the "img" objects in "derivs" to decide on the region
@@ -96,8 +97,7 @@ class TractorLsqrMixin(object):
             t0 = Time()
             X = self.getUpdateDirection(derivs, damp=damping, priors=priors,
                                         scale_columns=False, chiImages=chis0,
-                                        shared_params=shared_params,
-                                        use_tsnnls=use_tsnnls)
+                                        shared_params=shared_params)
             topt = Time()-t0
             logverb('forced phot: opt:', topt)
             #print 'forced phot: update', X
@@ -285,8 +285,6 @@ class TractorLsqrMixin(object):
                            scale_columns=True, scales_only=False,
                            chiImages=None, variance=False,
                            shared_params=True,
-                           use_tsnnls=False,
-                           use_ceres=False,
                            get_A_matrix=False):
         #
         # Returns: numpy array containing update direction.
@@ -523,169 +521,95 @@ class TractorLsqrMixin(object):
         # b = bnz
         assert(np.all(np.isfinite(b)))
 
-        use_lsqr = True
+        from scipy.sparse import csr_matrix, csc_matrix
+        from scipy.sparse.linalg import lsqr
 
-        if use_ceres:
-            # Solver::Options::linear_solver_type to SPARSE_NORMAL_CHOLESKY 
-            pass
+        spvals = np.hstack(spvals)
+        if not np.all(np.isfinite(spvals)):
+            print 'Warning: infinite derivatives; bailing out'
+            return None
+        assert(np.all(np.isfinite(spvals)))
+
+        sprows = np.hstack(sprows) # hogg's lovin' hstack *again* here
+        assert(len(sprows) == len(spvals))
+            
+        # For LSQR, expand 'spcols' to be the same length as 'sprows'.
+        cc = np.empty(len(sprows))
+        i = 0
+        for c,n in zip(spcols, nrowspercol):
+            cc[i : i+n] = c
+            i += n
+        spcols = cc
+        assert(i == len(sprows))
+        assert(len(sprows) == len(spcols))
+
+        logverb('  Number of sparse matrix elements:', len(sprows))
+        urows = np.unique(sprows)
+        ucols = np.unique(spcols)
+        logverb('  Unique rows (pixels):', len(urows))
+        logverb('  Unique columns (params):', len(ucols))
+        if len(urows) == 0 or len(ucols) == 0:
+            return []
+        logverb('  Max row:', urows[-1])
+        logverb('  Max column:', ucols[-1])
+        logverb('  Sparsity factor (possible elements / filled elements):', float(len(urows) * len(ucols)) / float(len(sprows)))
         
-        if use_tsnnls:
-            use_lsqr = False
-            from tsnnls import tsnnls_lsqr
-            #logmsg('TSNNLS: %i cols (%i unique), %i elements' %
-            #       (Ncols, len(ucols), len(spvals)))
-            print 'spcols:', spcols.shape, spcols.dtype
-            #print 'spvals:', spvals.shape, spvals.dtype
-            print 'spvals:', len(spvals), 'chunks'
-            print '  total', sum(len(x) for x in spvals), 'elements'
-            print 'b:', b.shape, b.dtype
-            #print 'sprows:', sprows.shape, sprows.dtype
-            print 'sprows:', len(sprows), 'chunks'
-            print '  total', sum(len(x) for x in sprows), 'elements'
+        # FIXME -- does it make LSQR faster if we remap the row and column
+        # indices so that no rows/cols are empty?
 
-            ucols,colI = np.unique(spcols, return_inverse=True)
-            J = np.argsort(colI)
+        # FIXME -- we could probably construct the CSC matrix ourselves!
 
-            sorted_cols = colI[J]
-            nel = [len(sprows[j]) for j in J]
-            sorted_rows = np.hstack([sprows[j].astype(np.int32) for j in J])
-            sorted_vals = np.hstack([spvals[j] for j in J])
-            #Nelements = sum(len(x) for x in spvals)
-            Nelements = sum(nel)
-            
-            colinds = np.zeros(len(ucols)+1, np.int32)
-            for c,n in zip(sorted_cols, nel):
-                colinds[c+1] += n
-            colinds = np.cumsum(colinds).astype(np.int32)
-            assert(colinds[-1] == Nelements)
-            #colinds = colinds[:-1]
-            
-            # print 'sorted_cols:', sorted_cols
-            # print 'column inds:', colinds
-            # print 'sorted_rows:', sorted_rows
-            # print 'sorted_vals:', sorted_vals
-            print 'colinds:', colinds.shape, colinds.dtype
-            print 'rows:', sorted_rows.shape, sorted_rows.dtype
-            print 'vals:', sorted_vals.shape, sorted_vals.dtype
+        # Build sparse matrix
+        #A = csc_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
+        A = csr_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
 
-            # compress b and rows?
-            urows,K = np.unique(sorted_rows, return_inverse=True)
-            bcomp = b[urows]
-            rowcomp = K.astype(np.int32)
+        if get_A_matrix:
+            return A
 
-            # print 'Compressed rows:', rowcomp
-            # print 'Compressed b:', bcomp
-            # for c,(i0,i1) in enumerate(zip(colinds, colinds[1:])):
-            #     print 'Column', c, 'goes from', i0, 'to', i1
-            #     print 'rows:', rowcomp[i0:i1]
-            #     print 'vals:', sorted_vals[i0:i1]
-            
-            nrcomp = len(urows)
-            
-            #tsnnls_lsqr(colinds, sorted_rows, sorted_vals,
-            #            b, Nrows, Nelements)
+        lsqropts = dict(show=isverbose(), damp=damp)
+        if variance:
+            lsqropts.update(calc_var=True)
 
-            X = tsnnls_lsqr(colinds, rowcomp, sorted_vals,
-                            bcomp, nrcomp, Nelements)
-            print 'Got TSNNLS result:', X
+        # Run lsqr()
+        logverb('LSQR: %i cols (%i unique), %i elements' %
+               (Ncols, len(ucols), len(spvals)-1))
 
-            # Undo the column mappings
-            X2 = np.zeros(len(allderivs))
-            #X2[colI] = X
-            X2[ucols] = X
-            X = X2
-            del X2
-            
-        if use_lsqr:
-            from scipy.sparse import csr_matrix, csc_matrix
-            from scipy.sparse.linalg import lsqr
+        # print 'A matrix:'
+        # print A.todense()
+        # print
+        # print 'vector b:'
+        # print b
 
-            spvals = np.hstack(spvals)
-            if not np.all(np.isfinite(spvals)):
-                print 'Warning: infinite derivatives; bailing out'
-                return None
-            assert(np.all(np.isfinite(spvals)))
-    
-            sprows = np.hstack(sprows) # hogg's lovin' hstack *again* here
-            assert(len(sprows) == len(spvals))
-                
-            # For LSQR, expand 'spcols' to be the same length as 'sprows'.
-            cc = np.empty(len(sprows))
-            i = 0
-            for c,n in zip(spcols, nrowspercol):
-                cc[i : i+n] = c
-                i += n
-            spcols = cc
-            assert(i == len(sprows))
-            assert(len(sprows) == len(spcols))
+        bail = False
+        try:
+            # lsqr can trigger floating-point errors
+            oldsettings = np.seterr(all='print')
+            (X, istop, niters, r1norm, r2norm, anorm, acond,
+             arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
+        except ZeroDivisionError:
+            print 'ZeroDivisionError caught.  Returning zero.'
+            bail = True
+        # finally:
+        np.seterr(**oldsettings)
 
-            logverb('  Number of sparse matrix elements:', len(sprows))
-            urows = np.unique(sprows)
-            ucols = np.unique(spcols)
-            logverb('  Unique rows (pixels):', len(urows))
-            logverb('  Unique columns (params):', len(ucols))
-            if len(urows) == 0 or len(ucols) == 0:
-                return []
-            logverb('  Max row:', urows[-1])
-            logverb('  Max column:', ucols[-1])
-            logverb('  Sparsity factor (possible elements / filled elements):', float(len(urows) * len(ucols)) / float(len(sprows)))
-            
-            # FIXME -- does it make LSQR faster if we remap the row and column
-            # indices so that no rows/cols are empty?
-    
-            # FIXME -- we could probably construct the CSC matrix ourselves!
-    
-            # Build sparse matrix
-            #A = csc_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
-            A = csr_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
+        del A
+        del b
 
-            if get_A_matrix:
-                return A
+        if bail:
+            if shared_params:
+                return np.zeros(len(paramindexmap))
+            return np.zeros(len(allderivs))
 
-            lsqropts = dict(show=isverbose(), damp=damp)
-            if variance:
-                lsqropts.update(calc_var=True)
-    
-            # Run lsqr()
-            logverb('LSQR: %i cols (%i unique), %i elements' %
-                   (Ncols, len(ucols), len(spvals)-1))
-
-            # print 'A matrix:'
-            # print A.todense()
-            # print
-            # print 'vector b:'
-            # print b
-
-            bail = False
-            try:
-                # lsqr can trigger floating-point errors
-                oldsettings = np.seterr(all='print')
-                (X, istop, niters, r1norm, r2norm, anorm, acond,
-                 arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
-            except ZeroDivisionError:
-                print 'ZeroDivisionError caught.  Returning zero.'
-                bail = True
-            # finally:
-            np.seterr(**oldsettings)
-
-            del A
-            del b
-
-            if bail:
-                if shared_params:
-                    return np.zeros(len(paramindexmap))
-                return np.zeros(len(allderivs))
-    
-            # print 'LSQR results:'
-            # print '  istop =', istop
-            # print '  niters =', niters
-            # print '  r1norm =', r1norm
-            # print '  r2norm =', r2norm
-            # print '  anorm =', anorm
-            # print '  acord =', acond
-            # print '  arnorm =', arnorm
-            # print '  xnorm =', xnorm
-            # print '  var =', var
+        # print 'LSQR results:'
+        # print '  istop =', istop
+        # print '  niters =', niters
+        # print '  r1norm =', r1norm
+        # print '  r2norm =', r2norm
+        # print '  anorm =', anorm
+        # print '  acord =', acond
+        # print '  arnorm =', arnorm
+        # print '  xnorm =', xnorm
+        # print '  var =', var
         
         logverb('scaled  X=', X)
         X = np.array(X)

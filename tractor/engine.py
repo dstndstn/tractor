@@ -475,8 +475,6 @@ class TractorBase(MultiParams):
                                    variance=False,
                                    skyvariance=False,
                                    shared_params=True,
-                                   use_tsnnls=False,
-                                   use_ceres=False,
                                    BW=None, BH=None,
                                    nonneg=False,
                                    #nilcounts=1e-6,
@@ -591,7 +589,7 @@ class TractorBase(MultiParams):
         if fitstats:
             wantims1 = True
 
-        _optimize_forcedphot_core(
+        self._optimize_forcedphot_core(
             result, umodels, imlist, mod0, scales, skyderivs, minFlux,
             BW, BH,
             nonneg=nonneg, wantims0=wantims0, wantims1=wantims1,
@@ -869,7 +867,6 @@ class TractorBase(MultiParams):
         return mod
 
     def getModelImages(self):
-        #return [self.getModelImage(img) for img in self.images]
         for img in self.images:
             yield self.getModelImage(img)
         

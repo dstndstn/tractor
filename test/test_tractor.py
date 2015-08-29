@@ -83,9 +83,11 @@ class TractorTest(unittest.TestCase):
     def test_model_images(self):
         W,H = 100,100
         tim1 = Image(data=np.zeros((H,W)), invvar=np.ones((H,W)),
-                     psf=NCircularGaussianPSF([2.], [1.]))
+                     psf=NCircularGaussianPSF([2.], [1.]),
+                     photocal=LinearPhotoCal(1.))
         tim2 = Image(data=np.zeros((H,W)), invvar=np.ones((H,W)),
-                     psf=NCircularGaussianPSF([3.], [1.]))
+                     psf=NCircularGaussianPSF([3.], [1.]),
+                     photocal=LinearPhotoCal(1.))
 
         star = PointSource(PixPos(W/2, H/2), Flux(100.))
         
@@ -99,6 +101,18 @@ class TractorTest(unittest.TestCase):
         print list(chis)
         lnp = tr.getLogProb()
         print 'lnp', lnp
+
+        tr.freezeParam('images')
+        dlnp,x,a = tr.optimize()
+        print 'dlnp', dlnp
+        print 'x', x
+        print 'a', a
+
+        star.brightness.setParams([100.])
+        star.freezeAllBut('brightness')
+        print 'star', star
+        tr.optimize_forced_photometry()
+        print 'star', star
         
 if __name__ == '__main__':
     unittest.main()

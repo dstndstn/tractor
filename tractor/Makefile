@@ -119,17 +119,3 @@ _ceres.so: ceres.i ceres-tractor.h ceres-tractor.cc
 	g++ $(CXXFLAGS) -c ceres-tractor.cc $(PYMOD_INC) $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC)
 	g++ $(CXXFLAGS) $(CXXLINKFLAGS) -o _ceres.so -shared ceres_wrap.o ceres-tractor.o $(CERES_LIB) $(PYMOD_LIB) $(CERES_EXTRA_LIB)
 
-LIBTSNNLS_INC ?=
-LIBTSNNLS_LIB ?= -ltsnnls
-
-_tsnnls.so: tsnnls.i
-	swig -python $(NUMPY_INC) $(LIBTSNNLS_INC) $<
-	gcc -Wall -fPIC -c tsnnls_wrap.c $$(python-config --includes) $(NUMPY_INC) $(LIBTSNNLS_INC)
-	gcc -Wall -fPIC -o _tsnnls.so -shared tsnnls_wrap.o $(LIBTSNNLS_LIB)
-
-#	gcc -Wall -fPIC -o $@ -shared tsnnls_wrap.o $$(python-config --ldflags) $(LIBTSNNLS_LIB)
-#	gcc -Wall -fPIC -o _tsnnls.so -shared tsnnls_wrap.o $(LIBTSNNLS_LIB) -lpython
-#	gcc -Wall -fPIC -o $@ -shared tsnnls_wrap.o -L$$(python-config --prefix)/lib $$(python-config --libs --ldflags) $(LIBTSNNLS_LIB)
-
-
-
