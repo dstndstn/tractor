@@ -10,18 +10,17 @@ Generally useful generic implementations of things the Tractor needs:
 Magnitudes, (RA,Dec) positions, FITS WCS, and so on.
 
 """
-from math import ceil, floor, pi, sqrt, exp
 
-from .engine import *
-from .utils import *
-#from . import ducks
-import ducks
-
-import mixture_profiles as mp
 import numpy as np
 
 from astrometry.util.starutil_numpy import *
 from astrometry.util.miscutils import *
+
+from .image import Image
+from .patch import Patch
+from .utils import *
+import ducks
+import mixture_profiles as mp
 
 class TractorWCSWrapper(object):
     '''
@@ -1402,10 +1401,10 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
                         r = max(r, np.sqrt(r2))
                 rr = int(np.ceil(r))
 
-            x0 = int(floor(px - rr))
-            x1 = int(ceil (px + rr)) + 1
-            y0 = int(floor(py - rr))
-            y1 = int(ceil (py + rr)) + 1
+            x0 = int(np.floor(px - rr))
+            x1 = int(np.ceil (px + rr)) + 1
+            y0 = int(np.floor(py - rr))
+            y1 = int(np.ceil (py + rr)) + 1
 
             if extent is not None:
                 [xl,xh,yl,yh] = extent
@@ -1432,8 +1431,8 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
             r = self.getRadius()
         else:
             r = radius
-        x0,x1 = int(floor(px-r)), int(ceil(px+r)) + 1
-        y0,y1 = int(floor(py-r)), int(ceil(py+r)) + 1
+        x0,x1 = int(np.floor(px-r)), int(np.ceil(px+r)) + 1
+        y0,y1 = int(np.floor(py-r)), int(np.ceil(py+r)) + 1
         if extent is not None:
             [xl,xh,yl,yh] = extent
             # clip
@@ -1802,7 +1801,7 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
         ix = int(round(px))
         iy = int(round(py))
         if radius is None:
-            rad = int(ceil(self.getRadius()))
+            rad = int(np.ceil(self.getRadius()))
         else:
             rad = radius
         x0 = ix - rad
