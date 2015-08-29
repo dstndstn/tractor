@@ -1261,25 +1261,3 @@ from lsqr_mixin import TractorLsqrMixin
 class Tractor(TractorLsqrMixin, TractorBase):
     pass
 
-    
-class ScaledTractor(object):
-    def __init__(self, tractor, p0, scales):
-        self.tractor = tractor
-        self.offset = p0
-        self.scale = scales
-    def getImage(self, i):
-        return self.tractor.getImage(i)
-    def getChiImage(self, i):
-        #return self.tractor.getChiImage(i)
-        return self.tractor.getChiImage(i).astype(float)
-
-    def _getOneImageDerivs(self, i):
-        derivs = self.tractor._getOneImageDerivs(i)
-        for (ind, x0, y0, der) in derivs:
-            der *= self.scale[ind]
-            #print 'Derivative', ind, 'has RSS', np.sqrt(np.sum(der**2))
-        return derivs
-    def setParams(self, p):
-        #print 'ScaledTractor: setParams', p
-        return self.tractor.setParams(self.offset + self.scale * p)
-        
