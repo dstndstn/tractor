@@ -118,7 +118,7 @@ class TractorBase(MultiParams):
             images = Images(*images)
         if not isinstance(catalog, Catalog):
             catalog = Catalog(*catalog)
-        super(Tractor,self).__init__(images, catalog)
+        super(TractorBase,self).__init__(images, catalog)
         self.modtype = np.float32
         self.modelMasks = None
         self.expectModelMasks = False
@@ -869,20 +869,13 @@ class TractorBase(MultiParams):
         return mod
 
     def getModelImages(self):
-        return [self.getModelImage(img) for img in self.images]
-
+        #return [self.getModelImage(img) for img in self.images]
+        for img in self.images:
+            yield self.getModelImage(img)
+        
     def getChiImages(self):
-        mods = self.getModelImages()
-        chis = []
-        for img,mod in zip(self.images, mods):
-            chi = (img.getImage() - mod) * img.getInvError()
-            if not np.all(np.isfinite(chi)):
-                print 'Chi not finite'
-                print 'Image finite?', np.all(np.isfinite(img.getImage()))
-                print 'Mod finite?', np.all(np.isfinite(mod))
-                print 'InvErr finite?', np.all(np.isfinite(img.getInvError()))
-            chis.append(chi)
-        return chis
+        for img in self.images:
+            yield self.getChiImage(img=img)
 
     def getChiImage(self, imgi=-1, img=None, srcs=None, minsb=0.):
         if img is None:

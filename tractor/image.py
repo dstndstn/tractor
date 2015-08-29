@@ -1,3 +1,4 @@
+import numpy as np
 from .utils import MultiParams, _isint, listmax, get_class_from_name
 
 class Image(MultiParams):
