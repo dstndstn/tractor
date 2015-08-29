@@ -350,9 +350,6 @@ class Tractor(MultiParams):
         if not isinstance(catalog, Catalog):
             catalog = Catalog(*catalog)
         super(Tractor,self).__init__(images, catalog)
-        self._setup(mp=mp)
-
-    def _setup(self):
         self.modtype = np.float32
         self.modelMasks = None
         self.expectModelMasks = False
@@ -375,16 +372,14 @@ class Tractor(MultiParams):
 
     # For pickling
     def __getstate__(self):
-        S = (self.getImages(), self.getCatalog(), self.liquid)
-        ### FIXME -- modelMasks!
+        S = (self.getImages(), self.getCatalog(), self.liquid,
+             self.modtype, self.modelMasks, self.expectModelMasks)
         return S
     def __setstate__(self, state):
-        args = {}
-        assert(len(state) == 3)
-        (images, catalog, liquid) = state
+        (images, catalog, self.liquid, self.modtype, self.modelMasks,
+         self.expectModelMasks
+         ) = state
         self.subs = [images, catalog]
-        self.liquid = liquid
-        self._setup(**args)
 
     def getNImages(self):
         return len(self.images)
