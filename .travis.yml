@@ -7,7 +7,7 @@ sudo: required
 
 install:
   - sudo apt-get update -qq
-  - sudo apt-get install -y libnetpbm10 libnetpbm10-dev wcslib-dev libcfitsio3 libcfitsio3-dev python-numpy swig gsl-bin libgsl0-dev python-sphinx sphinx-common python-matplotlib python-scipy python-mock 
+  - sudo apt-get install -y libnetpbm10 libnetpbm10-dev wcslib-dev libcfitsio3 libcfitsio3-dev python-numpy swig gsl-bin libgsl0-dev python-sphinx sphinx-common python-matplotlib python-scipy python-mock python-pyfits
   - sudo pip install numpydoc
 # python-numpydoc -- not available until Ubuntu 14.04 trusty
 
