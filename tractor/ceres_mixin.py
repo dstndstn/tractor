@@ -1,5 +1,24 @@
 class TractorCeresMixin(object):
 
+    def getDynamicScales(self):
+        '''
+        Returns parameter step sizes that will result in changes in
+        chi^2 of about 1.0
+        '''
+        scales = np.zeros(self.numberOfParams())
+        for i in range(self.getNImages()):
+            derivs = self._getOneImageDerivs(i)
+            for j,x0,y0,der in derivs:
+                scales[j] += np.sum(der**2)
+        scales = np.sqrt(scales)
+        I = (scales != 0)
+        if any(I):
+            scales[I] = 1./scales[I]
+        I = (scales == 0)
+        if any(I):
+            scales[I] = np.array(self.getStepSizes())[I]
+        return scales
+    
     def _optimize_forcedphot_core(result, *args, **kwargs):
         x = self._ceres_forced_photom(result, umodels, imlist, mod0, 
                                       scales, skyderivs, minFlux, BW, BH,
