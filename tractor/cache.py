@@ -1,8 +1,12 @@
 class TractorCacheMixin(object):
-    def __init__(self, *args, cache=None, **kwargs):
+    def __init__(self, *args, **kwargs):
         from .cache import Cache
+
+        cache = kwargs.pop('cache', None)
         super(TractorCacheMixin, self).__init__(*args, **kwargs)
-        cache = Cache()
+        if cache is None:
+            cache = Cache()
+        self.cache = cache
 
     def disable_cache(self):
         self.cache = None
