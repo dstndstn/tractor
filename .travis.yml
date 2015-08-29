@@ -42,7 +42,8 @@ script:
     - ls -l
     - python -c "import sys; print '\n'.join(sys.path)"
     - make
-    - (cd doc && make)
+    - make doc
+    - python test/test_tractor.py
 
 addons:
   apt:
