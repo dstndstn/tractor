@@ -23,7 +23,7 @@ __all__ = [
     'PixPos', 'RaDecPos',
     'NullPhotoCal', 'LinearPhotoCal', 'FluxesPhotoCal',
     'WCS', 'NullWCS',
-    'FitsWcs', 'WcslibWcs', 'ConstantFitsWcs',
+    'TanWcs', 'WcslibWcs', 'ConstantFitsWcs',
     'NCircularGaussianPSF', 'GaussianMixturePSF', 'PixelizedPSF',
     'GaussianMixtureEllipsePSF',
     'ScaledWcs', 'ShiftedWcs', 'ScaledPhotoCal', 'ShiftedPsf',
