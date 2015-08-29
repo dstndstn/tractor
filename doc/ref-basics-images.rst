@@ -21,7 +21,10 @@ Astrometry (World Coordinate System, WCS)
 .. autoclass:: tractor.NullWCS
    :members:
 
-.. autoclass:: tractor.FitsWcs
+.. autoclass:: tractor.ConstantFitsWcs
+   :members:
+
+.. autoclass:: tractor.TanWcs
    :members:
 
 Photometry calibration ("PhotoCal")
