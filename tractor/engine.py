@@ -1075,21 +1075,6 @@ class TractorBase(MultiParams):
         assert(len(allderivs) == self.numberOfParams())
         return allderivs
 
-    # def changeInvvar(self, Q2=None):
-    #     '''
-    #     run one iteration of iteratively reweighting the invvars for IRLS
-    #     '''
-    #     if Q2 is None:
-    #         return
-    #     assert(Q2 > 0.5)
-    #     for img in self.getImages():
-    #         resid = img.getImage() - self.getModelImage(img)
-    #         oinvvar = img.getOrigInvvar()
-    #         smask = img.getStarMask()
-    #         chi2 = oinvvar * resid**2
-    #         factor = Q2 / (Q2 + chi2)
-    #         img.setInvvar(oinvvar * factor * smask)
-
     def setModelMasks(self, masks, assumeMasks=True):
 
         '''
