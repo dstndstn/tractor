@@ -1,9 +1,45 @@
+class TractorCacheMixin(object):
+    def __init__(self, *args, cache=None, **kwargs):
+        from .cache import Cache
+        super(TractorCacheMixin, self).__init__(*args, **kwargs)
+        cache = Cache()
+
+    def disable_cache(self):
+        self.cache = None
+
+    def clearCache(self):
+        self.cache.clear()
+        
+    def getModelPatch(self, img, src, minsb=None, **kwargs):
+        if self.cache is None:
+            return super(TractorCacheMixin, self).getModelPatch(
+                img, src, **kwargs)
+
+        deps = (img.hashkey(), src.hashkey())
+        deps = hash(deps)
+        mv,mod = self.cache.get(deps, (0.,None))
+        if minsb is None:
+            minsb = img.modelMinval
+        if mv > minsb:
+            mod = None
+        if mod is not None:
+            pass
+        else:
+            mod = super(TractorCacheMixin, self).getModelPatch(
+                img, src, minsb=minsb, **kwargs)
+            self.cache.put(deps, (minsb,mod))
+
+        # DEBUG
+        if mod is not None and mod.patch is not None:
+            assert(np.all(np.isfinite(mod.patch)))
+
+        return mod
+
 try:
     # python 2.7
     from collections import OrderedDict
 except:
     from ordereddict import OrderedDict
-
 
 '''
 LRU cache.
