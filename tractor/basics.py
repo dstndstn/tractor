@@ -19,7 +19,7 @@ from .utils import *
 import ducks
 import mixture_profiles as mp
 
-from .time import TAITime
+from .tractortime import TAITime
 from .psf import PixelizedPSF, GaussianMixturePSF, GaussianMixtureEllipsePSF, NCircularGaussianPSF
 from .wcs import NullWCS, WcslibWcs, ConstantFitsWcs, TanWcs, PixPos, RaDecPos
 from .sky import NullSky, ConstantSky
