@@ -904,13 +904,6 @@ class TractorBase(MultiParams):
             print 'psf:', img.getPsf()
         return chi
 
-    def getNdata(self):
-        count = 0
-        for img in self.images:
-            InvError = img.getInvError()
-            count += len(np.ravel(InvError > 0.0))
-        return count
-
     def getLogLikelihood(self):
         chisq = 0.
         for i,chi in enumerate(self.getChiImages()):
