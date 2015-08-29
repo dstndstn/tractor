@@ -1,3 +1,9 @@
+import numpy as np
+
+from astrometry.util.ttime import *
+
+from engine import *
+
 class TractorCeresMixin(object):
 
     def getDynamicScales(self):
@@ -19,14 +25,9 @@ class TractorCeresMixin(object):
             scales[I] = np.array(self.getStepSizes())[I]
         return scales
     
-    def _optimize_forcedphot_core(result, *args, **kwargs):
-        x = self._ceres_forced_photom(result, umodels, imlist, mod0, 
-                                      scales, skyderivs, minFlux, BW, BH,
-                                      nonneg=nonneg, wantims0=wantims0,
-                                      wantims1=wantims1,
-                                      negfluxval=negfluxval)
+    def _optimize_forcedphot_core(self, result, *args, **kwargs):
+        x = self._ceres_forced_photom(result, *args, **kwargs)
         result.ceres_status = x
-    
 
 
     def _ceres_opt(self, variance=False, scale_columns=True,
@@ -165,7 +166,8 @@ class TractorCeresMixin(object):
                              wantims0 = True,
                              wantims1 = True,
                              negfluxval = None,
-                             verbose = False
+                             verbose = False,
+                             **kwargs
                              ):
         '''
         negfluxval: when 'nonneg' is set, the flux value to give sources that went
