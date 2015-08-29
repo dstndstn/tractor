@@ -16,8 +16,45 @@ import numpy as np
 from astrometry.util.ttime import Time
 
 from .utils import MultiParams, _isint, listmax, get_class_from_name
-from .cache import Cache
 from .patch import Patch
+
+class TractorCacheMixin(object):
+    def __init__(self, *args, cache=None, **kwargs):
+        from .cache import Cache
+        super(TractorCacheMixin, self).__init__(*args, **kwargs)
+        cache = Cache()
+
+    def disable_cache(self):
+        self.cache = None
+
+    def clearCache(self):
+        self.cache.clear()
+        
+    def getModelPatch(self, img, src, minsb=None, **kwargs):
+        if self.cache is None:
+            return self.getModelPatchNoCache(img, src, **kwargs)
+
+        deps = (img.hashkey(), src.hashkey())
+        deps = hash(deps)
+        mv,mod = self.cache.get(deps, (0.,None))
+        if minsb is None:
+            minsb = img.modelMinval
+        if mv > minsb:
+            mod = None
+        if mod is not None:
+            pass
+        else:
+            mod = super(TractorCacheMixin, self).getModelPatch(
+                img, src, minsb=minsb, **kwargs)
+            self.cache.put(deps, (minsb,mod))
+
+        # DEBUG
+        if mod is not None and mod.patch is not None:
+            assert(np.all(np.isfinite(mod.patch)))
+
+        return mod
+
+    
 
 def logverb(*args):
     msg = ' '.join([str(x) for x in args])
@@ -381,19 +418,12 @@ class Tractor(MultiParams):
         super(Tractor,self).__init__(images, catalog)
         self._setup(mp=mp)
 
-    def disable_cache(self):
-        self.cache = None
-
-    def _setup(self, mp=None, cache=None, pickleCache=False):
+    def _setup(self, mp=None):
         if mp is None:
             from astrometry.util.multiproc import multiproc
             mp = multiproc()
         self.mp = mp
         self.modtype = np.float32
-        if cache is None:
-            cache = Cache()
-        self.cache = cache
-        self.pickleCache = pickleCache
         self.modelMasks = None
         self.expectModelMasks = False
 
@@ -424,16 +454,12 @@ class Tractor(MultiParams):
     # For pickling
     def __getstate__(self):
         S = (self.getImages(), self.getCatalog(), self.liquid)
-        if self.pickleCache:
-            S = S + (self.cache,)
+        ### FIXME -- modelMasks!
         return S
     def __setstate__(self, state):
         args = {}
-        if len(state) == 3:
-            (images, catalog, liquid) = state
-        elif len(state) == 4:
-            (images, catalog, liquid, cache) = state
-            args.update(cache=cache, pickleCache=pickleCache)
+        assert(len(state) == 3)
+        (images, catalog, liquid) = state
         self.subs = [images, catalog]
         self.liquid = liquid
         self._setup(**args)
@@ -2382,38 +2408,14 @@ class Tractor(MultiParams):
 
         return derivs
 
-    def getModelPatchNoCache(self, img, src, **kwargs):
+    def getModelPatch(self, img, src, **kwargs):
         mask = self._getModelMaskFor(img, src)
-        #print 'Image', img, 'source', src, '-> modelMask', mask
-        
+
         # HACK -- assume no mask -> no overlap
         if self.expectModelMasks and mask is None:
             return None
 
         mod = src.getModelPatch(img, modelMask=mask, **kwargs)
-        return mod
-    
-    def getModelPatch(self, img, src, minsb=None, **kwargs):
-        if self.cache is None:
-            return self.getModelPatchNoCache(img, src, **kwargs)
-
-        deps = (img.hashkey(), src.hashkey())
-        deps = hash(deps)
-        mv,mod = self.cache.get(deps, (0.,None))
-        if minsb is None:
-            minsb = img.modelMinval
-        if mv > minsb:
-            mod = None
-        if mod is not None:
-            pass
-        else:
-            mod = self.getModelPatchNoCache(img, src, minsb=minsb, **kwargs)
-            self.cache.put(deps, (minsb,mod))
-
-        # DEBUG
-        if mod is not None and mod.patch is not None:
-            assert(np.all(np.isfinite(mod.patch)))
-
         return mod
 
     def getModelImage(self, img, srcs=None, sky=True, minsb=None):
@@ -2533,9 +2535,6 @@ class Tractor(MultiParams):
         else:
             mods = [self.getModelImage(img) for img in self.images]
         return mods
-
-    def clearCache(self):
-        self.cache.clear() # = Cache()
 
     def getChiImages(self):
         mods = self.getModelImages()
