@@ -9,28 +9,15 @@ Licensed under the GPLv2; see the file COPYING for details.
 Core image modeling and fitting.
 '''
 
-from math import ceil, floor, pi, sqrt, exp
-import time
 import logging
-import random
-import os
-import resource
-import gc
 
 import numpy as np
 
-# Scipy deps -- pushed down to where they are used.
-# from scipy.sparse import csr_matrix, csc_matrix
-# from scipy.sparse.linalg import lsqr
-# from scipy.ndimage.morphology import binary_dilation
-# from scipy.ndimage.measurements import label
-
-from astrometry.util.multiproc import *
-from astrometry.util.ttime import *
+from astrometry.util.ttime import Time
 
 from .utils import MultiParams, _isint, listmax, get_class_from_name
-from .cache import *
-from .patch import *
+from .cache import Cache
+from .patch import Patch
 
 def logverb(*args):
     msg = ' '.join([str(x) for x in args])
@@ -336,14 +323,12 @@ class Images(MultiParams):
 def getmodelimagestep(X):
     (tr, j, k, p0, step) = X
     im = tr.getImage(j)
-    #print 'Setting param', p0, step, p0+step
     im.setParam(k, p0 + step)
     mod = tr.getModelImage(im)
     im.setParam(k, p0)
     return mod
 def getmodelimagefunc(X):
     (tr, imj) = X
-    #print 'getmodelimagefunc(): imj', imj, 'pid', os.getpid()
     return tr.getModelImage(imj)
 def getsrcderivs(X):
     (src, img) = X
@@ -354,8 +339,6 @@ def getimagederivs(X):
     return img.getParamDerivatives(tractor, srcs)
 def getmodelimagefunc2(X):
     (tr, im) = X
-    #print 'getmodelimagefunc2(): im', im, 'pid', os.getpid()
-    #tr.images = Images(im)
     try:
         return tr.getModelImage(im)
     except:
@@ -403,6 +386,7 @@ class Tractor(MultiParams):
 
     def _setup(self, mp=None, cache=None, pickleCache=False):
         if mp is None:
+            from astrometry.util.multiproc import multiproc
             mp = multiproc()
         self.mp = mp
         self.modtype = np.float32

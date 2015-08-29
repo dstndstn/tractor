@@ -2,11 +2,8 @@ try:
     # python 2.7
     from collections import OrderedDict
 except:
-    #from .ordereddict import OrderedDict
     from ordereddict import OrderedDict
 
-
-#from refcnt import refcnt
 
 '''
 LRU cache.
