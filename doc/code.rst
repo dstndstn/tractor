@@ -4,6 +4,7 @@ Code structure of the Tractor
 Miscellaneous notes on control flow and call stacks.
 
 ::
+
     Tractor.optimize()
         Tractor.getDerivs()
             Image.getParamDerivatives()
@@ -18,7 +19,8 @@ Miscellaneous notes on control flow and call stacks.
 
 
 ::
-    Tractor.getLogProb()
+
+   Tractor.getLogProb()
         Tractor.getLogPrior()
         Tractor.getLogLikelihood()
             Tractor.getChiImages()

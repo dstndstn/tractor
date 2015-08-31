@@ -22,7 +22,7 @@ A number of ellipse parameterizations are available, including
 `GalaxyShape` (radius, axis ratio, and position angle; in
 `galaxy.py`), `EllipseE` (radius, e1, e2)---which I believe are called
 g1,g2 in GalSim, and `EllipseESoft` (log-radius, ee1, ee2), where
-ee1,ee2 go through a sigmoid softening function (1-exp(-|ee|)) to get
+ee1,ee2 go through a sigmoid softening function (1-exp(-\|ee\|)) to get
 to the standard e1,e2.  This parameterization has the advantage that
 the parameter space is smooth and unbounded, which tends to make
 optimizers happy.
