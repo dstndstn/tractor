@@ -37,3 +37,7 @@ class ConstantSky(ScalarParam, ducks.ImageCalibration):
     def toStandardFitsHeader(self, hdr):
         hdr.add_record(dict(name='SKY', comment='Sky value in Tractor model',
                             value=self.val))
+
+
+
+        
