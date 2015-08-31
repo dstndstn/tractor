@@ -130,7 +130,7 @@ def get_unwise_tractor_image(basedir, tile, band, bandname=None, masked=True,
         break
 
     if not foundFiles:
-        raise IOError('unWISE files not found in ' + basedirs + 'for tile' + tile)
+        raise IOError('unWISE files not found in ' + str(basedirs) + ' for tile ' + tile)
 
     print('Reading', ivfn)
     invvar = fitsio.FITS(ivfn)[0][roislice]

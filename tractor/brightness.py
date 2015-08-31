@@ -1,4 +1,5 @@
-from .utils import ScalarParam, ParamList, BaseParams
+import numpy as np
+from .utils import ScalarParam, ParamList, BaseParams, getClassName
 import ducks
 
 class Mag(ScalarParam):
