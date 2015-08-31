@@ -5,7 +5,7 @@ API Reference
 * :ref:`utils` -- ParamList, MultiParams, other utility types
 * :ref:`basics` -- Types for standard images, magnitudes, WCSes
 * :ref:`engine` -- Core Tractor routines
-* :ref:`sdss_galaxy` -- SDSS exp & deV galaxies
+* :ref:`galaxy` -- SDSS exp & deV galaxies
 * :ref:`sdss` -- Specific data types for handling SDSS images and catalogs
 * :ref:`cfht` -- Specific data types for handling data from the Canada-France-Hawaii Telescope
 
@@ -13,11 +13,11 @@ Flat list
 ---------
 
 * :class:`~tractor.Brightness`
-* :class:`~tractor.sdss_galaxy.CompositeGalaxy`
+* :class:`~tractor.galaxy.CompositeGalaxy`
 * :class:`~tractor.Catalog`
 * :class:`~tractor.ConstantSky`
-* :class:`~tractor.sdss_galaxy.DevGalaxy`
-* :class:`~tractor.sdss_galaxy.ExpGalaxy`
+* :class:`~tractor.galaxy.DevGalaxy`
+* :class:`~tractor.galaxy.ExpGalaxy`
 * :class:`~tractor.FitsWcs`
 * :class:`~tractor.Flux`
 * :class:`~tractor.GaussianMixturePSF`
@@ -112,11 +112,11 @@ Core Tractor routines
 
 
 
-.. _sdss_galaxy:
+.. _galaxy:
 
-SDSS Galaxies
--------------
-.. automodule:: tractor.sdss_galaxy
+Galaxies
+--------
+.. automodule:: tractor.galaxy
    :members:
    :undoc-members:
 
