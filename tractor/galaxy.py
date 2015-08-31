@@ -14,10 +14,13 @@ of these.
 """
 import numpy as np
 
+from astrometry.util.miscutils import get_overlapping_region
+
 from . import mixture_profiles as mp
 from .engine import *
 from .utils import *
 from .cache import *
+from .patch import *
 from .basics import SingleProfileSource, BasicSource
 
 _galcache = Cache(maxsize=10000)
@@ -379,10 +382,10 @@ class ProfileGalaxy(object):
         elif extent is None:
             # find overlapping pixels to render
             (outx, inx) = get_overlapping_region(
-                int(floor(px-halfsize)), int(ceil(px+halfsize+1)),
+                int(np.floor(px-halfsize)), int(np.ceil(px+halfsize+1)),
                 0, img.getWidth())
             (outy, iny) = get_overlapping_region(
-                int(floor(py-halfsize)), int(ceil(py+halfsize+1)),
+                int(np.floor(py-halfsize)), int(np.ceil(py+halfsize+1)),
                 0, img.getHeight())
             if inx == [] or iny == []:
                 # no overlap
