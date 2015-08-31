@@ -18,8 +18,8 @@ sudo: false
 #   - sudo pip install numpydoc
 
 install:
-   - pip install numpydoc
-   - pip install pyfits
+   - pip install --user numpydoc
+   - pip install --user pyfits
 
 # python-numpydoc -- not available until Ubuntu 14.04 trusty
 
