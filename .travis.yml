@@ -37,14 +37,17 @@ before_script:
     - pkg-config --exists gsl
     - pkg-config --modversion gsl
     - ls /usr/include/wcslib*
+    - pwd
     - echo $HOME
     - ls $HOME
     - ls $HOME/astrometry.net
     - set
-#    - if [ ! -d "$HOME/astrometry.net" ]; then (cd $HOME; git clone https://github.com/dstndstn/astrometry.net.git; cd astrometry.net; ln -sf /usr/include netpbm); fi
-    - cd $HOME; rm -R astrometry.net; git clone https://github.com/dstndstn/astrometry.net.git; cd astrometry.net; ln -sf /usr/include netpbm
+    - if [ ! -d "$HOME/astrometry.net" ]; then (cd $HOME; git clone https://github.com/dstndstn/astrometry.net.git; cd astrometry.net; ln -sf /usr/include netpbm; make && make py); fi
     - (cd $HOME/astrometry.net && git pull && make && make py)
     - ln -s $HOME/astrometry.net astrometry
+
+# Clean Astrometry.net cache?
+#    - (cd $HOME; rm -R astrometry.net; git clone https://github.com/dstndstn/astrometry.net.git; cd astrometry.net; ln -sf /usr/include netpbm)
 
 #    - export SYSTEM_GSL=yes
 #    - if [ ! -d "$HOME/fitsio-git" ]; then (cd $HOME; git clone https://github.com/esheldon/fitsio.git fitsio-git); fi
@@ -60,6 +63,7 @@ script:
     - echo "$PYTHONPATH"
     - ls -l
     - python -c "import sys; print '\n'.join(sys.path)"
+    - pwd
     - make
     - make doc
     - python test/test_tractor.py
