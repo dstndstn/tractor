@@ -3,19 +3,31 @@
 # container-based infrastructure
 sudo: false
 # need APT packages to get white-listed first;
+
+# python-mock:
+# https://github.com/travis-ci/apt-package-whitelist/issues/1081
+
+# python-pyfits:
+# https://github.com/travis-ci/apt-package-whitelist/issues/1082
+
 #sudo: required
 
+# install:
+#   - sudo apt-get update -qq
+#   - sudo apt-get install -y libnetpbm10 libnetpbm10-dev wcslib-dev libcfitsio3 libcfitsio3-dev python-numpy swig gsl-bin libgsl0-dev python-sphinx sphinx-common python-matplotlib python-scipy python-mock python-pyfits
+#   - sudo pip install numpydoc
+
 install:
-  - sudo apt-get update -qq
-  - sudo apt-get install -y libnetpbm10 libnetpbm10-dev wcslib-dev libcfitsio3 libcfitsio3-dev python-numpy swig gsl-bin libgsl0-dev python-sphinx sphinx-common python-matplotlib python-scipy python-mock python-pyfits
-  - sudo pip install numpydoc
+   - pip install numpydoc
+   - pip install pyfits
 
 # python-numpydoc -- not available until Ubuntu 14.04 trusty
 
 language: c
 compiler:
   - gcc
-  - clang
+#  - clang
+
 
 before_script:
     - export NETPBM_INC="-I$(pwd)"
@@ -23,12 +35,12 @@ before_script:
     - export WCSLIB_LIB="-lwcs"
     - pkg-config --exists gsl
     - pkg-config --modversion gsl
-    - export SYSTEM_GSL=yes
     - ls /usr/include/wcslib*
     - if [ ! -d "$HOME/astrometry.net" ]; then (cd $HOME; git clone https://github.com/dstndstn/astrometry.net.git; ln -sf /usr/include netpbm); fi
     - (cd $HOME/astrometry.net && make && make py)
     - ln -s $HOME/astrometry.net astrometry
 
+#    - export SYSTEM_GSL=yes
 #    - if [ ! -d "$HOME/fitsio-git" ]; then (cd $HOME; git clone https://github.com/esheldon/fitsio.git fitsio-git); fi
 #    - (cd $HOME/fitsio-git && python setup.py install --home $HOME/fitsio)
 #    - ln -s $HOME/fitsio/lib/python/fitsio .
@@ -57,14 +69,15 @@ addons:
     - python-numpy
     - swig
     - gsl-bin
-    - libgsl10-dev
+    - libgsl0-dev
     - python-sphinx
     - sphinx-common
     - python-matplotlib
     - python-scipy
-    - python-mock
-    - python-pyfits
-    - python-numpydoc
+
+#    - python-mock
+#    - python-pyfits
+#    - python-numpydoc
 
 cache:
   directories:
