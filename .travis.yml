@@ -41,7 +41,8 @@ before_script:
     - ls $HOME
     - ls $HOME/astrometry.net
     - set
-    - if [ ! -d "$HOME/astrometry.net" ]; then (cd $HOME; git clone https://github.com/dstndstn/astrometry.net.git; ln -sf /usr/include netpbm); fi
+#    - if [ ! -d "$HOME/astrometry.net" ]; then (cd $HOME; git clone https://github.com/dstndstn/astrometry.net.git; cd astrometry.net; ln -sf /usr/include netpbm); fi
+    - cd $HOME; rm -R astrometry.net; git clone https://github.com/dstndstn/astrometry.net.git; cd astrometry.net; ln -sf /usr/include netpbm
     - (cd $HOME/astrometry.net && git pull && make && make py)
     - ln -s $HOME/astrometry.net astrometry
 
