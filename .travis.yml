@@ -82,8 +82,9 @@ addons:
     - libgsl0-dev
     - python-sphinx
     - sphinx-common
-    - python-matplotlib
     - python-scipy
+    - python-matplotlib
+    - python-tk
 
 #    - python-mock
 #    - python-pyfits
