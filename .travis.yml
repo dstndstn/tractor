@@ -1,9 +1,9 @@
 # Travis-CI.org build script
 
 # container-based infrastructure
-#sudo: false
+sudo: false
 # need APT packages to get white-listed first;
-sudo: required
+#sudo: required
 
 install:
   - sudo apt-get update -qq
@@ -58,6 +58,13 @@ addons:
     - swig
     - gsl-bin
     - libgsl10-dev
+    - python-sphinx
+    - sphinx-common
+    - python-matplotlib
+    - python-scipy
+    - python-mock
+    - python-pyfits
+    - python-numpydoc
 
 cache:
   directories:

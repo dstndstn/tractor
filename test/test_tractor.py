@@ -9,37 +9,6 @@ from tractor.sdss import *
 from tractor.galaxy import *
 
 class TractorTest(unittest.TestCase):
-    def test_pixpsf(self):
-        tim,tinf = get_tractor_image_dr8(94, 2, 520, 'i', psf='kl-pix',
-                                         roi=[500,600,500,600], nanomaggies=True)
-        psf = tim.getPsf()
-        print 'PSF', psf
-
-        for i,(dx,dy) in enumerate([
-                (0.,0.), (0.2,0.), (0.4,0), (0.6,0),
-                (0., -0.2), (0., -0.4), (0., -0.6)]):
-            px,py = 50.+dx, 50.+dy
-            patch = psf.getPointSourcePatch(px, py)
-            print 'Patch size:', patch.shape
-            print 'x0,y0', patch.x0, patch.y0
-            H,W = patch.shape
-            XX,YY = np.meshgrid(np.arange(W), np.arange(H))
-            im = patch.getImage()
-            cx = patch.x0 + (XX * im).sum() / im.sum()
-            cy = patch.y0 + (YY * im).sum() / im.sum()
-            print 'cx,cy', cx,cy
-            print 'px,py', px,py
-
-            self.assertLess(np.abs(cx - px), 0.1)
-            self.assertLess(np.abs(cy - py), 0.1)
-            
-            plt.clf()
-            plt.imshow(patch.getImage(), interpolation='nearest', origin='lower')
-            plt.title('dx,dy %f, %f' % (dx,dy))
-            plt.savefig('pixpsf-%i.png' % i)
-        
-
-
     def test_expgal(self):
         ra,dec = 123., 45.
         pos = RaDecPos(ra, dec)
@@ -114,49 +83,6 @@ class TractorTest(unittest.TestCase):
         tr.optimize_forced_photometry()
         print 'star', star
 
-    def test_ceres(self):
-        W,H = 100,100
-        tim1 = Image(data=np.zeros((H,W)), invvar=np.ones((H,W)),
-                     psf=NCircularGaussianPSF([2.], [1.]),
-                     photocal=LinearPhotoCal(1.))
-        tim2 = Image(data=np.zeros((H,W)), invvar=np.ones((H,W)),
-                     psf=NCircularGaussianPSF([3.], [1.]),
-                     photocal=LinearPhotoCal(1.))
-
-        star = PointSource(PixPos(W/2, H/2), Flux(100.))
-
-        from tractor.ceres_mixin import TractorCeresMixin
-        class CeresTractor(TractorCeresMixin, TractorBase):
-            pass
-        
-        tr = CeresTractor([tim1,tim2], [star])
-
-        mods = tr.getModelImages()
-        print 'mods:', mods
-        print list(mods)
-        chis = tr.getChiImages()
-        print 'chis:', chis
-        print list(chis)
-        lnp = tr.getLogProb()
-        print 'lnp', lnp
-
-        tr.freezeParam('images')
-        #dlnp,x,a = tr.optimize()
-        #print 'dlnp', dlnp
-        #print 'x', x
-        #print 'a', a
-
-        star.brightness.setParams([100.])
-        star.freezeAllBut('brightness')
-        print 'star', star
-        tr.optimize_forced_photometry()
-        print 'star', star
-
         
 if __name__ == '__main__':
     unittest.main()
-        
-    #import matplotlib
-    #matplotlib.use('Agg')
-    #import pylab as plt
-        
