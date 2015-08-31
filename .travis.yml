@@ -20,6 +20,7 @@ sudo: false
 install:
    - pip install --user numpydoc
    - pip install --user pyfits
+   - ls ~/.local
 
 # python-numpydoc -- not available until Ubuntu 14.04 trusty
 
@@ -36,6 +37,9 @@ before_script:
     - pkg-config --exists gsl
     - pkg-config --modversion gsl
     - ls /usr/include/wcslib*
+    - echo $HOME
+    - ls $HOME
+    - set
     - if [ ! -d "$HOME/astrometry.net" ]; then (cd $HOME; git clone https://github.com/dstndstn/astrometry.net.git; ln -sf /usr/include netpbm); fi
     - (cd $HOME/astrometry.net && make && make py)
     - ln -s $HOME/astrometry.net astrometry
@@ -81,6 +85,7 @@ addons:
 
 cache:
   directories:
+  - $HOME/cache/.pip
   - $HOME/astrometry.net
 
 #  - $HOME/fitsio-git
