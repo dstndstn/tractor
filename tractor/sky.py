@@ -38,6 +38,14 @@ class ConstantSky(ScalarParam, ducks.ImageCalibration):
         hdr.add_record(dict(name='SKY', comment='Sky value in Tractor model',
                             value=self.val))
 
+    def write_fits(self, filename, hdr=None):
+        tt = type(self)
+        sky_type = '%s.%s' % (tt.__module__, tt.__name__)
+        if hdr is None:
+            hdr = fitsio.FITSHDR()
+        hdr.add_record(dict(name='SKY', value=sky_type,
+                            comment='Sky class'))
+        self.toFitsHeader(hdr, prefix='SKY_')
 
+        fitsio.write(filename, None, header=hdr, clobber=True)
 
-        

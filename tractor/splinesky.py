@@ -1,8 +1,9 @@
 import numpy as np
 import scipy.interpolate as interp
 from utils import *
+import ducks
 
-class SplineSky(ParamList):
+class SplineSky(ParamList, ducks.ImageCalibration):
 
     @staticmethod
     def BlantonMethod(image, mask, gridsize):
@@ -31,7 +32,7 @@ class SplineSky(ParamList):
                     im = im[mask[ylo:yhi, xlo:xhi]]
                 if len(im):
                     grid[iy,ix] = np.median(im)
-                
+
         return SplineSky(xgrid, ygrid, grid)
         
         
@@ -45,6 +46,12 @@ class SplineSky(ParamList):
         # spline boxes)
         self.W = len(X)
         self.H = len(Y)
+
+        self.xgrid = X.copy()
+        self.ygrid = Y.copy()
+        # spl(xgrid,ygrid) = gridvals
+        #self.gridvals = bg.copy()
+
         self.order = order
         self.spl = interp.RectBivariateSpline(X, Y, bg.T,
                                               kx=order, ky=order)
@@ -178,7 +185,45 @@ class SplineSky(ParamList):
             derivs.append(False)
         return derivs
 
+    def write_fits(self, filename, hdr=None, primhdr=None):
+        tt = type(self)
+        sky_type = '%s.%s' % (tt.__module__, tt.__name__)
+        if hdr is None:
+            import fitsio
+            hdr = fitsio.FITSHDR()
 
+        if primhdr is None:
+            import fitsio
+            primhdr = fitsio.FITSHDR()
+        hdr.add_record(dict(name='SKY', value=sky_type,
+                            comment='Sky class'))
+
+        primhdr.add_record(dict(name='SKY', value=sky_type,
+                            comment='Sky class'))
+        #hdr.add_record(dict(name='SPL_ORD', value=self.order,
+        #                    comment='Spline sky order'))
+        # this writes all params as header cards
+        #self.toFitsHeader(hdr, prefix='SKY_')
+
+        #fits = fitsio.FITS(filename, 'rw')
+        #fits.write(None, header=primhdr, clobber=True)
+        #fits.write(self.c, header=hdr)
+        #fits.close()
+        from astrometry.util.fits import fits_table
+        T = fits_table()
+        T.xgrid = np.atleast_2d(self.xgrid).astype(np.int32)
+        T.ygrid = np.atleast_2d(self.ygrid).astype(np.int32)
+        gridvals = self.spl(self.xgrid, self.ygrid).T
+        T.gridvals = np.array([gridvals]).astype(np.float32)
+        T.order = np.atleast_1d(self.order)
+        assert(len(T) == 1)
+        T.writeto(filename, header=hdr, primheader=primhdr)
+
+    @classmethod
+    def from_fits(cls, filename, header):
+        from astrometry.util.fits import fits_table
+        T = fits_table(filename)
+        return cls(T.xgrid, T.ygrid, T.gridvals, order=T.order)
     
         
 if __name__ == '__main__':
