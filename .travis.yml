@@ -39,9 +39,10 @@ before_script:
     - ls /usr/include/wcslib*
     - echo $HOME
     - ls $HOME
+    - ls $HOME/astrometry.net
     - set
     - if [ ! -d "$HOME/astrometry.net" ]; then (cd $HOME; git clone https://github.com/dstndstn/astrometry.net.git; ln -sf /usr/include netpbm); fi
-    - (cd $HOME/astrometry.net && make && make py)
+    - (cd $HOME/astrometry.net && git pull && make && make py)
     - ln -s $HOME/astrometry.net astrometry
 
 #    - export SYSTEM_GSL=yes
