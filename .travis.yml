@@ -1,8 +1,10 @@
 # Travis-CI.org build script
 
-# container-based infrastructure
+# We use the container-based infrastructure
+# http://docs.travis-ci.com/user/migrating-from-legacy/?utm_source=legacy-notice&utm_medium=banner&utm_campaign=legacy-upgrade
 sudo: false
-# need APT packages to get white-listed first;
+
+# Use these APT packages once they are white-listed:
 
 # python-mock:
 # https://github.com/travis-ci/apt-package-whitelist/issues/1081
@@ -10,19 +12,13 @@ sudo: false
 # python-pyfits:
 # https://github.com/travis-ci/apt-package-whitelist/issues/1082
 
-#sudo: required
-
-# install:
-#   - sudo apt-get update -qq
-#   - sudo apt-get install -y libnetpbm10 libnetpbm10-dev wcslib-dev libcfitsio3 libcfitsio3-dev python-numpy swig gsl-bin libgsl0-dev python-sphinx sphinx-common python-matplotlib python-scipy python-mock python-pyfits
-#   - sudo pip install numpydoc
+# python-numpydoc -- not available until Ubuntu 14.04 trusty
+# (currently Travis-CI uses 12.x precise)
 
 install:
    - pip install --user numpydoc
    - pip install --user pyfits
    - ls ~/.local
-
-# python-numpydoc -- not available until Ubuntu 14.04 trusty
 
 language: c
 compiler:
@@ -34,6 +30,7 @@ before_script:
     - export NETPBM_INC="-I$(pwd)"
     - export WCSLIB_INC="-I/usr/include/wcslib-4.8.3"
     - export WCSLIB_LIB="-lwcs"
+    - export SYSTEM_GSL=yes
     - pkg-config --exists gsl
     - pkg-config --modversion gsl
     - ls /usr/include/wcslib*
@@ -49,7 +46,6 @@ before_script:
 # Clean Astrometry.net cache?
 #    - (cd $HOME; rm -R astrometry.net; git clone https://github.com/dstndstn/astrometry.net.git; cd astrometry.net; ln -sf /usr/include netpbm)
 
-#    - export SYSTEM_GSL=yes
 #    - if [ ! -d "$HOME/fitsio-git" ]; then (cd $HOME; git clone https://github.com/esheldon/fitsio.git fitsio-git); fi
 #    - (cd $HOME/fitsio-git && python setup.py install --home $HOME/fitsio)
 #    - ln -s $HOME/fitsio/lib/python/fitsio .
