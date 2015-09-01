@@ -44,18 +44,13 @@ PY_INSTALL_DIR ?= $(INSTALL_DIR)/lib/python
 
 TRACTOR_INSTALL_DIR := $(PY_INSTALL_DIR)/tractor
 
-# emfit.py mix.py
-# mp_fourier.py 
-
-# cfht.py compiled_profiles.py diesel.py galaxy_profiles.py galex.py hst.py 
-# integral_image.py mpcache.py nasasloan.py ordereddict.py overview.py 
-# rc3.py saveImg.py sdss-main-old.py sdss_galaxy_old.py source_extractor.py
-# total_ordering.py tychodata.py
-
-TRACTOR_INSTALL := __init__.py basics.py cache.py ducks.py ellipses.py engine.py \
-	fitpsf.py galaxy.py imageutils.py mixture_profiles.py motion.py \
-	patch.py psfex.py sfd.py sdss.py sersic.py splinesky.py source_extractor.py utils.py \
-	emfit.py mix.py _emfit.so _mix.so
+TRACTOR_INSTALL := __init__.py basics.py brightness.py cache.py \
+	ceres_mixin.py ducks.py ellipses.py engine.py fitpsf.py galaxy.py \
+	image.py imageutils.py lsqr_mixin.py mixture_profiles.py motion.py \
+	multiproc.py ordereddict.py patch.py pointsource.py psf.py psfex.py \
+	sdss.py sersic.py sfd.py shifted.py sky.py source_extractor.py \
+	splinesky.py tractortime.py utils.py wcs.py \
+	mix.py _mix.so emfit.py _emfit.so mp_fourier.py _mp_fourier.so
 
 WISE_INSTALL_DIR := $(PY_INSTALL_DIR)/wise
 WISE_INSTALL := __init__.py allwisecat.py forcedphot.py unwise.py wise_psf.py \
