@@ -131,6 +131,7 @@ class Sky(ImageCalibration, Params):
         parameter.
         '''
         return []
+
     def addTo(self, mod, scale=1.):
         '''
         Add the sky to the input synthetic image `mod`, a 2-D numpy
@@ -150,6 +151,11 @@ class Sky(ImageCalibration, Params):
         '''
         raise RuntimeError('Unimplemented: Sky.subtract()')
 
+    def shift(self, x0, y0):
+        '''
+        Shifts this sky model so that it applies to the subimage starting at x0,y0.
+        '''
+        pass
 
 class Source(Params):
     '''

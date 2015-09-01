@@ -61,6 +61,14 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         self.vals = c
         self.prior_smooth_sigma = None
 
+        # offset for subimage sky models.
+        self.x0 = 0
+        self.y0 = 0
+
+    def shift(self, x0,y0):
+        self.x0 += x0
+        self.y0 += y0
+
     def setPriorSmoothness(self, sigma):
         '''
         The smoothness sigma is proportional to sky-intensity units;
@@ -70,8 +78,8 @@ class SplineSky(ParamList, ducks.ImageCalibration):
 
     def addTo(self, mod, scale=1.):
         H,W = mod.shape
-        X = np.arange(W)
-        Y = np.arange(H)
+        X = np.arange(W) + self.x0
+        Y = np.arange(H) + self.y0
         S = self.spl(X, Y).T
         mod += (S * scale)
 
@@ -213,6 +221,8 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         T = fits_table()
         T.xgrid = np.atleast_2d(self.xgrid).astype(np.int32)
         T.ygrid = np.atleast_2d(self.ygrid).astype(np.int32)
+        T.x0 = np.atleast_1d(self.x0)
+        T.y0 = np.atleast_1d(self.y0)
         gridvals = self.spl(self.xgrid, self.ygrid).T
         T.gridvals = np.array([gridvals]).astype(np.float32)
         T.order = np.atleast_1d(self.order)
@@ -223,8 +233,9 @@ class SplineSky(ParamList, ducks.ImageCalibration):
     def from_fits(cls, filename, header):
         from astrometry.util.fits import fits_table
         T = fits_table(filename)
-        return cls(T.xgrid, T.ygrid, T.gridvals, order=T.order)
-    
+        sky = cls(T.xgrid, T.ygrid, T.gridvals, order=T.order)
+        sky.shift(T.x0, T.y0)
+        return sky
         
 if __name__ == '__main__':
     W,H = 1024,600
