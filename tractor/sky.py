@@ -42,6 +42,8 @@ class ConstantSky(ScalarParam, ducks.ImageCalibration):
                             value=self.val))
 
     def write_fits(self, filename, hdr=None):
+        import fitsio
+        
         tt = type(self)
         sky_type = '%s.%s' % (tt.__module__, tt.__name__)
         if hdr is None:
