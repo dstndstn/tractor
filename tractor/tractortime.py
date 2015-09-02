@@ -19,9 +19,12 @@ class TAITime(ScalarParam, ArithmeticParams):
 
     mjd2k = datetomjd(J2000)
 
-    def __init__(self, t, mjd=None):
-        if t is None and mjd is not None:
-            t = mjd * 24. * 3600.
+    def __init__(self, t, mjd=None, date=None):
+        if t is None:
+            if date is not None:
+                mjd = datetomjd(date)
+            if mjd is not None:
+                t = mjd * 24. * 3600.
         super(TAITime, self).__init__(t)
 
     def toMjd(self):

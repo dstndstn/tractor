@@ -68,7 +68,7 @@ class TractorWCSWrapper(object):
 
 
 def getParamTypeTree(param):
-    mytype = str(type(param))
+    mytype = type(param)
     if isinstance(param, MultiParams):
         return [mytype] + [getParamTypeTree(s) for s in param._getActiveSubs()]
     return [mytype]
