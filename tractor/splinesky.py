@@ -69,6 +69,15 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         self.x0 += x0
         self.y0 += y0
 
+    def offset(self, dsky):
+        sky0 = self.spl(0,0)
+        (tx, ty, c) = self.spl.tck
+        c = [ci + dsky for ci in c]
+        self.spl.tck = (tx, ty, c)
+        self.vals = c
+        sky1 = self.spl(0,0)
+        print('Offset sky by', dsky, ':', sky0, 'to', sky1)
+
     def setPriorSmoothness(self, sigma):
         '''
         The smoothness sigma is proportional to sky-intensity units;
@@ -221,11 +230,11 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         T = fits_table()
         T.xgrid = np.atleast_2d(self.xgrid).astype(np.int32)
         T.ygrid = np.atleast_2d(self.ygrid).astype(np.int32)
-        T.x0 = np.atleast_1d(self.x0)
-        T.y0 = np.atleast_1d(self.y0)
+        T.x0 = np.atleast_1d(self.x0).astype(np.int32)
+        T.y0 = np.atleast_1d(self.y0).astype(np.int32)
         gridvals = self.spl(self.xgrid, self.ygrid).T
         T.gridvals = np.array([gridvals]).astype(np.float32)
-        T.order = np.atleast_1d(self.order)
+        T.order = np.atleast_1d(self.order).astype(np.uint8)
         assert(len(T) == 1)
         T.writeto(filename, header=hdr, primheader=primhdr)
 
