@@ -1,3 +1,4 @@
+from __future__ import print_function
 from engine import *
 
 class TractorLsqrMixin(object):
@@ -11,6 +12,9 @@ class TractorLsqrMixin(object):
             justims0=None, subimgs=None, damp=None, alphas=None,
             Nsky=None, mindlnp=None, shared_params=None):
     
+        print(len(umodels), 'umodels')
+        if len(umodels) == 0:
+            return
         Nsourceparams = len(umodels[0])
         imgs = self.images
 

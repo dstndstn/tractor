@@ -76,7 +76,7 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         self.spl.tck = (tx, ty, c)
         self.vals = c
         sky1 = self.spl(0,0)
-        print('Offset sky by', dsky, ':', sky0, 'to', sky1)
+        #print('Offset sky by', dsky, ':', sky0, 'to', sky1)
 
     def setPriorSmoothness(self, sigma):
         '''
