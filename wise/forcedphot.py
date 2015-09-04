@@ -119,7 +119,10 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None, unwise_dir=
 
             
             tractor = Tractor([tim], subcat)
-            #tractor.disable_cache()
+            if use_ceres:
+                from tractor.ceres_optimizer import CeresOptimizer
+                tractor.optimizer = CeresOptimizer(BW=ceres_block,
+                                                   BH=ceres_block)
             tractor.freezeParamsRecursive('*')
             tractor.thawPathsTo(wanyband)
 
@@ -128,23 +131,20 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None, unwise_dir=
             kwa = dict(fitstat_extras=[('pronexp', [tim.nims])])
             t0 = Time()
 
-            # use_ceres=use_ceres, 
-
             R = tractor.optimize_forced_photometry(
                 minsb=minsb, mindlnp=1., sky=fitsky, fitstats=True, 
                 variance=True, shared_params=False,
-                BW=ceres_block, BH=ceres_block,
                 wantims=wantims, **kwa)
             print 'That took', Time()-t0
 
-            # if use_ceres:
-            #     term = R.ceres_status['termination']
-            #     print 'Ceres termination status:', term
-            #     # Running out of memory can cause failure to converge
-            #     # and term status = 2.
-            #     # Fail completely in this case.
-            #     if term != 0:
-            #         raise RuntimeError('Ceres terminated with status %i' % term)
+            if use_ceres:
+                term = R.ceres_status['termination']
+                print 'Ceres termination status:', term
+                # Running out of memory can cause failure to converge
+                # and term status = 2.
+                # Fail completely in this case.
+                if term != 0:
+                    raise RuntimeError('Ceres terminated with status %i' % term)
 
             if wantims:
                 ims0 = R.ims0
