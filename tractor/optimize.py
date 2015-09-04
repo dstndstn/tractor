@@ -1,6 +1,6 @@
 import numpy as np
 from astrometry.util.ttime import Time
-from .engine import logverb, OptResult
+from .engine import logverb, OptResult, logmsg
 
 class Optimizer(object):
     def optimize(self, tractor, alphas=None, damp=0, priors=True,
@@ -131,7 +131,7 @@ class Optimizer(object):
         elif fitstats:
             t0 = Time()
             result.fitstats = self._get_fitstats(
-                catalog, imsBest, srcs, imlist, umodsforsource,
+                tractor.catalog, imsBest, srcs, imlist, umodsforsource,
                 umodels, scales, nilcounts, extras=fitstat_extras)
             logverb('forced phot: fit stats:', Time()-t0)
         return result
