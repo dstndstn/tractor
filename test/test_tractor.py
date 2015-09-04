@@ -62,7 +62,7 @@ class TractorTest(unittest.TestCase):
         star = PointSource(PixPos(W/2, H/2), Flux(100.))
         
 
-        for opt in [None, CeresOptimizer()]:
+        for opt in [None]: #, CeresOptimizer()]:
             tr = Tractor([tim1,tim2], [star], optimizer=opt)
             mods = tr.getModelImages()
             print 'mods:', mods
