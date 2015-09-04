@@ -1,3 +1,4 @@
+from __future__ import print_function
 from engine import *
 
 class TractorLsqrMixin(object):
@@ -11,6 +12,9 @@ class TractorLsqrMixin(object):
             justims0=None, subimgs=None, damp=None, alphas=None,
             Nsky=None, mindlnp=None, shared_params=None):
     
+        print(len(umodels), 'umodels')
+        if len(umodels) == 0:
+            return
         Nsourceparams = len(umodels[0])
         imgs = self.images
 
@@ -79,11 +83,11 @@ class TractorLsqrMixin(object):
                 result.ims0 = ims0
                 return
 
-            # print 'Starting opt loop with'
-            # print '  p0', p0
-            # print '  lnp0', lnp0
-            # print '  chisqs', [(chi**2).sum() for chi in chis0]
-            # print 'chis0:', chis0
+            # print('Starting opt loop with')
+            # print('  p0', p0)
+            # print('  lnp0', lnp0)
+            # print('  chisqs', [(chi**2).sum() for chi in chis0])
+            # print('chis0:', chis0)
 
             # Ugly: getUpdateDirection calls self.getImages(), and
             # ASSUMES they are the same as the images referred-to in
@@ -100,12 +104,12 @@ class TractorLsqrMixin(object):
                                         shared_params=shared_params)
             topt = Time()-t0
             logverb('forced phot: opt:', topt)
-            #print 'forced phot: update', X
+            #print('forced phot: update', X)
             if rois is not None:
                 self.images = realims
 
             if len(X) == 0:
-                print 'Error getting update direction'
+                print('Error getting update direction')
                 break
             
             ## tryUpdates():
@@ -125,19 +129,19 @@ class TractorLsqrMixin(object):
             # alpha=1 and quit.
 
             if (minFlux is None) or np.all((p0 + X) >= minFlux):
-                #print 'Update produces non-negative fluxes; accepting with alpha=1'
+                #print('Update produces non-negative fluxes; accepting with alpha=1')
                 alphas = [1.]
                 quitNow = True
             else:
-                print 'Some too-negative fluxes requested:'
-                print 'Fluxes:', p0
-                print 'Update:', X
-                print 'Total :', p0+X
-                print 'MinFlux:', minFlux
+                print('Some too-negative fluxes requested:')
+                print('Fluxes:', p0)
+                print('Update:', X)
+                print('Total :', p0+X)
+                print('MinFlux:', minFlux)
                 if damp == 0.0:
                     damping = damp0
                     damp0 *= 10.
-                    print 'Setting damping to', damping
+                    print('Setting damping to', damping)
                     if damp0 < 1e3:
                         tryAgain = True
 
@@ -180,10 +184,10 @@ class TractorLsqrMixin(object):
                 alpha = alphaBest
                 lnp0 = lnpBest
                 chis0 = chiBest
-                # print 'Accepting alpha =', alpha
-                # print 'new lnp0', lnp0
-                # print 'new chisqs', [(chi**2).sum() for chi in chis0]
-                # print 'new params', self.getParams()
+                # print('Accepting alpha =', alpha)
+                # print('new lnp0', lnp0)
+                # print('new chisqs', [(chi**2).sum() for chi in chis0])
+                # print('new params', self.getParams())
             else:
                 dlogprob = 0.
                 alpha = 0.
@@ -195,8 +199,8 @@ class TractorLsqrMixin(object):
                     self.images.setParams(p0sky)
 
             #tstep = Time() - t0
-            #print 'forced phot: line search:', tstep
-            #print 'forced phot: alpha', alphaBest, 'for delta-lnprob', dlogprob
+            #print('forced phot: line search:', tstep)
+            #print('forced phot: alpha', alphaBest, 'for delta-lnprob', dlogprob)
             if dlogprob < mindlnp:
                 if not tryAgain:
                     break
@@ -242,11 +246,11 @@ class TractorLsqrMixin(object):
         t0 = Time()
         allderivs = self.getDerivs()
         tderivs = Time()-t0
-        #print Time() - t0
-        #print 'allderivs:', allderivs
+        #print(Time() - t0)
+        #print('allderivs:', allderivs)
         #for d in allderivs:
         #   for (p,im) in d:
-        #       print 'patch mean', np.mean(p.patch)
+        #       print('patch mean', np.mean(p.patch))
         logverb('Finding optimal update direction...')
         t0 = Time()
         X = self.getUpdateDirection(allderivs, damp=damp, priors=priors,
@@ -262,9 +266,9 @@ class TractorLsqrMixin(object):
             X,var = X
             if just_variance:
                 return var
-        #print Time() - t0
+        #print(Time() - t0)
         topt = Time()-t0
-        #print 'X:', X
+        #print('X:', X)
         if len(X) == 0:
             return 0, X, 0.
         logverb('X: len', len(X), '; non-zero entries:', np.count_nonzero(X))
@@ -327,8 +331,8 @@ class TractorLsqrMixin(object):
             U,I = np.unique(p1, return_inverse=True)
             logverb(len(p0), 'params;', len(U), 'unique')
             paramindexmap = I
-            #print 'paramindexmap:', paramindexmap
-            #print 'p1:', p1
+            #print('paramindexmap:', paramindexmap)
+            #print('p1:', p1)
             
         # Build the sparse matrix of derivatives:
         sprows = []
@@ -343,7 +347,7 @@ class TractorLsqrMixin(object):
                 if img in imgoffs:
                     continue
                 imgoffs[img] = nextrow
-                #print 'Putting image', img.name, 'at row offset', nextrow
+                #print('Putting image', img.name, 'at row offset', nextrow)
                 nextrow += img.numberOfPixels()
         Nrows = nextrow
         del nextrow
@@ -363,18 +367,18 @@ class TractorLsqrMixin(object):
                 deriv.clipTo(W, H)
                 pix = deriv.getPixelIndices(img)
                 if len(pix) == 0:
-                    #print 'This param does not influence this image!'
+                    #print('This param does not influence this image!')
                     continue
 
                 assert(np.all(pix < img.numberOfPixels()))
                 # (grab non-zero indices)
                 dimg = deriv.getImage()
                 nz = np.flatnonzero(dimg)
-                #print '  source', j, 'derivative', p, 'has', len(nz), 'non-zero entries'
+                #print('  source', j, 'derivative', p, 'has', len(nz), 'non-zero entries')
                 if len(nz) == 0:
                     continue
                 rows = row0 + pix[nz]
-                #print 'Adding derivative', deriv.getName(), 'for image', img.name
+                #print('Adding derivative', deriv.getName(), 'for image', img.name)
                 vals = dimg.flat[nz]
                 w = inverrs[deriv.getSlice(img)].flat[nz]
                 assert(vals.shape == w.shape)
@@ -389,15 +393,7 @@ class TractorLsqrMixin(object):
             rows = np.hstack(RR)
             VV = np.hstack(VV)
             WW = np.hstack(WW)
-            #vals = np.hstack(VV) * np.hstack(WW)
-            #print 'VV absmin:', np.min(np.abs(VV))
-            #print 'WW absmin:', np.min(np.abs(WW))
-            #print 'VV type', VV.dtype
-            #print 'WW type', WW.dtype
             vals = VV * WW
-            #print 'vals absmin:', np.min(np.abs(vals))
-            #print 'vals absmax:', np.max(np.abs(vals))
-            #print 'vals type', vals.dtype
 
             # shouldn't be necessary since we check len(nz)>0 above
             #if len(vals) == 0:
@@ -475,13 +471,13 @@ class TractorLsqrMixin(object):
         
         if shared_params:
             # Apply shared parameter map
-            #print 'Before applying shared parameter map:'
-            #print 'spcols:', len(spcols), 'elements'
-            #print '  ', len(set(spcols)), 'unique'
+            #print('Before applying shared parameter map:')
+            #print('spcols:', len(spcols), 'elements')
+            #print('  ', len(set(spcols)), 'unique')
             spcols = paramindexmap[spcols]
-            #print 'After:'
-            #print 'spcols:', len(spcols), 'elements'
-            #print '  ', len(set(spcols)), 'unique'
+            #print('After:')
+            #print('spcols:', len(spcols), 'elements')
+            #print('  ', len(set(spcols)), 'unique')
             Ncols = np.max(spcols) + 1
             logverb('Set Ncols=', Ncols)
 
@@ -504,20 +500,20 @@ class TractorLsqrMixin(object):
         for img,row0 in imgoffs.items():
             chi = chimap.get(img, None)
             if chi is None:
-                #print 'computing chi image'
+                #print('computing chi image')
                 chi = self.getChiImage(img=img)
             chi = chi.ravel()
             NP = len(chi)
             # we haven't touched these pix before
             assert(np.all(b[row0 : row0 + NP] == 0))
             assert(np.all(np.isfinite(chi)))
-            #print 'Setting [%i:%i) from chi img' % (row0, row0+NP)
+            #print('Setting [%i:%i) from chi img' % (row0, row0+NP))
             b[row0 : row0 + NP] = chi
         ###### Zero out unused rows -- FIXME, is this useful??
-        # print 'Nrows', Nrows, 'vs len(urows)', len(urows)
+        # print('Nrows', Nrows, 'vs len(urows)', len(urows))
         # bnz = np.zeros(Nrows)
         # bnz[urows] = b[urows]
-        # print 'b', len(b), 'vs bnz', len(bnz)
+        # print('b', len(b), 'vs bnz', len(bnz))
         # b = bnz
         assert(np.all(np.isfinite(b)))
 
@@ -526,7 +522,7 @@ class TractorLsqrMixin(object):
 
         spvals = np.hstack(spvals)
         if not np.all(np.isfinite(spvals)):
-            print 'Warning: infinite derivatives; bailing out'
+            print('Warning: infinite derivatives; bailing out')
             return None
         assert(np.all(np.isfinite(spvals)))
 
@@ -574,11 +570,10 @@ class TractorLsqrMixin(object):
         logverb('LSQR: %i cols (%i unique), %i elements' %
                (Ncols, len(ucols), len(spvals)-1))
 
-        # print 'A matrix:'
-        # print A.todense()
-        # print
-        # print 'vector b:'
-        # print b
+        # print('A matrix:')
+        # print(A.todense())
+        # print('vector b:')
+        # print(b)
 
         bail = False
         try:
@@ -587,7 +582,7 @@ class TractorLsqrMixin(object):
             (X, istop, niters, r1norm, r2norm, anorm, acond,
              arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
         except ZeroDivisionError:
-            print 'ZeroDivisionError caught.  Returning zero.'
+            print('ZeroDivisionError caught.  Returning zero.')
             bail = True
         # finally:
         np.seterr(**oldsettings)
@@ -600,16 +595,16 @@ class TractorLsqrMixin(object):
                 return np.zeros(len(paramindexmap))
             return np.zeros(len(allderivs))
 
-        # print 'LSQR results:'
-        # print '  istop =', istop
-        # print '  niters =', niters
-        # print '  r1norm =', r1norm
-        # print '  r2norm =', r2norm
-        # print '  anorm =', anorm
-        # print '  acord =', acond
-        # print '  arnorm =', arnorm
-        # print '  xnorm =', xnorm
-        # print '  var =', var
+        # print('LSQR results:')
+        # print('  istop =', istop)
+        # print('  niters =', niters)
+        # print('  r1norm =', r1norm)
+        # print('  r2norm =', r2norm)
+        # print('  anorm =', anorm)
+        # print('  acord =', acond)
+        # print('  arnorm =', arnorm)
+        # print('  xnorm =', xnorm)
+        # print('  var =', var)
         
         logverb('scaled  X=', X)
         X = np.array(X)
@@ -638,9 +633,9 @@ class TractorLsqrMixin(object):
         return X
 
     def getParameterScales(self):
-        print self.getName()+': Finding derivs...'
+        print(self.getName()+': Finding derivs...')
         allderivs = self.getDerivs()
-        print 'Finding column scales...'
+        print('Finding column scales...')
         s = self.getUpdateDirection(allderivs, scales_only=True)
         return s
 
