@@ -1,7 +1,6 @@
 from __future__ import print_function
 import os
 import numpy as np
-import pyfits
 import fitsio
 
 from astrometry.util.util import Tan
