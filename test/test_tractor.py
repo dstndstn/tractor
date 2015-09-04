@@ -7,6 +7,7 @@ import unittest
 from tractor import *
 from tractor.sdss import *
 from tractor.galaxy import *
+from tractor.ceres_optimizer import CeresOptimizer
 
 class TractorTest(unittest.TestCase):
     def test_expgal(self):
@@ -60,28 +61,31 @@ class TractorTest(unittest.TestCase):
 
         star = PointSource(PixPos(W/2, H/2), Flux(100.))
         
-        tr = Tractor([tim1,tim2], [star])
 
-        mods = tr.getModelImages()
-        print 'mods:', mods
-        print list(mods)
-        chis = tr.getChiImages()
-        print 'chis:', chis
-        print list(chis)
-        lnp = tr.getLogProb()
-        print 'lnp', lnp
-
-        tr.freezeParam('images')
-        dlnp,x,a = tr.optimize()
-        print 'dlnp', dlnp
-        print 'x', x
-        print 'a', a
-
-        star.brightness.setParams([100.])
-        star.freezeAllBut('brightness')
-        print 'star', star
-        tr.optimize_forced_photometry()
-        print 'star', star
+        for opt in [None, CeresOptimizer()]:
+            tr = Tractor([tim1,tim2], [star], optimizer=opt)
+            mods = tr.getModelImages()
+            print 'mods:', mods
+            print list(mods)
+            chis = tr.getChiImages()
+            print 'chis:', chis
+            print list(chis)
+            lnp = tr.getLogProb()
+            print 'lnp', lnp
+    
+            tr.freezeParam('images')
+            X = tr.optimize()
+            # dlnp,x,a
+            # print 'dlnp', dlnp
+            # print 'x', x
+            # print 'a', a
+            print 'opt result:', X
+            
+            star.brightness.setParams([100.])
+            star.freezeAllBut('brightness')
+            print 'star', star
+            tr.optimize_forced_photometry()
+            print 'star', star
 
         
 if __name__ == '__main__':

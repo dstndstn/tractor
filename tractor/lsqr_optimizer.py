@@ -1,12 +1,12 @@
 from __future__ import print_function
-from engine import *
+from .engine import *
+from .optimize import Optimizer
 
-class TractorLsqrMixin(object):
+class LsqrOptimizer(Optimizer):
 
     def _optimize_forcedphot_core(
-            self,
+            self, tractor,
             result, umodels, imlist, mod0, scales, skyderivs, minFlux,
-            BW, BH,
             nonneg=None, wantims0=None, wantims1=None,
             negfluxval=None, rois=None, priors=None, sky=None,
             justims0=None, subimgs=None, damp=None, alphas=None,
@@ -16,7 +16,7 @@ class TractorLsqrMixin(object):
         if len(umodels) == 0:
             return
         Nsourceparams = len(umodels[0])
-        imgs = self.images
+        imgs = tractor.images
 
         t0 = Time()
         derivs = [[] for i in range(Nsourceparams)]
@@ -30,13 +30,14 @@ class TractorLsqrMixin(object):
             # Sky derivatives are part of the image derivatives, so go
             # first in the derivative list.
             derivs = skyderivs + derivs
-        assert(len(derivs) == self.numberOfParams())
+        assert(len(derivs) == tractor.numberOfParams())
         self._lsqr_forced_photom(
-            result, derivs, mod0, imgs, umodels, rois, scales, priors, sky,
-            minFlux, justims0, subimgs, damp, alphas, Nsky, mindlnp,
-            shared_params)
+            tractor, result, derivs, mod0, imgs, umodels,
+            rois, scales, priors, sky, minFlux, justims0, subimgs,
+            damp, alphas, Nsky, mindlnp, shared_params)
 
-    def _lsqr_forced_photom(self, result, derivs, mod0, imgs, umodels, rois, scales,
+    def _lsqr_forced_photom(self, tractor, result, derivs, mod0, imgs, umodels,
+                            rois, scales,
                             priors, sky, minFlux, justims0, subimgs,
                             damp, alphas, Nsky, mindlnp, shared_params):
         # About rois and derivs: we call
@@ -64,7 +65,7 @@ class TractorLsqrMixin(object):
             # A flag to try again even if the lnprob got worse
             tryAgain = False
 
-            p0 = self.getParams()
+            p0 = tractor.getParams()
             if sky:
                 p0sky = p0[:Nsky]
                 p0 = p0[Nsky:]
@@ -72,6 +73,7 @@ class TractorLsqrMixin(object):
             if lnp0 is None:
                 t0 = Time()
                 lnp0,chis0,ims0 = self._lnp_for_update(
+                    tractor,
                     mod0, imgs, umodels, None, None, p0, rois, scales,
                     None, None, priors, sky, minFlux)
                 logverb('forced phot: initial lnp = ', lnp0, 'took', Time()-t0)
@@ -94,19 +96,20 @@ class TractorLsqrMixin(object):
             # the "derivs", to figure out which chi image goes with
             # which image.  Temporarily set images = subimages
             if rois is not None:
-                realims = self.images
-                self.images = subimgs
+                realims = tractor.images
+                tractor.images = subimgs
 
             logverb('forced phot: getting update with damp=', damping)
             t0 = Time()
-            X = self.getUpdateDirection(derivs, damp=damping, priors=priors,
+            X = self.getUpdateDirection(tractor, derivs, damp=damping,
+                                        priors=priors,
                                         scale_columns=False, chiImages=chis0,
                                         shared_params=shared_params)
             topt = Time()-t0
             logverb('forced phot: opt:', topt)
             #print('forced phot: update', X)
             if rois is not None:
-                self.images = realims
+                tractor.images = realims
 
             if len(X) == 0:
                 print('Error getting update direction')
@@ -152,6 +155,7 @@ class TractorLsqrMixin(object):
             for alpha in alphas:
                 t0 = Time()
                 lnp,chis,ims = self._lnp_for_update(
+                    tractor,
                     mod0, imgs, umodels, X, alpha, p0, rois, scales,
                     p0sky, Xsky, priors, sky, minFlux)
                 logverb('Forced phot: stepped with alpha', alpha,
@@ -174,10 +178,10 @@ class TractorLsqrMixin(object):
                     pa = [max(minFlux, p + alphaBest * d) for p,d in zip(p0, X)]
                 else:
                     pa = [p + alphaBest * d for p,d in zip(p0, X)]
-                self.catalog.setParams(pa)
+                tractor.catalog.setParams(pa)
 
                 if sky:
-                    self.images.setParams([p + alpha * d for p,d
+                    tractor.images.setParams([p + alpha * d for p,d
                                            in zip(p0sky, Xsky)])
 
                 dlogprob = lnpBest - lnp0
@@ -196,7 +200,7 @@ class TractorLsqrMixin(object):
                 if sky:
                     # Revert -- recall that we change params while probing in
                     # lnpForUpdate()
-                    self.images.setParams(p0sky)
+                    tractor.images.setParams(p0sky)
 
             #tstep = Time() - t0
             #print('forced phot: line search:', tstep)
@@ -210,18 +214,18 @@ class TractorLsqrMixin(object):
         result.ims0 = ims0
         result.ims1 = imsBest
     
-    def _lnp_for_update(self, mod0, imgs, umodels, X, alpha, p0, rois,
+    def _lnp_for_update(self, tractor, mod0, imgs, umodels, X, alpha, p0, rois,
                         scales, p0sky, Xsky, priors, sky, minFlux):
         if X is None:
             pa = p0
         else:
             pa = [p + alpha * d for p,d in zip(p0, X)]
         if Xsky is not None:
-            self.images.setParams([p + alpha * d for p,d in zip(p0sky, Xsky)])
+            tractor.images.setParams([p + alpha * d for p,d in zip(p0sky, Xsky)])
 
         lnp = 0.
         if priors:
-            lnp += self.getLogPrior()
+            lnp += tractor.getLogPrior()
             if not np.isfinite(lnp):
                 return lnp, None, None
             
@@ -240,11 +244,12 @@ class TractorLsqrMixin(object):
         return lnp, chis, ims
 
     
-    def optimize(self, alphas=None, damp=0, priors=True, scale_columns=True,
+    def optimize(self, tractor, alphas=None, damp=0, priors=True,
+                 scale_columns=True,
                  shared_params=True, variance=False, just_variance=False):
-        logverb(self.getName()+': Finding derivs...')
+        logverb(tractor.getName()+': Finding derivs...')
         t0 = Time()
-        allderivs = self.getDerivs()
+        allderivs = tractor.getDerivs()
         tderivs = Time()-t0
         #print(Time() - t0)
         #print('allderivs:', allderivs)
@@ -253,7 +258,8 @@ class TractorLsqrMixin(object):
         #       print('patch mean', np.mean(p.patch))
         logverb('Finding optimal update direction...')
         t0 = Time()
-        X = self.getUpdateDirection(allderivs, damp=damp, priors=priors,
+        X = self.getUpdateDirection(tractor, allderivs, damp=damp,
+                                    priors=priors,
                                     scale_columns=scale_columns,
                                     shared_params=shared_params,
                                     variance=variance)
@@ -274,7 +280,7 @@ class TractorLsqrMixin(object):
         logverb('X: len', len(X), '; non-zero entries:', np.count_nonzero(X))
         logverb('Finding optimal step size...')
         t0 = Time()
-        (dlogprob, alpha) = self.tryUpdates(X, alphas=alphas)
+        (dlogprob, alpha) = self.tryUpdates(tractor, X, alphas=alphas)
         tstep = Time() - t0
         logverb('Finished opt2.')
         logverb('  alpha =',alpha)
@@ -285,7 +291,7 @@ class TractorLsqrMixin(object):
             return dlogprob, X, alpha, var
         return dlogprob, X, alpha
 
-    def getUpdateDirection(self, allderivs, damp=0., priors=True,
+    def getUpdateDirection(self, tractor, allderivs, damp=0., priors=True,
                            scale_columns=True, scales_only=False,
                            chiImages=None, variance=False,
                            shared_params=True,
@@ -324,10 +330,10 @@ class TractorLsqrMixin(object):
 
         if shared_params:
             # Find shared parameters
-            p0 = self.getParams()
-            self.setParams(np.arange(len(p0)))
-            p1 = self.getParams()
-            self.setParams(p0)
+            p0 = tractor.getParams()
+            tractor.setParams(np.arange(len(p0)))
+            p1 = tractor.getParams()
+            tractor.setParams(p0)
             U,I = np.unique(p1, return_inverse=True)
             logverb(len(p0), 'params;', len(U), 'unique')
             paramindexmap = I
@@ -440,7 +446,7 @@ class TractorLsqrMixin(object):
             # necessarily column-oriented the way the other params
             # are.  It would be possible to make it work, but dstn is
             # not convinced it's worth the effort right now.
-            X = self.getLogPriorDerivatives()
+            X = tractor.getLogPriorDerivatives()
             if X is not None:
                 rA,cA,vA,pb = X
 
@@ -491,7 +497,7 @@ class TractorLsqrMixin(object):
 
         chimap = {}
         if chiImages is not None:
-            for img,chi in zip(self.getImages(), chiImages):
+            for img,chi in zip(tractor.getImages(), chiImages):
                 chimap[img] = chi
 
         ## FIXME -- could compute just chi ROIs here.
@@ -501,7 +507,7 @@ class TractorLsqrMixin(object):
             chi = chimap.get(img, None)
             if chi is None:
                 #print('computing chi image')
-                chi = self.getChiImage(img=img)
+                chi = tractor.getChiImage(img=img)
             chi = chi.ravel()
             NP = len(chi)
             # we haven't touched these pix before
@@ -632,10 +638,10 @@ class TractorLsqrMixin(object):
 
         return X
 
-    def getParameterScales(self):
-        print(self.getName()+': Finding derivs...')
-        allderivs = self.getDerivs()
-        print('Finding column scales...')
-        s = self.getUpdateDirection(allderivs, scales_only=True)
-        return s
+    # def getParameterScales(self):
+    #     print(self.getName()+': Finding derivs...')
+    #     allderivs = self.getDerivs()
+    #     print('Finding column scales...')
+    #     s = self.getUpdateDirection(allderivs, scales_only=True)
+    #     return s
 

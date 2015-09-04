@@ -23,7 +23,7 @@ class NullWCS(BaseParams, ducks.ImageCalibration):
         return x - self.dx, y - self.dy
     def cdAtPixel(self, x, y):
         return np.array([[1.,0.],[0.,1.]]) * self.pixscale / 3600.
-    def getShifted(self, x, y):
+    def shifted(self, x, y):
         return self.copy()
 
 class WcslibWcs(BaseParams, ducks.ImageCalibration):
@@ -145,7 +145,7 @@ class ConstantFitsWcs(ParamList, ducks.ImageCalibration):
         copy.y0 = self.y0
         return copy
 
-    def getShifted(self, dx, dy):
+    def shifted(self, dx, dy):
         copy = self.copy()
         x,y = self.getX0Y0()
         copy.setX0Y0(x+dx, y+dy)
@@ -263,7 +263,7 @@ class TanWcs(ConstantFitsWcs, ducks.ImageCalibration):
         wcs.setX0Y0(self.x0, self.y0)
         return wcs
 
-    def getShifted(self, dx, dy):
+    def shifted(self, dx, dy):
         copy = self.copy()
         x,y = self.getX0Y0()
         copy.setX0Y0(x+dx, y+dy)
