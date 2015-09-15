@@ -409,9 +409,9 @@ class Tractor(MultiParams):
             patch.addTo(mod)
         return mod
 
-    def getModelImages(self):
+    def getModelImages(self, **kwargs):
         for img in self.images:
-            yield self.getModelImage(img)
+            yield self.getModelImage(img, **kwargs)
         
     def getChiImages(self):
         for img in self.images:
