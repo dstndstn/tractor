@@ -34,6 +34,12 @@ class ConstantSky(ScalarParam, ducks.ImageCalibration):
     def subtract(self, con):
         self.val -= con
 
+    def scale(self, s):
+        '''
+        Scales this sky model by a factor of *s*.
+        '''
+        self.val *= s
+
     def shift(self, x0,y0):
         pass
 

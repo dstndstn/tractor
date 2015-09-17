@@ -70,13 +70,24 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         self.y0 += y0
 
     def offset(self, dsky):
-        sky0 = self.spl(0,0)
+        #sky0 = self.spl(0,0)
         (tx, ty, c) = self.spl.tck
         c = [ci + dsky for ci in c]
         self.spl.tck = (tx, ty, c)
         self.vals = c
-        sky1 = self.spl(0,0)
+        #sky1 = self.spl(0,0)
         #print('Offset sky by', dsky, ':', sky0, 'to', sky1)
+
+    def scale(self, s):
+        '''
+        Scales this sky model by a factor of *s*.
+        '''
+        sky0 = self.spl(0,0)
+        (tx,ty,c) = self.spl.tck
+        c *= s
+        self.vals = c
+        sky1 = self.spl(0,0)
+        print('Scaled sky:', sky0, 'x', s, '=', sky0*s, 'vs', sky1)
 
     def setPriorSmoothness(self, sigma):
         '''

@@ -6,6 +6,8 @@ numpy_inc = get_numpy_include_dirs()
 c_swig_module = Extension('_mp_fourier',
 						  sources = ['mp_fourier_wrap.c' ],
 						  include_dirs = numpy_inc,
+                          extra_compile_args=['-g'],
+                          extra_link_args=['-g'],
     )
 #extra_objects = [],
 #undef_macros=['NDEBUG'],
