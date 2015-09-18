@@ -93,6 +93,9 @@ class EllipseE(ParamList):
     def isLegal(self):
         return ((self.e1**2 + self.e2**2) < 1.) and (self.re >= 0.)
 
+    def toEllipseE(self, **kwargs):
+        return self.copy()
+
     def getCovariance(self):
         '''
         Returns a covariance matrix that when, eg, used in a Gaussian
@@ -236,6 +239,9 @@ class EllipseESoft(EllipseE):
     # unlike the superclass.
     def isLegal(self):
         return True
+
+    def toEllipseE(self, maxe=0.999999):
+        return EllipseESoft.fromEllipseESoft(self, maxe=maxe)
     
 if __name__ == '__main__':
     ps = PlotSequence('ell')
