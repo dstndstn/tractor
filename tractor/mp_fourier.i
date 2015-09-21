@@ -18,6 +18,8 @@
  } // fool emacs indenter
 #endif
 
+#include "mp_fourier.c"
+
 static PyObject* mixture_profile_fourier_transform(
     PyObject* np_amps,
     PyObject* np_means,
@@ -109,34 +111,9 @@ static PyObject* mixture_profile_fourier_transform(
 
     double mu0 = means[0];
     double mu1 = means[1];
-    double* ff = f;
-    for (j=0; j<NW; j++) {
-        for (i=0; i<NV; i++) {
-            double s = 0;
-            double* V = vars;
-            double twopisquare = -2. * M_PI * M_PI;
-            for (k=0; k<K; k++) {
-                double a, b, d;
-                a = *V;
-                V++;
-                b = *V;
-                V++;
-                // skip c
-                V++;
-                d = *V;
-                V++;
 
-                s += amps[k] * exp(twopisquare * (a *  vv[i]*vv[i] +
-                                                  2.*b*vv[i]*ww[j] +
-                                                  d *  ww[j]*ww[j]));
-            }
-            double angle = -2. * M_PI * (mu0 * vv[i] + mu1 * ww[j]);
-            *ff = s * cos(angle);
-            ff++;
-            *ff = s * sin(angle);
-            ff++;
-        }
-    }
+    mp_fourier_core(NW, NV, K, mu0, mu1, vv, ww, amps, vars, f);
+
     return np_F;
 }
 
