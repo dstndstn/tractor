@@ -163,6 +163,7 @@ class MixtureOfGaussians():
             f = mp_fourier.mixture_profile_fourier_transform(
                 self.amp, self.mean, self.var, v, w)
             # t1 = time.clock()
+            print 'mp_fourier: mean', self.mean
             # print 'mp_fourier:', t1-t0
             # print repr(self.amp)
             # print repr(self.mean)

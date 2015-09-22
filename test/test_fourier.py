@@ -118,7 +118,7 @@ def test_fft(ps):
     modelmasks[gal] = Patch(int(x-mmsz/2), int(y-mmsz/2),
                             np.ones((mmsz,mmsz), bool))
     tr = Tractor([img], cat)
-    tr.disable_cache()
+    #tr.disable_cache()
 
     
 def test_galaxy_grid(ps, args):
@@ -166,7 +166,7 @@ def test_galaxy_grid(ps, args):
 
             
     tr = Tractor([img], cat)
-    tr.disable_cache()
+    #tr.disable_cache()
 
     if testname is not None:
         t0 = Time()
@@ -329,7 +329,7 @@ def test_model_masks(ps):
     
     
     tr = Tractor([img], [gal])
-    tr.disable_cache()
+    #tr.disable_cache()
     
     img.psf = gpsf
     mod_mog = tr.getModelImage(0)
@@ -365,6 +365,8 @@ def test_model_masks(ps):
     
     for mask in [mask1, mask2, mask3, mask4, mask5, mask6]:
     
+        print
+        print 'Mask:', mask
         print
         print 'MoG:'
     
@@ -440,6 +442,80 @@ def test_model_masks(ps):
     plt.title('Diff')
     ps.savefig()
     
+
+
+def test_one_model_mask(ps):
+    W,H = 50,50
+    cx,cy = W/2., H/2.
+    #gal = ExpGalaxy(PixPos(cx,cy), Flux(100.), EllipseESoft(1., 0., 0.5))
+    gal = ExpGalaxy(PixPos(25.4, 24.9), Flux(100.), EllipseESoft(1., 0., 0.5))
+    halfsize = 25
+    
+    gpsf = NCircularGaussianPSF([2.], [1.])
+    gpsf.radius = halfsize
+    psfimg = gpsf.getPointSourcePatch(0., 0., radius=15)
+    print 'PSF image size', psfimg.shape
+    pixpsf = PixelizedPSF(psfimg.patch)
+    data=np.zeros((H,W), np.float32)
+    img = Image(data=data, invvar=np.ones_like(data), psf=gpsf)
+    
+    dfrac = 0.01
+    
+    mask1 = Patch(10, 10, np.ones((30,30), bool))
+    mask2 = Patch(15, 10, np.ones((29,30), bool))
+    mask3 = Patch(0, 0, np.ones((20,20), bool))
+    mask4 = Patch(30, 30, np.ones((20,20), bool))
+    mask5 = Patch(20, 20, np.ones((10,10), bool))
+    mask6 = Patch(-25, -25, np.ones((100,100), bool))
+    
+    print 'One modelMask'
+    
+    #for mask in [mask5]: #, mask2, mask3, mask4, mask5, mask6]:
+    for m in range(-5, 40, 5):
+        mask = Patch(m, 15, np.ones((20,20), bool))
+    
+        print
+        print 'Mask:', mask
+        print
+        print 'MoG:'
+    
+        img.psf = gpsf
+        mod_mog = gal.getModelPatch(img, modelMask=mask)
+        assert(mod_mog.x0 == mask.x0)
+        assert(mod_mog.y0 == mask.y0)
+        assert(mod_mog.shape == mask.shape)
+    
+        print
+        print 'FFT:'
+    
+        img.psf = pixpsf
+        mod_fft = gal.getModelPatch(img, modelMask=mask)
+        assert(mod_fft.x0 == mask.x0)
+        assert(mod_fft.y0 == mask.y0)
+        assert(mod_fft.shape == mask.shape)
+    
+        mx = mod_mog.patch.max()
+        ima = dict(vmin=0.05*mx, vmax=0.95*mx)
+        diffa = dict(vmin=-dfrac*mx, vmax=dfrac*mx)
+
+        h,w = mod_mog.shape
+        xx,yy = np.meshgrid(np.arange(w), np.arange(h))
+
+        print 'MoG centroid:', np.sum(mod_mog.patch * xx) / np.sum(mod_mog.patch), np.sum(mod_mog.patch * yy) / np.sum(mod_mog.patch)
+        print 'FFT centroid:', np.sum(mod_fft.patch * xx) / np.sum(mod_fft.patch), np.sum(mod_fft.patch * yy) / np.sum(mod_fft.patch)
+        
+        plt.clf()
+        plt.subplot(1,3,1)
+        dimshow(mod_mog.patch, **ima)
+        plt.title('MoG')
+        plt.subplot(1,3,2)
+        dimshow(mod_fft.patch, **ima)
+        plt.title('FFT')
+        plt.subplot(1,3,3)
+        dimshow(mod_mog.patch - mod_fft.patch, **diffa)
+        plt.title('Diff')
+        ps.savefig()
+
     
 
 
@@ -551,8 +627,8 @@ def test_psfex(ps):
     tr2 = Tractor([tim], [gal])
 
     disable_galaxy_cache()
-    tr1.disable_cache()
-    tr2.disable_cache()
+    #tr1.disable_cache()
+    #tr2.disable_cache()
     
     tim.psf = psf
     mod = tr1.getModelImage(0)
@@ -614,14 +690,17 @@ if __name__ == '__main__':
     parser = optparse.OptionParser()
     opt,args = parser.parse_args()
 
-    test_galaxy_grid(ps, args)
+    test_one_model_mask(ps)
     sys.exit(0)
+
+    test_model_masks(ps)
+    
+    test_galaxy_grid(ps, args)
 
     test_mixture_profiles(ps)
     
     test_psfex(ps)
 
     test_fft(ps)
-    test_model_masks(ps)
 
     

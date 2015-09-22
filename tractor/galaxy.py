@@ -1,3 +1,4 @@
+
 """
 This file is part of the Tractor project.
 Copyright 2011, 2012, 2013 Dustin Lang and David W. Hogg.
@@ -506,6 +507,8 @@ class ProfileGalaxy(object):
                     fft_timing.append((timing_id, 'calling_sourceout', None))
                     t0 = CpuMeas()
 
+                print '** Source outside modelMask; recursing with size',(mh,mw)
+                    
                 bigmodel = self._realGetUnitFluxModelPatch(
                     img, px, py, minval, extent=None, modelMask=bigMask)
 
@@ -536,34 +539,48 @@ class ProfileGalaxy(object):
         v = np.fft.rfftfreq(pW)
         w = np.fft.fftfreq(pH)
 
-        # print 'PSF Fourier transform size:', P.shape
-        # print 'Padded size:', pH,pW
-        # print 'PSF offset:', px0,py0
-        # print 'Source center px,py', px,py
-
-        dx = px - px0
-        dy = py - py0
+        print 'PSF Fourier transform size:', P.shape
+        print 'Padded size:', pH,pW
+        print 'PSF offset:', px0,py0
+        print 'Source center px,py', px,py
+        
         if haveExtent:
+            fftx0 = int(np.round(px0 + x0 - px))
+            ffty0 = int(np.round(py0 + y0 - py))
+            print 'Target fft x0,y0', fftx0,ffty0
+            print 'Clip limits: x:', 0, pW-mw, 'y:', 0, pH-mh
+            fftx0 = np.clip(fftx0, 0, pW - mw)
+            ffty0 = np.clip(ffty0, 0, pH - mh)
+            print 'Clipped fft x0,y0', fftx0,ffty0
+            
+            # Try to make mux,muy subpixel, subject to modelMask constraints
+            mux = px + fftx0 - px0 - x0
+            muy = py + ffty0 - py0 - y0
+            print 'Setting, mux,muy =', (mux,muy)
             ix0 = x0
             iy0 = y0
         else:
+            dx = px - px0
+            dy = py - py0
             # Put the integer portion of the offset into Patch x0,y0
             ix0 = int(np.round(dx))
             iy0 = int(np.round(dy))
-        # Put the subpixel portion into the galaxy FFT.
-        mux = dx - ix0
-        muy = dy - iy0
+            # Put the subpixel portion into the galaxy FFT.
+            mux = dx - ix0
+            muy = dy - iy0
 
-        # print('px,py', px,py)
-        # print('px0,py0', px0,py0)
-        # print('dx,dy', dx,dy)
-        # print('ix0,iy0,', ix0,iy0)
-        # print('mux,muy', mux,muy)
+        print 'ix0,iy0,', ix0,iy0
+        print 'mux,muy', mux,muy
 
         if do_fft_timing:
             t0 = CpuMeas()
-        
-        amix = self._getAffineProfile(img, mux, muy)
+
+        lanczosShift = True
+
+        if lanczosShift:
+            amix = self._getAffineProfile(img, 0., 0.)
+        else:
+            amix = self._getAffineProfile(img, mux, muy)
 
         if do_fft_timing:
             t1 = CpuMeas()
@@ -578,9 +595,10 @@ class ProfileGalaxy(object):
             fft_timing.append((timing_id, 'get_ft', t2.cpu_seconds_since(t1),
                                (haveExtent,)))
 
-        if False:
-            # for fakedx in []:#0]:#, 1, 10]:
-
+        if True:
+            #for fakedx in []:#0]:#, 1, 10]:
+            fakedx = 0
+            
             amix2 = self._getAffineProfile(img, mux + fakedx, muy)
             Fsum2 = amix2.getFourierTransform(v, w)
 
@@ -644,6 +662,43 @@ class ProfileGalaxy(object):
                                    (haveExtent, (pH,pW))))
             
 
+            G = G[ffty0:, fftx0:]
+
+            if lanczosShift:
+                from scipy.ndimage.filters import correlate1d
+                from astrometry.util.miscutils import lanczos_filter
+
+                imx = int(np.round(mux))
+                imy = int(np.round(muy))
+                mux -= imx
+                muy -= imy
+                print 'imx,imy', imx,imy
+                print 'mux,muy', mux,muy
+                if imx > 0:
+                    G[:, :-imx] = G[:, imx:]
+                elif imx < 0:
+                    G[:, :imx] = G[:, -imx:]
+
+                if imy > 0:
+                    G[:-imy, :] = G[imy:, :]
+                elif imy < 0:
+                    G[:imy, :] = G[-imy:, :]
+
+                gh,gw = G.shape
+                xx,yy = np.meshgrid(np.arange(gw), np.arange(gh))
+                print 'FFT centroid before subpixel shift:', np.sum(G * xx) / np.sum(G), np.sum(G * yy) / np.sum(G)
+                    
+                L = 3
+                Lx = lanczos_filter(L, np.arange(-L, L+1) + mux)
+                Ly = lanczos_filter(L, np.arange(-L, L+1) + muy)
+                # Normalize the Lanczos interpolants (preserve flux)
+                Lx /= Lx.sum()
+                Ly /= Ly.sum()
+                G = correlate1d(G, Lx, axis=1, mode='constant')
+                G = correlate1d(G, Ly, axis=0, mode='constant')
+
+                print 'FFT centroid after subpixel shift:', np.sum(G * xx) / np.sum(G), np.sum(G * yy) / np.sum(G)
+                
             gh,gw = G.shape
             if gh > mh or gw > mw:
                 G = G[:mh,:mw]
