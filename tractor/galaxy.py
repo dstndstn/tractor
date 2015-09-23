@@ -783,9 +783,12 @@ class DevGalaxy(HoggGalaxy):
 
 class FracDev(ScalarParam):
     stepsize = 0.01
-    def getClippedValue(self):
+    def clipped(self):
         f = self.getValue()
         return np.clip(f, 0., 1.)
+
+    def derivative(self):
+        return 1.
 
 class SoftenedFracDev(FracDev):
     '''
@@ -794,12 +797,19 @@ class SoftenedFracDev(FracDev):
     The sigmoid function is scaled and shifted so that S(0) ~ 0.1 and
     S(1) ~ 0.9.
 
-    Use the 'getClippedValue()' function to get the un-softened
-    fracDev in [0,1].
+    Use the 'clipped()' function to get the un-softened fracDev
+    clipped to [0,1].
     '''
-    def getClippedValue(self):
+    def clipped(self):
         f = self.getValue()
         return 1./(1 + np.exp(4.*(0.5 - f)))
+    
+    def derivative(self):
+        f = self.getValue()
+        # Thanks, Sage
+        ef = np.exp(-4.*f + 2)
+        return 4. * ef / ((ef + 1)**2)
+
     
 class FixedCompositeGalaxy(MultiParams, ProfileGalaxy, SingleProfileSource):
     '''
@@ -848,7 +858,7 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy, SingleProfileSource):
                 ', shapeDev=' + repr(self.shapeDev) + ')')
 
     def _getAffineProfile(self, img, px, py):
-        f = self.fracDev.getClippedValue()
+        f = self.fracDev.clipped()
         profs = []
         if f > 0.:
             profs.append((f, DevGalaxy.profile, self.shapeDev))
@@ -877,7 +887,7 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy, SingleProfileSource):
             return self.halfsize
         cd = img.getWcs().cdAtPixel(px, py)
         pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
-        f = self.fracDev.getClippedValue()
+        f = self.fracDev.clipped()
         r = 1.
         if f < 1.:
             s = self.shapeExp
@@ -924,7 +934,7 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy, SingleProfileSource):
         #     print '  ', deriv.name, deriv.getExtent()
 
         # fracDev scaling
-        f = self.fracDev.getClippedValue()
+        f = self.fracDev.clipped()
         for deriv in dexp:
             if deriv is not None:
                 deriv *= (1.-f)
@@ -964,8 +974,13 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy, SingleProfileSource):
                 ## FIXME -- should be possible to avoid recomputing these...
                 ue = e.getUnitFluxModelPatch(img, modelMask=modelMask)
                 ud = d.getUnitFluxModelPatch(img, modelMask=modelMask)
+
+                df = self.fracDev.derivative()
+
                 if ue is not None:
-                    ue *= -1
+                    ue *= -df
+                if ud is not None:
+                    ud *= +df
                 df = add_patches(ud, ue)
                 if df is None:
                     derivs.append(None)
