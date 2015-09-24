@@ -1,0 +1,3 @@
+
+ftest: tractor/ftest2.c tractor/mp_fourier.c
+	gcc -g -std=c99 -o ftest tractor/ftest2.c -O3 -march=ivybridge -fassociative-math -ffast-math -lm

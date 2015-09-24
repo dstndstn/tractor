@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <assert.h>
 
 #include "mp_fourier.c"
 
@@ -55,19 +56,29 @@ int main() {
     printf("K = %i, NV = %i, NW = %i\n", K, NV, NW);
     double dv = vv[1]-vv[0];
     double dw = dv;
-    for (i=0; i<1000; i++) {
-        double* f = malloc(sizeof(double) * NV * NW);
+    double* f;
+    f = malloc(sizeof(double) * NV * NW * 2);
+    for (i=0; i<10000; i++) {
+    //for (i=0; i<100; i++) {
+        //printf("f at %p\n", f);
+        /*
+          double* f;
+          int ok;
+          ok = posix_memalign(&f, 32, sizeof(double) * NV * NW);
+          assert(ok == 0);
+        */
+
         //printf(".");
         //fflush(NULL);
         if (K == 6) {
-            //mp_fourier_core(NW, NV, 6, mu0, mu1, vv, ww, amps6, vars, f);
-            mp_fourier_core_vw(NW, NV, 6, mu0, mu1,
-                               0., dv, -0.5, dw, amps6, vars, f);
+            mp_fourier_core(NW, NV, 6, mu0, mu1, vv, ww, amps6, vars, f);
+            //mp_fourier_core_vw(NW, NV, 6, mu0, mu1,
+            //0., dv, -0.5, dw, amps6, vars, f);
         } else {
             mp_fourier_core(NW, NV, K, mu0, mu1, vv, ww, amps, vars, f);
         }
-        free(f);
     }
+    free(f);
     printf("\n");
 }
 

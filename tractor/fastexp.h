@@ -24,8 +24,6 @@
 
 #include <stdint.h>
 
-namespace NGMix {
-
     union fmath_di {
         double d;
         uint64_t i;
@@ -50,8 +48,6 @@ namespace NGMix {
         return y * di.d;
 
     }
-
-} // namespace fastexp
 
 
 #endif

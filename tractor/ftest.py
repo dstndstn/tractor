@@ -48,7 +48,7 @@ w = np.array([ 0.      ,  0.015625,  0.03125 ,  0.046875,  0.0625  ,  0.078125,
                -0.0625  , -0.046875, -0.03125 , -0.015625])
 
 t0 = time.clock()
-for i in xrange(1000):
+for i in xrange(10000):
     f = mp_fourier.mixture_profile_fourier_transform(
         amps, means, vars, v, w)
 t1 = time.clock()
