@@ -253,7 +253,8 @@ class Optimizer(object):
         # profile-weighted number of pixels
         fs.pronpix = np.zeros(len(srcs))
         # profile-weighted sum of (flux from other sources / my flux)
-        fs.profracflux = np.zeros(len(srcs))
+        fracflux_num = np.zeros(len(srcs))
+        fracflux_den = np.zeros(len(srcs))
         fs.proflux = np.zeros(len(srcs))
         # total number of pixels touched by this source
         fs.npix = np.zeros(len(srcs), int)
@@ -285,8 +286,8 @@ class Optimizer(object):
                 # just use 'scale'?
                 pcal = tim.getPhotoCal()
                 cc = [pcal.brightnessToCounts(b) for b in src.getBrightnesses()]
-                csum = sum(cc)
-                if csum == 0:
+                sourcecounts = sum(cc)
+                if sourcecounts == 0:
                     continue
                 # Still want to measure objects with negative flux
                 # if csum < nilcounts:
@@ -319,7 +320,7 @@ class Optimizer(object):
                     continue
                 slc = slice(ylo,yhi),slice(xlo,xhi)
                 
-                srcmod[slc] /= csum
+                srcmod[slc] /= sourcecounts
 
                 nz = np.flatnonzero((srcmod[slc] != 0) * (ie[slc] > 0))
                 if len(nz) == 0:
@@ -328,10 +329,12 @@ class Optimizer(object):
 
                 fs.prochi2[si] += np.sum(np.abs(srcmod[slc].flat[nz]) * chi[slc].flat[nz]**2)
                 fs.pronpix[si] += np.sum(np.abs(srcmod[slc].flat[nz]))
-                # (mod - srcmod*csum) is the model for everybody else
-                fs.profracflux[si] += np.sum((np.abs(mod[slc] / csum - srcmod[slc]) * np.abs(srcmod[slc])).flat[nz])
+                # (mod - srcmod*sourcecounts) is the model for everybody else
+                fracflux_num[si] += (np.sum((np.abs(mod[slc]/sourcecounts - srcmod[slc]) * np.abs(srcmod[slc])).flat[nz])
+                                     / np.sum((srcmod[slc]**2).flat[nz]))
+                fracflux_den[si] += np.sum(np.abs(srcmod[slc]).flat[nz] / np.abs(sourcecounts))
                 # scale to nanomaggies, weight by profile
-                fs.proflux[si] += np.sum((np.abs((mod[slc] - srcmod[slc]*csum) / scale) * np.abs(srcmod[slc])).flat[nz])
+                fs.proflux[si] += np.sum((np.abs((mod[slc] - srcmod[slc]*sourcecounts) / scale) * np.abs(srcmod[slc])).flat[nz])
                 fs.npix[si] += len(nz)
 
                 for key,extraims in extras:
@@ -339,6 +342,8 @@ class Optimizer(object):
                     x[si] += np.sum(np.abs(srcmod[slc].flat[nz]) * extraims[imi][slc].flat[nz])
 
                 srcmod[slc] = 0.
+
+        fs.profracflux = fracflux_num / np.maximum(1, fracflux_den)
 
         # re-add sky
         for tim,(img,mod,ie,chi,roi) in zip(imlist, imsBest):
