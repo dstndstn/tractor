@@ -333,7 +333,7 @@ class Optimizer(object):
                 fracflux_num[si] += (np.sum((np.abs(mod[slc]/sourcecounts - srcmod[slc]) * np.abs(srcmod[slc])).flat[nz])
                                      / np.sum((srcmod[slc]**2).flat[nz]))
                 fracflux_den[si] += np.sum(np.abs(srcmod[slc]).flat[nz] / np.abs(sourcecounts))
-                # scale to nanomaggies, weight by profile
+                # scalegit  to nanomaggies, weight by profile
                 fs.proflux[si] += np.sum((np.abs((mod[slc] - srcmod[slc]*sourcecounts) / scale) * np.abs(srcmod[slc])).flat[nz])
                 fs.npix[si] += len(nz)
 

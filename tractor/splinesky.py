@@ -69,6 +69,11 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         self.x0 += x0
         self.y0 += y0
 
+    def shifted(self, x0, y0):
+        s = self.copy()
+        s.shift(x0, y0)
+        return s
+        
     def offset(self, dsky):
         #sky0 = self.spl(0,0)
         (tx, ty, c) = self.spl.tck

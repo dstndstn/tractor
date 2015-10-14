@@ -8,7 +8,6 @@ from astrometry.util.fits import *
 from astrometry.util.plotutils import *
 from astrometry.util.ttime import *
 
-#from wise.unwise import *
 from unwise import *
 
 def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None, unwise_dir='.',

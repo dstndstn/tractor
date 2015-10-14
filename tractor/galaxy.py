@@ -506,6 +506,7 @@ class ProfileGalaxy(object):
                     fft_timing.append((timing_id, 'calling_sourceout', None))
                     t0 = CpuMeas()
 
+                # print 'Recursing:', self, ':', (mh,mw), 'to', (bigh,bigw)
                 bigmodel = self._realGetUnitFluxModelPatch(
                     img, px, py, minval, extent=None, modelMask=bigMask)
 
@@ -522,12 +523,13 @@ class ProfileGalaxy(object):
             psfh,psfw = psf.shape
             halfsize = max(halfsize, max(psfw/2., psfh/2.))
 
-
         if do_fft_timing:
             t0 = CpuMeas()
 
         P,(px0,py0),(pH,pW) = psf.getFourierTransform(px, py, halfsize)
 
+        #print 'Computing', self, ': halfsize=', halfsize, 'FFT', (pH,pW)
+        
         if do_fft_timing:
             t1 = CpuMeas()
             fft_timing.append((timing_id, 'psf_fft', t1.cpu_seconds_since(t0),

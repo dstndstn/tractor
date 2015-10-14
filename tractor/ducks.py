@@ -157,6 +157,11 @@ class Sky(ImageCalibration, Params):
         '''
         pass
 
+    def shifted(self, x0, y0):
+        s = self.copy()
+        s.shift(x0, y0)
+        return s
+    
 class Source(Params):
     '''
     This is the duck-type definition of a Source (star, galaxy, etc)
