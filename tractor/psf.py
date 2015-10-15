@@ -178,12 +178,13 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         Returns the Fourier Transform of this PSF, with the
         next-power-of-2 size up from *radius*.
 
-        Returns: (FFT, (x0, y0), (imh,imw))
+        Returns: (FFT, (x0, y0), (imh,imw), (v,w))
 
         *FFT*: numpy array, the FFT
         *x0*: float, pixel location of the PSF center in the PSF subimage
         *y0*:    ditto
         *imh,imw*: ints, shape of the PSF subimage
+        *v,w*: v=np.fft.rfftfreq(imw), w=np.fft.fftfreq(imh)
         
         '''
         sz = self.getFourierTransformSize(radius)
@@ -194,7 +195,10 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         pad,cx,cy = self._padInImage(sz,sz)
         ## cx,cy: coordinate of the PSF center in *pad*
         P = np.fft.rfft2(pad)
-        rtn = P, (cx, cy), pad.shape
+        pH,pW = pad.shape
+        v = np.fft.rfftfreq(pW)
+        w = np.fft.fftfreq(pH)
+        rtn = P, (cx, cy), (pH,pW), (v,w)
         self.fftcache[sz] = rtn
         return rtn
 

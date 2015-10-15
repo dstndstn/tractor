@@ -365,7 +365,7 @@ class PixelizedPsfEx(PixelizedPSF):
             self.psfex = psfexmodel(fn=fn, ext=ext)
         if psfex is not None:
             self.psfex = psfex
-        print('PsfEx x0,y0', self.psfex.x0, self.psfex.y0)
+        #print('PsfEx x0,y0', self.psfex.x0, self.psfex.y0)
         # meh
         self.fn = fn
         self.ext = ext
@@ -415,7 +415,7 @@ class PixelizedPsfEx(PixelizedPSF):
         sz = self.getFourierTransformSize(radius)
 
         if sz in self.fftcache:
-            fftbases,cx,cy,shape = self.fftcache[sz]
+            fftbases,cx,cy,shape,v,w = self.fftcache[sz]
         else:
             fftbases = []
             bases = self.psfex.bases()
@@ -425,13 +425,16 @@ class PixelizedPsfEx(PixelizedPSF):
                 shape = pad.shape
                 P = np.fft.rfft2(pad)
                 fftbases.append(P)
-            self.fftcache[sz] = (fftbases,cx,cy,shape)
+            H,W = shape
+            v = np.fft.rfftfreq(W)
+            w = np.fft.fftfreq(H)
+            self.fftcache[sz] = (fftbases,cx,cy,shape,v,w)
 
         # Now sum the bases by the polynomial coefficients
         sumfft = np.zeros(fftbases[0].shape, fftbases[0].dtype)
         for amp,base in zip(self.psfex.polynomials(px, py), fftbases):
             sumfft += amp * base
-        return sumfft, (cx,cy), shape
+        return sumfft, (cx,cy), shape, (v,w)
 
 
 

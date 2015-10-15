@@ -526,7 +526,7 @@ class ProfileGalaxy(object):
         if do_fft_timing:
             t0 = CpuMeas()
 
-        P,(px0,py0),(pH,pW) = psf.getFourierTransform(px, py, halfsize)
+        P,(px0,py0),(pH,pW),(v,w) = psf.getFourierTransform(px, py, halfsize)
 
         #print 'Computing', self, ': halfsize=', halfsize, 'FFT', (pH,pW)
         
@@ -534,9 +534,6 @@ class ProfileGalaxy(object):
             t1 = CpuMeas()
             fft_timing.append((timing_id, 'psf_fft', t1.cpu_seconds_since(t0),
                                (haveExtent, halfsize)))
-
-        v = np.fft.rfftfreq(pW)
-        w = np.fft.fftfreq(pH)
 
         # print 'PSF Fourier transform size:', P.shape
         # print 'Padded size:', pH,pW
