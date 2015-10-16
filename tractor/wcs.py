@@ -3,7 +3,7 @@ import numpy as np
 from .utils import BaseParams, ParamList, MultiParams, ArithmeticParams
 import ducks
 
-class NullWCS(BaseParams, ducks.ImageCalibration):
+class NullWCS(BaseParams, ducks.WCS):
     '''
     The "identity" WCS -- useful when you are using raw pixel
     positions rather than RA,Decs.
@@ -23,6 +23,8 @@ class NullWCS(BaseParams, ducks.ImageCalibration):
         return x - self.dx, y - self.dy
     def cdAtPixel(self, x, y):
         return np.array([[1.,0.],[0.,1.]]) * self.pixscale / 3600.
+    def pixscale_at(self, x, y):
+        return self.pixscale
     def shifted(self, x, y):
         return self.copy()
 
@@ -138,7 +140,7 @@ class ConstantFitsWcs(ParamList, ducks.ImageCalibration):
 
         cd = self.wcs.get_cd()
         self.cd = np.array([[cd[0], cd[1]], [cd[2],cd[3]]])
-
+        self.pixscale = self.wcs.pixel_scale()
         
     def hashkey(self):
         return (self.x0, self.y0, id(self.wcs))
@@ -203,8 +205,15 @@ class ConstantFitsWcs(ParamList, ducks.ImageCalibration):
         return self.cd
 
     def pixel_scale(self):
-        return self.wcs.pixel_scale()
+        return self.pixscale
 
+    def pixscale_at(self, x, y):
+        '''
+        Returns the local pixel scale at the given *x*,*y* pixel coords,
+        in *arcseconds* per pixel.
+        '''
+        return self.pixscale
+    
     def toStandardFitsHeader(self, hdr):
         if self.x0 != 0 or self.y0 != 0:
             wcs = self.wcs.get_subimage(self.x0, self.y0,

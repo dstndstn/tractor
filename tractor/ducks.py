@@ -316,6 +316,13 @@ class WCS(ImageCalibration, Params):
         '''
         return None
 
+    def pixscale_at(self, x, y):
+        '''
+        Returns the local pixel scale at the given *x*,*y* pixel coords,
+        in *arcseconds* per pixel.
+        '''
+        return 3600. * np.sqrt(np.abs(np.linalg.det(self.cdAtPixel(x,y))))
+    
     def shifted(self, dx, dy):
         '''
         Returns a new WCS object appropriate for the subimage starting at (dx,dy)
