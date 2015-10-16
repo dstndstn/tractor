@@ -1,4 +1,5 @@
 from .utils import BaseParams, ScalarParam
+from .patch import Patch
 import ducks
 
 class NullSky(BaseParams, ducks.Sky):
