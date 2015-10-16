@@ -763,7 +763,7 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
     def _getUnitFluxPatchSize(self, img, px, py, minval):
         if hasattr(self, 'halfsize'):
             return self.halfsize
-        cd = img.wcs.pixscale_at(px,py)
+        pixscale = img.wcs.pixscale_at(px,py)
         halfsize = max(1., self.getRadius() / pixscale)
         halfsize += img.psf.getRadius()
         halfsize = int(np.ceil(halfsize))
