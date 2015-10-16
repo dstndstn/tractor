@@ -181,9 +181,9 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         Returns: (FFT, (x0, y0), (imh,imw), (v,w))
 
         *FFT*: numpy array, the FFT
-        *x0*: float, pixel location of the PSF center in the PSF subimage
-        *y0*:    ditto
-        *imh,imw*: ints, shape of the PSF subimage
+        *xc*: float, pixel location of the PSF /center/ in the PSF subimage
+        *yc*:    ditto
+        *imh,imw*: ints, shape of the padded PSF image
         *v,w*: v=np.fft.rfftfreq(imw), w=np.fft.fftfreq(imh)
         
         '''

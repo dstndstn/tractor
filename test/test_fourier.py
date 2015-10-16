@@ -118,7 +118,7 @@ def test_fft(ps):
     modelmasks[gal] = Patch(int(x-mmsz/2), int(y-mmsz/2),
                             np.ones((mmsz,mmsz), bool))
     tr = Tractor([img], cat)
-    tr.disable_cache()
+    #tr.disable_cache()
 
     
 def test_galaxy_grid(ps, args):
@@ -166,7 +166,7 @@ def test_galaxy_grid(ps, args):
 
             
     tr = Tractor([img], cat)
-    tr.disable_cache()
+    #tr.disable_cache()
 
     if testname is not None:
         t0 = Time()
@@ -282,7 +282,8 @@ def test_galaxy_grid(ps, args):
 
 def test_model_masks(ps):
     W,H = 50,50
-    cx,cy = W/2., H/2.
+    #cx,cy = W/2., H/2.
+    cx,cy = 25.0, 24.7
     gal = ExpGalaxy(PixPos(cx,cy), Flux(100.), EllipseESoft(1., 0., 0.5))
     #gal = ExpGalaxy(PixPos(cx,cy), Flux(100.), EllipseESoft(-1., 0., 0.5))
     halfsize = 25
@@ -329,7 +330,7 @@ def test_model_masks(ps):
     
     
     tr = Tractor([img], [gal])
-    tr.disable_cache()
+    #tr.disable_cache()
     
     img.psf = gpsf
     mod_mog = tr.getModelImage(0)
@@ -359,11 +360,14 @@ def test_model_masks(ps):
     
     mask5 = Patch(20, 20, np.ones((10,10), bool))
     mask6 = Patch(-25, -25, np.ones((100,100), bool))
-    
+
+    mask7 = Patch(0,0, np.ones((31,31), bool))
+    mask8 = Patch(5,7, np.ones((40,40), bool))
+
     print
     print 'DIY modelMask'
     
-    for mask in [mask1, mask2, mask3, mask4, mask5, mask6]:
+    for mask in [mask7, mask8]:#mask1, mask2, mask3, mask4, mask5, mask6, mask7]:
     
         print
         print 'MoG:'
@@ -551,8 +555,8 @@ def test_psfex(ps):
     tr2 = Tractor([tim], [gal])
 
     disable_galaxy_cache()
-    tr1.disable_cache()
-    tr2.disable_cache()
+    # tr1.disable_cache()
+    # tr2.disable_cache()
     
     tim.psf = psf
     mod = tr1.getModelImage(0)
@@ -614,14 +618,14 @@ if __name__ == '__main__':
     parser = optparse.OptionParser()
     opt,args = parser.parse_args()
 
-    test_galaxy_grid(ps, args)
+    test_model_masks(ps)
     sys.exit(0)
+    test_galaxy_grid(ps, args)
 
     test_mixture_profiles(ps)
     
     test_psfex(ps)
 
     test_fft(ps)
-    test_model_masks(ps)
 
     
