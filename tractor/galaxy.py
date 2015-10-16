@@ -565,40 +565,13 @@ class ProfileGalaxy(object):
             psfmargin = cx - psfw/2
 
             gx0 = gy0 = 0
-            # if abs(mux) < psfmargin and abs(muy) < psfmargin and psfmargin>=2:
-            #     # Return a subimage of the iFFT result; set
-            #     # mux,muy as close to zero as possible.
-            #     print('mux,muy', mux,muy, 'with PSF margin', psfmargin)
-            #     gx0 = int(np.round(mux))
-            #     gy0 = int(np.round(muy))
-            #     assert(gx0 <= 0)
-            #     assert(gy0 <= 0)
-            #     mux -= gx0
-            #     muy -= gy0
-            #     gx0 = -gx0
-            #     gy0 = -gy0
-            #     #if gx0 < 0:
-            #     #    gx0 = pW - mw + gx0
-            #     #if gy0 < 0:
-            #     #    gy0 = pH - mh + gy0
-            # 
-            #     print('Set gx0,gy0 = ', gx0,gy0, 'and mux,muy', mux,muy)
-            #         
-            # else:
-            #     # Wrap-around is possible (likely).
-            #     # Actually compute the image on a shifted image and then
-            #     # copy it into the result?
-            #     pass
-            
             if abs(mux) >= psfmargin or abs(muy) >= psfmargin:
                 # Wrap-around is possible (likely).  Compute a shifted image
                 # and then copy it into the result.
-                #print('Wrap-around likely: margin', psfmargin, 'mux,muy', mux,muy)
                 gx0 = int(np.round(mux))
                 gy0 = int(np.round(muy))
                 mux -= gx0
                 muy -= gy0
-                #print('Shifted to gx0,gy0 =', gx0,gy0, 'mux,muy =', mux,muy)
                 
         else:
             # Put the integer portion of the offset into Patch x0,y0
@@ -608,34 +581,6 @@ class ProfileGalaxy(object):
             # Put the subpixel portion into the galaxy FFT.
             mux = dx - ix0
             muy = dy - iy0
-
-
-        # Shifting too much can cause bad wrap-around effects...  In
-        # this case, compute models on a shifted pixel grid and copy
-        # that into the output image?
-
-        # This also depends on how big the margins on the PSF are...
-
-        # mux,muy can be large(ly negative) if, eg, image is 140x140 so
-        # PSF gets padded out to 256x256.
-        
-        # if mux < -1 or mux > 1 or muy < -1 or muy > 1:
-        # 
-        #     # how much padding is there on the PSF?
-        #     print('PSF shape', psf.shape)
-        #     psfh,psfw = psf.shape
-        #     padx1 = cx - psfw/2
-        #     padx2 = pW - (cx + (psfw - psfw/2))
-        #     pady1 = cy - psfh/2
-        #     pady2 = pH - (cy + (psfh - psfh/2))
-        # 
-        #     print('mux,muy (%.1f,%.1f)' % (mux,muy), 'PSF shape', psf.shape,
-        #           'FFT shape', (pH,pW), 'padding', padx1,padx2,pady1,pady2)
-        
-        # print('px,py', px,py)
-        # print('dx,dy', dx,dy)
-        # print('ix0,iy0,', ix0,iy0)
-        # print('mux,muy', mux,muy)
 
         if do_fft_timing:
             t0 = CpuMeas()
@@ -724,15 +669,14 @@ class ProfileGalaxy(object):
             gh,gw = G.shape
 
             if gx0 != 0 or gy0 != 0:
-                # shift
+                print('gx0,gy0', gx0,gy0)
+                yi,yo = get_overlapping_region(-gy0, -gy0+mh-1, 0, gh-1)
+                xi,xo = get_overlapping_region(-gx0, -gx0+mw-1, 0, gw-1)
+
+                # shifted
                 shG = np.zeros((mh,mw), G.dtype)
-                #shG[:min(mh, gh-gy0),
-                #    :min(mw, gw-gx0)] = G[gy0:gy0+mh, gx0:gx0+mw]
-                shG[gy0: gy0+gh, gx0: gx0+gw] = G[:min(gh, mh-gy0),
-                                                  :min(gw, mw-gx0)]
+                shG[yo,xo] = G[yi,xi]
                 G = shG
-                #     print('Slicing G: gx0,gy0 =', gx0,gy0)
-                #     G = G[gy0:, gx0:]
             
             if gh > mh or gw > mw:
                 G = G[:mh,:mw]
