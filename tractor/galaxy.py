@@ -763,11 +763,9 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
     def _getUnitFluxPatchSize(self, img, px, py, minval):
         if hasattr(self, 'halfsize'):
             return self.halfsize
-        cd = img.getWcs().cdAtPixel(px, py)
-        pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
-        halfsize = max(1., self.getRadius() / 3600. / pixscale)
-        psf = img.getPsf()
-        halfsize += psf.getRadius()
+        cd = img.wcs.pixscale_at(px,py)
+        halfsize = max(1., self.getRadius() / pixscale)
+        halfsize += img.psf.getRadius()
         halfsize = int(np.ceil(halfsize))
         return halfsize
 
@@ -918,8 +916,7 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy, SingleProfileSource):
     def _getUnitFluxPatchSize(self, img, px, py, minval):
         if hasattr(self, 'halfsize'):
             return self.halfsize
-        cd = img.getWcs().cdAtPixel(px, py)
-        pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
+        pixscale = img.wcs.pixscale_at(px,py)
         f = self.fracDev.clipped()
         r = 1.
         if f < 1.:
@@ -930,9 +927,8 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy, SingleProfileSource):
             s = self.shapeDev
             rdev = max(r, DevGalaxy.nre * s.re)
             r = max(r, rdev)
-        halfsize = r / 3600. / pixscale
-        psf = img.getPsf()
-        halfsize += psf.getRadius()
+        halfsize = r / pixscale
+        halfsize += img.psf.getRadius()
         return halfsize
     
     def _getUnitFluxDeps(self, img, px, py):
