@@ -669,7 +669,7 @@ class ProfileGalaxy(object):
             gh,gw = G.shape
 
             if gx0 != 0 or gy0 != 0:
-                print('gx0,gy0', gx0,gy0)
+                #print('gx0,gy0', gx0,gy0)
                 yi,yo = get_overlapping_region(-gy0, -gy0+mh-1, 0, gh-1)
                 xi,xo = get_overlapping_region(-gx0, -gx0+mw-1, 0, gw-1)
 

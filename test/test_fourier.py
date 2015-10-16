@@ -370,8 +370,8 @@ def test_model_masks(ps):
     print
     print 'DIY modelMask'
     
-    #for mask in [mask7, mask8, mask9, mask10,mask11]: #mask1, mask2, mask3, mask4, mask5, mask6, mask7]:
-    for mx in range(-15,30,2):
+    for mask in [mask7, mask8, mask9, mask10,mask11]: #mask1, mask2, mask3, mask4, mask5, mask6, mask7]:
+        #for mx in range(-15,30,2):
         mask = Patch(mx, 7, np.ones((33,33), bool))
     
         print
