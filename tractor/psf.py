@@ -50,6 +50,9 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
     def __str__(self):
         return 'PixelizedPSF'
 
+    def clear_cache(self):
+        self.fftcache = {}
+
     @property
     def shape(self):
         return (self.H, self.W)
