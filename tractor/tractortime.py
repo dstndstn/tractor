@@ -1,3 +1,5 @@
+import numpy as np
+
 from astrometry.util.starutil_numpy import datetomjd, J2000
 
 from .utils import ScalarParam, ArithmeticParams

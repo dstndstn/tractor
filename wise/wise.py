@@ -54,9 +54,9 @@ def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
 
     if sipwcs:
         wcs = Sip(intfn, 0)
-        twcs = tractor.FitsWcs(wcs)
+        twcs = tractor.ConstantFitsWcs(wcs)
     else:
-        twcs = tractor.FitsWcs(intfn)
+        twcs = tractor.ConstantFitsWcs(intfn)
 
     # Read enough of the image to get its size
     Fint = fitsio.FITS(intfn)

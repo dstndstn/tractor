@@ -74,6 +74,8 @@ class MovingPointSource(PointSource):
                 repr(self.parallax) + ')')
 
     def getPositionAtTime(self, t):
+        from astrometry.util.starutil_numpy import radectoxyz, arcsecperrad, axistilt, xyztoradec
+
         dt = (t - self.epoch).toYears()
         # Assume "pos" is an RaDecPos
         p = self.pos + dt * self.pm

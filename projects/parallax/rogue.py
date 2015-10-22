@@ -7,7 +7,7 @@ import pylab as plt
 import os
 import datetime
 
-import emcee
+#import emcee
 #import triangle
 
 import fitsio
@@ -156,34 +156,52 @@ def epoch_coadd_plots(tractor, ps, S, ima, yearcut, fakewcs):
     ca = dict(interpolation='nearest', origin='lower', vmin=-3, vmax=3, cmap='RdBu')
 
     plt.clf()
+    plt.imshow(bimg, **ima)
+    plt.xticks([]); plt.yticks([])
+    plt.title('Epoch 1')
+    ps.savefig()
+
+    plt.clf()
+    plt.imshow(aimg, **ima)
+    plt.xticks([]); plt.yticks([])
+    plt.title('Epoch 2')
+    ps.savefig()
+
+    plt.clf()
 
     plt.subplot(2,3,1)
     plt.imshow(bimg, **ima)
     plt.xticks([]); plt.yticks([])
+    plt.title('Epoch 1: Data')
 
     plt.subplot(2,3,2)
     plt.imshow(bmod, **ima)
     plt.xticks([]); plt.yticks([])
-    plt.title('First epoch')
+    plt.title('Epoch 1: Model')
+    #plt.title('First epoch')
 
     plt.subplot(2,3,3)
     #plt.imshow(bchisq, **c2a)
     plt.imshow(bchi, **ca)
+    plt.title('Epoch 1: Residuals')
     plt.xticks([]); plt.yticks([])
 
     plt.subplot(2,3,4)
     plt.imshow(aimg, **ima)
     plt.xticks([]); plt.yticks([])
+    plt.title('Epoch 2: Data')
 
     plt.subplot(2,3,5)
     plt.imshow(amod, **ima)
     plt.xticks([]); plt.yticks([])
-    plt.title('Second epoch')
+    plt.title('Epoch 2: Model')
+    #plt.title('Second epoch')
 
     plt.subplot(2,3,6)
     #plt.imshow(achisq, **c2a)
     plt.imshow(achi, **ca)
     plt.xticks([]); plt.yticks([])
+    plt.title('Epoch 2: Residuals')
 
     ps.savefig()
 
@@ -526,7 +544,12 @@ if __name__ == '__main__':
     #W.cut(W.inroi)
     W.cut(np.argsort(W.mjd))
 
-    unw = fits_table('unwise-1342m076-w2-frames.fits')
+    unw = fits_table('unwise-coadds/134/1342m076/unwise-1342m076-w2-frames.fits')
+
+    masks = 'unwise-coadds/134/1342m076/unwise-1342m076-w2-mask.tgz'
+    cmd = 'tar xzf %s' % masks
+    print cmd
+    os.system(cmd)
 
     ima = dict(interpolation='nearest', origin='lower',
                vmin=-15, vmax=50)
@@ -552,6 +575,9 @@ if __name__ == '__main__':
 
         I = np.flatnonzero((unw.scan_id   == w.scan_id) *
                            (unw.frame_num == w.frame_num))
+        print 'I', I
+        if len(I) == 0:
+            continue
         assert(len(I) == 1)
         sky = unw.sky1[I[0]]
         #print 'unwise sky', sky
@@ -663,6 +689,7 @@ if __name__ == '__main__':
 
     print 'p0', p0
     
+    import emcee
     # Create emcee sampler
     sampler = emcee.EnsembleSampler(nw, ndim, tractor, threads=nthreads)
 
