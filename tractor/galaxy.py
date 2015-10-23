@@ -953,6 +953,10 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy, SingleProfileSource):
         if self.isParamFrozen('shapeDev'):
             d.freezeParam('shape')
 
+        if hasattr(self, 'halfsize'):
+            e.halfsize = self.halfsize
+            d.halfsize = self.halfsize
+            
         dexp = e.getParamDerivatives(img, modelMask=modelMask)
         ddev = d.getParamDerivatives(img, modelMask=modelMask)
 
