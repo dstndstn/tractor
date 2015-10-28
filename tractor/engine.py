@@ -8,7 +8,7 @@ Licensed under the GPLv2; see the file COPYING for details.
 
 Core image modeling and fitting.
 '''
-
+from __future__ import print_function
 import logging
 
 import numpy as np
@@ -62,9 +62,9 @@ class Catalog(MultiParams):
                 (len(self), self.numberOfParams()))
 
     def printLong(self):
-        print 'Catalog with %i sources:' % len(self)
+        print('Catalog with %i sources:' % len(self))
         for i,x in enumerate(self):
-            print '  %i:' % i, x
+            print('  %i:' % i, x)
 
     def getThawedSources(self):
         return self._getActiveSubs()
@@ -291,8 +291,8 @@ class Tractor(MultiParams):
                         continue
                     srcderivs[k].append((deriv, img))
             allderivs.extend(srcderivs)
-        #print 'allderivs:', len(allderivs)
-        #print 'N params:', self.numberOfParams()
+        #print('allderivs:', len(allderivs))
+        #print('N params:', self.numberOfParams())
 
         assert(len(allderivs) == self.numberOfParams())
         return allderivs
@@ -342,9 +342,9 @@ class Tractor(MultiParams):
 
         if patch is not None and mask is not None and patch.patch is not None:
             nonzero = Patch(patch.x0, patch.y0, patch.patch != 0)
-            #print 'nonzero type:', nonzero.patch.dtype
+            #print('nonzero type:', nonzero.patch.dtype)
             unmasked = Patch(mask.x0, mask.y0, np.logical_not(mask.patch))
-            #print 'unmasked type:', unmasked.patch.dtype
+            #print('unmasked type:', unmasked.patch.dtype)
             bad = nonzero.performArithmetic(unmasked, '__iand__', otype=bool)
             assert(np.all(bad.patch == False))
 
@@ -355,9 +355,9 @@ class Tractor(MultiParams):
         if self.expectModelMasks and mask is None:
             return [None] * src.numberOfParams()
 
-        #print 'getting param derivs for', src
+        #print('getting param derivs for', src)
         derivs = src.getParamDerivatives(img, modelMask=mask, **kwargs)
-        #print 'done getting param derivs for', src
+        #print('done getting param derivs for', src)
 
         # HACK -- auto-add?
         # if self.expectModelMasks:
@@ -423,18 +423,18 @@ class Tractor(MultiParams):
         mod = self.getModelImage(img, srcs=srcs, minsb=minsb)
         chi = (img.getImage() - mod) * img.getInvError()
         if not np.all(np.isfinite(chi)):
-            print 'Chi not finite'
-            print 'Image finite?', np.all(np.isfinite(img.getImage()))
-            print 'Mod finite?', np.all(np.isfinite(mod))
-            print 'InvErr finite?', np.all(np.isfinite(img.getInvError()))
-            print 'Current thawed parameters:'
+            print('Chi not finite')
+            print('Image finite?', np.all(np.isfinite(img.getImage())))
+            print('Mod finite?', np.all(np.isfinite(mod)))
+            print('InvErr finite?', np.all(np.isfinite(img.getInvError())))
+            print('Current thawed parameters:')
             self.printThawedParams()
-            print 'Current sources:'
+            print('Current sources:')
             for src in self.getCatalog():
-                print '  ', src
-            print 'Image:', img
-            print 'sky:', img.getSky()
-            print 'psf:', img.getPsf()
+                print('  ', src)
+            print('Image:', img)
+            print('sky:', img.getSky())
+            print('psf:', img.getPsf())
         return chi
 
     def getLogLikelihood(self):
@@ -453,11 +453,11 @@ class Tractor(MultiParams):
         lnl = self.getLogLikelihood()
         lnp = lnprior + lnl
         if np.isnan(lnp):
-            print 'Tractor.getLogProb() returning NaN.'
-            print 'Params:'
+            print('Tractor.getLogProb() returning NaN.')
+            print('Params:')
             self.printThawedParams()
-            print 'log likelihood:', lnl
-            print 'log prior:', lnprior
+            print('log likelihood:', lnl)
+            print('log prior:', lnprior)
             return -np.inf
         return lnp
 

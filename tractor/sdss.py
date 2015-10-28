@@ -12,6 +12,7 @@ SDSS-specific implementation of Tractor elements:
  - knows about SDSS photometric and astrometric calibration conventions
 
 """
+from __future__ import print_function
 import os
 import sys
 from math import pi, sqrt, ceil, floor
@@ -24,12 +25,6 @@ from .engine import *
 from .basics import *
 from .imageutils import interpret_roi
 from .galaxy import *
-
-from astrometry.sdss import * #DR7, band_name, band_index
-from astrometry.util.fits import *
-from astrometry.util.file import *
-from astrometry.util.plotutils import setRadecAxes, redgreen
-from astrometry.libkd.spherematch import match_radec
 
 ## FIXME -- these PSF params are not Params
 class SdssBrightPSF(ParamsWrapper):
@@ -45,6 +40,7 @@ class SdssBrightPSF(ParamsWrapper):
 
     def getRadius(self):
         return self.real.getRadius()
+
     def getMixtureOfGaussians(self, **kwargs):
         return self.real.getMixtureOfGaussians(**kwargs)
         
@@ -52,12 +48,13 @@ class SdssBrightPSF(ParamsWrapper):
         if dc > self.a3:
             R = 25.
         else:
-            R = np.sqrt( self.beta * self.sigmap**2 * ( (dc / self.a3)**(-2./self.beta) - 1.) )
-        # print 'beta', self.beta
-        # print 'sigmap', self.sigmap
-        # print 'p0:', self.a3
-        # print 'dc', dc
-        # print 'Bright ps patch: R=', R
+            R = np.sqrt( self.beta * self.sigmap**2 *
+                         ( (dc / self.a3)**(-2./self.beta) - 1.) )
+        # print('beta', self.beta)
+        # print('sigmap', self.sigmap)
+        # print('p0:', self.a3)
+        # print('dc', dc)
+        # print('Bright ps patch: R=', R)
 
         R = np.clip(R, 25., 200.)
 
@@ -71,8 +68,8 @@ class SdssBrightPSF(ParamsWrapper):
         #patch = Patch(x0, y0, grid)
 
         X,Y = np.meshgrid(np.arange(x0,x1+1), np.arange(y0,y1+1))
-        #print 'patch shape', patch.shape
-        #print 'X,Y shape', X.shape
+        #print('patch shape', patch.shape)
+        #print('X,Y shape', X.shape)
         R2 = ((X-px)**2 + (Y-py)**2)
         # According to RHL, these are denormalized Gaussians
         P = (self.a1 * np.exp(-0.5 * R2 / (self.s1**2)) +
@@ -135,8 +132,8 @@ class SdssPointSource(PointSource):
         patch = None
         if fb != 0.:
             ## HACK -- precision
-            #print 'Counts:', counts
-            #print 'sigma:', img.getMedianPixelNoise()
+            #print('Counts:', counts)
+            #print('sigma:', img.getMedianPixelNoise())
             # after scaling by counts, we want to have a small fraction
             # of a sigma beyond the cutoff
             dc = 1e-3 * img.getMedianPixelNoise() / counts
@@ -150,16 +147,18 @@ class SdssPointSource(PointSource):
             else:
                 patch += patcha * fa
 
-        #print 'PointSource: PSF patch has sum', patch.getImage().sum()
+        #print('PointSource: PSF patch has sum', patch.getImage().sum())
         return patch * counts
     
 
 def _check_sdss_files(sdss, run, camcol, field, bandname, filetypes,
                       retrieve=True, tryopen=False):
+    from astrometry.sdss import band_index
+
     bandnum = band_index(bandname)
     for filetype in filetypes:
         fn = sdss.getPath(filetype, run, camcol, field, bandname)
-        print 'Looking for file', fn
+        print('Looking for file', fn)
         exists = os.path.exists(fn)
         retrieveKwargs = {}
         if exists and tryopen:
@@ -168,12 +167,12 @@ def _check_sdss_files(sdss, run, camcol, field, bandname, filetypes,
             try:
                 T = pyfits.open(fn)
             except:
-                print 'Failed to open file', fn, 'as FITS file: maybe corrupt.'
+                print('Failed to open file', fn, 'as FITS file: maybe corrupt.')
                 exists = False
                 retrieveKwargs.update(skipExisting=False)
                 
         if (not exists) and retrieve:
-            print 'Retrieving', fn
+            print('Retrieving', fn)
             res = sdss.retrieve(filetype, run, camcol, field, bandnum,
                                 **retrieveKwargs)
             if res is False:
@@ -185,6 +184,8 @@ def _check_sdss_files(sdss, run, camcol, field, bandname, filetypes,
 
         
 def _getBrightness(counts, tsf, bands, extrabands):
+    from astrometry.sdss import band_name
+
     allcounts = counts
     order = []
     kwargs = {}
@@ -203,13 +204,13 @@ def _getBrightness(counts, tsf, bands, extrabands):
             mag = BAD_MAG
         order.append(bandname)
         kwargs[bandname] = mag
-        #print 'Band', bandname, 'counts', counts, 'mag', mag
-    #print 'creating mags:', kwargs
+        #print('Band', bandname, 'counts', counts, 'mag', mag)
+    #print('creating mags:', kwargs)
     for b in extrabands:
         order.append(b)
-        kwargs.update(b=BAG_MAG)
+        kwargs.update(b=BAD_MAG)
     m = Mags(order=order, **kwargs)
-    #print 'created', m
+    #print('created', m)
     return m
 
 
@@ -250,9 +251,10 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
     -"extrabands" are also included in the returned Source objects;
      they will be initialized to the SDSS flux for either the first of
      "bands", if given, or "bandname".
-
-    
     '''
+    from astrometry.sdss import (DR7, DR8, DR9, band_names, band_index,
+                                 photo_flags1_map)
+    
     #   brightPointSourceThreshold=0.):
 
     if sdss is None:
@@ -272,6 +274,7 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
         extrabands = []
     
     if objs is None:
+        from astrometry.util.fits import fits_table
         if isdr7:
             # FIXME
             rerun = 0
@@ -289,7 +292,7 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
             
         objs = fits_table(objfn)
         if objs is None:
-            print 'No sources in SDSS file', objfn
+            print('No sources in SDSS file', objfn)
             return []
 
     objs.index = np.arange(len(objs))
@@ -307,9 +310,11 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
 
     if radecroi is not None:
         r0,r1,d0,d1 = radecroi
-        objs.cut((objs.ra >= r0) * (objs.ra <= r1) * (objs.dec >= d0) * (objs.dec <= d1))
+        objs.cut((objs.ra >= r0) * (objs.ra <= r1) *
+                 (objs.dec >= d0) * (objs.dec <= d1))
 
     if radecrad is not None:
+        from astrometry.libkd.spherematch import match_radec
         (ra,dec,rad) = radecrad
         I,J,d = match_radec(ra, dec, objs.ra, objs.dec, rad)
         objs.cut(J)
@@ -363,7 +368,8 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
         if nanomaggies:
             raise RuntimeError('Nanomaggies not supported for DR7 (yet)')
         def lup2bright(lups):
-            counts = [tsf.luptitude_to_counts(lup,j) for j,lup in enumerate(lups)]
+            counts = [tsf.luptitude_to_counts(lup,j)
+                      for j,lup in enumerate(lups)]
             counts = np.array(counts)
             bright = _getBrightness(counts, tsf, bandnames, extrabands)
             return bright
@@ -373,7 +379,8 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
         devflux = objs.counts_dev
         expflux = objs.counts_exp
         def comp2bright(lups, Ldev, Lexp):
-            counts = [tsf.luptitude_to_counts(lup,j) for j,lup in enumerate(lups)]
+            counts = [tsf.luptitude_to_counts(lup,j)
+                      for j,lup in enumerate(lups)]
             counts = np.array(counts)
             dcounts = counts * Ldev
             ecounts = counts * Lexp
@@ -394,8 +401,7 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
                         flux = np.zeros(len(extrabands)) + flux[0]
                     else:
                         flux = np.append(flux, np.zeros(len(extrabands)))
-                bright = NanoMaggies(order=bb,
-                                     **dict(zip(bb, flux)))
+                bright = NanoMaggies(order=bb, **dict(zip(bb, flux)))
             else:
                 I = (flux > 0)
                 mag = np.zeros_like(flux) + badmag
@@ -416,7 +422,6 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
         compflux = objs.cmodelflux
         devflux = objs.devflux
         expflux = objs.expflux
-
         
     sources = []
     nstars, ndev, nexp, ncomp = 0, 0, 0, 0
@@ -450,7 +455,8 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
         elif hasexp:
             flux = expflux[i,:]
         else:
-            print 'Skipping object with Lstar = %g, Ldev = %g, Lexp = %g (fracdev=%g)' % (Lstar[i], Ldev[i], Lexp[i], fracdev[i])
+            print('Skipping object with Lstar = %g, Ldev = %g, Lexp = %g (fracdev=%g)'
+                  % (Lstar[i], Ldev[i], Lexp[i], fracdev[i]))
             continue
 
         isources.append(i)
@@ -488,8 +494,8 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
             nexp += 1
         sources.append(gal)
 
-    print 'Created', ndev, 'deV,', nexp, 'exp,', ncomp, 'composite',
-    print '(total %i) galaxies and %i stars' % (ndev+nexp+ncomp, nstars)
+    print('Created', ndev, 'deV,', nexp, 'exp,', ncomp, 'composite',)
+    print('(total %i) galaxies and %i stars' % (ndev+nexp+ncomp, nstars))
     
     if not (getobjs or getobjinds or getsourceobjs):
         return sources
@@ -548,13 +554,15 @@ def get_tractor_sources_dr9(*args, **kwargs):
     kwargs.update(release='DR9')
     return _get_sources(*args, **kwargs)
 
-
 def get_tractor_sources_cas_dr9(table, bandname='r', bands=None,
                                 extrabands=None,
                                 nanomaggies=False):
     '''
     table: filename or astrometry.util.fits.fits_table() object
     '''
+    from astrometry.sdss import band_names
+    from astrometry.util.fits import fits_table
+
     if isinstance(table, basestring):
         cas = fits_table(table)
     else:
@@ -640,6 +648,8 @@ def get_tractor_image(run, camcol, field, bandname,
       'sky'
       'skysig'
     '''
+    from astrometry.sdss import DR7, band_index
+
     if sdssobj is None:
         # Ugly
         if release != 'DR7':
@@ -676,7 +686,7 @@ def get_tractor_image(run, camcol, field, bandname,
     tsf = sdss.readTsField(run, camcol, field, rerun)
     astrans = tsf.getAsTrans(bandnum)
     wcs = SdssWcs(astrans)
-    #print 'Created SDSS Wcs:', wcs
+    #print('Created SDSS Wcs:', wcs)
 
     X = interpret_roi(wcs, (H,W), roi=roi, roiradecsize=roiradecsize,
                       roiradecbox=roiradecbox)
@@ -691,7 +701,8 @@ def get_tractor_image(run, camcol, field, bandname,
 
     if nanomaggies:
         zp = tsf.get_zeropoint(bandnum)
-        photocal = LinearPhotoCal(NanoMaggies.zeropointToScale(zp), band=bandname)
+        photocal = LinearPhotoCal(NanoMaggies.zeropointToScale(zp),
+                                  band=bandname)
     elif useMags:
         photocal = SdssMagsPhotoCal(tsf, bandname)
     else:
@@ -733,7 +744,7 @@ def get_tractor_image(run, camcol, field, bandname,
         II /= II.sum()
         # HIDEOUS HACK
         II = np.maximum(II, 0)
-        #print 'Multi-Gaussian PSF fit...'
+        #print('Multi-Gaussian PSF fit...')
         xm,ym = -(S/2), -(S/2)
         if savepsfimg is not None:
             plt.clf()
@@ -741,17 +752,17 @@ def get_tractor_image(run, camcol, field, bandname,
             plt.title('PSF image to fit with EM')
             plt.savefig(savepsfimg)
         res = em_fit_2d(II, xm, ym, w, mu, sig)
-        print 'em_fit_2d result:', res
+        print('em_fit_2d result:', res)
         if res == 0:
-            # print 'w,mu,sig', w,mu,sig
+            # print('w,mu,sig', w,mu,sig)
             mypsf = GaussianMixturePSF(w, mu, sig)
             mypsf.computeRadius()
         else:
             # Failed!  Return 'dg' model instead?
-            print 'PSF model fit', psf, 'failed!  Returning DG model instead'
+            print('PSF model fit', psf, 'failed!  Returning DG model instead')
             psf = 'dg'
     if psf == 'dg':
-        print 'Creating double-Gaussian PSF approximation'
+        print('Creating double-Gaussian PSF approximation')
         (a,s1, b,s2) = dgpsf
         mypsf = NCircularGaussianPSF([s1, s2], [a, b])
         
@@ -809,7 +820,6 @@ def scale_sdss_image(tim, S):
     # We're assuming ConstantSky here
     sky = tim.getSky().copy()
 
-    #photocal = tim.getPhotoCal().copy()
     photocal = ScaledPhotoCal(tim.getPhotoCal(), (1./S)**2)
     return Image(data=data, invvar=invvar, psf=psf, wcs=wcs,
                  sky=sky, photocal=photocal, name='Scaled(%i) '%S + tim.name,
@@ -824,13 +834,13 @@ def get_tractor_image_dr8(*args, **kwargs):
             return _get_tractor_image_dr8(*args, **kwargs)
         except:
             import traceback
-            print 'First get_tractor_image_dr8() failed -- trying to re-retrieve data'
-            print traceback.print_exc()
-            print
+            print('First get_tractor_image_dr8() failed -- trying to re-retrieve data')
+            print(traceback.print_exc())
             
             # Re-retrieve the data
             sdss = kwargs.get('sdss', None)
             if sdss is None:
+                from astrometry.sdss import DR8
                 curl = kwargs.get('curl', False)
                 sdss = DR8(curl=curl)
             (run,camcol,field,bandname) = args
@@ -882,12 +892,13 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
       'sky'
       'skysig'
     '''
+    from astrometry.sdss import band_index
 
     origpsf = psf
     if psf.startswith('bright-'):
         psf = psf[7:]
         brightpsf = True
-        print 'Setting bright PSF handling'
+        print('Setting bright PSF handling')
     else:
         brightpsf = False
 
@@ -896,6 +907,7 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
         raise RuntimeError('PSF must be in ' + str(valid_psf))
 
     if sdss is None:
+        from astrometry.sdss import DR8
         sdss = DR8(curl=curl)
 
     bandnum = band_index(bandname)
@@ -922,8 +934,8 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 
     astrans = frame.getAsTrans()
     wcs = SdssWcs(astrans)
-    #print 'Created SDSS Wcs:', wcs
-    #print '(x,y) = 1,1 -> RA,Dec', wcs.pixelToPosition(1,1)
+    #print('Created SDSS Wcs:', wcs)
+    #print('(x,y) = 1,1 -> RA,Dec', wcs.pixelToPosition(1,1))
 
     X = interpret_roi(wcs, (H,W), roi=roi, roiradecsize=roiradecsize,
                                roiradecbox=roiradecbox)
@@ -1027,7 +1039,7 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
         II /= II.sum()
         # HIDEOUS HACK
         II = np.maximum(II, 0)
-        #print 'Multi-Gaussian PSF fit...'
+        #print('Multi-Gaussian PSF fit...')
         xm,ym = -(S/2), -(S/2)
         if savepsfimg is not None:
             plt.clf()
@@ -1035,25 +1047,25 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
             plt.title('PSF image to fit with EM')
             plt.savefig(savepsfimg)
         res = em_fit_2d(II, xm, ym, w, mu, sig)
-        #print 'em_fit_2d result:', res
+        #print('em_fit_2d result:', res)
         if res == 0:
-            # print 'w,mu,sig', w,mu,sig
+            # print('w,mu,sig', w,mu,sig)
             mypsf = GaussianMixturePSF(w, mu, sig)
             mypsf.computeRadius()
         else:
             # Failed!  Return 'dg' model instead?
-            print 'PSF model fit', psf, 'failed!  Returning DG model instead'
+            print('PSF model fit', psf, 'failed!  Returning DG model instead')
             psf = 'dg'
     if psf == 'dg':
-        print 'Creating double-Gaussian PSF approximation'
+        print('Creating double-Gaussian PSF approximation')
         (a,s1, b,s2) = dgpsf
         mypsf = NCircularGaussianPSF([s1, s2], [a, b])
 
     if brightpsf:
-        print 'Wrapping PSF in SdssBrightPSF'
+        print('Wrapping PSF in SdssBrightPSF')
         (a1,s1, a2,s2, a3,sigmap,beta) = psfield.getPowerLaw(bandnum)
         mypsf = SdssBrightPSF(mypsf, a1,s1,a2,s2,a3,sigmap,beta)
-        print 'PSF:', mypsf
+        print('PSF:', mypsf)
 
     timg = Image(data=image, invvar=invvar, psf=mypsf, wcs=wcs,
                  sky=skyobj, photocal=photocal,
@@ -1068,6 +1080,7 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 def get_tractor_image_dr9(*args, **kwargs):
     sdss = kwargs.get('sdss', None)
     if sdss is None:
+        from astrometry.sdss import DR9
         curl = kwargs.pop('curl', False)
         kwargs['sdss'] = DR9(curl=curl)
     return get_tractor_image_dr8(*args, **kwargs)
@@ -1089,16 +1102,16 @@ class SdssNanomaggiesPhotoCal(BaseParams):
         # MAGIC
         if mag > 50.:
             return 0.
-        #print 'mag', mag
+        #print('mag', mag)
 
         if mag < -50:
-            print 'Warning: mag', mag, ': clipping'
+            print('Warning: mag', mag, ': clipping')
             mag = -50
 
         nmgy = 10. ** ((mag - 22.5) / -2.5)
         #nmgy2 = np.exp(mag * -0.9210340371976184 + 20.723265836946414)
-        #print 'nmgy', nmgy
-        #print 'nmgy2', nmgy2
+        #print('nmgy', nmgy)
+        #print('nmgy2', nmgy2)
         return nmgy
     def countsToMag(self, nmgy):
         # Attention: "mag" here is a simple scalar, not a Mag object...
@@ -1113,6 +1126,8 @@ class SdssMagsPhotoCal(BaseParams):
     A photocal that uses Mags objects.
     '''
     def __init__(self, tsfield, bandname):
+        from astrometry.sdss import band_index
+        
         self.bandname = bandname
         self.band = band_index(bandname)
 
@@ -1317,245 +1332,3 @@ class SdssWcs(ParamList):
         ## FIXME -- color.
         ra,dec = self.pixelToRaDec(x + self.x0, y + self.y0)
         return RaDecPos(ra, dec)
-
-class Changes(object):
-    pass
-
-class SDSSTractor(Tractor):
-
-    def __init__(self, *args, **kwargs):
-        self.debugnew = kwargs.pop('debugnew', False)
-        self.debugchange = kwargs.pop('debugchange', False)
-
-        Tractor.__init__(self, *args, **kwargs)
-        self.newsource = 0
-        self.changes = []
-        self.changei = 0
-
-        self.plotfns = []
-        self.comments = []
-        self.boxes = []
-
-    def debugChangeSources(self, **kwargs):
-        if self.debugchange:
-            self.doDebugChangeSources(**kwargs)
-
-    def doDebugChangeSources(self, step=None, src=None, newsrcs=None, alti=0,
-                             dlnprob=0, **kwargs):
-        if step == 'start':
-            ch = self.changes = Changes()
-            N = self.getNImages()
-            ch.src = src
-            ch.N = N
-            ch.impatch = [None for i in range(N)]
-            ch.mod0    = [None for i in range(N)]
-            ch.mod0type = src.getSourceType()
-            ch.newmods = []
-
-            for imgi in range(N):
-                img = self.getImage(imgi)
-                mod = self.getModelPatch(img, src)
-                ch.mod0[imgi] = mod
-                print 'image', imgi, 'got model patch', mod
-                if mod.getImage() is not None:
-                    impatch = img.getImage()[mod.getSlice(img)]
-                    if len(impatch.ravel()):
-                        ch.impatch[imgi] = impatch
-
-        elif step in ['init', 'opt1']:
-            ch = self.changes
-            if newsrcs == []:
-                return
-            mods = []
-            for imgi in range(ch.N):
-                img = self.getImage(imgi)
-                mod = self.getModelPatch(img, newsrcs[0])
-                mods.append(mod)
-
-            if step == 'init':
-                ch.newmods.append([newsrcs[0].getSourceType(),
-                                   mods])
-            else:
-                ch.newmods[-1].extend([mods, dlnprob])
-
-        elif step in ['switch', 'keep']:
-            ch = self.changes
-            M = len(ch.newmods)
-            N = ch.N
-            cols = M+2
-            II = [i for i in range(N) if ch.impatch[i] is not None]
-            rows = len(II)
-            fs = 10
-
-            imargs = {}
-            plt.clf()
-            # Images
-            for ri,i in enumerate(II):
-                img = self.getImage(i)
-                sky = img.getSky().val
-                skysig = sqrt(sky)
-                imargs[i] = dict(vmin=-3.*skysig, vmax=10.*skysig)
-                if ch.impatch[i] is None:
-                    continue
-                plt.subplot(rows, cols, ri*cols+1)
-                plotimage(ch.impatch[i] - sky, **imargs[i])
-                plt.xticks([])
-                plt.yticks([])
-                plt.title('image %i' % i, fontsize=fs)
-
-            # Original sources
-            for ri,i in enumerate(II):
-                if ch.mod0[i].getImage() is None:
-                    continue
-                plt.subplot(rows, cols, ri*cols+2)
-                plotimage(ch.mod0[i].getImage(), **imargs[i])
-                plt.xticks([])
-                plt.yticks([])
-                plt.title('original ' + ch.mod0type, fontsize=fs)
-
-            # New sources
-            for j,newmod in enumerate(ch.newmods):
-                (srctype, premods, postmods, dlnp) = newmod
-                for ri,i in enumerate(II):
-                    if postmods[i] is None:
-                        continue
-                    plt.subplot(rows, cols, ri*cols + 3 + j)
-
-                    # HACK -- force patches to be the same size + offset...
-                    img = self.getImage(i)
-                    sl = ch.mod0[i].getSlice(img)
-                    #print 'slice', sl
-                    im = np.zeros_like(img.getImage())
-                    postmods[i].addTo(im)
-                    im = im[sl]
-                    if len(im.ravel()):
-                        plotimage(im, **imargs[i])
-                        plt.xticks([])
-                        plt.yticks([])
-                        plt.title(srctype + ' (dlnp=%.1f)' % dlnp, fontsize=fs)
-                
-            fn = 'change-%03i.png' % self.changei
-            plt.savefig(fn)
-            print 'Wrote', fn
-            self.changei += 1
-            self.plotfns.append(fn)
-            if step == 'switch':
-                s = '<a href="#%s">' % fn + 'accepted change</a> from ' + str(src) + '<br />to '
-                if len(newsrcs) == 1:
-                    s += str(newsrcs[0])
-                else:
-                    s += '[ ' + ' + '.join([str(ns) for ns in newsrcs]) + ' ]'
-                self.comments.append(s)
-            elif step == 'keep':
-                s = '<a href="#%s">' % fn + 'rejected change</a> of ' + str(src)
-                self.comments.append(s)
-            #smallimg = 'border="0" width="400" height="300"'
-            #s += '<a href="%s"><img src="%s" %s /></a>' % (fn, fn, smallimg)
-                
-                
-    def debugNewSource(self, *args, **kwargs):
-        if self.debugnew:
-            self.doDebugNewSource(*args, **kwargs)
-
-    def doDebugNewSource(self, *args, **kwargs):
-        step = kwargs.get('type', None)
-        if step in [ 'newsrc-0', 'newsrc-opt' ]:
-            if step == 'newsrc-0':
-                optstep = 0
-                self.newsource += 1
-            else:
-                optstep = 1 + kwargs['step']
-            src = kwargs['src']
-            img = kwargs['img']
-
-            patch = src.getModelPatch(img)
-            imgpatch = img.getImage()[patch.getSlice(img)]
-
-            plt.clf()
-            plt.subplot(2,3,4)
-            plotimage(imgpatch)
-            cl = plt.gci().get_clim()
-            plt.colorbar()
-            plt.title('image patch')
-            plt.subplot(2,3,5)
-            plotimage(patch.getImage(), vmin=cl[0], vmax=cl[1])
-            plt.colorbar()
-            plt.title('new source')
-            derivs = src.getParamDerivatives(img)
-            assert(len(derivs) == 3)
-            for i,deriv in enumerate(derivs):
-                plt.subplot(2,3,i+1)
-                plotimage(deriv.getImage())
-                cl = plt.gci().get_clim()
-                mx = max(abs(cl[0]), abs(cl[1]))
-                plt.gci().set_clim(-mx, mx)
-                plt.colorbar()
-                plt.title(deriv.name)
-            fn = 'newsource-%02i-%02i.png' % (self.newsource, optstep)
-            plt.savefig(fn)
-            print 'Wrote', fn
-
-    def createNewSource(self, img, x, y, ht):
-        wcs = img.getWcs()
-        pos = wcs.pixelToPosition(None, (x,y))
-        # "ht" is the peak height (difference between image and model)
-        # convert to total flux by normalizing by my patch's peak pixel value.
-        patch = img.getPsf().getPointSourcePatch(x, y)
-        ht /= patch.getImage().max()
-        photocal = img.getPhotoCal()
-        # XXX
-        flux = photocal.countsToBrightness(ht)
-        ps = PointSource(pos, flux)
-        try:
-            imgi = self.images.index(img)
-            patch = self.getModelPatch(img, ps)
-            self.addBox(imgi, patch.getExtent())
-        except:
-            pass
-        return ps
-
-    def addBox(self, imgi, box):
-        if len(self.boxes) == 0:
-            self.boxes = [[] for i in range(self.getNImages())]
-        self.boxes[imgi].append(box)
-
-    def changeSourceTypes(self, srcs=None, **kwargs):
-        if srcs is not None:
-            for i,img in enumerate(self.getImages()):
-                for src in srcs:
-                    patch = self.getModelPatch(img, src)
-                    self.addBox(i, patch.getExtent())
-        Tractor.changeSourceTypes(self, srcs, **kwargs)
-
-
-    def changeSource(self, source):
-        '''
-        Proposes a list of alternatives, where each alternative is a list of new
-        Sources that the given Source could be changed into.
-        '''
-        if isinstance(source, PointSource):
-            eg = ExpGalaxy(source.getPosition().copy(), source.getBrightness().copy(),
-                            GalaxyShape(1., 0.5, 0.))
-            dg = DevGalaxy(source.getPosition().copy(), source.getBrightness().copy(),
-                           GalaxyShape(1., 0.5, 0.))
-            #print 'Changing:'
-            #print '  from ', source
-            #print '  into', eg
-            return [ [], [eg], [dg] ]
-
-        elif isinstance(source, ExpGalaxy):
-            dg = DevGalaxy(source.getPosition().copy(), source.getBrightness().copy(),
-                            GalaxyShape(source.re, source.ab, source.phi))
-            ps = PointSource(source.getPosition().copy(), source.getBrightness().copy())
-            return [ [], [ps], [dg] ]
-
-        elif isinstance(source, DevGalaxy):
-            eg = ExpGalaxy(source.getPosition().copy(), source.getBrightness().copy(),
-                           GalaxyShape(source.re, source.ab, source.phi))
-            ps = PointSource(source.getPosition().copy(), source.getBrightness().copy())
-            return [ [], [ps], [eg] ]
-
-        else:
-            print 'unknown source type for', source
-            return []
-
