@@ -50,6 +50,7 @@ TRACTOR_INSTALL := __init__.py basics.py brightness.py cache.py \
 	multiproc.py ordereddict.py patch.py pointsource.py psf.py psfex.py \
 	sdss.py sersic.py sfd.py shifted.py sky.py source_extractor.py \
 	splinesky.py tractortime.py utils.py wcs.py \
+	optimize.py lsqr_optimizer.py ceres_optimizer.py \
 	mix.py _mix.so emfit.py _emfit.so mp_fourier.py _mp_fourier.so
 
 WISE_INSTALL_DIR := $(PY_INSTALL_DIR)/wise
