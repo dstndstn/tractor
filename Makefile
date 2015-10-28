@@ -46,7 +46,7 @@ TRACTOR_INSTALL_DIR := $(PY_INSTALL_DIR)/tractor
 
 TRACTOR_INSTALL := __init__.py basics.py brightness.py cache.py \
 	ceres_mixin.py ducks.py ellipses.py engine.py fitpsf.py galaxy.py \
-	image.py imageutils.py lsqr_mixin.py mixture_profiles.py motion.py \
+	image.py imageutils.py mixture_profiles.py motion.py \
 	multiproc.py ordereddict.py patch.py pointsource.py psf.py psfex.py \
 	sdss.py sersic.py sfd.py shifted.py sky.py source_extractor.py \
 	splinesky.py tractortime.py utils.py wcs.py \
