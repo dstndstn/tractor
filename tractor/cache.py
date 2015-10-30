@@ -35,6 +35,7 @@ class TractorCacheMixin(object):
 
         # DEBUG
         if mod is not None and mod.patch is not None:
+            import numpy as np
             assert(np.all(np.isfinite(mod.patch)))
 
         return mod

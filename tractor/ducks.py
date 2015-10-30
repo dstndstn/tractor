@@ -321,6 +321,7 @@ class WCS(ImageCalibration, Params):
         Returns the local pixel scale at the given *x*,*y* pixel coords,
         in *arcseconds* per pixel.
         '''
+        import numpy as np
         return 3600. * np.sqrt(np.abs(np.linalg.det(self.cdAtPixel(x,y))))
     
     def shifted(self, dx, dy):

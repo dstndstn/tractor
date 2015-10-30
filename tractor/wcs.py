@@ -158,6 +158,7 @@ class ConstantFitsWcs(ParamList, ducks.ImageCalibration):
         return copy
         
     def __str__(self):
+        from .utils import getClassName
         return ('%s: x0,y0 %.3f,%.3f, WCS ' % (getClassName(self), self.x0,self.y0)
                 + str(self.wcs))
 
@@ -217,8 +218,8 @@ class ConstantFitsWcs(ParamList, ducks.ImageCalibration):
     def toStandardFitsHeader(self, hdr):
         if self.x0 != 0 or self.y0 != 0:
             wcs = self.wcs.get_subimage(self.x0, self.y0,
-                                        wcs.get_width()-x0,
-                                        wcs.get_height()-y0)
+                                        self.wcs.get_width()-self.x0,
+                                        self.wcs.get_height()-self.y0)
         else:
             wcs = self.wcs
         wcs.add_to_header(hdr)

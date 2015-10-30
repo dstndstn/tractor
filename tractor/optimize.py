@@ -64,6 +64,7 @@ class Optimizer(object):
         subimgs = []
         if rois is not None:
             for i,img in enumerate(imgs):
+                from .image import Image
                 roi = rois[i]
                 y0 = roi[0].start
                 x0 = roi[1].start

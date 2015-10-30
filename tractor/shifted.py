@@ -70,6 +70,7 @@ class ShiftedPsf(ParamsWrapper, ducks.ImageCalibration):
             extent = (ex0+self.x0, ex1+self.x0, ey0+self.y0, ey1+self.y0)
         mm = None
         if modelMask is not None:
+            from .patch import Patch
             mm = Patch(modelMask.x0 + self.x0, modelMask.y0 + self.y0, modelMask.patch)
             
         p = self.psf.getPointSourcePatch(self.x0 + px, self.y0 + py,

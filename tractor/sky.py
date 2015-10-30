@@ -19,6 +19,7 @@ class ConstantSky(ScalarParam, ducks.ImageCalibration):
     ("counts").
     '''
     def getParamDerivatives(self, tractor, img, srcs):
+        import numpy as np
         p = Patch(0, 0, np.ones_like(img.getImage()))
         p.setName('dsky')
         return [p]
