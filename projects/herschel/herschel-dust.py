@@ -140,8 +140,9 @@ class DustPhotoCal(ParamList):
 
 class DustSheet(MultiParams):
     '''
-    A Source that represents a smooth sheet of dust.  The dust parameters are help in arrays
-    that represent sample points on the sky; they are interpolated onto the destination image.
+    A Source that represents a smooth sheet of dust.  The dust
+    parameters are help in arrays that represent sample points on the
+    sky; they are interpolated onto the destination image.
     '''
     @staticmethod
     def getNamedParams():
@@ -166,36 +167,26 @@ class DustSheet(MultiParams):
         self.prior_emis_std = 0.5
 
         # priors on smoothness (stdevs)
-        #self.prior_logt_smooth = np.log(1.2)
-        #self.prior_logsa_smooth = np.log(1.2)
-        #self.prior_emis_smooth = 0.25
-
         # weak
         self.prior_logt_smooth = np.log(1.5)
-        # try matching it to the absolute prior
-        #self.prior_logt_smooth = np.log(1.2)
         self.prior_logsa_smooth = np.log(2.)
         self.prior_emis_smooth = 0.5
 
     def getRaDecCorners(self, margin=0):
         H,W = self.wcs.get_height(), self.wcs.get_width()
         rds = []
-        for x,y in [(1.-margin,1.-margin),(W+margin,1.-margin),(W+margin,H+margin),(1.-margin,H+margin)]:
+        for x,y in [(1.-margin,1.-margin),(W+margin,1.-margin),
+                    (W+margin,H+margin),(1.-margin,H+margin)]:
             r,d = self.wcs.pixelxy2radec(x,y)
             rds.append((r,d))
         rds.append(rds[0])
         rds = np.array(rds)
         return rds
 
-    def getArrays(self, ravel=False): #, reshape=True):   DOI, they're already the right shape.
+    def getArrays(self, ravel=False):
         logsa = self.logsolidangle.a
         logt  = self.logtemperature.a
         emis  = self.emissivity.a
-        # if reshape:
-        #   shape = self.shape
-        #   logsa = logsa.reshape(shape)
-        #   logt  = logt.reshape(shape)
-        #   emis  = emis.reshape(shape)
         if ravel:
             logsa = logsa.ravel()
             logt  = logt.ravel()
@@ -289,8 +280,8 @@ class DustSheet(MultiParams):
             I = np.array(list(p.getThawedParamIndices()))
             nparams = len(I)
 
-            # values that are exactly equal to the prior mean produce zero derivatives
-            # (and that can cause problems for lsqr)
+            # values that are exactly equal to the prior mean produce
+            # zero derivatives (and that can cause problems for lsqr)
             b = -(arr[I] - mn) / st
             J = (b != 0)
             I = I[J]
@@ -310,9 +301,10 @@ class DustSheet(MultiParams):
         # Smoothness priors:
         c0 = 0
         H,W = self.shape
-        for pname, smooth, arr in [('logsolidangle',  self.prior_logsa_smooth, logsa),
-                                   ('logtemperature', self.prior_logt_smooth,  logt),
-                                   ('emissivity',     self.prior_emis_smooth,  emis)]:
+        for pname, smooth, arr in [
+                ('logsolidangle',  self.prior_logsa_smooth, logsa),
+                ('logtemperature', self.prior_logt_smooth,  logt),
+                ('emissivity',     self.prior_emis_smooth,  emis)]:
             if self.isParamFrozen(pname):
                 continue
             p = getattr(self, pname)
@@ -365,28 +357,29 @@ class DustSheet(MultiParams):
 
         return (rA, cA, vA, pb)
 
-    def __getattr__(self, name):
-        if name == 'shape':
-            return self.logsolidangle.shape
-        raise AttributeError() #name + ': no such attribute in DustSheet.__getattr__')
+    @property
+    def shape(self):
+        return self.logsolidangle.shape
 
-    def __getstate__(self): #return self.__dict__
+    def __getstate__(self):
         D = self.__dict__.copy()
         D.pop('mp', None)
         return D
-    def __setstate__(self, d): self.__dict__.update(d)
+    def __setstate__(self, d):
+        self.__dict__.update(d)
 
     def _getcounts(self, img, I=None):
+        '''
+        Returns an image giving the brightness of this DustSheet in
+        the given image.  This is a grid the same shape as the
+        DustSheet, but in the image's units.
+        '''
+        
         # This takes advantage of the coincidence that our
         # DustPhotoCal does the right thing with numpy arrays.
 
         if I is not None:
-            # class fakebright(object):
-            #   pass
-            # b = fakebright()
             sa,t,e = self.getArrays(ravel=True)
-            #b.logsolidangle, b.logtemperature, b.emissivity = sa[I], t[I], e[I]
-            #counts = img.getPhotoCal().brightnessToCounts(b)
             counts = img.getPhotoCal().dustParamsToCounts(sa[I], t[I], e[I])
             return counts
 
@@ -397,8 +390,21 @@ class DustSheet(MultiParams):
         return counts
 
     def _computeTransformation(self, img, ylo=0, yhi=-1):
+        '''
+        Pre-compute the "grid-spread function" transformation matrix
+        for this parameter grid to the given image pixels.
+
+        The result is a home-brewed sparse matrix representation: a
+        dictionary mapping from model grid pixel indices (integers) to
+        the tuple (I, G, nz, NZI), where:
+
+        I: numpy index array (integers) in the image
+        G: grid weights for those pixels
+        nz = ((x0,y0), (h,w)): the subimage with non-zero weights
+        NZI: numpy index array (integers) within the "nz" subimage
+        
+        '''
         imwcs = img.getWcs()
-        # Pre-compute the "grid-spread function" transformation matrix...
         H,W = self.shape
         if yhi == -1:
             yhi = H
@@ -449,7 +455,8 @@ class DustSheet(MultiParams):
                 rim[:,:] = 0
                 ##
                 weighted = 1
-                res = tan_wcs_resample(cwcs, imwcs.wcs, cmock, rim, weighted, Lorder)
+                res = tan_wcs_resample(cwcs, imwcs.wcs, cmock, rim,
+                                       weighted, Lorder)
                 assert(res == 0)
 
                 if False:
@@ -460,7 +467,8 @@ class DustSheet(MultiParams):
                 if sum(outimg) == 0:
                     continue
 
-                I = np.flatnonzero((outimg > 0) * (img.getInvError().ravel() > 0))
+                I = np.flatnonzero((outimg > 0) *
+                                   (img.getInvError().ravel() > 0))
 
                 if len(I) == 0:
                     continue
@@ -628,7 +636,7 @@ def makeplots(tractor, step, suffix):
     W2 = (0.90 / 0.99) * H
     print 'W2', W2
 
-    plt.figure(figsize=(W1,H))
+    plt.figure(1, figsize=(W1,H))
     plt.subplots_adjust(**spa)
 
     logsa = np.fliplr(logsa)
@@ -684,7 +692,7 @@ def makeplots(tractor, step, suffix):
     #plt.figure(figsize=(2.5,2.5))
     #plt.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.9)
 
-    plt.figure(figsize=(W2,H))
+    plt.figure(2, figsize=(W2,H))
     #plt.figure(figsize=(3,3))
     plt.subplots_adjust(**spa)
 
@@ -760,7 +768,7 @@ def makeplots(tractor, step, suffix):
     #   plt.title(tim.name)
     #   plt.savefig('chi-%i-%02i%s.png' % (i, step, suffix))
 
-    plt.figure(figsize=(16,8))
+    plt.figure(3, figsize=(16,8))
     plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.9, wspace=0.1, hspace=0.1)
     R,C = 3,len(mods)
     plt.clf()
@@ -803,7 +811,7 @@ def makeplots(tractor, step, suffix):
     ds = tractor.getCatalog()[0]
     logsa, logt, emis = ds.getArrays()
 
-    plt.figure(figsize=(16,5))
+    plt.figure(4, figsize=(16,5))
     plt.clf()
 
     plt.subplot(1,3,1)
@@ -1160,6 +1168,19 @@ def main():
             ds._setTransformation(im, X)
         print 'done precomputing.'
 
+        # Plot the grid-spread functions.
+        for itim,tim in enumerate(tractor.images):
+            T = ds._getTransformation(tim)
+            (I,G,nz,NZI) = T[0]
+            plt.clf()
+            g = np.zeros(tim.shape, np.float32)
+            g.flat[I] = G
+            plt.imshow(g, interpolation='nearest', origin='lower', cmap='hot')
+            plt.colorbar()
+            plt.title('Grid-spread function for cell 0, image %s' % tim.name)
+            plt.savefig('gsf-%i.png' % itim)
+
+        
         makeplots(tractor, 0, opt.suffix)
         pfn = 'herschel-%02i%s.pickle' % (0, opt.suffix)
         pickle_to_file(tractor, pfn)
