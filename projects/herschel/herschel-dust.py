@@ -906,6 +906,7 @@ def create_tractor(opt):
         tim = Image(data=image, invvar=invvar, psf=psf, wcs=twcs,
                     sky=sky, photocal=pcal, name=nm)
         print 'created', tim
+        print Image
         print tim.setInvvar
         tim.zr = zr
         tims.append(tim)
