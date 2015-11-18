@@ -145,13 +145,21 @@ class Tractor(MultiParams):
 
     # For pickling
     def __getstate__(self):
-        S = (self.getImages(), self.getCatalog(), self.liquid,
-             self.modtype, self.modelMasks, self.expectModelMasks)
+        version = 1
+        S = (version, self.getImages(), self.getCatalog(), self.liquid,
+             self.modtype, self.modelMasks, self.expectModelMasks,
+             self.optimizer)
         return S
     def __setstate__(self, state):
-        (images, catalog, self.liquid, self.modtype, self.modelMasks,
-         self.expectModelMasks
-         ) = state
+        if len(state) == 6:
+            # "backwards compat"
+            (images, catalog, self.liquid, self.modtype, self.modelMasks,
+             self.expectModelMasks) = state
+            from .lsqr_optimizer import LsqrOptimizer
+            self.optimizer = LsqrOptimizer()
+        elif len(state) == 8:
+            (ver, images, catalog, self.liquid, self.modtype, self.modelMasks,
+             self.expectModelMasks, self.optimizer) = state
         self.subs = [images, catalog]
 
     def getNImages(self):

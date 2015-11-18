@@ -516,7 +516,7 @@ class DustSheet(MultiParams):
             X = self.Tcache[key]
         return X
 
-    def getModelPatch(self, img):
+    def getModelPatch(self, img, **kwa):
         X = self._getTransformation(img)
         counts = self._getcounts(img)
         rim = np.zeros(img.shape)
@@ -710,8 +710,7 @@ def makeplots(tractor, step, suffix):
         plt.clf()
         plt.imshow(mod, **ima)
         plt.gray()
-        name = ['PACS 100', 'PACS 160', 'SPIRE 250', 'SPIRE 350', 'SPIRE 500'][i]
-        plt.title('Model: ' + name)
+        plt.title('Model: ' + tim.name)
         #plt.title(name)
         plt.xticks([])
         plt.yticks([])
@@ -847,11 +846,11 @@ def create_tractor(opt):
     - Can I just blow up the SPIRE images with interpolation?
     """
     dataList = [
-        ('m31_brick15_PACS100.fits',   7.23,  7.7),
-        ('m31_brick15_PACS160.fits',   3.71, 12.0),
-        ('m31_brick15_SPIRE250.fits',  None, 18.0),
-        ('m31_brick15_SPIRE350.fits',  None, 25.0),
-        ('m31_brick15_SPIRE500.fits',  None, 37.0),
+        ('m31_brick15_PACS100.fits',  'PACS 100',  7.23,  7.7),
+        ('m31_brick15_PACS160.fits',  'PACS 160',  3.71, 12.0),
+        ('m31_brick15_SPIRE250.fits', 'SPIRE 250', None, 18.0),
+        ('m31_brick15_SPIRE350.fits', 'SPIRE 350', None, 25.0),
+        ('m31_brick15_SPIRE500.fits', 'SPIRE 500', None, 37.0),
         ]
 
     # From Groves via Rix:
@@ -866,7 +865,7 @@ def create_tractor(opt):
 
     print 'Reading images...'
     tims = []
-    for i, (fn, noise, fwhm) in enumerate(dataList):
+    for i, (fn, nm, noise, fwhm) in enumerate(dataList):
         print
         print 'Reading', fn
         P = pyfits.open(fn)
@@ -882,7 +881,7 @@ def create_tractor(opt):
             noise = float(hdr['NOISE'])
         print 'Noise', noise
         print 'Median image value', np.median(image)
-        invvar = np.ones_like(image) / (noise**2)
+        inverr = np.ones_like(image) / noise
 
         skyval = np.percentile(image, 5)
         sky = ConstantSky(skyval)
@@ -894,7 +893,7 @@ def create_tractor(opt):
         # "Filter" is in *microns* in the headers; convert to *m* here, to match "lam0"
         pcal = DustPhotoCal(lam * 1e-6, wcs.pixel_scale())
         #nm = '%s %i' % (hdr['INSTRUME'], lam)
-        nm = fn.replace('.fits', '')
+        #nm = fn.replace('.fits', '')
         #zr = noise * np.array([-3, 10]) + skyval
         zr = np.array([np.percentile(image.ravel(), p) for p in [1, 99]])
         print 'Pixel scale:', wcs.pixel_scale()
@@ -903,11 +902,9 @@ def create_tractor(opt):
         print 'PSF sigma', sigma, 'pixels'
         psf = NCircularGaussianPSF([sigma], [1.])
         twcs = ConstantFitsWcs(wcs)
-        tim = Image(data=image, invvar=invvar, psf=psf, wcs=twcs,
+        tim = Image(data=image, inverr=inverr, psf=psf, wcs=twcs,
                     sky=sky, photocal=pcal, name=nm)
         print 'created', tim
-        print Image
-        print tim.setInvvar
         tim.zr = zr
         tims.append(tim)
 
@@ -1125,14 +1122,12 @@ def main():
             poly = np.array([tim.getWcs().positionToPixel(RaDecPos(rdi[0], rdi[1])) for rdi in rd])
             poly = poly[:-1,:]
             print 'Model bounding box in image', tim.name, 'coordinates:'
-            print poly.shape
+            #print poly.shape
             print poly
             H,W = tim.shape
             xx,yy = np.meshgrid(np.arange(W), np.arange(H))
             inside = point_in_poly(xx, yy, poly)
-            iv = tim.getInvvar()
-            iv[(inside == 0)] = 0.
-            tim.setInvvar(iv)
+            tim.inverr[inside == 0] = 0.
 
         print 'Precomputing transformations...'
         ds = tractor.getCatalog()[0]
@@ -1171,6 +1166,7 @@ def main():
         im.freezeAllBut('sky')
 
     for i in range(step0, opt.steps):
+        print 'Step', i
         if callgrind:
             callgrind.callgrind_start_instrumentation()
 
