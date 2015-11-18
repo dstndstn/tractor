@@ -535,7 +535,10 @@ class DustSheet(MultiParams):
                 [0.1] * len(self.emissivity))
 
 
-    def getParamDerivatives(self, img):
+    def getParamDerivatives(self, img, modelMask=None):
+
+        assert(modelMask is None)
+
         X = self._getTransformation(img)
         imwcs = img.getWcs()
         gridscale = self.wcs.pixel_scale()
