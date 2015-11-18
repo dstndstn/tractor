@@ -939,7 +939,7 @@ def create_tractor(opt):
         twcs = tim.getWcs()
         rds = []
         for x,y in [(0.5,0.5),(W+0.5,0.5),(W+0.5,H+0.5),(0.5,H+0.5),(0.5,0.5)]:
-            rd = twcs.pixelToPosition(x,y)
+            rd = twcs.pixelToPosition(x-1, y-1)
             rds.append(rd)
         rds = np.array(rds)
         radecbounds.append(rds)
@@ -1137,7 +1137,7 @@ def main():
 
         # zero out invvar outside the model bounds.
         ds = tractor.getCatalog()[0]
-        rd = ds.getRaDecCorners()
+        rd = ds.getRaDecCorners(margin=0.5)
         for i,tim in enumerate(tractor.getImages()):
             poly = np.array([tim.getWcs().positionToPixel(
                 RaDecPos(rdi[0], rdi[1])) for rdi in rd])
@@ -1150,6 +1150,28 @@ def main():
             inside = point_in_poly(xx, yy, poly)
             tim.inverr[inside == 0] = 0.
 
+        plt.clf()
+        for i,tim in enumerate(tractor.images):
+            h,w = tim.shape
+            rd = [tim.getWcs().pixelToPosition(x,y)
+                  for x,y in [(-0.5,-0.5),(w-0.5,-0.5),(w-0.5,h-0.5),
+                              (-0.5,h-0.5),(-0.5,-0.5)]]
+            plt.plot([p.ra for p in rd], [p.dec for p in rd], '-',
+                     label=tim.name)
+        rd = ds.getRaDecCorners(margin=0.5)
+        plt.plot(rd[:,0], rd[:,1], 'k-', label='Grid')
+        mh,mw = ds.shape
+        r,d = ds.wcs.pixelxy2radec(1 + np.arange(mw), np.ones(mw))
+        plt.plot(r, d, 'k.')
+        r,d = ds.wcs.pixelxy2radec(np.ones(mh), 1 + np.arange(mh))
+        plt.plot(r, d, 'k.')
+        r,d = ds.wcs.pixelxy2radec(1 + np.arange(mw), np.zeros(mw)+mh)
+        plt.plot(r, d, 'k.')
+        r,d = ds.wcs.pixelxy2radec(np.zeros(mh)+mw, 1 + np.arange(mh))
+        plt.plot(r, d, 'k.')
+        plt.legend()
+        plt.savefig('radec.png')
+            
         print 'Precomputing transformations...'
         ds = tractor.getCatalog()[0]
 
