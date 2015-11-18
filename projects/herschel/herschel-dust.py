@@ -525,10 +525,21 @@ class DustSheet(MultiParams):
         return X
 
     def getModelPatch(self, img, **kwa):
-        X = self._getTransformation(img)
+        '''
+        Returns a rendering of this DustSheet as it would appear in
+        the given image.
+
+        This first renders the dust in grid coordinates, and then
+        applies the grid-spread function to get to image coords.
+        '''
+        # render in grid coords
         counts = self._getcounts(img)
+        # get grid-spread function
+        X = self._getTransformation(img)
+        # we'll sum that into this result image
         rim = np.zeros(img.shape)
         rim1 = rim.ravel()
+        # for each grid pixel...
         for i,c in enumerate(counts.ravel()):
             if not i in X:
                 continue
@@ -541,7 +552,6 @@ class DustSheet(MultiParams):
         return ([0.1] * len(self.logsolidangle) +
                 [0.1] * len(self.logtemperature) +
                 [0.1] * len(self.emissivity))
-
 
     def getParamDerivatives(self, img, modelMask=None):
 
@@ -562,7 +572,6 @@ class DustSheet(MultiParams):
         i0 = 0
 
         counts0 = counts0.ravel()
-        #arrs = self.getArrays(ravel=True)
         sa,t,e = self.getArrays(ravel=True)
         photocal = img.getPhotoCal()
         for si,sub in self._enumerateActiveSubs():
@@ -1130,7 +1139,8 @@ def main():
         ds = tractor.getCatalog()[0]
         rd = ds.getRaDecCorners()
         for i,tim in enumerate(tractor.getImages()):
-            poly = np.array([tim.getWcs().positionToPixel(RaDecPos(rdi[0], rdi[1])) for rdi in rd])
+            poly = np.array([tim.getWcs().positionToPixel(
+                RaDecPos(rdi[0], rdi[1])) for rdi in rd])
             poly = poly[:-1,:]
             print 'Model bounding box in image', tim.name, 'coordinates:'
             #print poly.shape
