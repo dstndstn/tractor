@@ -37,8 +37,8 @@ class Image(MultiParams):
         if inverr is not None:
             self.inverr = inverr
         elif invvar is not None:
-            self.inverr = np.sqrt(invvar)
-            
+            self.setInvvar(invvar)
+
         self.name = name
         self.zr = kwargs.pop('zr', None)
         self.time = time
@@ -134,6 +134,8 @@ class Image(MultiParams):
         return self.inverr
     def getInvvar(self):
         return self.inverr**2
+    def setInvvar(self, iv):
+        self.inverr = np.sqrt(iv)
 
     def getImage(self):
         return self.data
