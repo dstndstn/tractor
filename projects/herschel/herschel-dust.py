@@ -470,9 +470,6 @@ class DustSheet(MultiParams):
                 else:
                     outimg = rim.ravel()
 
-                if sum(outimg) == 0:
-                    continue
-
                 I = np.flatnonzero((outimg > 0) *
                                    (img.getInvError().ravel() > 0))
 
