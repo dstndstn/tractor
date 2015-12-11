@@ -137,6 +137,12 @@ class DustPhotoCal(ParamList):
                                        brightness.logtemperature,
                                        brightness.emissivity)
 
+class MeltedNpArrayParams(NpArrayParams):
+    '''
+    An implementation of NpArrayParams with always liquid parameters
+    '''
+    def getParam(self,i):
+        return self._getThing(i)
 
 class DustSheet(MultiParams):
     '''
@@ -152,9 +158,9 @@ class DustSheet(MultiParams):
         assert(logsolidangle.shape == logtemperature.shape)
         assert(logsolidangle.shape == emissivity.shape)
         assert(logsolidangle.shape == (wcs.get_height(), wcs.get_width()))
-        super(DustSheet, self).__init__(NpArrayParams(logsolidangle),
-                                        NpArrayParams(logtemperature),
-                                        NpArrayParams(emissivity))
+        super(DustSheet, self).__init__(MeltedNpArrayParams(logsolidangle),
+                                        MeltedNpArrayParams(logtemperature),
+                                        MeltedNpArrayParams(emissivity))
         self.wcs = wcs
 
         self.Tcache = {}
