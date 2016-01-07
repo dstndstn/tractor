@@ -89,7 +89,7 @@ class SFDMap(object):
             if sum(cut) == 0:
                 continue
             ok,x,y = wcs.radec2pixelxy(l[cut], b[cut])
-            assert(np.all(ok == 0))
+            #assert(np.all(ok == 0))
             H,W = image.shape
             assert(np.all(x >= 0.5))
             assert(np.all(x <= (W+0.5)))
