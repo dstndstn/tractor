@@ -255,9 +255,10 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         T.writeto(filename, header=hdr, primheader=primhdr)
 
     @classmethod
-    def from_fits(cls, filename, header):
+    def from_fits(cls, filename, header, row=0):
         from astrometry.util.fits import fits_table
         T = fits_table(filename)
+        T = T[row]
         sky = cls(T.xgrid, T.ygrid, T.gridvals, order=T.order)
         sky.shift(T.x0, T.y0)
         return sky
