@@ -136,9 +136,12 @@ class Image(MultiParams):
         return self.inverr**2
     def setInvvar(self, iv):
         self.inverr = np.sqrt(iv)
-
+        
     def getImage(self):
         return self.data
+    def setImage(self, img):
+        self.data = img
+
     def getPsf(self):
         return self.psf
     def getWcs(self):
