@@ -4,7 +4,7 @@ Probabilistic astronomical source detection & measurement
 
 ## authors & license
 
-Copyright 2011-2015 Dustin Lang (University of Toronto) & David W. Hogg (NYU)
+Copyright 2011-2016 Dustin Lang (University of Toronto) & David W. Hogg (NYU)
 
 Licensed under GPLv2; see LICENSE.
 
