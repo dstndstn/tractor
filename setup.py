@@ -72,7 +72,7 @@ if key in sys.argv:
 
 setup(
     distclass=MyDistribution,
-    name="the Tractor",
+    name="tractor",
     version="git",
     author="Dustin Lang (UToronto) and David W. Hogg (NYU)",
     author_email="dstndstn@gmail.com",
