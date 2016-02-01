@@ -329,7 +329,21 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
 
     if cutToPrimary:
         objs.cut((objs.resolve_status & 256) > 0)
+
+    if len(objs) == 0:
+        sources = []
+        if not (getobjs or getobjinds or getsourceobjs):
+            return sources
+        rtn = [sources]
+        if getobjs:
+            rtn.append(None)
+        if getobjinds:
+            rtn.append(None)
+        if getsourceobjs:
+            rtn.append(None)
+        return rtn
         
+    
     if isdr7:
         objs.rename('phi_dev', 'phi_dev_deg')
         objs.rename('phi_exp', 'phi_exp_deg')
