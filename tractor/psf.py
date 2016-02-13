@@ -746,21 +746,23 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
 
     # returns a Patch object.
     def getPointSourcePatch(self, px, py, minval=0., radius=None,
-                            modelMask=None, **kwargs):
-
+                            modelMask=None, extent=None, **kwargs):
         ## FIXME!
         assert(modelMask is None)
 
-        ix = int(round(px))
-        iy = int(round(py))
-        if radius is None:
-            rad = int(np.ceil(self.getRadius()))
+        if extent is not None:
+            x0,x1,y0,y1 = extent
         else:
-            rad = radius
-        x0 = ix - rad
-        x1 = ix + rad + 1
-        y0 = iy - rad
-        y1 = iy + rad + 1
+            ix = int(round(px))
+            iy = int(round(py))
+            if radius is None:
+                rad = int(np.ceil(self.getRadius()))
+            else:
+                rad = radius
+            x0 = ix - rad
+            x1 = ix + rad + 1
+            y0 = iy - rad
+            y1 = iy + rad + 1
         mix = self.getMixtureOfGaussians()
         mix.mean[:,0] += px
         mix.mean[:,1] += py
