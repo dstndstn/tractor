@@ -37,8 +37,13 @@ class CeresOptimizer(Optimizer):
         result.ceres_status = x
 
     def optimize(self, tractor, **kwargs):
-        return self._ceres_opt(tractor, **kwargs)
-                               
+        X = self._ceres_opt(tractor, **kwargs)
+        #print('optimize:', X)
+        chisq0 = X['initial_cost']
+        chisq1 = X['final_cost']
+        # dlnp, dparams, alpha
+        return chisq0 - chisq1, None, 1
+    
     def _ceres_opt(self, tractor, variance=False, scale_columns=True,
                    numeric=False, scaled=True, numeric_stepsize=0.1,
                    dynamic_scale=True,

@@ -74,7 +74,11 @@ SUITESPARSE_LIB ?= -L$(SUITESPARSE_LIB_DIR) -lcxsparse -lcholmod -lcamd -lcolamd
 
 BLAS_LIB ?= -lblas
 
-GLOG_LIB ?= -lglog
+GLOG_LIB ?= $(shell pkg-config --libs   libglog) #-lglog
+GLOG_INC ?= $(shell pkg-config --cflags libglog)
+
+GFLAGS_LIB ?= $(shell pkg-config --libs   libgflags)
+GFLAGS_INC ?= $(shell pkg-config --cflags libgflags)
 
 CERES_LIB_DIR ?= /usr/local/lib
 CERES_LIB ?= -L$(CERES_LIB_DIR) -lceres $(GLOG_LIB) $(SUITESPARSE_LIB) $(BLAS_LIB)
@@ -101,7 +105,7 @@ CERES_LIB ?= -L$(CERES_LIB_DIR) -lceres $(GLOG_LIB) $(SUITESPARSE_LIB) $(BLAS_LI
 # export CERES_INC="-I/usr/local/ceres-solver-1.8.0/include"
 
 ceres.py: ceres.i
-	swig -python -c++ $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $<
+	swig -python -c++ $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $(GLOG_INC) $(GFLAGS_INC) $<
 
 CXXFLAGS := -Wall -fPIC
 # DEBUG
@@ -115,7 +119,7 @@ CERES_EXTRA_LIB ?=
 
 _ceres.so: ceres.i ceres-tractor.h ceres-tractor.cc
 	swig -python -c++ $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $<
-	g++ $(CXXFLAGS) -c ceres_wrap.cxx $(PYMOD_INC) $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC)
-	g++ $(CXXFLAGS) -c ceres-tractor.cc $(PYMOD_INC) $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC)
+	g++ $(CXXFLAGS) -c ceres_wrap.cxx $(PYMOD_INC) $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $(GLOG_INC) $(GFLAGS_INC)
+	g++ $(CXXFLAGS) -c ceres-tractor.cc $(PYMOD_INC) $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $(GLOG_INC) $(GFLAGS_INC)
 	g++ $(CXXFLAGS) $(CXXLINKFLAGS) -o _ceres.so -shared ceres_wrap.o ceres-tractor.o $(CERES_LIB) $(PYMOD_LIB) $(CERES_EXTRA_LIB)
 

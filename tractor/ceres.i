@@ -489,6 +489,11 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
 
 
 
+
+
+
+
+
 %}
 
 
