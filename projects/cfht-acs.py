@@ -14,6 +14,8 @@ from tractor.sky import ConstantSky
 from tractor.psf import GaussianMixturePSF
 from tractor.psfex import PixelizedPsfEx
 
+from tractor.source_extractor import get_se_modelfit_cat
+
 if __name__ == '__main__':
 
     imgfn = 'cfht/1624827p.fits'
