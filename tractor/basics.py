@@ -16,8 +16,8 @@ import numpy as np
 from .image import Image
 from .patch import Patch
 from .utils import *
-import ducks
-import mixture_profiles as mp
+from . import ducks
+from . import mixture_profiles as mp
 
 from .tractortime import TAITime
 from .psf import PixelizedPSF, GaussianMixturePSF, GaussianMixtureEllipsePSF, NCircularGaussianPSF

@@ -8,8 +8,8 @@ from .brightness import Flux
 from .engine import Tractor
 from .patch import Patch
 from .utils import BaseParams, ParamList, MultiParams
-import mixture_profiles as mp
-import ducks
+from . import mixture_profiles as mp
+from . import ducks
 
 # class VaryingPsfMixin(ducks.ImageCalibration):
 #     def getShifted(self, x0, y0):

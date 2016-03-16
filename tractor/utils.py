@@ -11,6 +11,7 @@ needs: sets of parameters stored in lists and such.  This framework
 could be useful outside the Tractor context.
 
 """
+from __future__ import print_function
 import numpy as np
 
 try:
@@ -35,14 +36,14 @@ def get_class_from_name(objclass):
         mod = importlib.import_module(pkg)
     else:
         mod = __import__(pkg, globals(), locals(), [], -1)
-        print 'Module:', mod
+        print('Module:', mod)
         for name in names[1:-1]:
-            print 'name', name
+            print('name', name)
             mod = getattr(mod, name)
-            print '-> mod', mod
+            print('-> mod', mod)
 
     clazz = getattr(mod, clazz)
-    #print 'Class:', clazz
+    #print('Class:', clazz)
     return clazz
     
 def listmax(X, default=0):
@@ -386,12 +387,12 @@ class NamedParams(object):
 
         # Create a property for each named parameter.
         for n,i in self.namedparams.items():
-            #print 'Adding named parameter', n, 'to class', self.__class__
+            #print('Adding named parameter', n, 'to class', self.__class__)
             if hasattr(self.__class__, n):
-                #print '  class', self.__class__, 'already has attr', n
+                #print('  class', self.__class__, 'already has attr', n)
                 continue
             #if hasattr(self, n):
-            #   print '  self of type', self.__class__, 'already has that attr'
+            #   print('  self of type', self.__class__, 'already has that attr')
             #   continue
 
             # def makeGetter(ii):
@@ -434,7 +435,7 @@ class NamedParams(object):
         Yields  (name,val) tuples, where "name" is None if the parameter is not named.
         '''
         pvals = self._getThings()
-        #print '_iterNamesAndVals: pvals types', [type(x) for x in pvals]
+        #print('_iterNamesAndVals: pvals types', [type(x) for x in pvals])
         for i,val in enumerate(pvals):
             name = self.paramnames.get(i, None)
             yield((name,val))
@@ -613,7 +614,7 @@ class ParamList(GaussianPriorsMixin, NamedParams, BaseParams):
     An implementation of Params that holds values in a list.
     '''
     def __init__(self, *args):
-        #print 'ParamList __init__()'
+        #print('ParamList __init__()')
         # FIXME -- kwargs with named params?
         self.vals = list(args)
         super(ParamList,self).__init__()
@@ -634,7 +635,7 @@ class ParamList(GaussianPriorsMixin, NamedParams, BaseParams):
         for i,(name,val) in enumerate(self._iterNamesAndVals()):
             fmt = self.getFormatString(i)
             if name is not None:
-                #print 'name', name, 'val', type(val)
+                #print('name', name, 'val', type(val))
                 ss.append(('%s='+fmt) % (name, val))
             else:
                 ss.append(fmt % val)
@@ -967,7 +968,7 @@ class MultiParams(BaseParams, NamedParams):
 
     def printThawedParams(self):
         for nm,val in zip(self.getParamNames(), self.getParams()):
-            print '  ', nm, '=', val
+            print('  ', nm, '=', val)
 
     def getParamNames(self):
         n = []
@@ -979,9 +980,9 @@ class MultiParams(BaseParams, NamedParams):
             if snames is not None and len(snames) == s.numberOfParams():
                 n.extend('%s.%s' % (pre,post) for post in snames)
             else:
-                print 'Getting named params for', pre
-                print '  -> ', snames
-                print '      (expected', s.numberOfParams(), 'of them)'
+                print('Getting named params for', pre)
+                print('  -> ', snames)
+                print('      (expected', s.numberOfParams(), 'of them)')
                 n.extend('%s.param%i' % (pre,i) for i in range(s.numberOfParams()))
             
         return n

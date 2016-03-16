@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 from .utils import MultiParams, _isint, listmax, get_class_from_name
 
@@ -82,13 +83,13 @@ class Image(MultiParams):
         derivs = []
         for s in self._getActiveSubs():
             if hasattr(s, 'getParamDerivatives'):
-                #print 'Calling getParamDerivatives on', s
+                #print('Calling getParamDerivatives on', s)
                 sd = s.getParamDerivatives(tractor, self, srcs)
                 assert(len(sd) == s.numberOfParams())
                 derivs.extend(sd)
             else:
                 derivs.extend([False] * s.numberOfParams())
-        # print 'Image.getParamDerivatives: returning', derivs
+        # print('Image.getParamDerivatives: returning', derivs)
         return derivs
 
     def getSky(self):
@@ -161,9 +162,9 @@ class Image(MultiParams):
             objclass = hdr[k]
             clazz = get_class_from_name(objclass)
             fromfits = getattr(clazz, 'fromFitsHeader')
-            print 'fromFits:', fromfits
+            print('fromFits:', fromfits)
             obj = fromfits(hdr, prefix=prefix + '_')
-            print 'Got:', obj
+            print('Got:', obj)
             return obj
 
         psf = readObject(prefix + 'PSF')

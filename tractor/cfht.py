@@ -1,4 +1,50 @@
+from __future__ import print_function
 from .utils import BaseParams
+from .brightness import LinearPhotoCal
+
+def parse_head_file(fn):
+    import fitsio
+    f = open(fn, 'r')
+    hdrs = []
+    #s = ''
+    hdr = None
+    for line in f.readlines():
+        #print('Read %i chars' % len(line), ': ' + line[:25]+'...')
+        line = line.strip()
+        #print('Stripped to %i' % len(line))
+        #line = line + ' ' * (80 - len(line))
+        #assert(len(line) == 80)
+        #s += line
+        if line.startswith('END'):
+            #print('Found END')
+            hdr = None
+            continue
+        if hdr is None:
+            hdr = fitsio.FITSHDR()
+            hdrs.append(hdr)
+            #print('Started header number', len(hdrs))
+        hdr.add_record(line)
+    return hdrs
+    
+class CfhtLinearPhotoCal(LinearPhotoCal):
+    def __init__(self, hdr, bandname=None):
+        import numpy as np
+        from tractor.brightness import NanoMaggies
+        
+        self.exptime = hdr['EXPTIME']
+        self.phot_c = hdr['PHOT_C']
+        self.phot_k = hdr['PHOT_K']
+        self.airmass = hdr['AIRMASS']
+        print('CFHT photometry:', self.exptime, self.phot_c, self.phot_k, self.airmass)
+
+        zpt = (2.5 * np.log10(self.exptime) + self.phot_c +
+               self.phot_k * (self.airmass - 1))
+        print('-> zeropoint', zpt)
+        scale = NanoMaggies.zeropointToScale(zpt)
+        super(CfhtLinearPhotoCal, self).__init__(scale, band=bandname)
+
+
+
 
 class CfhtPhotoCal(BaseParams):
 	def __init__(self, hdr=None, bandname=None):
@@ -8,7 +54,7 @@ class CfhtPhotoCal(BaseParams):
 			self.phot_c = hdr['PHOT_C']
 			self.phot_k = hdr['PHOT_K']
 			self.airmass = hdr['AIRMASS']
-			print 'CFHT photometry:', self.exptime, self.phot_c, self.phot_k, self.airmass
+			print('CFHT photometry:', self.exptime, self.phot_c, self.phot_k, self.airmass)
 		# FIXME -- NO COLOR TERMS (phot_x)!
 		'''
 		COMMENT   Formula for Photometry, based on keywords given in this header:

@@ -22,7 +22,7 @@ from . import mixture_profiles as mp
 from .engine import *
 from .utils import *
 from .cache import *
-from .patch import *
+from .patch import Patch, add_patches
 from .basics import SingleProfileSource, BasicSource
 
 _galcache = Cache(maxsize=10000)
