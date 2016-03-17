@@ -30,21 +30,30 @@ class CfhtLinearPhotoCal(LinearPhotoCal):
     def __init__(self, hdr, bandname=None):
         import numpy as np
         from tractor.brightness import NanoMaggies
-        
-        self.exptime = hdr['EXPTIME']
-        self.phot_c = hdr['PHOT_C']
-        self.phot_k = hdr['PHOT_K']
-        self.airmass = hdr['AIRMASS']
-        print('CFHT photometry:', self.exptime, self.phot_c, self.phot_k, self.airmass)
 
-        zpt = (2.5 * np.log10(self.exptime) + self.phot_c +
-               self.phot_k * (self.airmass - 1))
-        print('-> zeropoint', zpt)
-        scale = NanoMaggies.zeropointToScale(zpt)
+        if hdr is not None:
+            self.exptime = hdr['EXPTIME']
+            self.phot_c = hdr['PHOT_C']
+            self.phot_k = hdr['PHOT_K']
+            self.airmass = hdr['AIRMASS']
+            # print('CFHT photometry:', self.exptime, self.phot_c, self.phot_k, self.airmass)
+
+            zpt = (2.5 * np.log10(self.exptime) + self.phot_c +
+                   self.phot_k * (self.airmass - 1))
+            print('-> zeropoint', zpt)
+            scale = NanoMaggies.zeropointToScale(zpt)
+        else:
+            scale = 1.
         super(CfhtLinearPhotoCal, self).__init__(scale, band=bandname)
 
-
-
+    def copy(self):
+        c = self.__class__(None, bandname=self.band)
+        c.exptime = self.exptime
+        c.phot_c = self.phot_c
+        c.phot_k = self.phot_k
+        c.airmass = self.airmass
+        c.scale = self.getScale()
+        return c
 
 class CfhtPhotoCal(BaseParams):
 	def __init__(self, hdr=None, bandname=None):

@@ -64,6 +64,18 @@ class Image(MultiParams):
     def __str__(self):
         return 'Image ' + str(self.name)
 
+    def subimage(self, x0, x1, y0, y1):
+        slc = (slice(y0, y1), slice(x0, x1))
+        subtim = Image(data=self.data[slc].copy(),
+                       inverr=self.inverr[slc].copy(),
+                       wcs=self.wcs.shifted(x0, y0),
+                       psf=self.psf.getShifted(x0, y0),
+                       sky=self.sky.shifted(x0, y0),
+                       photocal=self.photocal.copy())
+        subtim.name = self.name
+        subtim.time = self.time
+        return subtim
+    
     @staticmethod
     def getNamedParams():
         return dict(psf=0, wcs=1, photocal=2, sky=3)
