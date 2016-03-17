@@ -88,12 +88,15 @@ def gim2d_catalog(cat, band):
     for t in cat:
         pos = RaDecPos(t.ra, t.dec)
         bright = NanoMaggies(**{band:NanoMaggies.magToNanomaggies(t.acs_mag_auto)})
-        shape = GalaxyShape(t.r_0p5_gim2d, 1. - t.ell_gim2d, t.pa_gim2d)
+        shape = GalaxyShape(t.r_0p5_gim2d, 1. - t.ell_gim2d, 90. + t.pa_gim2d)
 
-        if t.is_galaxy and t.type == 1:
+        is_galaxy = (t.is_galaxy * (shape.re >= 0 ) * (shape.ab <= 1.) *
+                     (shape.phi > -999))
+        
+        if is_galaxy and t.type == 1:
             # deV
             src = DevGalaxy(pos, bright, shape)
-        elif t.is_galaxy and type == 2:
+        elif is_galaxy and t.type == 2:
             # exp
             src = ExpGalaxy(pos, bright, shape)
         else:
@@ -105,6 +108,32 @@ def gim2d_catalog(cat, band):
 if __name__ == '__main__':
 
     ps = PlotSequence('cfht')
+
+
+    if False:
+        # UGH, ACS image
+        imgfn = 'cfht/acs_I_030mas_065_sci.VISRES.fits'
+        wtfn = 'cfht/acs_I_030mas_065_wht.VISRES.fits'
+        flagfn = 'cfht/acs_I_030mas_065_flg.VISRES.fits'
+
+        catfn = 'cfht/acs_I_030mas_065_sci.VISRES.ldac'
+        cat = fits_table(catfn, hdu=2)
+        cat.ra = cat.alpha_j2000
+        cat.dec = cat.delta_j2000
+    
+        img,imghdr = fitsio.read(imgfn, ext=ext, header=True)
+        print('Read image', img.shape, img.dtype)
+        img = img.astype(np.float32)
+        H,W = img.shape
+
+    
+
+
+
+    
+        import sys
+        sys.exit(0)
+
     
     imgfn = 'cfht/1624827p.fits'
     headfn = 'cfht/1624827p.head'
@@ -122,7 +151,7 @@ if __name__ == '__main__':
     cat = fits_table(catfn)
     print('Read', len(cat), 'catalog entries')
 
-    cat.about()
+    #cat.about()
     
     img,imghdr = fitsio.read(imgfn, ext=ext, header=True)
     print('Read image', img.shape, img.dtype)
@@ -141,6 +170,7 @@ if __name__ == '__main__':
     wcshdr['IMAGEW'] = W
     wcshdr['IMAGEH'] = H
     wcs = wcs_pv2sip_hdr(wcshdr)
+    print('WCS pixel scale:', wcs.pixel_scale())
     #print('Got WCS:', wcs)
     
     ok,xx,yy = wcs.radec2pixelxy(cat.ra, cat.dec)
@@ -234,8 +264,79 @@ if __name__ == '__main__':
                vmin=mn, vmax=mx)
     ps.savefig()
 
+    ax = plt.axis()
+    I = np.flatnonzero(cat.type == 1)
+    plt.plot(cat.xx[I], cat.yy[I], 'r.')
+    I = np.flatnonzero(cat.type == 2)
+    plt.plot(cat.xx[I], cat.yy[I], 'b.')
+    I = np.flatnonzero(cat.type == 3)
+    plt.plot(cat.xx[I], cat.yy[I], 'm.')
+    plt.axis(ax)
+    ps.savefig()
+    
     plt.clf()
     plt.imshow(mod, interpolation='nearest', origin='lower', cmap='gray',
                vmin=-2.*sig1, vmax=10.*sig1)
     ps.savefig()
+    
+
+    plt.clf()
+    plt.imshow(subtim.getImage(), interpolation='nearest', origin='lower',
+               cmap='gray', vmin=-2.*sig1, vmax=10.*sig1)
+    ax = plt.axis()
+    plt.plot(cat.xx, cat.yy, 'r.')
+    for t in cat:
+        if t.type in [1,2]:
+            r = t.r_0p5_gim2d
+            if r > 0:
+                rtxt = '%.1f' % r
+            else:
+                rtxt = 'X'
+            ab = 1.-t.ell_gim2d
+            if ab >= 0 and ab < 1:
+                abtxt = '%.2f' % ab
+            else:
+                abtxt = 'X'
+            
+            plt.text(t.xx, t.yy, 'T%i, r %s ab %s' % (t.type, rtxt, abtxt),
+                     color='r')
+    plt.axis(ax)
+    ps.savefig()
+
+    
+    tractor.freezeParam('images')
+    for src in srcs:
+        src.freezeAllBut('brightness')
+
+    from tractor.ceres_optimizer import CeresOptimizer
+    B = 8
+    opti = CeresOptimizer(BW=B, BH=B)
+    tractor.optimizer = opti
+
+    print('Forced phot...')
+    kwa = {}
+    R = tractor.optimize_forced_photometry(shared_params=False, **kwa)
+    #variance=True, fitstats=True,
+
+    print('R:', R)
+    
+    mod = tractor.getModelImage(0)
+        
+    plt.clf()
+    plt.imshow(mod, interpolation='nearest', origin='lower', cmap='gray',
+               vmin=-2.*sig1, vmax=10.*sig1)
+    ps.savefig()
+
+    plt.clf()
+    plt.imshow(subtim.getImage(), interpolation='nearest', origin='lower', cmap='gray',
+               vmin=-2.*sig1, vmax=10.*sig1)
+    ps.savefig()
+
+
+    # Order by flux
+    I = np.argsort([-src.getBrightness().getFlux(band) for src in srcs])
+    
+    for i in I:
+        src = srcs[i]
+        print('Source:', src)
     
