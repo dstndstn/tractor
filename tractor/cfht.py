@@ -27,7 +27,7 @@ def parse_head_file(fn):
     return hdrs
     
 class CfhtLinearPhotoCal(LinearPhotoCal):
-    def __init__(self, hdr, bandname=None):
+    def __init__(self, hdr, bandname=None, scale=1.):
         import numpy as np
         from tractor.brightness import NanoMaggies
 
@@ -36,23 +36,22 @@ class CfhtLinearPhotoCal(LinearPhotoCal):
             self.phot_c = hdr['PHOT_C']
             self.phot_k = hdr['PHOT_K']
             self.airmass = hdr['AIRMASS']
-            # print('CFHT photometry:', self.exptime, self.phot_c, self.phot_k, self.airmass)
+            print('CFHT photometry:', self.exptime, self.phot_c, self.phot_k, self.airmass)
 
             zpt = (2.5 * np.log10(self.exptime) + self.phot_c +
                    self.phot_k * (self.airmass - 1))
             print('-> zeropoint', zpt)
             scale = NanoMaggies.zeropointToScale(zpt)
-        else:
-            scale = 1.
+            print('-> scale', scale)
+
         super(CfhtLinearPhotoCal, self).__init__(scale, band=bandname)
 
     def copy(self):
-        c = self.__class__(None, bandname=self.band)
+        c = self.__class__(None, bandname=self.band, scale=self.getScale())
         c.exptime = self.exptime
         c.phot_c = self.phot_c
         c.phot_k = self.phot_k
         c.airmass = self.airmass
-        c.scale = self.getScale()
         return c
 
 class CfhtPhotoCal(BaseParams):
