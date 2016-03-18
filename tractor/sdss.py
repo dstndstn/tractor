@@ -1331,6 +1331,11 @@ class SdssWcs(ParamList):
             return self.constant_cd
         return self.astrans.cd_at_pixel(x + self.x0, y + self.y0)
 
+    def pixscale_at(self, x, y):
+        cd = self.cdAtPixel(x,y)
+        pixscale = np.sqrt(np.abs(cd[0,0]*cd[1,1] - cd[0,1]*cd[1,0]))
+        return pixscale
+    
     # RA,Dec in deg to pixel x,y.
     # HACK -- color -- debug
     def positionToPixel(self, pos, src=None, color=0.):

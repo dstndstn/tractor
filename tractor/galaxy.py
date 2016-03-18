@@ -1075,7 +1075,7 @@ class CompositeGalaxy(MultiParams, BasicSource):
     def _getModelPatches(self, img, minsb=0., modelMask=None):
         e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
         d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
-        if minsb == 0.:
+        if minsb == 0. or minsb is None:
             kw = {}
         else:
             kw = dict(minsb=minsb/2.)

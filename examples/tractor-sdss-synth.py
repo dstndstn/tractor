@@ -6,13 +6,15 @@ import os
 import logging
 import numpy as np
 import pylab as plt
-import pyfits
+import fitsio
 import math
 
 from astrometry.util.file import *
 from astrometry.util.plotutils import ArcsinhNormalize
 from astrometry.util.starutil_numpy import *
 from astrometry.sdss.fields import *
+
+from astrometry.sdss import DR9
 
 from tractor import *
 from tractor import sdss as st
@@ -24,7 +26,7 @@ def save(idstr, tractor, nlscale=1., debug=False, plotAll=False, imgi=0,
     chi = tractor.getChiImage(imgi=imgi)
     synthfn = 'synth-%s.fits' % idstr
     print 'Writing synthetic image to', synthfn
-    pyfits.writeto(synthfn, mod, clobber=True)
+    fitsio.write(synthfn, mod, clobber=True)
 
     pfn = 'tractor-%s.pickle' % idstr
     print 'Saving state to', pfn
@@ -186,8 +188,6 @@ def main():
     parser.add_option('-R', '--radec', dest='radec', nargs=2, type=str, help='RA,Dec center: float degrees or hh:mm:ss +-dd:mm:ss')
     parser.add_option('-s', '--size', dest='pixsize', type=int, help='Pixel size when using RA,Dec center option')
     parser.add_option('--drfields', dest='drfields', help='FITS table of SDSS fields: default dr%ifields.fits, etc')
-    parser.add_option('--dr8', dest='dr8', action='store_true', help='Use DR8?  Default is DR7')
-    parser.add_option('--dr9', dest='dr9', action='store_true', help='Use DR9?  Default is DR7')
     parser.add_option('--curl', dest='curl', action='store_true', default=False, help='Use "curl", not "wget", to download files')
     parser.add_option('--ntune', action='callback', callback=store_value, type=int,  help='Improve synthetic image by locally optimizing likelihood for nsteps iterations')
     parser.add_option('--itune', action='callback', callback=store_value, type=int, nargs=2, help='Optimizes each source individually')
@@ -222,7 +222,6 @@ def main():
         camcol = 3
         field = 164
         opt.band = 'r'
-        opt.dr9 = True
         opt.curl = True
         tune.extend([('i',[1,1]), ('n',1)])
         opt.roi = [100,600,100,600]
@@ -277,27 +276,11 @@ def main():
             dec = dec.replace(':',' ')
             dec = dmsstring2dec(dec)
 
-    sdss = None
-    imkw = {}
-    if opt.dr9:
-        getim = st.get_tractor_image_dr9
-        getsrc = st.get_tractor_sources_dr9
-        drnum = 9
-        sdss = st.DR9()
-        imkw.update(zrange=[-3,100], sdss=sdss)
-    elif opt.dr8:
-        getim = st.get_tractor_image_dr8
-        getsrc = st.get_tractor_sources_dr8
-        drnum = 8
-        sdss = st.DR8()
-        imkw.update(zrange=[-3,100], sdss=sdss)
-    else:
-        getim = st.get_tractor_image
-        getsrc = st.get_tractor_sources
-        drnum = 7
-        imkw.update(useMags=True)
-
-    if drnum in [8,9] and opt.unzip:
+    sdss = DR9()
+    getim = st.get_tractor_image_dr9
+    getsrc = st.get_tractor_sources_dr9
+    imkw = dict(zrange=[-3,100], sdss=sdss)
+    if opt.unzip:
         sdss.saveUnzippedFiles(opt.unzip)
         
     tims = []
@@ -333,9 +316,6 @@ def main():
     sa = dict(debug=opt.debug, plotAll=opt.plotAll, roi=opt.roi)
     if opt.noarcsinh:
         sa.update(nlscale=0)
-    elif opt.dr8:
-        #sa.update(nlscale=1.)
-        sa.update(chilo=-50., chihi=50.)
         
     for j,band in enumerate(bands):
         save('initial-%s-' % (band) + prefix, tractor, imgi=j, **sa)
