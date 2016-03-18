@@ -185,6 +185,8 @@ def main():
     parser.add_option('-c', '--camcol', dest='camcol', type='int')
     parser.add_option('-f', '--field', dest='field', type='int')
     parser.add_option('-b', '--band', dest='band', help='SDSS Band (u, g, r, i, z)')
+    parser.add_option('--dg', action='store_true', default=False,
+                      help='Use double-Gaussian PSF model (default is Gaussian mixture approximation of pixelized model')
     parser.add_option('-R', '--radec', dest='radec', nargs=2, type=str, help='RA,Dec center: float degrees or hh:mm:ss +-dd:mm:ss')
     parser.add_option('-s', '--size', dest='pixsize', type=int, help='Pixel size when using RA,Dec center option')
     parser.add_option('--drfields', dest='drfields', help='FITS table of SDSS fields: default dr%ifields.fits, etc')
@@ -299,7 +301,11 @@ def main():
                 rcfs = rcfs[0]
                 run,camcol,field = rcfs[:3]
             imkw.update(roiradecsize = (ra, dec, opt.pixsize))
-        tim,tinf = getim(run, camcol, field, bandname, curl=opt.curl, roi=opt.roi, **imkw)
+        if opt.dg:
+            imkw.update(psf='dg')
+
+        tim,tinf = getim(run, camcol, field, bandname, curl=opt.curl,
+                         roi=opt.roi, **imkw)
         tim.zr = tinf['zr']
         if userd:
             opt.roi = tinf['roi']
