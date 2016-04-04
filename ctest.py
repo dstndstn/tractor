@@ -66,10 +66,12 @@ print 'Logprob:', lnp0
 #print 'Testing _getOneImageDerivs...'
 #tractor._getOneImageDerivs(0)
 
-print 'Calling _ceres_opt...'
-tractor._ceres_opt()
+print 'Calling ceres optimizer...'
+from tractor.ceres_optimizer import CeresOptimizer
+tractor.optimizer = CeresOptimizer()
+tractor.optimize()
 
-print '_ceres_opt finished'
+print 'Ceres opt finished'
 print 'Params:', tractor.getParams()
 lnp1 = tractor.getLogProb()
 print 'Logprob:', lnp1
