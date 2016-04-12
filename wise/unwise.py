@@ -183,10 +183,10 @@ def get_unwise_tractor_image(basedir, tile, band, bandname=None, masked=True,
     tim.hdr = hdr
 
     if 'MJDMIN' in hdr and 'MJDMAX' in hdr:
-        from .tractortime import TAITime
+        from tractor.tractortime import TAITime
         tim.mjdmin = hdr['MJDMIN']
         tim.mjdmax = hdr['MJDMAX']
-        tim.time = TAITime(mjd=(tim.mjdmin + tim.mjdmax)/2.)
+        tim.time = TAITime(None, mjd=(tim.mjdmin + tim.mjdmax)/2.)
 
     return tim
 
