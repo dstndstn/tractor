@@ -15,7 +15,7 @@ import numpy as np
 
 from astrometry.util.ttime import Time
 
-from .utils import MultiParams, _isint, listmax, get_class_from_name
+from .utils import MultiParams, _isint, get_class_from_name
 from .patch import Patch
 from .image import Image
 

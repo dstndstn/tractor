@@ -191,6 +191,28 @@ class PsfExModel(object):
             self.radius = (bh+1)/2.
             self.x0,self.y0 = x0,y0
 
+    def writeto(self, fn):
+        from astrometry.util.fits import fits_table
+        import fitsio
+        T = fits_table()
+        T.psf_mask = np.array([self.psfbases])
+        hdr = fitsio.FITSHDR()
+        hdr['POLNAME1'] = 'X_IMAGE'
+        hdr['POLNAME2'] = 'Y_IMAGE'        
+        hdr['POLGRP1'] = 1
+        hdr['POLGRP2'] = 1
+        hdr['POLNGRP' ] = 1
+        # number of terms in polynomial
+        ne = (self.degree + 1) * (self.degree + 2) / 2
+        hdr['PSFAXIS3'] = ne
+        hdr['POLZERO1'] = self.x0
+        hdr['POLZERO2'] = self.y0
+        hdr['POLSCAL1'] = self.xscale
+        hdr['POLSCAL2'] = self.yscale
+        hdr['POLDEG1'] = self.degree
+        hdr['PSF_SAMP'] = self.sampling
+        T.writeto(fn, header=hdr)
+        
     @property
     def shape(self):
         '''
