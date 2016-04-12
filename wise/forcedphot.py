@@ -1,6 +1,8 @@
 from __future__ import print_function
 import sys
 
+import numpy as np
+
 from tractor import RaDecPos, NanoMaggies, PointSource, Tractor
 from tractor.galaxy import (ExpGalaxy, DevGalaxy, FixedCompositeGalaxy,
                             disable_galaxy_cache)
