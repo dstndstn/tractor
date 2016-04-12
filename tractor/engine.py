@@ -226,7 +226,11 @@ class Tractor(MultiParams):
     # shared_params=True, variance=False, just_variance=False):
     def optimize(self, **kwargs):
         '''
-        Performs *one step* of linearized least-squares + line search.
+        Performs *one step* of optimization.
+
+        (Exactly what that entails depends on the optimizer; by
+        default (LsqrOptimizer) it means one linearized least-squares
+        + line search iteration.)
         
         Returns (delta-logprob, parameter update X, alpha stepsize)
 
@@ -245,6 +249,13 @@ class Tractor(MultiParams):
         '''
         return self.optimizer.optimize(self, **kwargs)
 
+    def optimize_loop(self, **kwargs):
+        '''
+        Performs multiple steps of optimization until convergence.
+
+        Returns a dict of results (exact contents varying by optimizer).
+        '''
+        return self.optimizer.optimize_loop(self, **kwargs)
 
     def getDerivs(self):
         '''

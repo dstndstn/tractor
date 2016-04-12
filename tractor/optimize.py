@@ -8,7 +8,8 @@ class Optimizer(object):
                  just_variance=False):
         pass
 
-
+    def optimize_loop(self, tractor, **kwargs):
+        pass
     
     def forced_photometry(self, tractor, 
                           alphas=None, damp=0, priors=False,

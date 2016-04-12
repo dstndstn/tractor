@@ -1,8 +1,9 @@
+from __future__ import print_function
 import numpy as np
 
-from astrometry.util.ttime import *
+from astrometry.util.ttime import Time
 
-from .engine import *
+from .engine import logverb
 from .optimize import Optimizer
 
 class CeresOptimizer(Optimizer):
@@ -43,6 +44,10 @@ class CeresOptimizer(Optimizer):
         chisq1 = X['final_cost']
         # dlnp, dparams, alpha
         return chisq0 - chisq1, None, 1
+
+    def optimize_loop(self, tractor, **kwargs):
+        X = self._ceres_opt(tractor, **kwargs)
+        return X
     
     def _ceres_opt(self, tractor, variance=False, scale_columns=True,
                    numeric=False, scaled=True, numeric_stepsize=0.1,
@@ -60,7 +65,7 @@ class CeresOptimizer(Optimizer):
 
             if dynamic_scale:
                 scales = self.getDynamicScales(tractor)
-                # print 'Dynamic scales:', scales
+                # print('Dynamic scales:', scales)
 
             else:
                 scales = np.array(tractor.getStepSizes())
@@ -89,7 +94,7 @@ class CeresOptimizer(Optimizer):
             R['variance'] = variance_out
 
         if scaled:
-            print 'Opt. in scaled space:', params
+            print('Opt. in scaled space:', params)
             tractor.setParams(p0 + params * scales)
             if variance:
                 variance_out *= scales**2
@@ -242,9 +247,9 @@ class CeresOptimizer(Optimizer):
                     continue
                 # DEBUG
                 if len(umod.shape) != 2:
-                    print 'zi', zi
-                    print 'modi', modi
-                    print 'umod', umod
+                    print('zi', zi)
+                    print('modi', modi)
+                    print('umod', umod)
                 umod.clipTo(W,H)
                 umod.trimToNonZero()
                 if umod.patch is None:
@@ -273,8 +278,8 @@ class CeresOptimizer(Optimizer):
                     for bx in range(bx0, bx1+1):
                         bi = by * nbw + bx
                         #if type(umod.x0) != int or type(umod.y0) != int:
-                        #    print 'umod:', umod.x0, umod.y0, type(umod.x0), type(umod.y0)
-                        #    print 'umod:', umod
+                        #    print('umod:', umod.x0, umod.y0, type(umod.x0), type(umod.y0))
+                        #    print('umod:', umod)
                         dd = (ceresparam, int(umod.x0), int(umod.y0), cmod)
                         blocks[b0 + bi][1].append(dd)
         logverb('forced phot: dicing up', Time()-t0)
@@ -312,7 +317,7 @@ class CeresOptimizer(Optimizer):
                 fluxes = np.maximum(fluxes, negfluxval)
 
         x = ceres_forced_phot(blocks, fluxes, nonneg, iverbose)
-        #print 'Ceres forced phot:', x
+        #print('Ceres forced phot:', x)
         logverb('forced phot: ceres', Time()-t0)
 
         t0 = Time()

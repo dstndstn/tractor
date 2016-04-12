@@ -1,5 +1,6 @@
 from __future__ import print_function
-from .engine import *
+import numpy as np
+from .engine import logverb
 from .optimize import Optimizer
 
 class LsqrOptimizer(Optimizer):
@@ -291,6 +292,15 @@ class LsqrOptimizer(Optimizer):
             return dlogprob, X, alpha, var
         return dlogprob, X, alpha
 
+    def optimize_loop(self, tractor, dchisq=0., steps=50, **kwargs):
+        R = {}
+        for step in range(steps):
+            dlnp,X,alpha = self.optimize(tractor, **kwargs)
+            if dlnp <= dchisq:
+                break
+        R.update(steps=step)
+        return R
+    
     def getUpdateDirection(self, tractor, allderivs, damp=0., priors=True,
                            scale_columns=True, scales_only=False,
                            chiImages=None, variance=False,
