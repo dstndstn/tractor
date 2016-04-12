@@ -1,7 +1,7 @@
 from __future__ import print_function
 import numpy as np
 from astrometry.util.ttime import Time
-from .engine import logverb
+from .engine import logverb, isverbose
 from .optimize import Optimizer
 
 class LsqrOptimizer(Optimizer):
