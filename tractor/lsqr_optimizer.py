@@ -1,5 +1,6 @@
 from __future__ import print_function
 import numpy as np
+from astrometry.util.ttime import Time
 from .engine import logverb
 from .optimize import Optimizer
 

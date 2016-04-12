@@ -34,7 +34,6 @@ def main():
     print 'Patch2', patch2
 
     tr = Tractor([tim], [src])
-    tr.disable_cache()
     patch3 = tr.getModelPatch(tim, src)
     print 'Patch3', patch3
 
@@ -161,7 +160,7 @@ def main():
 
 
 
-    
+    import sys
     sys.exit(0)
 
     src = ExpGalaxy(PixPos(50,50), Flux(100.), EllipseESoft(1., 0., 0.5))
