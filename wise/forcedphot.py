@@ -1,16 +1,19 @@
+from __future__ import print_function
 import sys
 
-from tractor import *
-from tractor.galaxy import *
-from tractor.ellipses import *
+from tractor import RaDecPos, NanoMaggies, PointSource, Tractor
+from tractor.galaxy import (ExpGalaxy, DevGalaxy, FixedCompositeGalaxy,
+                            disable_galaxy_cache)
+from tractor.ellipses import EllipseE
 
-from astrometry.util.fits import *
-from astrometry.util.plotutils import *
-from astrometry.util.ttime import *
+from astrometry.util.fits import fits_table
+from astrometry.util.ttime import Time
 
-from unwise import *
+from unwise import (unwise_tile_wcs, unwise_tiles_touching_wcs,
+                    get_unwise_tractor_image)
 
-def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None, unwise_dir='.',
+def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None,
+                      unwise_dir='.',
                       use_ceres=True, ceres_block=8,
                       save_fits=False, ps=None):
     '''
@@ -29,7 +32,8 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None, unwise_dir=
     wantims = ((ps is not None) or save_fits)
     wanyband = 'w'
 
-    fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix', 'pronexp' ]
+    fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix',
+              'pronexp' ]
 
     Nsrcs = len(cat)
     phot = fits_table()
@@ -39,7 +43,7 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None, unwise_dir=
     dec = np.array([src.getPosition().dec for src in cat])
 
     for band in bands:
-        print 'Photometering WISE band', band
+        print('Photometering WISE band', band)
         wband = 'w%i' % band
 
         # The tiles have some overlap, so for each source, keep the
@@ -50,16 +54,18 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None, unwise_dir=
         fitstats = dict([(k, np.zeros(Nsrcs, np.float32)) for k in fskeys])
         nexp = np.zeros(Nsrcs, np.int16)
 
+        mjd = np.zeros(Nsrcs, np.float32)
+
         for tile in tiles:
-            print 'Reading tile', tile.coadd_id
+            print('Reading tile', tile.coadd_id)
 
             tim = get_unwise_tractor_image(unwise_dir, tile.coadd_id, band,
                                            bandname=wanyband, roiradecbox=roiradecbox)
             if tim is None:
-                print 'Actually, no overlap with tile', tile.coadd_id
+                print('Actually, no overlap with tile', tile.coadd_id)
                 continue
             
-            print 'Read image with shape', tim.shape
+            print('Read image with shape', tim.shape)
             
             # Select sources in play.
             wcs = tim.wcs.wcs
@@ -70,11 +76,11 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None, unwise_dir=
             margin = 10.
             I = np.flatnonzero((x >= -margin) * (x < W+margin) *
                                (y >= -margin) * (y < H+margin))
-            print len(I), 'within the image + margin'
+            print(len(I), 'within the image + margin')
 
             inbox = ((x[I] >= -0.5) * (x[I] < (W-0.5)) *
                      (y[I] >= -0.5) * (y[I] < (H-0.5)))
-            print sum(inbox), 'strictly within the image'
+            print(sum(inbox), 'strictly within the image')
 
             # Compute L_inf distance to (full) tile center.
             tilewcs = unwise_tile_wcs(tile.ra, tile.dec)
@@ -90,7 +96,7 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None, unwise_dir=
             srci = I[keep]
 
             if not len(srci):
-                print 'No sources to be kept; skipping.'
+                print('No sources to be kept; skipping.')
                 continue
 
             phot.tile[srci] = tile.coadd_id
@@ -114,8 +120,6 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None, unwise_dir=
             fitsky = False
             
             ## Look in image and set radius based on peak height??
-
-
             
             tractor = Tractor([tim], subcat)
             if use_ceres:
@@ -125,7 +129,7 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None, unwise_dir=
             tractor.freezeParamsRecursive('*')
             tractor.thawPathsTo(wanyband)
 
-            print tractor
+            print(tractor)
             
             kwa = dict(fitstat_extras=[('pronexp', [tim.nims])])
             t0 = Time()
@@ -134,11 +138,11 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None, unwise_dir=
                 minsb=minsb, mindlnp=1., sky=fitsky, fitstats=True, 
                 variance=True, shared_params=False,
                 wantims=wantims, **kwa)
-            print 'That took', Time()-t0
+            print('That took', Time()-t0)
 
             if use_ceres:
                 term = R.ceres_status['termination']
-                print 'Ceres termination status:', term
+                print('Ceres termination status:', term)
                 # Running out of memory can cause failure to converge
                 # and term status = 2.
                 # Fail completely in this case.
@@ -187,6 +191,8 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None, unwise_dir=
             # Save results for this tile.
             # the "keep" sources are at the beginning of the "subcat" list
             flux_invvars[srci] = IV[:len(srci)].astype(np.float32)
+            if hasattr(tim, 'mjdmin') and hasattr(tim, 'mjdmax'):
+                mjd[srci] = (tim.mjdmin + tim.mjdmax)/2.
             for k in fskeys:
                 x = getattr(fs, k)
                 # fitstats are returned only for un-frozen sources
@@ -222,15 +228,18 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None, unwise_dir=
         phot.set(wband + '_mag_err', dmag)
         for k in fskeys:
             phot.set(wband + '_' + k, fitstats[k])
-        phot.set('w%i_nexp' % band, nexp)
+        phot.set(wband + '_nexp', nexp)
 
-        # DEBUG
-        #phot.tiledists = tiledists
+        if not np.all(mjd == 0):
+            phot.set(wband + '_mjd', mjd)
 
     return phot
 
 def main():
     import optparse
+    from astrometry.util.plotutils import PlotSequence
+    from astrometry.util.util import Tan
+
     parser = optparse.OptionParser(usage='%prog [options] incat.fits out.fits')
     parser.add_option('-r', '--ralo',  dest='ralo',  type=float,
                       help='Minimum RA')
@@ -279,7 +288,7 @@ def main():
         for s in str(band):
             bb.append(int(s))
     opt.bands = bb
-    print 'Bands', opt.bands
+    print('Bands', opt.bands)
 
     ps = None
     if opt.plots:
@@ -288,7 +297,7 @@ def main():
     infn,outfn = args
     
     T = fits_table(infn)
-    print 'Read', len(T), 'sources from', infn
+    print('Read', len(T), 'sources from', infn)
     if opt.declo is not None:
         T.cut(T.dec >= opt.declo)
     if opt.dechi is not None:
@@ -310,9 +319,6 @@ def main():
     T.cross = x * yy - y * xx
     minra = T.ra[np.argmin(T.cross)]
     maxra = T.ra[np.argmax(T.cross)]
-    #print 'Mid RA:', midra
-    #print 'min ra:', minra
-    #print 'max ra:', maxra
 
     if opt.ralo is not None:
         r = np.deg2rad(opt.ralo)
@@ -320,7 +326,7 @@ def main():
         yy = np.sin(r)
         crosscut = x * yy - y * xx
         T.cut(T.cross >= crosscut)
-        print 'Cut to', len(T), 'with RA >', opt.ralo
+        print('Cut to', len(T), 'with RA >', opt.ralo)
 
     if opt.rahi is not None:
         r = np.deg2rad(opt.rahi)
@@ -328,7 +334,7 @@ def main():
         yy = np.sin(r)
         crosscut = x * yy - y * xx
         T.cut(T.cross <= crosscut)
-        print 'Cut to', len(T), 'with RA <', opt.rahi
+        print('Cut to', len(T), 'with RA <', opt.rahi)
     if opt.declo is None:
         opt.declo = T.dec.min()
     if opt.dechi is None:
@@ -339,8 +345,8 @@ def main():
         opt.rahi = T.ra[np.argmax(T.cross)]
     T.delete_column('cross')
 
-    print 'RA range:', opt.ralo, opt.rahi
-    print 'Dec range:', opt.declo, opt.dechi
+    print('RA range:', opt.ralo, opt.rahi)
+    print('Dec range:', opt.declo, opt.dechi)
     
     x = np.mean([np.cos(np.deg2rad(r)) for r in (opt.ralo, opt.rahi)])
     y = np.mean([np.sin(np.deg2rad(r)) for r in (opt.ralo, opt.rahi)])
@@ -348,7 +354,7 @@ def main():
     midra += 360.*(midra < 0)
     middec = (opt.declo + opt.dechi) / 2.
 
-    print 'RA,Dec center:', midra, middec
+    print('RA,Dec center:', midra, middec)
 
     pixscale = 2.75 / 3600.
     H = (opt.dechi - opt.declo) / pixscale
@@ -358,18 +364,18 @@ def main():
     margin = 5
     W = int(W) + margin*2
     H = int(H) + margin*2
-    print 'W,H', W,H
+    print('W,H', W,H)
     targetwcs = Tan(midra, middec, (W+1)/2., (H+1)/2.,
                     -pixscale, 0., 0., pixscale, float(W), float(H))
-    #print 'Target WCS:', targetwcs
+    #print('Target WCS:', targetwcs)
     
     ra0,dec0 = targetwcs.pixelxy2radec(0.5, 0.5)
     ra1,dec1 = targetwcs.pixelxy2radec(W+0.5, H+0.5)
     roiradecbox = [ra0, ra1, dec0, dec1]
-    #print 'ROI RA,Dec box', roiradecbox
+    #print('ROI RA,Dec box', roiradecbox)
 
     tiles = unwise_tiles_touching_wcs(targetwcs)
-    print 'Cut to', len(tiles), 'unWISE tiles'
+    print('Cut to', len(tiles), 'unWISE tiles')
 
     disable_galaxy_cache()
 
@@ -382,7 +388,7 @@ def main():
 
     wanyband = 'w'
 
-    print 'Creating Tractor catalog...'
+    print('Creating Tractor catalog...')
     cat = []
     for i,t in enumerate(T):
         pos = RaDecPos(t.ra, t.dec)
@@ -406,7 +412,7 @@ def main():
             cat.append(FixedCompositeGalaxy(pos, flux, t.fracdev,
                                             eshape, dshape))
         else:
-            print 'Did not understand row', i, 'of input catalog:'
+            print('Did not understand row', i, 'of input catalog:')
             t.about()
             assert(False)
 

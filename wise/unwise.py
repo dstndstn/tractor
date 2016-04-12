@@ -6,7 +6,7 @@ import fitsio
 from astrometry.util.util import Tan
 from astrometry.util.starutil_numpy import degrees_between
 from astrometry.util.miscutils import polygons_intersect
-from astrometry.util.fits import *
+from astrometry.util.fits import fits_table
 from tractor import *
 
 def unwise_tile_wcs(ra, dec, W=2048, H=2048, pixscale=2.75):
@@ -97,7 +97,9 @@ def get_unwise_tractor_image(basedir, tile, band, bandname=None, masked=True,
         wcs = Tan(imfn)
         twcs = ConstantFitsWcs(wcs)
 
-        img = fitsio.FITS(imfn)[0]
+        F = fitsio.FITS(imfn)
+        img = F[0]
+        hdr = img.read_header()
         H,W = img.get_info()['dims']
         H,W = int(H), int(W)
 
@@ -178,5 +180,13 @@ def get_unwise_tractor_image(basedir, tile, band, bandname=None, masked=True,
     tim.roi = roi
     tim.nims = nims
     tim.nuims = nuims
+    tim.hdr = hdr
+
+    if 'MJDMIN' in hdr and 'MJDMAX' in hdr:
+        from .tractortime import TAITime
+        tim.mjdmin = hdr['MJDMIN']
+        tim.mjdmax = hdr['MJDMAX']
+        tim.time = TAITime(mjd=(tim.mjdmin + tim.mjdmax)/2.)
+
     return tim
 
