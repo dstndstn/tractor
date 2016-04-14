@@ -192,7 +192,7 @@ ImageCostFunction::ImageCostFunction(PyObject* tractor,
     Py_DECREF(ret);
     _npix = _W * _H;
 
-    printf("Image %i: %i x %i -> number of pixels %i\n", _imagei, _W, _H,_npix);
+    //printf("Image %i: %i x %i -> number of pixels %i\n", _imagei, _W, _H,_npix);
 
     set_num_residuals(_npix);
     std::vector<int32_t>* bs = mutable_parameter_block_sizes();
@@ -209,7 +209,7 @@ bool ImageCostFunction::Evaluate(double const* const* parameters,
                                  double* residuals,
                                  double** jacobians) const {
     bool result = _Evaluate(parameters, residuals, jacobians);
-    printf("ImageCostFunction::Evaluate: returning %i\n", (int)result);
+    //printf("ImageCostFunction::Evaluate: returning %i\n", (int)result);
     return result;
 }
 
