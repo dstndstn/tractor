@@ -81,7 +81,11 @@ GFLAGS_LIB ?= $(shell pkg-config --libs   libgflags)
 GFLAGS_INC ?= $(shell pkg-config --cflags libgflags)
 
 CERES_LIB_DIR ?= /usr/local/lib
-CERES_LIB ?= -L$(CERES_LIB_DIR) -lceres $(GLOG_LIB) $(SUITESPARSE_LIB) $(BLAS_LIB)
+
+# ceres-debug
+CERES_LIB_NAME ?= ceres
+
+CERES_LIB ?= -L$(CERES_LIB_DIR) -l$(CERES_LIB_NAME) $(GLOG_LIB) $(SUITESPARSE_LIB) $(BLAS_LIB)
 
 # On Riemann:
 #SSlib=~/software/suitespares-4.1.2/lib
