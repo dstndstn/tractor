@@ -328,7 +328,7 @@ public:
 
     virtual ceres::CallbackReturnType operator()
     (const ceres::IterationSummary& summary) {
-        printf("Cost change: %g\n", summary.cost_change);
+        //printf("Cost change: %g\n", summary.cost_change);
         if (summary.cost_change > 0 && summary.cost_change < _dlnp) {
             return ceres::SOLVER_TERMINATE_SUCCESSFULLY;
         }
@@ -379,8 +379,8 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
 
     get_variance = (np_variance != Py_None);
 
-    printf("ceres_opt, nims %i, nparams %i, get_variance %i\n", nims, nparams,
-           get_variance);
+    //printf("ceres_opt, nims %i, nparams %i, get_variance %i\n", nims, nparams,
+    //       get_variance);
 
     std::vector<double*> allparams;
     // Single-param blocks
@@ -421,15 +421,14 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
     }
     if (dlnp > 0) {
         options.function_tolerance = 1e-16;
-
-        printf("Callbacks: %i\n", (int)options.callbacks.size());
         DlnpCallback cb(dlnp);
         options.callbacks.push_back(&cb);
+        //printf("Added Dlnp callback: now %i callbacks\n",(int)options.callbacks.size());
     }
 
     Solver::Summary summary;
     Solve(options, &problem, &summary);
-    printf("%s\n", summary.BriefReport().c_str());
+    //printf("%s\n", summary.BriefReport().c_str());
 
     if (get_variance && (summary.termination_type == ceres::CONVERGENCE)) {
         if (!(PyArray_Check(np_variance) &&
