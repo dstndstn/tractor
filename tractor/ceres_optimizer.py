@@ -175,6 +175,11 @@ class CeresOptimizer(Optimizer):
                 continue
             deriv = -1. * d.patch.astype(np.float64) * ie[d.getSlice()]
             chiderivs.append((ind, d.x0, d.y0, deriv))
+
+        print('_getOneImageDerivs: image', tractor.images[imgi],
+              ':', len(chiderivs))
+        for ind,x0,y0,deriv in chiderivs:
+            print('  ', deriv.shape)
             
         return chiderivs
     
