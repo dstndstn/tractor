@@ -1,7 +1,7 @@
 from __future__ import print_function
 import numpy as np
 from astrometry.util.ttime import Time
-from .engine import logverb, isverbose
+from .engine import logverb, isverbose, logmsg
 from .optimize import Optimizer
 from .utils import listmax
 
