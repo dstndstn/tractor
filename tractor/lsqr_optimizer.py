@@ -461,7 +461,7 @@ class LsqrOptimizer(Optimizer):
             # not convinced it's worth the effort right now.
             X = tractor.getLogPriorDerivatives()
             if X is not None:
-                rA,cA,vA,pb = X
+                rA,cA,vA,pb,mub = X
 
                 sprows.extend([ri + Nrows for ri in rA])
                 spcols.extend(cA)

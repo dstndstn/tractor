@@ -101,6 +101,8 @@ class _GaussianPriors(object):
         cols = []
         vals = []
         bs = []
+        mus = []
+        
         row0 = 0
         p = param.getParams()
         for name,j,mu,sigma in self.terms:
@@ -112,8 +114,9 @@ class _GaussianPriors(object):
             vals.append(np.array([1. / sigma]))
             rows.append(np.array([row0]))
             bs.append(np.array([-(p[i] - mu) / sigma]))
+            mus.append(np.array([mu]))
             row0 += 1
-        return rows, cols, vals, bs
+        return rows, cols, vals, bs, mus
 
 class GaussianPriorsMixin(object):
     '''
@@ -1073,10 +1076,8 @@ class MultiParams(BaseParams, NamedParams):
     def getLogPriorDerivatives(self):
         """
         Return prior formatted so that it can be used in least square fitting
-        DSTN: this needs documenting here.
-        For now, splinesky.py contains a useful docstring.
         """
-        rA,cA,vA,pb = [],[],[],[]
+        rA,cA,vA,pb,mub = [],[],[],[],[]
 
         r0 = 0
         c0 = 0
@@ -1086,18 +1087,19 @@ class MultiParams(BaseParams, NamedParams):
             if X is None:
                 c0 += s.numberOfParams()
                 continue
-            (r,c,v,b) = X
+            (r,c,v,b,m) = X
             rA.extend([ri + r0 for ri in r])
             cA.extend([ci + c0 for ci in c])
             vA.extend(v)
             pb.extend(b)
-
+            mub.extend(m)
+            
             c0 += s.numberOfParams()
             r0 += listmax(r,-1) + 1
 
         if rA == []:
             return None
-        return rA,cA,vA,pb
+        return rA,cA,vA,pb,mub
 
 
 class NpArrayParams(ParamList):

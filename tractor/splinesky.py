@@ -124,36 +124,6 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         return lnP
 
     def getLogPriorDerivatives(self):
-        '''
-        Returns a "chi-like" approximation to the log-prior at the
-        current parameter values.
-
-        This will go into the least-squares fitting (each term in the
-        prior acts like an extra "pixel" in the fit).
-
-        Returns (rowA, colA, valA, pb), where:
-
-        rowA, colA, valA: describe a sparse matrix pA
-
-        pA: has shape N x numberOfParams
-        pb: has shape N
-
-        rowA, colA, valA, and pb should be *lists* of np.arrays
-
-        (ACTUALLY, the colA values should be plain ints, not arrays;
-        the code below may not have been updated!!)
-        
-        where "N" is the number of "pseudo-pixels"; "pA" will be
-        appended to the least-squares "A" matrix, and "pb" will be
-        appended to the least-squares "b" vector, and the
-        least-squares problem is minimizing
-
-        || A * (delta-params) - b ||^2
-
-        This function must take frozen-ness of parameters into account
-        (this is implied by the "numberOfParams" shape requirement).
-        '''
-
         #### FIXME -- we ignore frozenness!
 
         if self.prior_smooth_sigma is None:
@@ -163,6 +133,7 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         cA = []
         vA = []
         pb = []
+        mub = []
         # columns are parameters
         # rows are prior terms
 
@@ -183,7 +154,9 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         cA.append(II[:, :-1].ravel())
         vA.append(np.ones(NX) / sig)
         pb.append(dx.ravel() / sig)
-
+        # Not 100% certain of this...
+        mub.append(np.zeros(NX))
+        
         rA.append(np.arange(NX))
         cA.append(II[:, 1:].ravel())
         vA.append(-np.ones(NX) / sig)
@@ -194,6 +167,7 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         cA.append(II[:-1, :].ravel())
         vA.append(np.ones(NY) / sig)
         pb.append(dy.ravel() / sig)
+        mub.append(np.zeros(NY))
 
         rA.append(NX + np.arange(NY))
         cA.append(II[1:, :].ravel())

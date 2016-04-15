@@ -95,25 +95,28 @@ class Params(object):
         This will go into the least-squares fitting (each term in the
         prior acts like an extra "pixel" in the fit).
 
-        Returns (rowA, colA, valA, pb), where:
+        Returns (rowA, colA, valA, pb, mub), where:
 
         rowA, colA, valA: describe a sparse matrix pA
 
         pA: has shape N x numberOfParams
         pb: has shape N
+        mub: has shape N
 
-        rowA, colA, valA, and pb should be *lists* of np.arrays
+        rowA, valA, pb and mub should be *lists* of np.arrays
+        colA should be a list of ints.
 
-        (ACTUALLY, the colA values should be plain ints, not arrays;
-        the code below may not have been updated!!)
-        
-        where "N" is the number of "pseudo-pixels"; "pA" will be
-        appended to the least-squares "A" matrix, and "pb" will be
-        appended to the least-squares "b" vector, and the
+        where "N" is the number of "pseudo-pixels" or Gaussian terms.
+        "pA" will be appended to the least-squares "A" matrix, and
+        "pb" will be appended to the least-squares "b" vector, and the
         least-squares problem is minimizing
 
         || A * (delta-params) - b ||^2
 
+        We also require *mub*, which is like "pb" but not shifted
+        relative to the current parameter values; ie, it's the mean of
+        the Gaussian.
+        
         This function must take frozen-ness of parameters into account
         (this is implied by the "numberOfParams" shape requirement).
         '''

@@ -218,7 +218,7 @@ bool ImageCostFunction::_Evaluate(double const* const* parameters,
                                   double** jacobians) const {
     const std::vector<int32_t> bs = parameter_block_sizes();
 
-    //printf("ImageCostFunction::Evaluate\n");
+    printf("ImageCostFunction::Evaluate\n");
     /*
      printf("Parameter blocks: (%i)\n", (int)(bs.size()));
      for (size_t i=0; i<bs.size(); i++) {
