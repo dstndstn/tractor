@@ -52,7 +52,7 @@ class CeresOptimizer(Optimizer):
     def _ceres_opt(self, tractor, variance=False, scale_columns=True,
                    numeric=False, scaled=True, numeric_stepsize=0.1,
                    dynamic_scale=True,
-                   dlnp = 1e-3, max_iterations=0, **nil):
+                   dlnp = 1e-3, max_iterations=0, print_progress=True, **nil):
         from ceres import ceres_opt
 
         pp = tractor.getParams()
@@ -89,7 +89,7 @@ class CeresOptimizer(Optimizer):
         R = ceres_opt(trwrapper, tractor.getNImages(), params, variance_out,
                       (1 if scale_columns else 0),
                       (1 if numeric else 0), numeric_stepsize,
-                      dlnp, max_iterations)
+                      dlnp, max_iterations, print_progress)
         if variance:
             R['variance'] = variance_out
 
