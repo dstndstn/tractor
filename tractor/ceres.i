@@ -366,6 +366,7 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
     int nparams;
     int get_variance;
     int variance_ok = 0;
+    DlnpCallback cb(dlnp);
 
     assert(PyArray_Check(np_params));
     assert(PyArray_TYPE(np_params) == NPY_DOUBLE);
@@ -421,7 +422,6 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
     }
     if (dlnp > 0) {
         options.function_tolerance = 1e-16;
-        DlnpCallback cb(dlnp);
         options.callbacks.push_back(&cb);
         //printf("Added Dlnp callback: now %i callbacks\n",(int)options.callbacks.size());
     }
