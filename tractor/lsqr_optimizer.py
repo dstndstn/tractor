@@ -249,7 +249,8 @@ class LsqrOptimizer(Optimizer):
     
     def optimize(self, tractor, alphas=None, damp=0, priors=True,
                  scale_columns=True,
-                 shared_params=True, variance=False, just_variance=False):
+                 shared_params=True, variance=False, just_variance=False,
+                 **nil):
         logverb(tractor.getName()+': Finding derivs...')
         t0 = Time()
         allderivs = tractor.getDerivs()
