@@ -20,7 +20,9 @@
 
 %{
 #include "ceres/ceres.h"
+#include "ceres/normal_prior.h"
 #include <vector>
+#include <Eigen/Core>
 
 #if 0
  } // fool emacs indenter
@@ -346,6 +348,7 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
                            float numeric_stepsize,
                            float dlnp,
                            int max_iterations,
+                           PyObject* gaussian_priors,
                            int print_progress) {
     /*
      np_params: numpy array, type double, length number of params.
@@ -359,6 +362,9 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
      tractor.setParams(np_params)   # with the np_params obj passed in
      tractor.getChiImage(i)
      tractor._getOneImageDerivs(i)
+     
+     if priors:
+     tractor.getLogPriorDerivatives()
 
      */
     Problem problem;
@@ -384,10 +390,12 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
     //printf("ceres_opt, nims %i, nparams %i, get_variance %i\n", nims, nparams,
     //       get_variance);
 
-    std::vector<double*> allparams;
-    // Single-param blocks
-    for (i=0; i<nparams; i++)
-        allparams.push_back(params + i);
+    /*
+     std::vector<double*> allparams;
+     // Single-param blocks
+     for (i=0; i<nparams; i++)
+     allparams.push_back(params + i);
+     */
 
     for (i=0; i<nims; i++) {
 
@@ -408,7 +416,120 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
         } else {
             cost = icf;
         }
-        problem.AddResidualBlock(cost, NULL, allparams);
+        //problem.AddResidualBlock(cost, NULL, allparams);
+        problem.AddResidualBlock(cost, NULL, params);
+    }
+
+    if (gaussian_priors != Py_None) {
+        if (!PyList_Check(gaussian_priors)) {
+            printf("Expected gaussian_priors to be a list\n");
+            return NULL;
+        }
+        if (PyList_Size(gaussian_priors) != 4) {
+            printf("Expected gaussian_priors to be a list of length 4\n");
+            return NULL;
+        }
+        PyObject* rows = PyList_GetItem(gaussian_priors, 0);
+        PyObject* cols = PyList_GetItem(gaussian_priors, 1);
+        PyObject* vals = PyList_GetItem(gaussian_priors, 2);
+        PyObject* mus  = PyList_GetItem(gaussian_priors, 3);
+
+        size_t nterms = PySequence_Length(rows);
+        if (nterms <= 0) {
+            printf("Got %i terms in 'rows' term of gaussian_priors!\n",
+                   (int)nterms);
+            return NULL;
+        }
+        if (PySequence_Length(cols) != nterms) {
+            printf("Expected 'cols' to have length %i, got %i\n", 
+                   (int)nterms, (int)PySequence_Length(cols));
+            return NULL;
+        }
+        if (PySequence_Length(vals) != nterms) {
+            printf("Expected 'vals' to have length %i, got %i\n", 
+                   (int)nterms, (int)PySequence_Length(vals));
+            return NULL;
+        }
+        if (PySequence_Length(mus) != nterms) {
+            printf("Expected 'vals' to have length %i, got %i\n", 
+                   (int)nterms, (int)PySequence_Length(mus));
+            return NULL;
+        }
+
+        Eigen::MatrixXd A = Eigen::MatrixXd::Zero(nterms, nparams);
+        //<double, nterms, nparams> A;
+        //Vector<double, nparams> mu;
+        Eigen::VectorXd mu = Eigen::VectorXd::Zero(nparams);
+
+        printf("Created Matrix (%i,%i) and Vector (%i)\n",
+               (int)nterms, (int)nparams, (int)nparams);
+
+        printf("... Matrix (%i,%i) and Vector (%i)\n",
+               (int)A.rows(), (int)A.cols(), (int)mu.rows());
+
+        size_t i;
+        
+        for (i=0; i<nterms; i++) {
+            int r,c;
+            PyObject *pyr, *pyc, *pyv, *pym;
+            PyObject *ir, *ic;
+            PyObject *fv, *fm;
+            double v, m;
+
+            pyr = PySequence_GetItem(rows, i);
+            pyc = PySequence_GetItem(cols, i);
+            pyv = PySequence_GetItem(vals, i);
+            pym = PySequence_GetItem(mus,  i);
+            ir = PyNumber_Int(pyr);
+            if (!ir) {
+                printf("Expected row element %i to be an integer\n", (int)i);
+                return NULL;
+            }
+            ic = PyNumber_Int(pyc);
+            if (!ic) {
+                printf("Expected col element %i to be an integer\n", (int)i);
+                return NULL;
+            }
+            r = PyInt_AsLong(ir);
+            c = PyInt_AsLong(ic);
+            Py_DECREF(ic);
+            Py_DECREF(ir);
+            Py_DECREF(pyr);
+            Py_DECREF(pyc);
+            if (!((r >= 0) && (r < nterms) && (c >= 0) && (c < nparams))) {
+                printf("Expected row %i in [%i,%i) and col %i in [%i,%i)\n",
+                       r, 0, (int)nterms, c, 0, nparams);
+                return NULL;
+            }
+
+            fv = PyNumber_Float(pyv);
+            if (!fv) {
+                printf("Expected val element %i to be a float\n", (int)i);
+                return NULL;
+            }
+            fm = PyNumber_Float(pym);
+            if (!fm) {
+                printf("Expected mu element %i to be a float\n", (int)i);
+                return NULL;
+            }
+            v = PyFloat_AsDouble(fv);
+            m = PyFloat_AsDouble(fm);
+            Py_DECREF(fv);
+            Py_DECREF(fm);
+            Py_DECREF(pyv);
+            Py_DECREF(pym);
+
+            A(r, c) += v;
+            mu(c) += m;
+            printf("Gaussian prior: row %i, col %i, value %f, mu %f\n",
+                   r, c, v, m);
+        }
+
+        CostFunction* prior = new ceres::NormalPrior(A, mu);
+
+        //problem.AddResidualBlock(prior, NULL, allparams);
+        // Pass the whole params array as one big parameter block
+        problem.AddResidualBlock(prior, NULL, params);
     }
 
 

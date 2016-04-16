@@ -113,8 +113,8 @@ ceres.py: ceres.i
 
 CXXFLAGS := -Wall -fPIC
 # DEBUG
-#CXXFLAGS += -O0 -g
-CXXFLAGS += -O3
+CXXFLAGS += -O0 -g
+#CXXFLAGS += -O3
 #CXXLINKFLAGS := -Wl,--no-undefined
 #CXXLINKFLAGS :=
 CXXLINKFLAGS ?=

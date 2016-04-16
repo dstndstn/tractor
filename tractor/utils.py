@@ -110,7 +110,7 @@ class _GaussianPriors(object):
             # frozen:
             if i == -1:
                 continue
-            cols.append(i)
+            cols.append(np.array([i]))
             vals.append(np.array([1. / sigma]))
             rows.append(np.array([row0]))
             bs.append(np.array([-(p[i] - mu) / sigma]))

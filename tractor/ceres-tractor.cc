@@ -195,10 +195,13 @@ ImageCostFunction::ImageCostFunction(PyObject* tractor,
     //printf("Image %i: %i x %i -> number of pixels %i\n", _imagei, _W, _H,_npix);
 
     set_num_residuals(_npix);
+
     std::vector<int32_t>* bs = mutable_parameter_block_sizes();
-    for (int i=0; i<_nparams; i++) {
-        bs->push_back(1);
-    }
+    //for (int i=0; i<_nparams; i++) {
+    //bs->push_back(1);
+    //}
+    bs->push_back(_nparams);
+
 }
 
 ImageCostFunction::~ImageCostFunction() {
@@ -229,6 +232,7 @@ bool ImageCostFunction::_Evaluate(double const* const* parameters,
      printf(" ]\n");
      }
      */
+
     // Copy from "parameters" into "_np_params"
     int e0 = 0;
     double* pdata = (double*)PyArray_DATA(_np_params);

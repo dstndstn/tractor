@@ -103,8 +103,11 @@ class Params(object):
         pb: has shape N
         mub: has shape N
 
-        rowA, valA, pb and mub should be *lists* of np.arrays
-        colA should be a list of ints.
+        rowA: list of iterables of ints
+        colA: list of iterables of ints
+        valA: list of iterables of floats
+        pb:   list of iterables of floats
+        mub:  list of iterables of floats
 
         where "N" is the number of "pseudo-pixels" or Gaussian terms.
         "pA" will be appended to the least-squares "A" matrix, and

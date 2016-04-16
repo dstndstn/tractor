@@ -52,7 +52,8 @@ class CeresOptimizer(Optimizer):
     def _ceres_opt(self, tractor, variance=False, scale_columns=True,
                    numeric=False, scaled=True, numeric_stepsize=0.1,
                    dynamic_scale=True,
-                   dlnp = 1e-3, max_iterations=0, print_progress=True, **nil):
+                   dlnp = 1e-3, max_iterations=0, print_progress=True,
+                   priors=False, **nil):
         from ceres import ceres_opt
 
         pp = tractor.getParams()
@@ -86,10 +87,26 @@ class CeresOptimizer(Optimizer):
         if variance:
             variance_out = np.zeros_like(params)
 
+        gpriors = None
+        if priors:
+            P = tractor.getLogPriorDerivatives()
+            if P is None:
+                priors = False
+        if priors:
+            print('LogPriorDerivatives:', P)
+            rr,cc,vv,mm = [],[],[],[]
+            for ri,ci,vi,pi,mi in zip(*P):
+                rr.extend(list(ri))
+                cc.extend(list(ci))
+                vv.extend(list(vi))
+                mm.extend(list(mi))
+            print('rr', rr, 'cc', cc, 'vv', vv, 'mm', mm)
+            gpriors = [rr, cc, vv, mm]
+            
         R = ceres_opt(trwrapper, tractor.getNImages(), params, variance_out,
                       (1 if scale_columns else 0),
                       (1 if numeric else 0), numeric_stepsize,
-                      dlnp, max_iterations, print_progress)
+                      dlnp, max_iterations, gpriors, print_progress)
         if variance:
             R['variance'] = variance_out
 
