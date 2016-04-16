@@ -299,6 +299,15 @@ bool ImageCostFunction::_Evaluate(double const* const* parameters,
         return true;
     }
 
+    // all parameters in one block
+    double* J = jacobians[0];
+    if (!J) {
+      return true;
+    }
+
+    // zero out J to start
+    memset(J, 0, _nparams * _H * _W * sizeof(double));
+
     // FIXME -- we don't include priors here!
 
     // NOTE -- _getOneImageDerivs() returns dCHI / dParam, not the usual
@@ -316,23 +325,27 @@ bool ImageCostFunction::_Evaluate(double const* const* parameters,
     }
     int n = (int)PyList_Size(allderivs);
     //printf("Got %i derivatives\n", n);
-    for (int i=0; i<n; i++) {
-        PyObject* deriv = PyList_GetItem(allderivs, i);
+    for (int ideriv=0; ideriv<n; ideriv++) {
+        PyObject* deriv = PyList_GetItem(allderivs, ideriv);
         if (!PyTuple_Check(deriv)) {
-            printf("Expected allderivs element %i to be a tuple\n", i);
+            printf("Expected allderivs element %i to be a tuple\n", ideriv);
             Py_DECREF(allderivs);
             return false;
         }
-        int j = PyInt_AsLong(PyTuple_GetItem(deriv, 0));
 
-        if (!jacobians[j])
-            continue;
+        int iparam = PyInt_AsLong(PyTuple_GetItem(deriv, 0));
+
+        /*
+	  if (!jacobians[iparam])
+	  continue;
+	*/
 
         int x0 = PyInt_AsLong(PyTuple_GetItem(deriv, 1));
         int y0 = PyInt_AsLong(PyTuple_GetItem(deriv, 2));
         PyObject* np_deriv = PyTuple_GetItem(deriv, 3);
         if (!PyArray_Check(np_deriv)) {
-            printf("Expected third element of allderivs element %i to be an array\n", i);
+            printf("Expected third element of allderivs element %i to be an array\n",
+		   ideriv);
             Py_DECREF(allderivs);
             return false;
         }
@@ -348,8 +361,19 @@ bool ImageCostFunction::_Evaluate(double const* const* parameters,
 
         //printf("jacobian %i: x0,y0 %i,%i, W,H %i,%i\n", j, x0, y0, dW, dH);
 
-        double* J = jacobians[j];
+	// Yuck, jacobians is transposed from the easy way.
+	// J[(ipixel) * _nparams + iparam] =
+	// J[((y + y0)*_W + (x + x0)) * _nparams + iparam] = deriv_data(y*dW + x)
 
+	int x,y;
+	for (y=0; y<dH; y++) {
+	  for (x=0; x<dW; x++) {
+	    J[((y + y0)*_W + (x + x0)) * _nparams + iparam] = deriv_data[y*dW + x];
+	  }
+	}
+
+
+	/*
         // Pad with zeros
         if (y0)
             memset(J, 0, y0*_W*sizeof(double));
@@ -368,6 +392,7 @@ bool ImageCostFunction::_Evaluate(double const* const* parameters,
             if (x0 + dW < _W)
                 memset(row0 + dW, 0, (_W - (x0+dW)) * sizeof(double));
         }
+	*/
     }
     Py_DECREF(allderivs);
 
