@@ -87,21 +87,11 @@ class CeresOptimizer(Optimizer):
         if variance:
             variance_out = np.zeros_like(params)
 
+        
         gpriors = None
         if priors:
-            P = tractor.getLogPriorDerivatives()
-            if P is None:
-                priors = False
-        if priors:
-            print('LogPriorDerivatives:', P)
-            rr,cc,vv,mm = [],[],[],[]
-            for ri,ci,vi,pi,mi in zip(*P):
-                rr.extend(list(ri))
-                cc.extend(list(ci))
-                vv.extend(list(vi))
-                mm.extend(list(mi))
-            print('rr', rr, 'cc', cc, 'vv', vv, 'mm', mm)
-            gpriors = [rr, cc, vv, mm]
+            gpriors = tractor.getGaussianPriors()
+            print('Gaussian priors:', gpriors)
             
         R = ceres_opt(trwrapper, tractor.getNImages(), params, variance_out,
                       (1 if scale_columns else 0),

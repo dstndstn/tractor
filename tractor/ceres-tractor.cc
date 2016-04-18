@@ -299,17 +299,6 @@ bool ImageCostFunction::_Evaluate(double const* const* parameters,
         return true;
     }
 
-    // all parameters in one block
-    double* J = jacobians[0];
-    if (!J) {
-      return true;
-    }
-
-    // zero out J to start
-    memset(J, 0, _nparams * _H * _W * sizeof(double));
-
-    // FIXME -- we don't include priors here!
-
     // NOTE -- _getOneImageDerivs() returns dCHI / dParam, not the usual
     // dModel / dParam!
     PyObject* allderivs = PyObject_CallMethod(
@@ -335,10 +324,9 @@ bool ImageCostFunction::_Evaluate(double const* const* parameters,
 
         int iparam = PyInt_AsLong(PyTuple_GetItem(deriv, 0));
 
-        /*
-	  if (!jacobians[iparam])
-	  continue;
-	*/
+        double* J = jacobians[iparam];
+        if (!J)
+            continue;
 
         int x0 = PyInt_AsLong(PyTuple_GetItem(deriv, 1));
         int y0 = PyInt_AsLong(PyTuple_GetItem(deriv, 2));
@@ -361,19 +349,6 @@ bool ImageCostFunction::_Evaluate(double const* const* parameters,
 
         //printf("jacobian %i: x0,y0 %i,%i, W,H %i,%i\n", j, x0, y0, dW, dH);
 
-	// Yuck, jacobians is transposed from the easy way.
-	// J[(ipixel) * _nparams + iparam] =
-	// J[((y + y0)*_W + (x + x0)) * _nparams + iparam] = deriv_data(y*dW + x)
-
-	int x,y;
-	for (y=0; y<dH; y++) {
-	  for (x=0; x<dW; x++) {
-	    J[((y + y0)*_W + (x + x0)) * _nparams + iparam] = deriv_data[y*dW + x];
-	  }
-	}
-
-
-	/*
         // Pad with zeros
         if (y0)
             memset(J, 0, y0*_W*sizeof(double));
@@ -392,7 +367,6 @@ bool ImageCostFunction::_Evaluate(double const* const* parameters,
             if (x0 + dW < _W)
                 memset(row0 + dW, 0, (_W - (x0+dW)) * sizeof(double));
         }
-	*/
     }
     Py_DECREF(allderivs);
 
