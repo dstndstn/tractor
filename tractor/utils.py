@@ -95,7 +95,7 @@ class _GaussianPriors(object):
         return -0.5 * chisq
 
     def getGaussianPriors(self):
-        return [i,mu,sigma] for name,i,mu,sigma in self.terms
+        return [(i,mu,sigma) for name,i,mu,sigma in self.terms]
     
     def getDerivs(self, param=None):
         if param is None:
