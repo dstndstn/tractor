@@ -466,6 +466,8 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
             A(0,0) = 1. / sigma;
             Eigen::VectorXd mu(1);
             mu[0] = mean;
+            //printf("Adding Gaussian prior on parameter %i (current value "
+            //"%f): mean %f, sigma %f\n", index, params[index], mean, sigma);
             //printf("A size: %i, %i.  Mu size: %i\n", 
             //A.rows(), A.cols(), mu.size());
             CostFunction* prior = new ceres::NormalPrior(A, mu);

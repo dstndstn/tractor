@@ -90,7 +90,7 @@ class CeresOptimizer(Optimizer):
         gpriors = None
         if priors:
             gpriors = tractor.getGaussianPriors()
-            print('Gaussian priors:', gpriors)
+            # print('Gaussian priors:', gpriors)
             
         R = ceres_opt(trwrapper, tractor.getNImages(), params, variance_out,
                       (1 if scale_columns else 0),
