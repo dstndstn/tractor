@@ -53,13 +53,12 @@ class CeresOptimizer(Optimizer):
                    numeric=False, scaled=True, numeric_stepsize=0.1,
                    dynamic_scale=True,
                    dlnp = 1e-3, max_iterations=0, print_progress=True,
-                   priors=False, **nil):
+                   priors=False, bounds=False, **nil):
         from ceres import ceres_opt
 
         pp = tractor.getParams()
         if len(pp) == 0:
             return None
-
 
         if scaled:
             p0 = np.array(pp)
@@ -67,7 +66,6 @@ class CeresOptimizer(Optimizer):
             if dynamic_scale:
                 scales = self.getDynamicScales(tractor)
                 # print('Dynamic scales:', scales)
-
             else:
                 scales = np.array(tractor.getStepSizes())
             
@@ -91,11 +89,26 @@ class CeresOptimizer(Optimizer):
         if priors:
             gpriors = tractor.getGaussianPriors()
             # print('Gaussian priors:', gpriors)
+
+        lubounds = None
+        if bounds:
+            lowers = tractor.getLowerBounds()
+            uppers = tractor.getUpperBounds()
+            print('Lower bounds:', lowers)
+            print('Upper bounds:', uppers)
+            assert(len(lowers) == len(pp))
+            assert(len(uppers) == len(pp))
+            lubounds = ([(i,float(b),True) for i,b in enumerate(lowers)
+                         if b is not None] +
+                        [(i,float(b),False) for i,b in enumerate(uppers)
+                         if b is not None])
+            print('lubounds:', lubounds)
             
         R = ceres_opt(trwrapper, tractor.getNImages(), params, variance_out,
                       (1 if scale_columns else 0),
                       (1 if numeric else 0), numeric_stepsize,
-                      dlnp, max_iterations, gpriors, print_progress)
+                      dlnp, max_iterations, gpriors, lubounds,
+                      print_progress)
         if variance:
             R['variance'] = variance_out
 

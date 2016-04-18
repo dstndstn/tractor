@@ -349,6 +349,7 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
                            float dlnp,
                            int max_iterations,
                            PyObject* gaussian_priors,
+                           PyObject* lubounds,
                            int print_progress) {
     /*
      np_params: numpy array, type double, length number of params.
@@ -475,6 +476,58 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
         }
     }
 
+    if (lubounds != Py_None) {
+        if (!PyList_Check(lubounds)) {
+            printf("Expected lubounds to be a list\n");
+            return NULL;
+        }
+        size_t nterms = PyList_Size(lubounds);
+        for (size_t i=0; i<nterms; i++) {
+            PyObject* tup = PyList_GetItem(lubounds, i);
+            if (!PySequence_Check(tup)) {
+                printf("Expected lubounds to contain iterables; element %i is not\n", (int)i);
+                return NULL;
+            }
+            if (PySequence_Size(tup) != 3) {
+                printf("Expected lubounds to contain length-3 iterables; element %i is not\n", (int)i);
+                return NULL;
+            }
+            // (int index, float bound, bool lower)
+            PyObject* pyi = PySequence_GetItem(tup, 0);
+            PyObject* pyb = PySequence_GetItem(tup, 1);
+            PyObject* pyl = PySequence_GetItem(tup, 2);
+
+            if (!PyInt_Check(pyi)) {
+                printf("Expected lubounds element %i, index 0, to be an integer\n", (int)i);
+                return NULL;
+            }
+            int index = PyInt_AsLong(pyi);
+            Py_DECREF(pyi);
+
+            if (!PyFloat_Check(pyb)) {
+                printf("Expected lubounds element %i, index 1, to be a float\n", (int)i);
+                return NULL;
+            }
+            double bound = PyFloat_AsDouble(pyb);
+            Py_DECREF(pyb);
+            
+            if (!PyBool_Check(pyl)) {
+                printf("Expected lubounds element %i, index 2, to be a bool\n", (int)i);
+                return NULL;
+            }
+            int islower = (pyl == Py_True);
+            Py_DECREF(pyl);
+
+            printf("Bound on element %i, bound %g, %s bound\n",
+                   index, bound, (islower ? "lower" : "upper"));
+
+            if (islower)
+                problem.SetParameterLowerBound(params + index, 0, bound);
+            else
+                problem.SetParameterUpperBound(params + index, 0, bound);
+
+        }
+    }
 
     // Run the solver!
     Solver::Options options;

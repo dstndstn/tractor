@@ -319,6 +319,10 @@ class ScalarParam(BaseParams):
         return self.val
     def setValue(self, v):
         self._set(v)
+    def getLowerBounds(self):
+        return [self.lower]
+    def getUpperBounds(self):
+        return [self.upper]
     
 def _isint(i):
     #return type(i) in [int, np.int64]
