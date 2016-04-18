@@ -364,7 +364,7 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
      tractor._getOneImageDerivs(i)
      
      if priors:
-     tractor.getLogPriorDerivatives()
+     tractor.getGaussianPriors()
 
      */
     Problem problem;
@@ -464,7 +464,10 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
 
             Eigen::MatrixXd A(1,1);
             A(0,0) = 1. / sigma;
-            Eigen::VectorXd mu(mean);
+            Eigen::VectorXd mu(1);
+            mu[0] = mean;
+            //printf("A size: %i, %i.  Mu size: %i\n", 
+            //A.rows(), A.cols(), mu.size());
             CostFunction* prior = new ceres::NormalPrior(A, mu);
             problem.AddResidualBlock(prior, NULL, params + index);
         }

@@ -197,11 +197,10 @@ ImageCostFunction::ImageCostFunction(PyObject* tractor,
     set_num_residuals(_npix);
 
     std::vector<int32_t>* bs = mutable_parameter_block_sizes();
-    //for (int i=0; i<_nparams; i++) {
-    //bs->push_back(1);
-    //}
-    bs->push_back(_nparams);
-
+    for (int i=0; i<_nparams; i++) {
+        bs->push_back(1);
+    }
+    //bs->push_back(_nparams);
 }
 
 ImageCostFunction::~ImageCostFunction() {
@@ -221,8 +220,8 @@ bool ImageCostFunction::_Evaluate(double const* const* parameters,
                                   double** jacobians) const {
     const std::vector<int32_t> bs = parameter_block_sizes();
 
-    printf("ImageCostFunction::Evaluate\n");
     /*
+    printf("ImageCostFunction::Evaluate\n");
      printf("Parameter blocks: (%i)\n", (int)(bs.size()));
      for (size_t i=0; i<bs.size(); i++) {
      printf("  %i: n=%i, [", (int)i, (int)bs[i]);
@@ -360,9 +359,6 @@ bool ImageCostFunction::_Evaluate(double const* const* parameters,
             if (x0)
                 memset(row0, 0, x0*sizeof(double));
             row0 += x0;
-            // Copy
-            //for (int m=0; m<dW; m++)
-            //row0[m] = deriv_data[k*dW + m];
             memcpy(row0, deriv_data + k*dW, dW * sizeof(double));
             if (x0 + dW < _W)
                 memset(row0 + dW, 0, (_W - (x0+dW)) * sizeof(double));

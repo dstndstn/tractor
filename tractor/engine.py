@@ -439,18 +439,18 @@ class Tractor(MultiParams):
     def getChiImage(self, imgi=-1, img=None, srcs=None, minsb=0.):
         if img is None:
             img = self.getImage(imgi)
-        print('getChiImage:', img, ':', img.shape)
-        if srcs is None:
-            print('Sources:')
-            for src in self.catalog:
-                print('  ', src)
-        else:
-            print('Sources:', srcs)
-        print('LogPriorDerivatives:', self.getLogPriorDerivatives())
 
+        # print('getChiImage:', img, ':', img.shape)
+        # if srcs is None:
+        #     print('Sources:')
+        #     for src in self.catalog:
+        #         print('  ', src)
+        # else:
+        #     print('Sources:', srcs)
+        # print('LogPriorDerivatives:', self.getLogPriorDerivatives())
             
         mod = self.getModelImage(img, srcs=srcs, minsb=minsb)
-        print('mod:', mod.shape)
+        #print('mod:', mod.shape)
         chi = (img.getImage() - mod) * img.getInvError()
         if not np.all(np.isfinite(chi)):
             print('Chi not finite')

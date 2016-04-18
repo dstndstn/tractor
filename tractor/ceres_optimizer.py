@@ -87,7 +87,6 @@ class CeresOptimizer(Optimizer):
         if variance:
             variance_out = np.zeros_like(params)
 
-        
         gpriors = None
         if priors:
             gpriors = tractor.getGaussianPriors()
@@ -183,10 +182,10 @@ class CeresOptimizer(Optimizer):
             deriv = -1. * d.patch.astype(np.float64) * ie[d.getSlice()]
             chiderivs.append((ind, d.x0, d.y0, deriv))
 
-        print('_getOneImageDerivs: image', tractor.images[imgi],
-              ':', len(chiderivs))
-        for ind,x0,y0,deriv in chiderivs:
-            print('  ', deriv.shape)
+        # print('_getOneImageDerivs: image', tractor.images[imgi],
+        #       ':', len(chiderivs))
+        # for ind,x0,y0,deriv in chiderivs:
+        #     print('  ', deriv.shape)
             
         return chiderivs
     
