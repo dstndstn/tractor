@@ -80,6 +80,17 @@ class Params(object):
         Returns the old value.
         '''
         return None
+    def getLowerBounds(self):
+        return []
+    def getUpperBounds(self):
+        return []
+    def getGaussianPriors(self):
+        '''
+        Returns a list of
+        (index, mu, sigma)
+        of Gaussian priors on this set of parameters.
+        '''
+        return []
     def getLogPrior(self):
         '''
         Returns the prior, evaluated at the current values of

@@ -94,6 +94,9 @@ class _GaussianPriors(object):
             chisq += (p[i] - mu)**2 / sigma**2
         return -0.5 * chisq
 
+    def getGaussianPriors(self):
+        return [i,mu,sigma] for name,i,mu,sigma in self.terms
+    
     def getDerivs(self, param=None):
         if param is None:
             param = self.param
@@ -146,6 +149,9 @@ class GaussianPriorsMixin(object):
     def getGaussianLogPriorDerivatives(self):
         return self.gpriors.getDerivs(param=self)
 
+    def getGaussianPriors(self):
+        return self.gpriors.getGaussianPriors()
+    
     def isLegal(self):
         '''
         Returns True if the current parameter values are legal; ie,
@@ -257,6 +263,13 @@ class BaseParams(object):
     def getLogPriorDerivatives(self):
         return None
 
+    def getLowerBounds(self):
+        return []
+    def getUpperBounds(self):
+        return []
+    def getGaussianPriors(self):
+        return []
+    
 @total_ordering
 class ScalarParam(BaseParams):
     '''
@@ -267,6 +280,8 @@ class ScalarParam(BaseParams):
     strformat = '%g'
     def __init__(self, val=0):
         self.val = val
+        self.lower = None
+        self.upper = None
     def __str__(self):
         return getClassName(self) + ': ' + self.strformat % self.val
     def __repr__(self):
@@ -425,13 +440,11 @@ class NamedParams(object):
         d: dict of (string, int) parameter names->indices
         '''
         self._addNamedParams(alias=False, **d)
-        
 
     def _getNamedThing(self, nm):
         return self._getThing(self.namedparams[nm])
     def _setNamedThing(self, nm, v):
         return self._setThing(self.namedparams[nm], v)
-
 
     def _iterNamesAndVals(self):
         '''
@@ -617,14 +630,12 @@ class ParamList(GaussianPriorsMixin, NamedParams, BaseParams):
     An implementation of Params that holds values in a list.
     '''
     def __init__(self, *args):
-        #print('ParamList __init__()')
-        # FIXME -- kwargs with named params?
         self.vals = list(args)
+        self.lowers = [None for v in self.vals]
+        self.uppers = [None for v in self.vals]
         super(ParamList,self).__init__()
 
     def copy(self):
-        #return self.__class__(*self.getParams())
-        #cop = self.__class__(*self._getThings())
         cop = super(ParamList, self).copy()
         cop.liquid = [l for l in self.liquid]
         return cop
@@ -684,14 +695,19 @@ class ParamList(GaussianPriorsMixin, NamedParams, BaseParams):
     def getAllParams(self):
         return list(self._getThings())
 
+    def getParam(self,i):
+        ii = self._indexLiquid(i)
+        return self._getThing(ii)
+    
     def setAllParams(self, p):
         for i,pp in enumerate(p):
             self._setThing(i, pp)
 
-    def getParam(self,i):
-        ii = self._indexLiquid(i)
-        return self._getThing(ii)
-
+    def getLowerBounds(self):
+        return list(self._getLiquidArray(self.lowers))
+    def getUpperBounds(self):
+        return list(self._getLiquidArray(self.uppers))
+    
     def __len__(self):
         ''' len(): of liquid params '''
         return self.numberOfParams()
@@ -717,9 +733,6 @@ class ParamList(GaussianPriorsMixin, NamedParams, BaseParams):
         return ParamList.ParamListIter(self)
 
 class ArithmeticParams(object):
-    #def __eq__(self, other):
-    #   return np.all(self.getParams() == other.getParams())
-    #def __lt__(self, other):
 
     def __add__(self, other):
         ''' + '''
@@ -1041,6 +1054,28 @@ class MultiParams(BaseParams, NamedParams):
         raise RuntimeError('setParam(%i,...) for a %s that only has %i elements' %
                            (i, getClassName(self), self.numberOfParams()))
 
+    def getLowerBounds(self):
+        p = []
+        for s in self._getActiveSubs():
+            p.extend(s.getLowerBounds())
+        return p
+
+    def getUpperBounds(self):
+        p = []
+        for s in self._getActiveSubs():
+            p.extend(s.getUpperBounds())
+        return p
+
+    def getGaussianPriors(self):
+        p = []
+        offset = 0
+        for s in self._getActiveSubs():
+            n = s.numberOfParams()
+            p.extend([(offset + i, mu, sigma) for i,mu,sigma in
+                      s.getGaussianPriors()])
+            offset += n
+        return p
+    
     def getStepSizes(self, *args, **kwargs):
         p = []
         for s in self._getActiveSubs():
