@@ -55,7 +55,6 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None,
         flux_invvars = np.zeros(Nsrcs, np.float32)
         fitstats = dict([(k, np.zeros(Nsrcs, np.float32)) for k in fskeys])
         nexp = np.zeros(Nsrcs, np.int16)
-
         mjd = np.zeros(Nsrcs, np.float32)
 
         for tile in tiles:
@@ -102,8 +101,8 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None,
                 continue
 
             phot.tile[srci] = tile.coadd_id
-            nexp[srci] = tim.nuims[np.clip(np.round(y[keep]).astype(int), 0, H-1),
-                                   np.clip(np.round(x[keep]).astype(int), 0, W-1)]
+            nexp[srci] = tim.nuims[np.clip(np.round(y[srci]).astype(int), 0, H-1),
+                                   np.clip(np.round(x[srci]).astype(int), 0, W-1)]
 
             # Source indices in the margins
             margi = I[np.logical_not(keep)]
