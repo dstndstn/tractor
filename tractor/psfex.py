@@ -163,7 +163,7 @@ class PsfExModel(object):
             from astrometry.util.fits import fits_table
             T = fits_table(fn, ext=ext)
             ims = T.psf_mask[0]
-            print('Got', ims.shape, 'PSF images')
+            #print('Got', ims.shape, 'PSF images')
             hdr = T.get_header()
             # PSF distortion bases are polynomials of x,y
             assert(hdr['POLNAME1'].strip() == 'X_IMAGE')
@@ -177,7 +177,7 @@ class PsfExModel(object):
             yscale = hdr.get('POLSCAL2')
             degree = hdr.get('POLDEG1')
             self.sampling = hdr.get('PSF_SAMP')
-            print('PsfEx sampling:', self.sampling)
+            #print('PsfEx sampling:', self.sampling)
             # number of terms in polynomial
             ne = (degree + 1) * (degree + 2) / 2
             assert(hdr['PSFAXIS3'] == ne)
@@ -186,7 +186,7 @@ class PsfExModel(object):
             self.psfbases = ims
             self.xscale, self.yscale = xscale, yscale
             self.degree = degree
-            print('PsfEx degree:', self.degree)
+            #print('PsfEx degree:', self.degree)
             bh,bw = self.psfbases[0].shape
             self.radius = (bh+1)/2.
             self.x0,self.y0 = x0,y0

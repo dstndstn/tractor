@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 import scipy.interpolate as interp
 from utils import *
@@ -92,7 +93,7 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         c *= s
         self.vals = c
         sky1 = self.spl(0,0)
-        print('Scaled sky:', sky0, 'x', s, '=', sky0*s, 'vs', sky1)
+        #print('Scaled sky:', sky0, 'x', s, '=', sky0*s, 'vs', sky1)
 
     def setPriorSmoothness(self, sigma):
         '''
@@ -180,10 +181,10 @@ class SplineSky(ParamList, ducks.ImageCalibration):
     def getParamDerivatives(self, *args):
         derivs = []
         tx,ty = self.spl.get_knots()
-        print 'Knots:'
-        print 'x', len(tx), tx
-        print 'y', len(ty), ty
-        print 'W,H', self.W, self.H
+        print('Knots:')
+        print('x', len(tx), tx)
+        print('y', len(ty), ty)
+        print('W,H', self.W, self.H)
         #NX = len(tx) - self.order
         #print 'NX', NX
         for i in self.getThawedParamIndices():
@@ -249,9 +250,9 @@ if __name__ == '__main__':
     YY = np.linspace(0, H, NY)
     ss = SplineSky(XX, YY, vals)
 
-    print 'NP', ss.numberOfParams()
-    print ss.getParamNames()
-    print ss.getParams()
+    print('NP', ss.numberOfParams())
+    print(ss.getParamNames())
+    print(ss.getParams())
 
     X = np.zeros((H,W))
     ss.addTo(X)
@@ -332,14 +333,13 @@ if __name__ == '__main__':
     tractor = Tractor(images=[tim])
     ss.setPriorSmoothness(sig)
 
-    print 'Tractor', tractor
-    print 'im params', tim.getParamNames()
-    print 'im step sizes', tim.getStepSizes()
-
-    print 'Initial:'
-    print 'lnLikelihood', tractor.getLogLikelihood()
-    print 'lnPrior', tractor.getLogPrior()
-    print 'lnProb', tractor.getLogProb()
+    print('Tractor', tractor)
+    print('im params', tim.getParamNames())
+    print('im step sizes', tim.getStepSizes())
+    print('Initial:')
+    print('lnLikelihood', tractor.getLogLikelihood())
+    print('lnPrior', tractor.getLogPrior())
+    print('lnProb', tractor.getLogProb())
 
     mod = tractor.getModelImage(0)
     
@@ -350,10 +350,10 @@ if __name__ == '__main__':
 
     tractor.optimize()
 
-    print 'After opt:'
-    print 'lnLikelihood', tractor.getLogLikelihood()
-    print 'lnPrior', tractor.getLogPrior()
-    print 'lnProb', tractor.getLogProb()
+    print('After opt:')
+    print('lnLikelihood', tractor.getLogLikelihood())
+    print('lnPrior', tractor.getLogPrior())
+    print('lnProb', tractor.getLogProb())
 
     mod = tractor.getModelImage(0)
     
