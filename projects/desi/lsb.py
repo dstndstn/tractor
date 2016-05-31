@@ -18,8 +18,8 @@ from tractor import *
 import os
 os.environ['DECALS_DIR'] = 'decals-lsb'
 
-from common import *
-from desi_common import *
+from legacypipe.common import *
+from legacypipe.desi_common import *
 
 def bin_image(data, S):
     # rebin image data
@@ -59,25 +59,24 @@ def stage_1(expnum=431202, extname='S19', plotprefix='lsb', plots=False,
     else:
         ps = None
 
-    decals = Decals()
-    C = decals.find_ccds(expnum=expnum, extname=extname)
+    survey = LegacySurveyData()
+    C = survey.find_ccds(expnum=expnum, ccdname=extname)
     print len(C), 'CCDs'
-    im = DecamImage(decals, C[0])
+    im = survey.get_image_object(C[0])
     print 'im', im
     
     #(x0,x1,y0,y1) = opt.zoom
     #zoomslice = (slice(y0,y1), slice(x0,x1))
     zoomslice = None
     
-    tim = im.get_tractor_image(const2psf=True, slc=zoomslice)
+    tim = im.get_tractor_image(gaussPsf=True, splinesky=True, slc=zoomslice)
     print 'Tim', tim
     
     cats = []
-    bricks = bricks_touching_wcs(tim.subwcs, decals=decals)
+    bricks = bricks_touching_wcs(tim.subwcs, survey=survey)
     bricknames = bricks.brickname
     for b in bricknames:
-        fn = os.path.join(decals.decals_dir, 'tractor', b[:3],
-                          'tractor-%s.fits' % b)
+        fn = survey.find_file('tractor', brick=b)
         if not os.path.exists(fn):
             print 'WARNING: file does not exist:', fn
             continue
