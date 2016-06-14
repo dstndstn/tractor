@@ -15,7 +15,7 @@ class LsqrOptimizer(Optimizer):
             justims0=None, subimgs=None, damp=None, alphas=None,
             Nsky=None, mindlnp=None, shared_params=None):
     
-        print(len(umodels), 'umodels')
+        #print(len(umodels), 'umodels')
         if len(umodels) == 0:
             return
         Nsourceparams = len(umodels[0])
@@ -299,6 +299,8 @@ class LsqrOptimizer(Optimizer):
         R = {}
         for step in range(steps):
             dlnp,X,alpha = self.optimize(tractor, **kwargs)
+            print('Opt step: dlnp', dlnp,
+                  ', '.join([str(src) for src in tractor.getCatalog()]))
             if dlnp <= dchisq:
                 break
         R.update(steps=step)

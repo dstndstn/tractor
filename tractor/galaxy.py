@@ -131,7 +131,7 @@ class Galaxy(MultiParams, SingleProfileSource):
     def __repr__(self):
         return (self.name + '(pos=' + repr(self.pos) +
                 ', brightness=' + repr(self.brightness) +
-                ', shape=' + repr(self.shape))
+                ', shape=' + repr(self.shape) + ')')
 
     def getUnitFluxModelPatch(self, img, **kwargs):
         raise RuntimeError('getUnitFluxModelPatch unimplemented in' +
@@ -265,15 +265,13 @@ class Galaxy(MultiParams, SingleProfileSource):
         return derivs
 
 
-from astrometry.util.plotutils import *
-psfft = PlotSequence('fft')
+ps_debug = None
 
 do_fft_timing = False
 if do_fft_timing:
     from astrometry.util.ttime import *
     fft_timing = []
     fft_timing_id = 0
-
     
 class ProfileGalaxy(object):
     '''
@@ -402,7 +400,7 @@ class ProfileGalaxy(object):
         else:
             x0,x1,y0,y1 = extent
         psf = img.getPsf()
-
+        
         # We have two methods of rendering profile galaxies: If the
         # PSF can be represented as a mixture of Gaussians, then we do
         # the analytic Gaussian convolution, producing a larger
@@ -411,12 +409,26 @@ class ProfileGalaxy(object):
         # FFT of the galaxy, and IFFT back to get the rendered
         # profile.
 
-        if hasattr(psf, 'getMixtureOfGaussians'):
-            amix = self._getAffineProfile(img, px, py)
+        from tractor.psf import HybridPSF
+        hybrid = isinstance(psf, HybridPSF)
+
+        # amix = self._getAffineProfile(img, px, py)
+        # psfmix = psf.getMixtureOfGaussians(px=px, py=py)
+        # cmix = amix.convolve(psfmix)
+        # return None
+
+        def run_mog(amix=None):
+            # img, px, py, psf, modelMask, x0, x1, y0, y1,
+            # minval, exactExtent
+            if amix is None:
+                amix = self._getAffineProfile(img, px, py)
+
             # now convolve with the PSF, analytically
             psfmix = psf.getMixtureOfGaussians(px=px, py=py)
             cmix = amix.convolve(psfmix)
 
+            print('MoG galaxy: modelMask:', (modelMask.shape if modelMask is not None else 'no'))
+            
             # print('galaxy affine mixture:', amix)
             # print('psf mixture:', psfmix)
             # print('convolved mixture:', cmix)
@@ -431,6 +443,9 @@ class ProfileGalaxy(object):
                 assert(p.shape == modelMask.shape)
                 return p
 
+        
+        if hasattr(psf, 'getMixtureOfGaussians') and not hybrid:
+            return run_mog()
 
         # Otherwise, FFT:
         imh,imw = img.shape
@@ -439,14 +454,12 @@ class ProfileGalaxy(object):
 
         if not haveExtent:
             halfsize = self._getUnitFluxPatchSize(img, px, py, minval)
-
             # Avoid huge galaxies -> huge halfsize in a tiny image (blob)
             imsz = max(imh,imw)
             halfsize = min(halfsize, imsz)
 
         else:
             # FIXME -- max of modelMask, PSF, and Galaxy sizes!
-
             if modelMask is not None:
                 mh,mw = modelMask.shape
                 x1 = x0 + mw
@@ -458,8 +471,13 @@ class ProfileGalaxy(object):
 
             # is the source center outside the modelMask?
             sourceOut = (px < x0 or px > x1-1 or py < y0 or py > y1-1)
+            # print('mh,mw', mh,mw, 'sourceout?', sourceOut)
             
             if sourceOut:
+
+                if hybrid:
+                    return run_mog()
+                
                 # FIXME -- could also *think* about switching to a
                 # Gaussian approximation when very far from the source
                 # center...
@@ -568,6 +586,7 @@ class ProfileGalaxy(object):
             if abs(mux) >= psfmargin or abs(muy) >= psfmargin:
                 # Wrap-around is possible (likely).  Compute a shifted image
                 # and then copy it into the result.
+                print('Wrap-around possible/likely')
                 gx0 = int(np.round(mux))
                 gy0 = int(np.round(muy))
                 mux -= gx0
@@ -587,11 +606,31 @@ class ProfileGalaxy(object):
         
         amix = self._getAffineProfile(img, mux, muy)
 
+        fftmix = amix
+        mogmix = None
+        
         if do_fft_timing:
             t1 = CpuMeas()
-        
-        Fsum = amix.getFourierTransform(v, w)
-        
+
+        if hybrid:
+            # Split "amix" into terms that we will evaluate using MoG
+            # vs FFT.
+            vv = amix.var[:,0,0] + amix.var[:,1,1]
+            nsigma = 3.
+            # Terms that will wrap-around significantly...
+            I = (np.sqrt(vv) * nsigma > pW)
+            if np.sum(I):
+                print('Evaluating', np.sum(I), 'terms as MoGs')
+                ## Yuck, re-evaluate affine profile using 'px,py' vs 'mux,muy'
+                gmix = self._getAffineProfile(img, px, py)
+                mogmix = mp.MixtureOfGaussians(gmix.amp[I], gmix.mean[I,:],
+                                               gmix.var[I,:,:])
+                I = np.logical_not(I)
+                fftmix = mp.MixtureOfGaussians(amix.amp[I], amix.mean[I,:],
+                                               amix.var[I,:,:])
+            
+        Fsum = fftmix.getFourierTransform(v, w)
+
         if do_fft_timing:
             t2 = CpuMeas()
 
@@ -658,6 +697,7 @@ class ProfileGalaxy(object):
             if do_fft_timing:
                 t0 = CpuMeas()
 
+            #print('iFFT size', pH,pW)
             G = np.fft.irfft2(Fsum * P, s=(pH,pW))
 
             if do_fft_timing:
@@ -730,6 +770,11 @@ class ProfileGalaxy(object):
             fft_timing.append((timing_id, 'get_unit_patch_finished', CpuMeas().cpu_seconds_since(tpatch),
                                (self,)))
 
+        if mogmix is not None:
+            mogpatch = run_mog(amix=mogmix)
+            assert(mogpatch.patch.shape == G.shape)
+            G += mogpatch.patch
+            
         return Patch(ix0, iy0, G)
                     
 
