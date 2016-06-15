@@ -25,6 +25,9 @@ from .cache import *
 from .patch import Patch, add_patches
 from .basics import SingleProfileSource, BasicSource
 
+# DEBUG
+import pylab as plt
+
 _galcache = Cache(maxsize=10000)
 def get_galaxy_cache():
     return _galcache
@@ -267,6 +270,10 @@ class Galaxy(MultiParams, SingleProfileSource):
 
 ps_debug = None
 
+def set_ps_debug(ps):
+    global ps_debug
+    ps_debug = ps
+
 do_fft_timing = False
 if do_fft_timing:
     from astrometry.util.ttime import *
@@ -361,10 +368,6 @@ class ProfileGalaxy(object):
         extent: if not None, [x0,x1,y0,y1], where the range to render
         is [x0, x1), [y0,y1).
         '''
-
-        #####
-        global psfft
-
         if do_fft_timing:
             global fft_timing
             global fft_timing_id
@@ -417,7 +420,7 @@ class ProfileGalaxy(object):
         # cmix = amix.convolve(psfmix)
         # return None
 
-        def run_mog(amix=None):
+        def run_mog(amix=None, mm=None):
             # img, px, py, psf, modelMask, x0, x1, y0, y1,
             # minval, exactExtent
             if amix is None:
@@ -427,20 +430,23 @@ class ProfileGalaxy(object):
             psfmix = psf.getMixtureOfGaussians(px=px, py=py)
             cmix = amix.convolve(psfmix)
 
-            print('MoG galaxy: modelMask:', (modelMask.shape if modelMask is not None else 'no'))
+            if mm is None:
+                mm = modelMask
+
+            print('MoG galaxy: mm:', (mm.shape if mm is not None else 'no'))
             
             # print('galaxy affine mixture:', amix)
             # print('psf mixture:', psfmix)
             # print('convolved mixture:', cmix)
             # print('_realGetUnitFluxModelPatch: extent', x0,x1,y0,y1)
-            if modelMask is None:
+            if mm is None:
                 return mp.mixture_to_patch(cmix, x0, x1, y0, y1, minval,
                                            exactExtent=(extent is not None))
             else:
                 # The convolved mixture *already* has the px,py offset added
                 # (via px,py to amix) so set px,py=0,0 in this call.
-                p = cmix.evaluate_grid_masked(x0, y0, modelMask.patch, 0., 0.)
-                assert(p.shape == modelMask.shape)
+                p = cmix.evaluate_grid_masked(x0, y0, mm.patch, 0., 0.)
+                assert(p.shape == mm.shape)
                 return p
 
         
@@ -640,11 +646,8 @@ class ProfileGalaxy(object):
                                (haveExtent,)))
 
         if False:
-            # for fakedx in []:#0]:#, 1, 10]:
-
             amix2 = self._getAffineProfile(img, mux + fakedx, muy)
             Fsum2 = amix2.getFourierTransform(v, w)
-
             plt.clf()
             plt.subplot(3,3,1)
             plt.imshow(Fsum2.real, interpolation='nearest', origin='lower')
@@ -666,7 +669,6 @@ class ProfileGalaxy(object):
             plt.imshow((Fsum2 * P).imag,
                        interpolation='nearest', origin='lower')
             plt.title('Galaxy * PSF FFT')
-
             plt.subplot(3,3,7)
             plt.imshow(np.fft.irfft2(Fsum2, s=(pH,pW)),
                        interpolation='nearest', origin='lower')
@@ -679,11 +681,8 @@ class ProfileGalaxy(object):
             plt.imshow(np.fft.irfft2(Fsum2*P, s=(pH,pW)),
                        interpolation='nearest', origin='lower')
             plt.title('iFFT Galaxy*PSF')
-            
             plt.suptitle('dx = %i pixel' % fakedx)
             psfft.savefig()
-
-        
         
         if haveExtent:
 
@@ -699,7 +698,7 @@ class ProfileGalaxy(object):
 
             #print('iFFT size', pH,pW)
             G = np.fft.irfft2(Fsum * P, s=(pH,pW))
-
+            
             if do_fft_timing:
                 t1 = CpuMeas()
                 fft_timing.append((timing_id, 'irfft2', t1.cpu_seconds_since(t0),
@@ -771,9 +770,43 @@ class ProfileGalaxy(object):
                                (self,)))
 
         if mogmix is not None:
-            mogpatch = run_mog(amix=mogmix)
+            mogpatch = run_mog(amix=mogmix,
+                               mm=Patch(ix0,iy0,np.ones(G.shape,bool)))
             assert(mogpatch.patch.shape == G.shape)
+            if ps_debug is not None:
+                plt.clf()
+                mogh,mogw = mogpatch.shape
+                gh,gw = G.shape
+                xlo = min(mogpatch.x0, ix0)
+                xhi = max(mogpatch.x0 + mogw, ix0 + gw)
+                ylo = min(mogpatch.y0, iy0)
+                yhi = max(mogpatch.y0 + mogh, iy0 + gh)
+                ax = [xlo,xhi,ylo,yhi]
+                plt.subplot(2,2,1)
+                plt.imshow(mogpatch.patch, extent=mogpatch.getExtent(),
+                           interpolation='nearest', origin='lower',
+                           cmap='gray')
+                plt.axis(ax)
+                plt.title('MoG')
+                plt.subplot(2,2,2)
+                plt.imshow(G, extent=[ix0,ix0+gw,iy0,iy0+gh],
+                           interpolation='nearest', origin='lower',
+                           cmap='gray')
+                plt.axis(ax)
+                plt.title('FFT')
+                plt.subplot(2,2,3)
+                if modelMask is not None:
+                    plt.imshow(modelMask.patch,
+                               extent=modelMask.getExtent(),
+                               interpolation='nearest', origin='lower',
+                               cmap='gray', vmin=0, vmax=1)
+                    plt.axis(ax)
+                    plt.title('modelMask')
+                plt.suptitle('tim: %s' % (img))
+                ps_debug.savefig()
+            
             G += mogpatch.patch
+
             
         return Patch(ix0, iy0, G)
                     
