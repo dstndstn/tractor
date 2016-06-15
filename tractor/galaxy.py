@@ -383,7 +383,9 @@ class ProfileGalaxy(object):
 
         if modelMask is not None:
             x0,y0 = modelMask.x0, modelMask.y0
-        elif extent is None:
+        elif extent is not None:
+            x0,x1,y0,y1 = extent
+        else:
             # find overlapping pixels to render
             (outx, inx) = get_overlapping_region(
                 int(np.floor(px-halfsize)), int(np.ceil(px+halfsize+1)),
@@ -393,15 +395,13 @@ class ProfileGalaxy(object):
                 0, img.getHeight())
             if inx == [] or iny == []:
                 # no overlap
-
                 if do_fft_timing:
-                    fft_timing.append((timing_id, 'no_overlap', CpuMeas().cpu_seconds_since(tpatch)))
-
+                    fft_timing.append((timing_id, 'no_overlap',
+                                       CpuMeas().cpu_seconds_since(tpatch)))
                 return None
             x0,x1 = outx.start, outx.stop
             y0,y1 = outy.start, outy.stop
-        else:
-            x0,x1,y0,y1 = extent
+
         psf = img.getPsf()
         
         # We have two methods of rendering profile galaxies: If the
@@ -412,33 +412,23 @@ class ProfileGalaxy(object):
         # FFT of the galaxy, and IFFT back to get the rendered
         # profile.
 
+        # The "HybridPSF" class is just a marker to indicate whether this
+        # code should treat the PSF as a hybrid.
         from tractor.psf import HybridPSF
         hybrid = isinstance(psf, HybridPSF)
 
-        # amix = self._getAffineProfile(img, px, py)
-        # psfmix = psf.getMixtureOfGaussians(px=px, py=py)
-        # cmix = amix.convolve(psfmix)
-        # return None
-
         def run_mog(amix=None, mm=None):
-            # img, px, py, psf, modelMask, x0, x1, y0, y1,
-            # minval, exactExtent
+            ''' This runs the mixture-of-Gaussians convolution method.
+            '''
             if amix is None:
                 amix = self._getAffineProfile(img, px, py)
+            if mm is None:
+                mm = modelMask
 
             # now convolve with the PSF, analytically
             psfmix = psf.getMixtureOfGaussians(px=px, py=py)
             cmix = amix.convolve(psfmix)
 
-            if mm is None:
-                mm = modelMask
-
-            print('MoG galaxy: mm:', (mm.shape if mm is not None else 'no'))
-            
-            # print('galaxy affine mixture:', amix)
-            # print('psf mixture:', psfmix)
-            # print('convolved mixture:', cmix)
-            # print('_realGetUnitFluxModelPatch: extent', x0,x1,y0,y1)
             if mm is None:
                 return mp.mixture_to_patch(cmix, x0, x1, y0, y1, minval,
                                            exactExtent=(extent is not None))
@@ -448,7 +438,6 @@ class ProfileGalaxy(object):
                 p = cmix.evaluate_grid_masked(x0, y0, mm.patch, 0., 0.)
                 assert(p.shape == mm.shape)
                 return p
-
         
         if hasattr(psf, 'getMixtureOfGaussians') and not hybrid:
             return run_mog()
@@ -480,16 +469,10 @@ class ProfileGalaxy(object):
             # print('mh,mw', mh,mw, 'sourceout?', sourceOut)
             
             if sourceOut:
-
                 if hybrid:
                     return run_mog()
-                
-                # FIXME -- could also *think* about switching to a
-                # Gaussian approximation when very far from the source
-                # center...
-                #
-                #print('modelMask does not contain source center!  Fetching bigger model...')
-                # If the source is *way* outside the patch, return zero.
+
+                # Yuck
                 neardx,neardy = 0., 0.
                 if px < x0:
                     neardx = x0 - px
@@ -501,11 +484,10 @@ class ProfileGalaxy(object):
                     neardy = py - y1
                 nearest = np.hypot(neardx, neardy)
                 if nearest > self.getRadius():
-
                     if do_fft_timing:
-                        fft_timing.append((timing_id, 'source_way_outside', CpuMeas().cpu_seconds_since(tpatch)))
+                        fft_timing.append((timing_id, 'source_way_outside',
+                                        CpuMeas().cpu_seconds_since(tpatch)))
                     return None
-
                 # how far is the furthest point from the source center?
                 farw = max(abs(x0 - px), abs(x1 - px))
                 farh = max(abs(y0 - py), abs(y1 - py))
@@ -527,25 +509,21 @@ class ProfileGalaxy(object):
                     bigMask = np.zeros((bigh,bigw), bool)
                     bigMask[boffy:boffy+mh, boffx:boffx+mw] = modelMask.patch
                 bigMask = Patch(bigx0, bigy0, bigMask)
-
                 if do_fft_timing:
                     fft_timing.append((timing_id, 'calling_sourceout', None))
                     t0 = CpuMeas()
-
                 # print('Recursing:', self, ':', (mh,mw), 'to', (bigh,bigw))
                 bigmodel = self._realGetUnitFluxModelPatch(
                     img, px, py, minval, extent=None, modelMask=bigMask)
-
                 if do_fft_timing:
                     t1 = CpuMeas()
-                    fft_timing.append((timing_id, 'sourceout', t1.cpu_seconds_since(t0),
+                    fft_timing.append((timing_id, 'sourceout',
+                                       t1.cpu_seconds_since(t0),
                                        (bigMask.shape, (mh,mw))))
-
                 return Patch(x0, y0,
                              bigmodel.patch[boffy:boffy+mh, boffx:boffx+mw])
             
             halfsize = max(mh/2., mw/2.)
-
             psfh,psfw = psf.shape
             halfsize = max(halfsize, max(psfw/2., psfh/2.))
 
@@ -554,22 +532,10 @@ class ProfileGalaxy(object):
 
         P,(cx,cy),(pH,pW),(v,w) = psf.getFourierTransform(px, py, halfsize)
 
-        #print('Computing', self, ': halfsize=', halfsize, 'FFT', (pH,pW))
-        
         if do_fft_timing:
             t1 = CpuMeas()
             fft_timing.append((timing_id, 'psf_fft', t1.cpu_seconds_since(t0),
                                (haveExtent, halfsize)))
-
-        # print('PSF Fourier transform size:', P.shape)
-        # print('Padded size:', pH,pW)
-        # print('PSF center in padded image:', cx,cy)
-        # print('Source center px,py', px,py)
-
-        # One example:
-        # pH,pW = (256, 256)
-        # P.shape = (256, 129)
-        # cx,cy = (127, 127)
         
         dx = px - cx
         dy = py - cy
@@ -577,11 +543,9 @@ class ProfileGalaxy(object):
             # the Patch we return *must* have this origin.
             ix0 = x0
             iy0 = y0
-
             # Put the difference into the galaxy FFT.
             mux = dx - ix0
             muy = dy - iy0
-
             # ASSUME square PSF
             assert(pH == pW)
             psfh,psfw = psf.shape
@@ -592,9 +556,9 @@ class ProfileGalaxy(object):
             if abs(mux) >= psfmargin or abs(muy) >= psfmargin:
                 # Wrap-around is possible (likely).  Compute a shifted image
                 # and then copy it into the result.
-                print('Wrap-around possible/likely')
                 gx0 = int(np.round(mux))
                 gy0 = int(np.round(muy))
+                print('Wrap-around possible/likely:', mux, muy, 'vs', psfmargin, '->', gx0,gy0)
                 mux -= gx0
                 muy -= gy0
                 
@@ -602,7 +566,6 @@ class ProfileGalaxy(object):
             # Put the integer portion of the offset into Patch x0,y0
             ix0 = int(np.round(dx))
             iy0 = int(np.round(dy))
-
             # Put the subpixel portion into the galaxy FFT.
             mux = dx - ix0
             muy = dy - iy0
@@ -611,7 +574,6 @@ class ProfileGalaxy(object):
             t0 = CpuMeas()
         
         amix = self._getAffineProfile(img, mux, muy)
-
         fftmix = amix
         mogmix = None
         
@@ -626,22 +588,25 @@ class ProfileGalaxy(object):
             # Terms that will wrap-around significantly...
             I = (np.sqrt(vv) * nsigma > pW)
             if np.sum(I):
-                print('Evaluating', np.sum(I), 'terms as MoGs')
-                ## Yuck, re-evaluate affine profile using 'px,py' vs 'mux,muy'
+                #print('Evaluating', np.sum(I), 'terms as MoGs')
+                # Yuck, re-evaluate affine profile using 'px,py' vs 'mux,muy'
                 gmix = self._getAffineProfile(img, px, py)
                 mogmix = mp.MixtureOfGaussians(gmix.amp[I], gmix.mean[I,:],
                                                gmix.var[I,:,:])
-                I = np.logical_not(I)
+            I = np.logical_not(I)
+            if np.sum(I):
                 fftmix = mp.MixtureOfGaussians(amix.amp[I], amix.mean[I,:],
                                                amix.var[I,:,:])
-            
-        Fsum = fftmix.getFourierTransform(v, w)
+            else:
+                fftmix = None
+
+        if fftmix is not None:
+            Fsum = fftmix.getFourierTransform(v, w)
 
         if do_fft_timing:
             t2 = CpuMeas()
-
-            fft_timing.append((timing_id, 'get_affine', t1.cpu_seconds_since(t0),
-                               (haveExtent,)))
+            fft_timing.append((timing_id, 'get_affine',
+                               t1.cpu_seconds_since(t0),(haveExtent,)))
             fft_timing.append((timing_id, 'get_ft', t2.cpu_seconds_since(t1),
                                (haveExtent,)))
 
@@ -683,40 +648,30 @@ class ProfileGalaxy(object):
             plt.title('iFFT Galaxy*PSF')
             plt.suptitle('dx = %i pixel' % fakedx)
             psfft.savefig()
-        
-        if haveExtent:
 
-            if False:
-                plt.clf()
-                plt.imshow(np.fft.irfft2(Fsum * P, s=(pH,pW)),
-                           interpolation='nearest', origin='lower')
-                plt.title('iFFT in PSF shape')
-                psfft.savefig()
+        if do_fft_timing:
+            t0 = CpuMeas()
 
-            if do_fft_timing:
-                t0 = CpuMeas()
-
-            #print('iFFT size', pH,pW)
+        if fftmix is not None:
             G = np.fft.irfft2(Fsum * P, s=(pH,pW))
+        else:
+            G = np.zeros((pH,pW), np.float32)
+        
+        if do_fft_timing:
+            t1 = CpuMeas()
+            fft_timing.append((timing_id, 'irfft2',
+                          t1.cpu_seconds_since(t0), (haveExtent, (pH,pW))))
             
-            if do_fft_timing:
-                t1 = CpuMeas()
-                fft_timing.append((timing_id, 'irfft2', t1.cpu_seconds_since(t0),
-                                   (haveExtent, (pH,pW))))
-            
-
+        if haveExtent:
             gh,gw = G.shape
-
             if gx0 != 0 or gy0 != 0:
                 #print('gx0,gy0', gx0,gy0)
                 yi,yo = get_overlapping_region(-gy0, -gy0+mh-1, 0, gh-1)
                 xi,xo = get_overlapping_region(-gx0, -gx0+mw-1, 0, gw-1)
-
                 # shifted
                 shG = np.zeros((mh,mw), G.dtype)
                 shG[yo,xo] = G[yi,xi]
                 G = shG
-            
             if gh > mh or gw > mw:
                 G = G[:mh,:mw]
             if modelMask is not None:
@@ -725,33 +680,6 @@ class ProfileGalaxy(object):
                 assert(G.shape == (mh,mw))
             
         else:
-            #print('iFFT', (pW,pH))
-
-            # psfim = np.fft.irfft2(P)
-            # print('psf iFFT', psfim.shape, psfim.sum())
-            # psfim /= psfim.sum()
-            # xx,yy = np.meshgrid(np.arange(pW), np.arange(pH))
-            # print('centroid', np.sum(psfim*xx), np.sum(psfim*yy))
-
-            if do_fft_timing:
-                t0 = CpuMeas()
-
-            G = np.fft.irfft2(Fsum * P, s=(pH,pW))
-
-            if do_fft_timing:
-                t1 = CpuMeas()
-                fft_timing.append((timing_id, 'irfft2_b', t1.cpu_seconds_since(t0),
-                                   (haveExtent, (pH,pW))))
-
-            # print('Evaluating iFFT with shape', pH,pW)
-            # print('G shape:', G.shape)
-
-            if False:
-                plt.clf()
-                plt.imshow(G, interpolation='nearest', origin='lower')
-                plt.title('iFFT in padded PSF shape')
-                psfft.savefig()
-            
             # Clip down to suggested "halfsize"
             if x0 > ix0:
                 G = G[:,x0 - ix0:]
@@ -766,12 +694,15 @@ class ProfileGalaxy(object):
                 G = G[:y1-iy0,:]
 
         if do_fft_timing:
-            fft_timing.append((timing_id, 'get_unit_patch_finished', CpuMeas().cpu_seconds_since(tpatch),
-                               (self,)))
+            fft_timing.append((timing_id, 'get_unit_patch_finished',
+                               CpuMeas().cpu_seconds_since(tpatch), (self,)))
 
         if mogmix is not None:
-            mogpatch = run_mog(amix=mogmix,
-                               mm=Patch(ix0,iy0,np.ones(G.shape,bool)))
+            if haveExtent:
+                mogpatch = run_mog(amix=mogmix)
+            else:
+                mogpatch = run_mog(amix=mogmix,
+                                   mm=Patch(ix0,iy0,np.ones(G.shape,bool)))
             assert(mogpatch.patch.shape == G.shape)
             if ps_debug is not None:
                 plt.clf()
@@ -806,7 +737,6 @@ class ProfileGalaxy(object):
                 ps_debug.savefig()
             
             G += mogpatch.patch
-
             
         return Patch(ix0, iy0, G)
                     
