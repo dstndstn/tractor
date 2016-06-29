@@ -1,0 +1,104 @@
+\documentclass[letterpaper]{article}
+\usepackage{amssymb, amsmath}
+\usepackage{hyperref}
+
+\newcommand{\likelihood}{\mathcal{L}}
+\newcommand{\dd}{\partial}
+\newcommand{\var}{\textrm{var}}
+
+\newcommand{\niceurl}[1]{\mbox{\href{#1}{\textsl{#1}}}}
+
+\begin{document}
+
+\title{Uncertainty estimates in \emph{The Tractor}}
+\author{Dustin Lang}
+\date{\today}
+
+\maketitle
+
+\section{Uncertainty estimates}
+
+The uncertainty estimates produced by \emph{The Tractor} are related
+to the Cram\'er--Rao bound.  Specifically, the Cram\'er--Rao bound is
+a lower bound on the variance of any unbiased estimator $\hat{\theta}$:
+\begin{equation}
+\var(\hat{\theta}) \ge \displaystyle\frac{1}{I(\theta)}
+\end{equation}
+where $I(\theta)$ is the Fisher information,
+\begin{align}
+  I(\theta) &= E_{x}\left[ \left( \frac{\dd \log \likelihood(x | \theta)}{\dd \theta} \right)^2 \right] \\
+  & = - E_{x}\left[ \frac{\dd^2 \log \likelihood(x | \theta)}{\dd \theta^2} \right]
+\end{align}
+where $\likelihood(x | \theta)$ is the likelihood of the data $x$ given
+the parameter we are estimating, $\theta$,
+as outlined in the Wikipedia articles.\footnote{%
+  \niceurl{https://en.wikipedia.org/wiki/Cram\%C3\%A9r\%E2\%80\%93Rao\_bound}
+  and
+  \niceurl{https://en.wikipedia.org/wiki/Fisher\_information}}
+
+
+In the case of \emph{The Tractor}, the likelihood is based on a simple
+independent Gaussian noise model
+\begin{equation}
+\likelihood(x | \theta) = \exp\left(-\sum_i \frac{(m(\theta)_i - x_i)^2}{2 \sigma_i^2} \right)
+\end{equation}
+where $m(\theta)$ is our pixel-space model prediction of the
+appearance of an astronomical object in an image, given model
+parameters $\theta$, and the observed pixel values are $x_i$.  The sum
+is over pixels $i$, possibly in several overlapping images, and
+$\sigma_i$ are the per-pixel noise values.
+
+The log likelihood is trivially
+\begin{equation}
+\log \likelihood(x | \theta) = -\sum_i \frac{(m(\theta)_i - x_i)^2}{2 \sigma_i^2}
+\end{equation}
+with first derivative
+\begin{equation}
+\frac{\dd}{\dd \theta} \log \likelihood(x | \theta) = - \sum_i \frac{m(\theta)_i - x_i}{\sigma_i} \frac{1}{\sigma_i} \frac{\dd}{\dd \theta} m(\theta)_i
+\quad ,
+\end{equation}
+which should equal zero when we have correctly maximized the likelihood.
+The second derivative is
+\begin{equation}
+\frac{\dd^2}{\dd \theta^2} \log \likelihood(x | \theta) = - \sum_i \left[
+  \frac{m(\theta)_i - x_i}{\sigma_i} \frac{1}{\sigma_i} \frac{\dd^2}{\dd \theta^2} m(\theta)_i
+  + \left( \frac{1}{\sigma_i} \frac{\dd}{\dd \theta} m(\theta)_i \right)^2
+\right]
+\quad ,
+\end{equation}
+where the first term is zero.
+
+Returning to the Cram\'er--Rao bound, we have
+\begin{align}
+\frac{1}{\var(\hat{\theta})} \le 
+& - E_{x}\left[ \frac{\dd^2 \log \likelihood(x | \theta)}{\dd \theta^2} \right]
+\end{align}
+and since our second derivative is independent of $x$, the expectation
+collapses and we get
+\begin{align}
+\frac{1}{\var(\hat{\theta})} & \le 
+  \sum_i \left( \frac{1}{\sigma_i} \frac{\dd}{\dd \theta} m(\theta)_i \right)^2
+  \quad ,
+\end{align}
+which is the inverse-variance estimate we use in \emph{The Tractor}.
+
+Now, the derivative $\frac{\dd}{\dd \theta} m(\theta)_i$ is just the
+derivative of the pixel-space model prediction with respect to the
+parameter; we have to compute this (many times at different $\theta$)
+during the optimization.
+
+The Cram\'er--Rao bound is the smallest variance an unbiased estimator
+can achieve.  Since in \emph{The Tractor} we are working in likelihood
+space, we can actually expect to achieve the bound.
+
+
+
+
+
+% According to Wikipedia, refs are
+%
+% Cramér, Harald (1946). Mathematical Methods of Statistics. Princeton, NJ: Princeton Univ. Press. ISBN 0-691-08004-6. OCLC 185436716.
+%
+% Rao, Calyampudi Radakrishna (1945). "Information and the accuracy attainable in the estimation of statistical parameters". Bulletin of the Calcutta Mathematical Society 37: 81–89. MR 0015748.
+
+\end{document}
