@@ -72,8 +72,9 @@ Returning to the Cram\'er--Rao bound, we have
 \begin{align}
 \frac{1}{\var(\hat{\theta})} \le 
 & - E_{x}\left[ \frac{\dd^2 \log \likelihood(x | \theta)}{\dd \theta^2} \right]
+\label{eq:secondderiv}
 \end{align}
-and since our second derivative is independent of $x$, the expectation
+and since our second derivative (equation \ref{eq:secondderiv}) is independent of $x$, the expectation
 collapses and we get
 \begin{align}
 \frac{1}{\var(\hat{\theta})} & \le 
@@ -82,14 +83,24 @@ collapses and we get
 \end{align}
 which is the inverse-variance estimate we use in \emph{The Tractor}.
 
-Now, the derivative $\frac{\dd}{\dd \theta} m(\theta)_i$ is just the
+The derivative $\displaystyle\frac{\dd}{\dd \theta} m(\theta)_i$ is just the
 derivative of the pixel-space model prediction with respect to the
 parameter; we have to compute this (many times at different $\theta$)
 during the optimization.
 
 The Cram\'er--Rao bound is the smallest variance an unbiased estimator
 can achieve.  Since in \emph{The Tractor} we are working in likelihood
-space, we can actually expect to achieve the bound.
+space, we can actually expect to achieve this bound.
+
+In the case of estimating the flux of a source, the derivative of the
+model with respect to flux is just the profile of the model, in
+zeropoint-scaled image counts.  For point sources, this means that the
+uncertainty estimate we produce is based entirely upon the PSF model,
+the photometric calibration, and the per-pixel error estimates
+$\sigma_i$.  Also notice that the inverse-variance is computed by
+summing over all pixels, so the error estimates on our flux estimates
+if we have multiple images simply sum in inverse-variance, as expected
+for Gaussian estimates.
 
 
 
