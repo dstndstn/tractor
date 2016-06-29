@@ -38,7 +38,7 @@ as outlined in the Wikipedia articles.\footnote{%
 
 
 In the case of \emph{The Tractor}, the likelihood is based on a simple
-independent Gaussian noise model
+pixelwise independent Gaussian noise model
 \begin{equation}
 \likelihood(x | \theta) = \exp\left(-\sum_i \frac{(m(\theta)_i - x_i)^2}{2 \sigma_i^2} \right)
 \end{equation}
@@ -66,7 +66,7 @@ The second derivative is
 \right]
 \quad ,
 \end{equation}
-where the first term is zero.
+where the first term is zero at the optimum.
 
 Returning to the Cram\'er--Rao bound, we have
 \begin{align}
@@ -86,7 +86,7 @@ which is the inverse-variance estimate we use in \emph{The Tractor}.
 The derivative $\displaystyle\frac{\dd}{\dd \theta} m(\theta)_i$ is just the
 derivative of the pixel-space model prediction with respect to the
 parameter; we have to compute this (many times at different $\theta$)
-during the optimization.
+during optimization.
 
 The Cram\'er--Rao bound is the smallest variance an unbiased estimator
 can achieve.  Since in \emph{The Tractor} we are working in likelihood
