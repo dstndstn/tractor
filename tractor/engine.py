@@ -375,6 +375,9 @@ class Tractor(MultiParams):
             return [None] * src.numberOfParams()
 
         #print('getting param derivs for', src)
+
+        print('_getSourceDerivatives:', src, img, kwargs)
+
         derivs = src.getParamDerivatives(img, modelMask=mask, **kwargs)
         #print('done getting param derivs for', src)
 

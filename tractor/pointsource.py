@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 
 from .utils import MultiParams
@@ -139,13 +140,13 @@ class PointSource(MultiParams, SingleProfileSource):
         if derivs:
             patches = self.getUnitFluxModelPatch(img, minval=minval, derivs=True,
                                                  modelMask=modelMask)
-            #print 'minval=', minval, 'Patches:', patches
+            #print('minval=', minval, 'Patches:', patches)
             if patches is None:
                 return [None]*self.numberOfParams()
             if not isinstance(patches, tuple):
                 patch0 = patches
-                #print 'img:', img
-                #print 'counts0:', counts0
+                #print('img:', img)
+                #print('counts0:', counts0)
             else:
                 patch0, patchdx, patchdy = patches
 
@@ -168,6 +169,8 @@ class PointSource(MultiParams, SingleProfileSource):
 
                 # Convert x,y derivatives to Position derivatives
 
+                print('Computing ptsrc deriv via patchdx,patchdy')
+
                 px,py = wcs.positionToPixel(pos, self)
                 cd = wcs.cdAtPixel(px, py)
                 cdi = np.linalg.inv(cd)
@@ -183,6 +186,9 @@ class PointSource(MultiParams, SingleProfileSource):
             else:
                 psteps = pos.getStepSizes(img)
                 pvals = pos.getParams()
+
+                print('Computing ptsrc deriv via stepping params by', psteps)
+
                 for i,pstep in enumerate(psteps):
                     oldval = pos.setParam(i, pvals[i] + pstep)
                     patchx = self.getUnitFluxModelPatch(img, minval=minval,
