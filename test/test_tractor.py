@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -33,11 +34,11 @@ class TractorTest(unittest.TestCase):
 
         re2 = 7.7
         gal.shape.re = re2
-        print gal
+        print(gal)
         self.assertEqual(shape.re, re2)
         self.assertEqual(gal.shape.re, re2)
-        print gal.subs
-        print shape.vals
+        print(gal.subs)
+        print(shape.vals)
         self.assertEqual(gal.getParams(), [ra, dec, flux, re2, ab, phi])
         self.assertEqual(shape.getParams(), [re2, ab, phi])
 
@@ -65,13 +66,13 @@ class TractorTest(unittest.TestCase):
         for opt in [None]: #, CeresOptimizer()]:
             tr = Tractor([tim1,tim2], [star], optimizer=opt)
             mods = tr.getModelImages()
-            print 'mods:', mods
-            print list(mods)
+            print('mods:', mods)
+            print(list(mods))
             chis = tr.getChiImages()
-            print 'chis:', chis
-            print list(chis)
+            print('chis:', chis)
+            print(list(chis))
             lnp = tr.getLogProb()
-            print 'lnp', lnp
+            print('lnp', lnp)
     
             tr.freezeParam('images')
             X = tr.optimize()
@@ -79,13 +80,13 @@ class TractorTest(unittest.TestCase):
             # print 'dlnp', dlnp
             # print 'x', x
             # print 'a', a
-            print 'opt result:', X
+            print('opt result:', X)
             
             star.brightness.setParams([100.])
             star.freezeAllBut('brightness')
-            print 'star', star
+            print('star', star)
             tr.optimize_forced_photometry()
-            print 'star', star
+            print('star', star)
 
         
 if __name__ == '__main__':

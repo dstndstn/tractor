@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -17,9 +18,9 @@ N = 1000
 a = np.random.uniform(size=N)
 assert(len(amps) == 2)
 z = (a > amps[0]) * 1
-print 'z', np.unique(z)
-print 'n = 0:', np.sum(z == 0)
-print 'n = 1:', np.sum(z == 1)
+print('z', np.unique(z))
+print('n = 0:', np.sum(z == 0))
+print('n = 1:', np.sum(z == 1))
 X = np.random.normal(size=N) * stds[z] + mus[z]
 
 K = 2
@@ -29,11 +30,11 @@ vv = np.array([1., 2.])
 
 for i in range(3):
     r = em_fit_1d_samples(X, ww, mm, vv)
-    print 'result:', r
-    print 'fit / true:'
-    print 'A', ww, amps
-    print 'mu', mm, mus
-    print 'std', np.sqrt(vv), stds
+    print('result:', r)
+    print('fit / true:')
+    print('A', ww, amps)
+    print('mu', mm, mus)
+    print('std', np.sqrt(vv), stds)
 
 plt.clf()
 n,b,p = plt.hist(X, 50, histtype='step', color='b')

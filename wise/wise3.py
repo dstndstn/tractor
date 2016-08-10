@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
@@ -49,7 +50,7 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     band = 'w%i' % bandnum
     wisedatadirs = opt.wisedatadirs
 
-    print 'RA,Dec range', ralo, rahi, declo, dechi
+    print('RA,Dec range', ralo, rahi, declo, dechi)
 
     roipoly = np.array([(ralo,declo),(ralo,dechi),(rahi,dechi),(rahi,declo)])
 
@@ -60,13 +61,13 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         else:
             ifn = indexfn
         T = fits_table(ifn, columns=['ra','dec','scan_id','frame_num', 'band'])
-        print 'Read', len(T), 'from WISE index', ifn
+        print('Read', len(T), 'from WISE index', ifn)
 
         # Add a margin around the CRVAL so we catch all fields that touch the RA,Dec box.
         # Magic numbers 1016 * 2.75 = image size * pixel scale of W1 = FOV
         margin = (1016. * 2.75 * np.sqrt(2.) / 3600.) / 2.
         cosdec = np.cos(np.deg2rad((declo + dechi) / 2.))
-        print 'Margin:', margin, 'degrees'
+        print('Margin:', margin, 'degrees')
 
         r0 = ralo - margin/cosdec
         r1 = rahi + margin/cosdec
@@ -74,10 +75,10 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         d1 = dechi + margin
 
         I = np.flatnonzero(T.band == bandnum)
-        print len(I), 'band', band
+        print(len(I), 'band', band)
         T.cut(I)
         I = np.flatnonzero((T.ra > r0) * (T.ra < r1) * (T.dec > d0) * (T.dec < d1))
-        print len(I), 'overlap RA,Dec box'
+        print(len(I), 'overlap RA,Dec box')
         T.cut(I)
         T.tag = [tag] * len(T)
 
@@ -97,10 +98,10 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 
         fns = []
         for sid,fnum in zip(T.scan_id, T.frame_num):
-            print 'scan,frame', sid, fnum
+            print('scan,frame', sid, fnum)
 
             fn = get_l1b_file(d, sid, fnum, bandnum)
-            print '-->', fn
+            print('-->', fn)
             assert(os.path.exists(fn))
             fns.append(fn)
         T.filename = np.array(fns)
@@ -122,7 +123,7 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
             corners.append(rd)
             ii.append(i)
 
-    print 'Found', len(wcses), 'overlapping'
+    print('Found', len(wcses), 'overlapping')
     I = np.array(ii)
     T.cut(I)
 
@@ -132,7 +133,7 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     if ps:
         r0,r1 = corners[:,0].min(), corners[:,0].max()
         d0,d1 = corners[:,1].min(), corners[:,1].max()
-        print 'RA,Dec extent', r0,r1, d0,d1
+        print('RA,Dec extent', r0,r1, d0,d1)
 
         plot = Plotstuff(outformat='png', ra=(r0+r1)/2., dec=(d0+d1)/2., width=d1-d0, size=(800,800))
         out = plot.outline
@@ -151,12 +152,12 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         plot.plot_grid(1, 1, 1, 1)
         pfn = ps.getnext()
         plot.write(pfn)
-        print 'Wrote', pfn
+        print('Wrote', pfn)
 
 
     # Read WISE sources in the ROI
     if opt.wsources is not None:
-        print 'Looking for WISE sources in', opt.wsources
+        print('Looking for WISE sources in', opt.wsources)
     if opt.wsources is not None and os.path.exists(opt.wsources):
         W = fits_table(opt.wsources)
         W.cut((W.ra > ralo) * (W.ra < rahi) * (W.dec > declo) * (W.dec < dechi))
@@ -175,7 +176,7 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         W = wise_catalog_radecbox(ralo, rahi, declo, dechi, cols=cols)
         if opt.wsources is not None:
             W.writeto(opt.wsources)
-            print 'Wrote', opt.wsources
+            print('Wrote', opt.wsources)
         
     return dict(opt100=opt, rd=(ralo,rahi,declo,dechi), T=T, outlines=outlines,
                 wcses=wcses, bandnum=bandnum, band=band, W=W)
@@ -229,13 +230,13 @@ def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
                                      sipwcs=True, constantInvvar=True,
                                      roi=[x0,x1,y0,y1],
                                      zrsigs = [-2, 5])
-        print 'Read', tim
+        print('Read', tim)
 
         # Mask pixels outside the RA,Dec ROI
         if x0 > 0 or y0 > 0 or x1 < W-1 or y1 < H-1:
-            print 'Image was clipped -- masking pixels outside ROI'
+            print('Image was clipped -- masking pixels outside ROI')
             h,w = tim.shape
-            print 'Clipped size:', w,'x',h
+            print('Clipped size:', w,'x',h)
             wcs = tim.getWcs()
             x0,y0 = wcs.getX0Y0()
             XX,YY = np.meshgrid(np.arange(x0, x0+w), np.arange(y0, y0+h))
@@ -267,7 +268,7 @@ def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
     # Read SDSS sources in range.
 
     S = fits_table(opt.sources, columns=['ra','dec'])
-    print 'Read', len(S), 'sources from', opt.sources
+    print('Read', len(S), 'sources from', opt.sources)
 
     margin2 = margin1 * 2.
     cosdec = np.cos(np.deg2rad((d0+d1)/2.))
@@ -275,7 +276,7 @@ def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
     md = margin2
     I = np.flatnonzero((S.ra  > (r0-mr)) * (S.ra  < (r1+mr)) *
                        (S.dec > (d0-md)) * (S.dec < (d1+md)))
-    print 'Reading', len(I), 'in range'
+    print('Reading', len(I), 'in range')
 
     S = fits_table(opt.sources, rows=I,
                    column_map=dict(r_dev='theta_dev',
@@ -301,7 +302,7 @@ def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
                                       fixedComposites=True,
                                       forcePointSources=opt.ptsrc,
                                       useObjcType=True)
-    print 'Created', len(cat), 'Tractor sources'
+    print('Created', len(cat), 'Tractor sources')
     assert(len(cat) == len(S))
 
     tractor = Tractor(tims, cat)
@@ -340,7 +341,7 @@ def stage103(opt=None, ps=None, tractor=None, band=None, bandnum=None,
         # print 'Checking', tim
         I = np.flatnonzero(np.logical_not(np.isfinite(tim.getImage())))
         if len(I):
-            print 'Found', len(I), 'inf pixels in', tim.name
+            print('Found', len(I), 'inf pixels in', tim.name)
             tim.getImage().flat[I] = 0
             iv = tim.getInvvar()
             iv.flat[I] = 0.
@@ -370,7 +371,7 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     W,H = (rahi - ralo) * np.cos(np.deg2rad(dec)) / pixscale, (dechi - declo) / pixscale
     W,H = int(np.ceil(W)), int(np.ceil(H))
     cowcs = Tan(ra, dec, (W+1)/2., (H+1)/2., pixscale, 0., 0., pixscale, W,H)
-    print 'Target WCS:', cowcs
+    print('Target WCS:', cowcs)
 
     tims = tractor.getImages()
 
@@ -383,9 +384,9 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     wsum     = np.zeros((H,W))
     for i,d in enumerate(ims):
         if d is None:
-            print 'No overlap:', tims[i]
-            print 'image shape:', tims[i].shape
-            print '# valid pix:', np.sum(tims[i].invvar > 0)
+            print('No overlap:', tims[i])
+            print('image shape:', tims[i].shape)
+            print('# valid pix:', np.sum(tims[i].invvar > 0))
             continue
         lancsum  += (d.rimg    * d.ww)
         lancsum2 += (d.rimg**2 * d.ww)
@@ -410,7 +411,7 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     coimg1 = coimg
     
     sig = 1./np.sqrt(np.median(coinvvar[coinvvar > 0]))
-    print 'Coadd sig:', sig
+    print('Coadd sig:', sig)
     # Per-pixel std
     coppstd = np.sqrt(lancsum2 / (np.maximum(wsum, tinyw)) - coimg**2)
     coppstd1 = coppstd
@@ -444,14 +445,14 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     coimg = (lancsum / np.maximum(wsum, tinyw))
     coinvvar = wsum
 
-    print 'Second-round coadd:'
+    print('Second-round coadd:')
     sig = 1./np.sqrt(np.median(coinvvar[coinvvar > 0]))
-    print 'Coadd sig:', sig
+    print('Coadd sig:', sig)
     # per-pixel variance
     coppstd = np.sqrt(lancsum2 / (np.maximum(wsum, tinyw)) - coimg**2)
 
     # 2. Apply rchi masks to individual images
-    print 'Applying rchi masks to images...'
+    print('Applying rchi masks to images...')
     tims = tractor.getImages()
 
     args = []
@@ -625,7 +626,7 @@ def stage106(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
     if minFlux is not None:
         minFlux = np.median([tim.sigma1 * minFlux / tim.getPhotoCal().val
                              for tim in tims])
-        print 'minFlux:', minFlux, 'nmgy'
+        print('minFlux:', minFlux, 'nmgy')
 
     goodtims = []
     for tim in tims:
@@ -633,11 +634,11 @@ def stage106(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
         assert(np.all(np.isfinite(tim.getInvvar())))
         #print 'tim', tim.name, 'invvar', tim.getInvvar().min(), tim.getInvvar().max()
         if tim.getInvvar().max() == 0:
-            print 'Dropping tim', tim.name, ': no non-zero invvar pixels'
+            print('Dropping tim', tim.name, ': no non-zero invvar pixels')
             continue
 
         if not np.isfinite(tim.getSky().getValue()):
-            print 'Infinite sky value in', tim.name
+            print('Infinite sky value in', tim.name)
             tim.getSky().setValue(0.)
 
         goodtims.append(tim)
@@ -690,7 +691,7 @@ def stage106(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
             ps.savefig()
         raise
 
-    print 'Forced phot took', Time()-t0
+    print('Forced phot took', Time()-t0)
 
     cat = tractor.catalog
     assert(len(cat) == len(S) + len(UW))
@@ -734,7 +735,7 @@ def get_sip_subwcs(wcs, extent):
     return wcs.get_subimage(int(x0), int(y0), int(x1-x0), int(y1-y0))
 
 def _resample_one((tim, mod, targetwcs, spline)):
-    print 'Resampling', tim.name
+    print('Resampling', tim.name)
     wcs2 = get_sip_subwcs(tim.getWcs().wcs, tim.extent)
     try:
         yo,xo,yi,xi,nil = resample_with_wcs(targetwcs, wcs2, [],[], spline=spline)
@@ -758,8 +759,8 @@ def _resample_one((tim, mod, targetwcs, spline)):
     ok = patch_image(patchimg, tim.invvar > 0,
                      required=tim.rdmask)
     if not ok:
-        print 'WARNING: patching failed.  Image size', patchimg.shape
-        print 'Wanted to patch', np.count_nonzero(tim.rdmask), 'pixels'
+        print('WARNING: patching failed.  Image size', patchimg.shape)
+        print('Wanted to patch', np.count_nonzero(tim.rdmask), 'pixels')
         return None
 
     # Resample
@@ -990,7 +991,7 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     coimg = coimg.copy()
     coinvvar = coinvvar.copy()
     bad = np.flatnonzero(np.logical_not(np.isfinite(coimg)))
-    print 'Zeroing out', len(bad), 'non-finite pixels in coadd'
+    print('Zeroing out', len(bad), 'non-finite pixels in coadd')
     coimg.flat[bad] = 0.0
     coinvvar.flat[bad] = 0.0
 
@@ -1019,7 +1020,7 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
             shared_params=False, **kwa)
         ims0,ims1 = R.ims0, R.ims1
         IV,fs = R.IV, R.fitstats
-        print 'Forced phot on coadd took', Time()-t0
+        print('Forced phot on coadd took', Time()-t0)
     except:
         import traceback
         traceback.print_exc()
@@ -1047,7 +1048,7 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 
         raise
 
-    print 'Sky level in coadd fit:', coim.getSky()
+    print('Sky level in coadd fit:', coim.getSky())
 
     cat3 = cat.copy()
 
@@ -1109,10 +1110,10 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         plt.ylabel('Coadd photometry (mag)')
         ps.savefig()
 
-    print 'SDSS sources:', len(sdss)
-    print 'UW sources:', len(UW)
-    print 'cat2:', len(cat2)
-    print 'cat3:', len(cat3)
+    print('SDSS sources:', len(sdss))
+    print('UW sources:', len(UW))
+    print('cat2:', len(cat2))
+    print('cat3:', len(cat3))
 
     rd = np.array([(s.getPosition().ra, s.getPosition().dec) for s in cat2])
     ra,dec = rd[:,0], rd[:,1]
@@ -1231,8 +1232,8 @@ def stage109(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 
         npix = sum(tim.getInvvar() > 0)
         nparams = tr.numberOfParams()
-        print 'N pixels:', npix
-        print 'N params:', nparams
+        print('N pixels:', npix)
+        print('N params:', nparams)
 
         if npix < nparams:
             cats4.append(tr.getCatalog())
@@ -1245,7 +1246,7 @@ def stage109(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
                                                         sky=True, minFlux=minFlux,
                                                         fitstats=True,
                                                         variance=True)
-        print 'Forced phot on coadd took', Time()-t0
+        print('Forced phot on coadd took', Time()-t0)
         cats4.append(tr.getCatalog())
 
     if ps:
@@ -1300,7 +1301,7 @@ def stage110(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     p0 = np.array(tr.getParams())
     ndim = len(p0)
     nw = 50
-    print 'N params', ndim, 'N walkers', nw
+    print('N params', ndim, 'N walkers', nw)
     sampler = emcee.EnsembleSampler(nw, ndim, tr, threads=8)
     steps = np.array(tr.getStepSizes())
     colscales = tr.getParameterScales()
@@ -1313,7 +1314,7 @@ def stage110(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     pp = pp0
     rstate = None
     for step in range(1001):
-        print 'Taking emcee step', step
+        print('Taking emcee step', step)
         pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
         #print 'lnprobs:', lnp
         alllnp.append(lnp.copy())
@@ -1365,12 +1366,12 @@ def stage204(opt=None, ps=None, tractor=None, band=None, bandnum=None, **kwa):
     minFlux = opt.minflux
     if minFlux is not None:
         minFlux = np.median([tim.sigma1 * minFlux / tim.getPhotoCal().val for tim in tims])
-        print 'minFlux:', minFlux, 'nmgy'
+        print('minFlux:', minFlux, 'nmgy')
 
     t0 = Time()
     ims0,ims1 = tractor.optimize_forced_photometry(minsb=opt.minsb, mindlnp=1.,
                                                    sky=False, minFlux=minFlux)
-    print 'Forced phot took', Time()-t0
+    print('Forced phot took', Time()-t0)
 
 
 def stage304(opt=None, ps=None, tractor=None, band=None, bandnum=None, rd=None, **kwa):
@@ -1388,22 +1389,22 @@ def stage304(opt=None, ps=None, tractor=None, band=None, bandnum=None, rd=None, 
     # I,J,d = match_radec(ra, dec, W.ra, W.dec, 4./3600.)
     # print len(I), 'matches to WISE sources'
     
-    print 'Clustering with radius', opt.wrad, 'arcsec'
+    print('Clustering with radius', opt.wrad, 'arcsec')
     Wrad = opt.wrad / 3600.
     groups,singles = cluster_radec(ra, dec, Wrad, singles=True)
     #print 'Source clusters:', groups
     #print 'Singletons:', singles
-    print 'Source clusters:', len(groups)
-    print 'Singletons:', len(singles)
+    print('Source clusters:', len(groups))
+    print('Singletons:', len(singles))
     
-    print 'Group size histogram:'
+    print('Group size histogram:')
     ng = Counter()
     for g in groups:
         ng[len(g)] += 1
     kk = ng.keys()
     kk.sort()
     for k in kk:
-        print '  ', k, 'sources:', ng[k], 'groups'
+        print('  ', k, 'sources:', ng[k], 'groups')
 
     tims = tractor.images
     tractor.freezeParam('images')
@@ -1411,7 +1412,7 @@ def stage304(opt=None, ps=None, tractor=None, band=None, bandnum=None, rd=None, 
     minFlux = opt.minflux
     if minFlux is not None:
         minFlux = np.median([tim.sigma1 * minFlux / tim.getPhotoCal().val for tim in tims])
-        print 'minFlux:', minFlux, 'nmgy'
+        print('minFlux:', minFlux, 'nmgy')
 
     dpix = opt.wrad / 2.75
 
@@ -1421,7 +1422,7 @@ def stage304(opt=None, ps=None, tractor=None, band=None, bandnum=None, rd=None, 
     
     for gi,X in enumerate(sgroups + groups):
 
-        print 'Group', gi, 'of', NG, 'groups;', len(X), 'sources'
+        print('Group', gi, 'of', NG, 'groups;', len(X), 'sources')
 
         mysrcs = [cat[i] for i in X]
         mytims = []
@@ -1454,7 +1455,7 @@ def stage304(opt=None, ps=None, tractor=None, band=None, bandnum=None, rd=None, 
         ims0,ims1 = subtr.optimize_forced_photometry(minsb=opt.minsb, mindlnp=1.,
                                                      sky=False, minFlux=minFlux,
                                                      rois=myrois)
-        print 'Forced phot took', Time()-t0
+        print('Forced phot took', Time()-t0)
 
 
 def stage305(opt=None, ps=None, tractor=None, band=None, bandnum=None, rd=None, **kwa):
@@ -1466,13 +1467,13 @@ def stage305(opt=None, ps=None, tractor=None, band=None, bandnum=None, rd=None, 
     tractor.thawPathsTo('sky')
 
     for ti,tim in enumerate(tims):
-        print 'Image', ti, 'of', len(tims)
+        print('Image', ti, 'of', len(tims))
 
         subtr = Tractor([tim], cat)
         t0 = Time()
         ims0,ims1 = subtr.optimize_forced_photometry(minsb=opt.minsb, mindlnp=1.,
                                                      sky=True, minFlux=None)
-        print 'Optimizing sky took', Time()-t0
+        print('Optimizing sky took', Time()-t0)
 
 
 def stage306(opt=None, ps=None, tractor=None, band=None, bandnum=None, rd=None, **kwa):
@@ -1493,7 +1494,7 @@ def stage306(opt=None, ps=None, tractor=None, band=None, bandnum=None, rd=None, 
     cat0 = cat.getParams()
 
     for ti,tim in enumerate(tims):
-        print 'Image', ti, 'of', len(tims)
+        print('Image', ti, 'of', len(tims))
 
         cat.setParams(cat0)
 
@@ -1509,9 +1510,9 @@ def stage306(opt=None, ps=None, tractor=None, band=None, bandnum=None, rd=None, 
                 ii.append(i)
             elif x > -margin and x < (W+margin) and y > -margin and y < (H+margin):
                 fsrcs.append(src)
-        print len(srcs), 'in bounds plus', len(fsrcs), 'nearby'
+        print(len(srcs), 'in bounds plus', len(fsrcs), 'nearby')
         subcat = Catalog(*(srcs + fsrcs))
-        print len(subcat), 'in subcat'
+        print(len(subcat), 'in subcat')
         for i in range(len(fsrcs)):
             subcat.freezeParam(len(srcs) + i)
 
@@ -1522,7 +1523,7 @@ def stage306(opt=None, ps=None, tractor=None, band=None, bandnum=None, rd=None, 
         t0 = Time()
         ims0,ims1 = subtr.optimize_forced_photometry(minsb=opt.minsb, mindlnp=1.,
                                                      sky=True, minFlux=None)
-        print 'Forced phot took', Time()-t0
+        print('Forced phot took', Time()-t0)
 
         continue
 
@@ -1583,12 +1584,12 @@ def stage402(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
         cowcs = Tan(ra, dec, (W+1)/2., (H+1)/2.,
                     -pixscale, 0., 0., pixscale,
                     W, H)
-        print 'Target WCS:', cowcs
+        print('Target WCS:', cowcs)
         coadd = np.zeros((H,W))
         comod = np.zeros((H,W))
         con   = np.zeros((H,W), int)
         for i,(tim) in enumerate(tims):
-            print 'coadding', i
+            print('coadding', i)
             # Create sub-WCS
             x0,x1,y0,y1 = tim.extent
             wcs = tim.getWcs().wcs
@@ -1598,7 +1599,7 @@ def stage402(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
             h,w = tim.shape
             wcs2.set_width(w)
             wcs2.set_height(h)
-            print 'wcs2:', wcs2
+            print('wcs2:', wcs2)
             yo,xo,yi,xi,nil = resample_with_wcs(cowcs, wcs2, [], 0, spline=False)
             if yo is None:
                 continue
@@ -1614,7 +1615,7 @@ def stage402(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
         comod /= np.maximum(con, 1)
 
         n = np.median(con)
-        print 'median of', n, 'exposures'
+        print('median of', n, 'exposures')
         mn = np.median(coadd)
         st = tims[0].sigma1 / np.sqrt(n)
 
@@ -1650,14 +1651,14 @@ def stage402(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
             mn = inf['sky']
             st = inf['skysig']
 
-            print 'SDSS image:', tim
+            print('SDSS image:', tim)
             h,w = tim.getImage().shape
             wcs = tim.getWcs()
             wcs.astrans._cache_vals()
             wcs = AsTransWrapper(wcs.astrans, w, h)
             yo,xo,yi,xi,nil = resample_with_wcs(cowcs, wcs, [],[], spline=False)
             if yo is None:
-                print 'WARNING: No overlap with SDSS image?!'
+                print('WARNING: No overlap with SDSS image?!')
             sco = np.zeros((H,W))
             sco[yo,xo] = tim.getImage()[yi,xi]
                                     
@@ -1690,8 +1691,8 @@ def stage404(coadds=None, ps=None, targetrd=None,
     z = fits_table('zans-plates7027-7032-zscan.fits')
     I,J,d = match_radec(z.plug_ra, z.plug_dec, targetrd[0], targetrd[1],
                         1./3600.)
-    print 'N matches', len(I)
-    print 'zans', z[I[0]]
+    print('N matches', len(I))
+    print('zans', z[I[0]])
     z[I[0]].about()
     
     plt.subplots_adjust(hspace=0, wspace=0,
@@ -1700,13 +1701,13 @@ def stage404(coadds=None, ps=None, targetrd=None,
     
     wfn = 'wise-objs-w3.fits'
     W = fits_table(wfn)
-    print 'Read', len(W), 'from', wfn
+    print('Read', len(W), 'from', wfn)
     W.cut((W.ra > r0) * (W.ra < r1) * (W.dec > d0) * (W.dec < d1))
-    print 'Cut to', len(W), 'in RA,Dec box'
+    print('Cut to', len(W), 'in RA,Dec box')
     Wise = W
 
     S.cut((S.ra > r0) * (S.ra < r1) * (S.dec > d0) * (S.dec < d1))
-    print 'Cut to', len(S), 'SDSS'
+    print('Cut to', len(S), 'SDSS')
     sdss = S
 
     #sdss.about()
@@ -1750,20 +1751,20 @@ def stage404(coadds=None, ps=None, targetrd=None,
     # w2b = (w2b, np.median(w2b), 1./np.sqrt(np.median(coiv)))
 
     H,W = si[0].shape
-    print 'Coadd size', W, H
+    print('Coadd size', W, H)
 
     sRGB = np.zeros((H,W,3))
     (im,mn,st) = si
     r = im
-    print 'i-band std', st
+    print('i-band std', st)
     sRGB[:,:,0] = (im - mn) / st
     (im,mn,st) = sr
     g = im
-    print 'r-band std', st
+    print('r-band std', st)
     sRGB[:,:,1] = (im - mn) / st
     (im,mn,st) = sg
     b = im
-    print 'g-band std', st
+    print('g-band std', st)
     sRGB[:,:,2] = (im - mn) / st
 
     if False:
@@ -1846,11 +1847,11 @@ def stage404(coadds=None, ps=None, targetrd=None,
     plt.axis(ax)
     ps.savefig()
 
-    print 'WISE mags: W1', Wise.w1mpro
-    print 'WISE mags: W2', Wise.w2mpro
+    print('WISE mags: W1', Wise.w1mpro)
+    print('WISE mags: W2', Wise.w2mpro)
 
-    print 'x', x
-    print 'y', y
+    print('x', x)
+    print('y', y)
     
     # img = np.clip(wRGB / 10., 0., 1.)
     # plt.clf()
@@ -1890,7 +1891,7 @@ def stage404(coadds=None, ps=None, targetrd=None,
                                   objs=sdss, bands=['r'], nanomaggies=True,
                                   extrabands=[band],
                                   fixedComposites=True, forcePointSources=False)
-    print 'Created', len(cat), 'Tractor sources'
+    print('Created', len(cat), 'Tractor sources')
 
     r,c,f = rcf
     stim,inf = get_tractor_image_dr9(r,c,f, sband, psf='dg', nanomaggies=True)
@@ -1918,11 +1919,11 @@ def stage404(coadds=None, ps=None, targetrd=None,
 
     # WISE, single exposure, model (resampled to coadd wcs)
     for i,tim in enumerate(tims):
-        print '  ', i, tim.name, '# pix', len(np.flatnonzero(tim.invvar))
+        print('  ', i, tim.name, '# pix', len(np.flatnonzero(tim.invvar)))
     tim = tims[0]
-    print 'Catalog:'
+    print('Catalog:')
     for src in cat:
-        print '  ', src
+        print('  ', src)
     tractor = Tractor([tim], cat)
     cat = tractor.catalog
     cat.freezeParamsRecursive('*')
@@ -1945,7 +1946,7 @@ def stage404(coadds=None, ps=None, targetrd=None,
     # plt.xticks([]); plt.yticks([])
     # ps.savefig()
 
-    print 'WISE x0,y0', tim.getWcs().getX0Y0()
+    print('WISE x0,y0', tim.getWcs().getX0Y0())
     x0,y0 = tim.getWcs().getX0Y0()
     # Create sub-WCS
     wcs = tim.getWcs().wcs
@@ -1958,7 +1959,7 @@ def stage404(coadds=None, ps=None, targetrd=None,
 
     yo,xo,yi,xi,nil = resample_with_wcs(cowcs, wcs2, [],[])
     if yo is None:
-        print 'WARNING: No overlap with WISE model?'
+        print('WARNING: No overlap with WISE model?')
     rwmod0 = np.zeros_like(rmodel)
     rwmod1 = np.zeros_like(rmodel)
     rwimg = np.zeros_like(rmodel)
@@ -1984,7 +1985,7 @@ def stage404(coadds=None, ps=None, targetrd=None,
     plt.xticks([]); plt.yticks([])
     ps.savefig()
 
-    print 'band', band
+    print('band', band)
     
     I = np.flatnonzero((CC.name == 'WISE model 2') * (CC.pixscale == fine) *
                        (CC.band == band))
@@ -2031,7 +2032,7 @@ def stage510(S=None, W=None, targetrd=None, **kwa):
     for cat in [1,2,3, 4,5]:
         if cat in [4,5]:
             I,J,d = match_radec(S.ra, S.dec, W.ra, W.dec, 4./3600.)
-            print len(I), 'matches'
+            print(len(I), 'matches')
             S.cut(I)
             W.cut(J)
             if cat == 4:
@@ -2081,12 +2082,12 @@ def stage510(S=None, W=None, targetrd=None, **kwa):
         (r,d) = targetrd
 
         I,J,d = match_radec(Si.ra, S.dec, np.array([r]), np.array([d]), 1./3600.)
-        print 'Matched', len(I)
+        print('Matched', len(I))
         
-        print 'in1:', in1[I]
+        print('in1:', in1[I])
 
-        print 'W1', Si.w1[I], fluxtomag(Si.w1[I])
-        print 'W2', Si.w2[I], fluxtomag(Si.w2[I])
+        print('W1', Si.w1[I], fluxtomag(Si.w1[I]))
+        print('W2', Si.w2[I], fluxtomag(Si.w2[I]))
 
 
 # Plots for LBL talk
@@ -2430,7 +2431,7 @@ def stage701(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
                                                     sky=True, minFlux=minFlux,
                                                     fitstats=True,
                                                     variance=True)
-    print 'Forced phot on coadd took', Time()-t0
+    print('Forced phot on coadd took', Time()-t0)
 
     if ps:
         mod1 = tr.getModelImage(0)
@@ -2517,11 +2518,11 @@ def stage702(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     cat = tractor.getCatalog()
     for src in cat:
         if isinstance(src, FixedCompositeGalaxy):
-            print 'Comp', src.shapeDev.re, src.shapeExp.re
+            print('Comp', src.shapeDev.re, src.shapeExp.re)
         elif isinstance(src, ExpGalaxy):
-            print 'Exp', src.re
+            print('Exp', src.re)
         elif isinstance(src, DevGalaxy):
-            print 'Dev', src.re
+            print('Dev', src.re)
 
     pointsources = []
     
@@ -2546,7 +2547,7 @@ def stage702(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
             else:
                 cati.append(src.copy())
 
-        print 'Changed', nchanged, 'galaxies to point sources'
+        print('Changed', nchanged, 'galaxies to point sources')
         if nchanged == 0:
             continue
 
@@ -2561,10 +2562,10 @@ def stage702(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         ims0,ims1,IV,fs = tractor.optimize_forced_photometry(
             minsb=opt.minsb, mindlnp=1., sky=True, minFlux=minFlux,
             fitstats=True, variance=True)
-        print 'Forced phot took', Time()-t0
+        print('Forced phot took', Time()-t0)
 
         lnp = tr.getLogProb()
-        print 'Log prob:', lnp
+        print('Log prob:', lnp)
 
         if ps:
             mod = tr.getModelImage(cotim)
@@ -2729,33 +2730,33 @@ def main():
         # print 'Read', len(P), 'spPlate'
 
         T = fits_table('/home/schlegel/wise1ext/sdss/zans-plates7027-7032-zscan.fits', column_map={'class':'clazz'})
-        print 'Read', len(T), 'zscan'
+        print('Read', len(T), 'zscan')
 
         I = np.flatnonzero(T.zwarning == 0)
-        print len(I), 'with Zwarning = 0'
+        print(len(I), 'with Zwarning = 0')
 
-        print 'Classes:', np.unique(T.clazz)
+        print('Classes:', np.unique(T.clazz))
 
         qso = 'QSO   '
         I = np.flatnonzero((T.zwarning == 0) * (T.clazz == qso))
-        print len(I), 'QSO with Zwarning = 0'
+        print(len(I), 'QSO with Zwarning = 0')
 
-        print 'Typescans:', np.unique(T.typescan)
+        print('Typescans:', np.unique(T.typescan))
         qsoscan = 'QSO    '
         I = np.flatnonzero((T.zwarning == 0) * (T.clazz == qso) * (T.typescan == qsoscan))
-        print len(I), 'QSO, scan QSO, with Zwarning = 0'
+        print(len(I), 'QSO, scan QSO, with Zwarning = 0')
 
         for zcut in [2, 2.3, 2.5]:
             I = np.flatnonzero((T.zwarning == 0) * (T.clazz == qso) * (T.typescan == qsoscan) * (T.z > zcut))
-            print len(I), 'QSO, scan QSO, with Zwarning = 0, z >', zcut
+            print(len(I), 'QSO, scan QSO, with Zwarning = 0, z >', zcut)
 
             I = np.flatnonzero((T.zwarning == 0) * (T.clazz == qso) * (T.typescan == qsoscan) * (T.zscan > zcut))
-            print len(I), 'QSO, scan QSO, with Zwarning = 0, z and zscan >', zcut
+            print(len(I), 'QSO, scan QSO, with Zwarning = 0, z and zscan >', zcut)
 
         #zcut = 2.3
         zcut = 2.0
         I = np.flatnonzero((T.zwarning == 0) * (T.clazz == qso) * (T.typescan == qsoscan) * (T.zscan > zcut))
-        print len(I), 'QSO, scan QSO, with Zwarning = 0, z and zscan >', zcut
+        print(len(I), 'QSO, scan QSO, with Zwarning = 0, z and zscan >', zcut)
 
         T.cut(I)
 
@@ -2769,18 +2770,18 @@ def main():
         # T.cut(I)
         
         A = fits_table('ancil/ancil-QSO-eBOSS-W3-ADM-dr8.fits')
-        print 'Read', len(A), 'targets'
+        print('Read', len(A), 'targets')
         I,J,d = match_radec(T.plug_ra, T.plug_dec, A.ra, A.dec, 1./3600.)
-        print len(I), 'matched'
-        print len(np.unique(I)), 'unique fibers'
-        print len(np.unique(J)), 'unique targets'
+        print(len(I), 'matched')
+        print(len(np.unique(I)), 'unique fibers')
+        print(len(np.unique(J)), 'unique targets')
 
         A.cut(J)
         #S.cut(I)
         T.cut(I)
 
         I = np.flatnonzero(A.w3bitmask == 4)
-        print 'Selected by WISE only:', len(I)
+        print('Selected by WISE only:', len(I))
         A.cut(I)
         T.cut(I)
         T.ra = T.plug_ra
@@ -2813,11 +2814,11 @@ def main():
             if j != 9:
                 continue
 
-            print
-            print 'source', j
-            print
+            print()
+            print('source', j)
+            print()
             T[i].about()
-            print
+            print()
 
             ra,dec = T.ra[i], T.dec[i]
             pixscale = 2.75
@@ -2829,10 +2830,10 @@ def main():
                     continue
                 
                 co = atlas.coadd_id[k]
-                print 'source', j, 'RA,Dec', ra, dec, 'tile index', k, co
+                print('source', j, 'RA,Dec', ra, dec, 'tile index', k, co)
                 imgs = []
                 ok, x,y = cowcs.radec2pixelxy(ra, dec)
-                print 'x,y', x,y
+                print('x,y', x,y)
                 x = int(np.round(x)-1)
                 y = int(np.round(y)-1)
                 S = 6
@@ -2865,7 +2866,7 @@ def main():
                 for band in [1,2]:
                     fn = 'unwise-coadds/%s/%s/unwise-%s-w%i-img-m.fits' % (co[:3], co, co, band)
                     if not os.path.exists(fn):
-                        print 'Does not exist:', fn
+                        print('Does not exist:', fn)
                         continue
                     img = fitsio.read(fn)
                     subimg = img[slc]
@@ -2937,9 +2938,9 @@ def main():
                         nm = P.get('w%i_nanomaggies' % band)
                         for ii,(r,d,w) in enumerate(zip(P.ra, P.dec, nm)):
                             dd = (np.abs(r-ra) + np.abs(d-dec)) * 3600.
-                            print 'dist', dd
+                            print('dist', dd)
                             if dd < 0.5:
-                                print 'Skipping', r, d
+                                print('Skipping', r, d)
                                 iskip.append(ii)
                                 continue
                             cat.append(PointSource(RaDecPos(r,d),
@@ -2966,7 +2967,7 @@ def main():
 
                 #for jj,(mods1,mods2) in enumerate(zip(*imods)):
                 mods1,mods2 = imods
-                print 'mods1:', len(mods1), 'mods2:', len(mods2)
+                print('mods1:', len(mods1), 'mods2:', len(mods2))
                 rgbs = []
                 for ii,(mod1,mod2) in enumerate(zip(mods1 + [mods[0], imgs[0]],
                                                     mods2 + [mods[1], imgs[1]])):
@@ -3069,7 +3070,7 @@ def main():
                 plt.subplot(3,3,3)
                 plt.imshow(imgs[1], **ima)
                 for k,m in enumerate(mods):
-                    print 'mod', m.shape
+                    print('mod', m.shape)
                     plt.subplot(3,3,5+k)
                     plt.imshow(m, **ima)
                     ax = plt.axis()
@@ -3138,7 +3139,7 @@ def main():
 
         j,i = good,I[good]
         ra,dec = A.ra[i], A.dec[i]
-        print '<img src="http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpeg.aspx?ra=%f&dec=%f&scale=0.2&width=200&height=200&opt=G"><br />' % (ra,dec)
+        print('<img src="http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpeg.aspx?ra=%f&dec=%f&scale=0.2&width=200&height=200&opt=G"><br />' % (ra,dec))
         ddec = 0.007
         dra = ddec / np.cos(np.deg2rad(dec))
         rlo,rhi =  ra -  dra,  ra +  dra
@@ -3154,9 +3155,9 @@ def main():
         dec = (dlo + dhi) / 2.
         
     if ri == -1:
-        print 'rlo,rhi', rlo,rhi
-        print 'dlo,dhi', dlo,dhi
-        print 'R,C,F', (A.run[i],A.camcol[i],A.field[i])
+        print('rlo,rhi', rlo,rhi)
+        print('dlo,dhi', dlo,dhi)
+        print('R,C,F', (A.run[i],A.camcol[i],A.field[i]))
         
         #opt.name = 'w3-target-%02i-w1' % j
         opt.name = 'w3-target-%02i-w%i' % (j, opt.bandnum)

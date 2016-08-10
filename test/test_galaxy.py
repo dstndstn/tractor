@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 
 from tractor import *
@@ -30,9 +31,9 @@ p1 = gal.getParams()
 # setting "gal" params has no effect on "gal2"
 assert(np.all(p2 == gal2.getParams()))
 
-print gal
-print p1
+print(gal)
+print(p1)
 
-print gal2
-print p2
+print(gal2)
+print(p2)
 

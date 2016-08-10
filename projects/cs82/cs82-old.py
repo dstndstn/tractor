@@ -1,3 +1,4 @@
+from __future__ import print_function
 	# imstd = estimate_noise(image)
 	# print 'estimated std:', imstd
 	# # Turns out that a ~= 1
@@ -16,7 +17,7 @@ def estimate_noise(im, S=5):
 	D = np.abs((im[J[:-1, :-1], I[:-1, :-1]] - im[J[1:, 1:], I[1:, 1:]]).ravel())
 	D.sort()
 	N = len(D)
-	print 'estimating noise at', N, 'samples'
+	print('estimating noise at', N, 'samples')
 	nsig = 0.7
 	s = 0.
 	while s == 0.:
@@ -31,18 +32,18 @@ def estimate_noise(im, S=5):
 def getdata():
 	fn = 'cs82data/W4p1m1_i.V2.7A.swarp.cut.vig15_deV_ord2_size25.fits'
 	T = fits_table(fn, hdunum=2)
-	print 'Read', len(T), 'rows from', fn
+	print('Read', len(T), 'rows from', fn)
 	#T.about()
 
 	r0,r1,d0,d1 = T.alpha_sky.min(), T.alpha_sky.max(), T.delta_sky.min(), T.delta_sky.max()
-	print 'Range', r0,r1,d0,d1
+	print('Range', r0,r1,d0,d1)
 	plt.clf()
 	plt.plot(T.alpha_sky, T.delta_sky, 'r.')
 	plt.xlabel('alpha_sky')
 	plt.ylabel('delta_sky')
 
 	rcf = radec_to_sdss_rcf((r0+r1)/2., (d0+d1)/2., radius=60., tablefn='s82fields.fits')
-	print 'SDSS fields nearby:', len(rcf)
+	print('SDSS fields nearby:', len(rcf))
 
 	rr = [ra  for r,c,f,ra,dec in rcf]
 	dd = [dec for r,c,f,ra,dec in rcf]
@@ -53,15 +54,15 @@ def getdata():
 
 	rcf = radec_to_sdss_rcf(RA,DEC, radius=10., tablefn='s82fields.fits',
 							 contains=True)
-	print 'SDSS fields nearby:', len(rcf)
+	print('SDSS fields nearby:', len(rcf))
 	rcf = [(r,c,f,ra,dec) for r,c,f,ra,dec in rcf if r != 206]
-	print 'Filtering out run 206:', len(rcf)
+	print('Filtering out run 206:', len(rcf))
 
 	sdss = DR7()
 	sdss.setBasedir('cs82data')
 	for r,c,f,ra,dec in rcf:
 		for band in 'ugriz':
-			print 'Retrieving', r,c,f,band
+			print('Retrieving', r,c,f,band)
 			st.get_tractor_image(r, c, f, band, psf='dg', useMags=True, sdssobj=sdss)
 
 	plt.clf()
@@ -90,7 +91,7 @@ def getdata():
 			tc = '%i:%i' % (j,i)
 			if wcs.is_inside(RA,DEC):
 				keepWCS.append(wcs)
-				print 'Keeping', tc
+				print('Keeping', tc)
 			#RR.append(rr)
 			#DD.append(dd)
 			plt.plot(rr,dd, 'b-')
@@ -101,13 +102,13 @@ def getdata():
 def read_cf_catalogs(RA, DEC, sz):
 	fn = 'cs82data/v1/W4p1m1_i.V2.7A.swarp.cut.vig15_deV_ord2_size25.fits'
 	T = fits_table(fn, hdunum=2)
-	print 'Read', len(T), 'rows from', fn
+	print('Read', len(T), 'rows from', fn)
 	T.ra  = T.alpha_sky
 	T.dec = T.delta_sky
 
 	fn = 'cs82data/v1/W4p1m1_i.V2.7A.swarp.cut.vig15_exp_ord2_size25.fit'
 	T2 = fits_table(fn, hdunum=2)
-	print 'Read', len(T2), 'rows from', fn
+	print('Read', len(T2), 'rows from', fn)
 	T2.ra  = T2.alpha_sky
 	T2.dec = T2.delta_sky
 
@@ -149,19 +150,19 @@ def read_cf_catalogs(RA, DEC, sz):
 	T.chi2_sph = T.chi2_model
 
 	T = T[(T.ra > ra0) * (T.ra < ra1) * (T.dec > dec0) * (T.dec < dec1)]
-	print 'Cut to', len(T), 'objects nearby.'
+	print('Cut to', len(T), 'objects nearby.')
 
 	T.chi2_gal = np.minimum(T.chi2_disk, T.chi2_sph)
 	T.mag_gal = np.where(T.chi2_disk < T.chi2_sph, T.mag_disk, T.mag_sph)
 
 	Tstar = T[np.logical_and(T.chi2_psf < T.chi2_gal, T.mag_psf < 50)]
 	Tgal = T[np.logical_and(T.chi2_gal < T.chi2_psf, T.mag_gal < 50)]
-	print len(Tstar), 'stars'
-	print len(Tgal), 'galaxies'
+	print(len(Tstar), 'stars')
+	print(len(Tgal), 'galaxies')
 	Tdisk = Tgal[Tgal.chi2_disk < Tgal.chi2_sph]
 	Tsph  = Tgal[Tgal.chi2_sph  <= Tgal.chi2_disk]
-	print len(Tdisk), 'disk'
-	print len(Tsph), 'spheroid'
+	print(len(Tdisk), 'disk')
+	print(len(Tsph), 'spheroid')
 
 	return Tstar, Tdisk, Tsph
 
@@ -208,8 +209,8 @@ def stage01TEST(tractor=None, mp=None, **kwargs):
 
 	brightcat,Ibright = cut_bright(allsources, magcut=maglim, mag='i2')
 	tractor.setCatalog(brightcat)
-	print ' Cut to:', tractor
-	print len(tractor.getParams()), 'params'
+	print(' Cut to:', tractor)
+	print(len(tractor.getParams()), 'params')
 
 	# TRY drilling down to a much smaller region to check out galaxy scale parameters
 	tim = allimages[0]
@@ -219,9 +220,9 @@ def stage01TEST(tractor=None, mp=None, **kwargs):
 	subim = im[y0:y1, x0:x1].copy()
 	suberr = tim.getInvError()[y0:y1, x0:x1].copy()
 	subwcs = tim.getWcs().copy()
-	print 'x0,y0', subwcs.x0, subwcs.y0
+	print('x0,y0', subwcs.x0, subwcs.y0)
 	subwcs.setX0Y0(subwcs.x0 + x0, subwcs.y0 + y0)
-	print 'subwcs:', subwcs
+	print('subwcs:', subwcs)
 	pc = tim.getPhotoCal().copy()
 	psf = tim.getPsf().copy()
 	sky = tim.getSky().copy()
@@ -242,12 +243,12 @@ def stage01TEST(tractor=None, mp=None, **kwargs):
 		rd = wcs.pixelToPosition(x, y)
 		r.append(rd.ra)
 		d.append(rd.dec)
-		print 'pix', x,y, 'radec', rd
+		print('pix', x,y, 'radec', rd)
 	ramin = np.min(r)
 	ramax = np.max(r)
 	decmin = np.min(d)
 	decmax = np.max(d)
-	print 'RA,Dec range', ramin, ramax, decmin, decmax
+	print('RA,Dec range', ramin, ramax, decmin, decmax)
 	cutrd = Catalog()
 	Icut = []
 	for i in xrange(len(brightcat)):
@@ -260,8 +261,8 @@ def stage01TEST(tractor=None, mp=None, **kwargs):
 			pass
 
 	tractor.setCatalog(cutrd)
-	print ' Cut on RA,Dec box to:', tractor
-	print len(tractor.getParams()), 'params'
+	print(' Cut on RA,Dec box to:', tractor)
+	print(len(tractor.getParams()), 'params')
 
 	mags = ['i2']
 
@@ -271,9 +272,9 @@ def stage01TEST(tractor=None, mp=None, **kwargs):
 		T = fits_table(fn, hdunum=2)
 		T.ra  = T.alpha_j2000
 		T.dec = T.delta_j2000
-		print 'Read', len(T), gal, 'galaxies'
+		print('Read', len(T), gal, 'galaxies')
 		T.cut((T.ra > ramin) * (T.ra < ramax) * (T.dec > decmin) * (T.dec < decmax))
-		print 'Cut to', len(T), 'in RA,Dec box'
+		print('Cut to', len(T), 'in RA,Dec box')
 
 		srcs = Catalog()
 		for t in T:
@@ -341,7 +342,7 @@ def stage01OLD(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
 			thaw_sdss=[],
 			RA=None, DEC=None, sz=None,
 			**kwargs):
-	print 'tractor', tractor
+	print('tractor', tractor)
 	tractor.mp = mp
 
 	S=500
@@ -350,7 +351,7 @@ def stage01OLD(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
 
 	newims = Images(*([coim] + [im for im in tractor.getImages() if im.name.startswith('SDSS')]))
 	tractor.setImages(newims)
-	print 'tractor:', tractor
+	print('tractor:', tractor)
 
 	# We only use the 'inverr' element, so don't also store 'invvar'.
 	for im in tractor.getImages():
@@ -370,7 +371,7 @@ def stage01OLD(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
 			image = P[1].data
 			(H,W) = image.shape
 			x,y = np.array([1,W,W,1,1]), np.array([1,1,H,H,1])
-			print 'x,y', x,y
+			print('x,y', x,y)
 			r,d = wcs.pixelxy2radec(x, y)
 			plt.plot(r, d, 'k-', lw=1, alpha=0.8)
 
@@ -389,8 +390,8 @@ def stage01OLD(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
 			#aa = 0.1
 			aa = 0.06
 		else:
-			print 'CFHT WCS x0,y0', wcs.x0, wcs.y0
-			print 'image W,H', W,H
+			print('CFHT WCS x0,y0', wcs.x0, wcs.y0)
+			print('image W,H', W,H)
 			cc = 'k'
 			aa = 0.5
 		plt.plot(r, d, '-', color=cc, alpha=aa, lw=1)
@@ -435,9 +436,9 @@ def stage01OLD(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
 
 def stage02(tractor=None, mp=None, Ibright=[], allp=[], params0=None, **kwargs):
 
-	print 'Tractor sources:', len(tractor.getCatalog())
-	print 'Ibright:', Ibright
-	print 'Ibright len', len(Ibright)
+	print('Tractor sources:', len(tractor.getCatalog()))
+	print('Ibright:', Ibright)
+	print('Ibright len', len(Ibright))
 	#print 'allp:', allp
 	#print 'params0:', params0
 
@@ -448,10 +449,10 @@ def stage02(tractor=None, mp=None, Ibright=[], allp=[], params0=None, **kwargs):
 
 	(imi, band, i2fit) = allp[0]
 
-	print 'imi', imi
-	print 'band', band
-	print 'i2fit', i2fit
-	print len(i2fit)
+	print('imi', imi)
+	print('band', band)
+	print('i2fit', i2fit)
+	print(len(i2fit))
 	
 	assert(band == 'i2')
 	assert(len(i2fit) == tractor.getCatalog().numberOfParams())
@@ -504,7 +505,7 @@ def stage02(tractor=None, mp=None, Ibright=[], allp=[], params0=None, **kwargs):
 	for im in tractor.getImages():
 		im.invvar = None
 
-	print 'Plots...'
+	print('Plots...')
 	plots(tractor, ['data', 'modbest', 'chibest'], 0, ibest=0, pp=np.array([tractor.getParams()]),
 		  alllnp=[0.], imis=[0,1,2,3,4,5])
 
@@ -525,8 +526,8 @@ def stage03OLD(tractor=None, mp=None, **kwargs):
 	bparams0 = np.array(tractor.getParams()).copy()
 	allimages = tractor.getImages()
 	tractor.setImages(Images(allimages[0]))
-	print ' Cut to:', tractor
-	print len(tractor.getParams()), 'params'
+	print(' Cut to:', tractor)
+	print(len(tractor.getParams()), 'params')
 
 	# TRY drilling down to a much smaller region to check out galaxy scale parameters
 	tim = allimages[0]
@@ -536,9 +537,9 @@ def stage03OLD(tractor=None, mp=None, **kwargs):
 	subim = im[y0:y1, x0:x1].copy()
 	suberr = tim.getInvError()[y0:y1, x0:x1].copy()
 	subwcs = tim.getWcs().copy()
-	print 'x0,y0', subwcs.x0, subwcs.y0
+	print('x0,y0', subwcs.x0, subwcs.y0)
 	subwcs.setX0Y0(subwcs.x0 + x0, subwcs.y0 + y0)
-	print 'subwcs:', subwcs
+	print('subwcs:', subwcs)
 	pc = tim.getPhotoCal().copy()
 	psf = tim.getPsf().copy()
 	sky = tim.getSky().copy()
@@ -559,12 +560,12 @@ def stage03OLD(tractor=None, mp=None, **kwargs):
 		rd = wcs.pixelToPosition(x, y)
 		r.append(rd.ra)
 		d.append(rd.dec)
-		print 'pix', x,y, 'radec', rd
+		print('pix', x,y, 'radec', rd)
 	ramin = np.min(r)
 	ramax = np.max(r)
 	decmin = np.min(d)
 	decmax = np.max(d)
-	print 'RA,Dec range', ramin, ramax, decmin, decmax
+	print('RA,Dec range', ramin, ramax, decmin, decmax)
 	cutrd = Catalog()
 	Icut = []
 	for i in xrange(len(brightcat)):
@@ -579,15 +580,15 @@ def stage03OLD(tractor=None, mp=None, **kwargs):
 		else:
 			#print '  -> cut.'
 			pass
-	print 'Keeping sources:'
+	print('Keeping sources:')
 	for src in cutrd:
-		print '  ', src
+		print('  ', src)
 		x,y = wcs.positionToPixel(src.getPosition())
-		print '  --> (%.1f, %.1f)' % (x,y)
+		print('  --> (%.1f, %.1f)' % (x,y))
 
 	tractor.setCatalog(cutrd)
-	print ' Cut on RA,Dec box to:', tractor
-	print len(tractor.getParams()), 'params'
+	print(' Cut on RA,Dec box to:', tractor)
+	print(len(tractor.getParams()), 'params')
 
 	cparams0 = np.array(tractor.getParams()).copy()
 	p0 = cparams0
@@ -614,7 +615,7 @@ def stage01_OLD(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
 	allsources = tractor.getCatalog()
 	brightcat,nil = cut_bright(allsources)
 	tractor.setCatalog(brightcat)
-	print 'Cut to', len(brightcat), 'bright sources', brightcat.numberOfParams(), 'params'
+	print('Cut to', len(brightcat), 'bright sources', brightcat.numberOfParams(), 'params')
 	allims = tractor.getImages()
 	fitims = []
 	for im in allims:
@@ -628,16 +629,16 @@ def stage01_OLD(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
 		else:
 			continue
 		fitims.append(im)
-	print len(tractor.getImages()), 'images', tractor.images.numberOfParams(), 'image params'
+	print(len(tractor.getImages()), 'images', tractor.images.numberOfParams(), 'image params')
 	tractor.freezeParam('catalog')
 
 	lnp0 = tractor.getLogProb()
-	print 'Lnprob', lnp0
+	print('Lnprob', lnp0)
 	plots(tractor, ['modsum', 'chisum'], step0 + 0, **plotsa)
 
 	#wcs0 = tractor.getParams()
 	wcs0 = np.hstack([im.getParams() for im in fitims])
-	print 'Orig WCS:', wcs0
+	print('Orig WCS:', wcs0)
 	# We will tweak the WCS parameters one image at a time...
 	tractor.images = Images()
 	# Do the work:
@@ -648,12 +649,12 @@ def stage01_OLD(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
 	for im,p in zip(fitims,wcs1):
 		im.setParams(p)
 	lnp1 = tractor.getLogProb()
-	print 'Before lnprob', lnp0
-	print 'After  lnprob', lnp1
+	print('Before lnprob', lnp0)
+	print('After  lnprob', lnp1)
 	wcs1 = np.hstack(wcs1)
-	print 'Orig WCS:', wcs0
-	print 'Opt  WCS:', wcs1
-	print 'dWCS (arcsec):', (wcs1 - wcs0) * 3600.
+	print('Orig WCS:', wcs0)
+	print('Opt  WCS:', wcs1)
+	print('dWCS (arcsec):', (wcs1 - wcs0) * 3600.)
 	plots(tractor, ['modsum', 'chisum'], step0 + 1, None, **plotsa)
 
 	# Re-freeze WCS
@@ -682,7 +683,7 @@ def stage02_OLD(tractor=None, mp=None, **kwargs):
 
 # stage 3 replacement: "quick" fit of bright sources to one CFHT image
 def stage03_OLD(tractor=None, mp=None, steps=None, **kwargs):
-	print 'Tractor:', tractor
+	print('Tractor:', tractor)
 	tractor.mp = mp
 	tractor.freezeParam('images')
 	tractor.catalog.thawParamsRecursive('*')
@@ -693,7 +694,7 @@ def stage03_OLD(tractor=None, mp=None, steps=None, **kwargs):
 	bparams0 = np.array(tractor.getParams()).copy()
 	allimages = tractor.getImages()
 	tractor.setImages(Images(allimages[0]))
-	print ' Cut to:', tractor
+	print(' Cut to:', tractor)
 
 	plotims = [0,]
 	plotsa = dict(imis=plotims, mp=mp)
@@ -715,7 +716,7 @@ def stage03_OLD(tractor=None, mp=None, steps=None, **kwargs):
 
 def stage04(tractor=None, mp=None, steps=None, alllnp3=None, Ibright3=None,
 			**kwargs):
-	print 'Tractor:', tractor
+	print('Tractor:', tractor)
 	tractor.mp = mp
 	tractor.freezeParam('images')
 	tractor.catalog.thawParamsRecursive('*')
@@ -724,7 +725,7 @@ def stage04(tractor=None, mp=None, steps=None, alllnp3=None, Ibright3=None,
 	allimages = tractor.getImages()
 
 	tractor.setImages(Images(allimages[0]))
-	print ' Cut to:', tractor
+	print(' Cut to:', tractor)
 	plotims = [0,]
 	plotsa = dict(imis=plotims, mp=mp)
 
@@ -742,7 +743,7 @@ def stage04(tractor=None, mp=None, steps=None, alllnp3=None, Ibright3=None,
 
 def stage05(tractor=None, mp=None, steps=None,
 			**kwargs):
-	print 'Tractor:', tractor
+	print('Tractor:', tractor)
 	tractor.mp = mp
 	tractor.freezeParam('images')
 	tractor.catalog.thawParamsRecursive('*')
@@ -750,7 +751,7 @@ def stage05(tractor=None, mp=None, steps=None,
 
 	allimages = tractor.getImages()
 	tractor.setImages(Images(*[im for im in allimages if im.name.startswith('CFHT')]))
-	print ' Cut to:', tractor
+	print(' Cut to:', tractor)
 	plotims = [0,]
 	plotsa = dict(imis=plotims, mp=mp)
 
@@ -767,15 +768,15 @@ def stage05(tractor=None, mp=None, steps=None,
 
 def stage06(tractor=None, mp=None, steps=None,
 			**kwargs):
-	print 'Tractor:', tractor
+	print('Tractor:', tractor)
 	cache = createCache(maxsize=10000)
-	print 'Using multiprocessing cache', cache
+	print('Using multiprocessing cache', cache)
 	tractor.cache = cache
 	tractor.pickleCache = True
 
 	# oops, forgot to reset the images in an earlier version of stage05...
 	pfn = 'tractor%02i.pickle' % 4
-	print 'Reading pickle', pfn
+	print('Reading pickle', pfn)
 	R = unpickle_from_file(pfn)
 	allimages = R['tractor'].getImages()
 	del R
@@ -799,7 +800,7 @@ def stage06(tractor=None, mp=None, steps=None,
 	plotims = [0,]
 	plotsa = dict(imis=plotims, mp=mp)
 
-	print 'Tractor:', tractor
+	print('Tractor:', tractor)
 
 	allp = []
 
@@ -818,16 +819,16 @@ def stage06(tractor=None, mp=None, steps=None,
 	#allparams0 = tractor.getParamsEvenFrozenOnes()
 
 	for imi,im in enumerate(sdssimages):
-		print 'Fitting image', imi, 'of', len(sdssimages)
+		print('Fitting image', imi, 'of', len(sdssimages))
 		tractor.setImages(Images(im))
 		band = im.photocal.bandname
-		print im
-		print 'Band', band
+		print(im)
+		print('Band', band)
 
-		print 'Current param names:'
+		print('Current param names:')
 		for nm in tractor.getParamNames():
-			print '  ', nm
-		print len(tractor.getParamNames()), 'params, p0', len(params0)
+			print('  ', nm)
+		print(len(tractor.getParamNames()), 'params, p0', len(params0))
 
 		# Reset params; need to thaw first though!
 		tractor.catalog.thawParamsRecursive(*sbands)
@@ -839,10 +840,10 @@ def stage06(tractor=None, mp=None, steps=None,
 		tractor.catalog.freezeParamsRecursive(*sbands)
 		tractor.catalog.thawParamsRecursive(band)
 
-		print 'Tractor:', tractor
-		print 'Active params:'
+		print('Tractor:', tractor)
+		print('Active params:')
 		for nm in tractor.getParamNames():
-			print '  ', nm
+			print('  ', nm)
 
 		step = 7000 + imi*3
 		plots(tractor, ['modbest', 'chibest'], step, pp=np.array([tractor.getParams()]),
@@ -858,10 +859,10 @@ def stage06(tractor=None, mp=None, steps=None,
 			  ibest=0, tsuf=': '+im.name+' indiv', **plotsa)
 
 		p = tractor.getParams()
-		print 'Saving params', p
+		print('Saving params', p)
 		allp.append((band, p))
 
-		print 'Cache stats'
+		print('Cache stats')
 		cache.printStats()
 
 	tractor.setImages(allimages)
@@ -870,7 +871,7 @@ def stage06(tractor=None, mp=None, steps=None,
 	return dict(tractor=tractor, allp=allp, Ibright=Ibright)
 
 def stage07(tractor=None, allp=None, Ibright=None, mp=None, **kwargs):
-	print 'Tractor:', tractor
+	print('Tractor:', tractor)
 
 	sbands = ['g','r','i']
 
@@ -879,33 +880,33 @@ def stage07(tractor=None, allp=None, Ibright=None, mp=None, **kwargs):
 	rcf = []
 	for im in tr1.getImages():
 		rcf.append(im.rcf + (None,None))
-	print 'RCF', rcf
-	print len(rcf)
-	print 'Kept', len(rcf), 'of', len(tr1.getImages()), 'images'
+	print('RCF', rcf)
+	print(len(rcf))
+	print('Kept', len(rcf), 'of', len(tr1.getImages()), 'images')
 	# W = fits_table('window_flist-dr8.fits')
 	W = fits_table('window_flist-DR8-S82.fits')
 	scores = []
 	noscores = []
 	rcfscore = {}
 	for r,c,f,nil,nil in rcf:
-		print 'RCF', r,c,f
+		print('RCF', r,c,f)
 		w = W[(W.run == r) * (W.camcol == c) * (W.field == f)]
-		print w
+		print(w)
 		if len(w) == 0:
-			print 'No entry'
+			print('No entry')
 			noscores.append((r,c,f))
 			continue
 		score = w.score[0]
-		print 'score', score
+		print('score', score)
 		scores.append(score)
 		rcfscore[(r,c,f)] = score
-	print 'No scores:', noscores
+	print('No scores:', noscores)
 	plt.clf()
 	plt.hist(scores, 20)
 	plt.savefig('scores.png')
-	print len(scores), 'scores'
+	print(len(scores), 'scores')
 	scores = np.array(scores)
-	print sum(scores > 0.5), '> 0.5'
+	print(sum(scores > 0.5), '> 0.5')
 
 	allsources = tractor.getCatalog()
 	bright = Catalog()
@@ -920,15 +921,15 @@ def stage07(tractor=None, allp=None, Ibright=None, mp=None, **kwargs):
 	# Add "rcf" and "score" fields to the SDSS images...
 	# first build name->rcf map
 	namercf = {}
-	print len(tr1.getImages()), 'tr1 images'
-	print len(tractor.getImages()), 'tractor images'
+	print(len(tr1.getImages()), 'tr1 images')
+	print(len(tractor.getImages()), 'tractor images')
 	for im in tr1.getImages():
-		print im.name, '->', im.rcf
+		print(im.name, '->', im.rcf)
 		namercf[im.name] = im.rcf
 	for im in tractor.getImages():
-		print im.name
+		print(im.name)
 		rcf = namercf[im.name]
-		print '->', rcf
+		print('->', rcf)
 		im.rcf = rcf
 		im.score = rcfscore.get(rcf, None)
 
@@ -944,8 +945,8 @@ def stage07(tractor=None, allp=None, Ibright=None, mp=None, **kwargs):
 		nimg,nsrcs = vals.shape
 
 	for i in range(nsrcs):
-		print 'source', i
-		print tractor.getCatalog()[i]
+		print('source', i)
+		print(tractor.getCatalog()[i])
 		plt.clf()
 		cmap = dict(r='r', g='g', i='m')
 		pp = {}
@@ -955,7 +956,7 @@ def stage07(tractor=None, allp=None, Ibright=None, mp=None, **kwargs):
 			mn,mx = 15,25
 			keep = ((X >= mn) * (X <= mx))
 			if sum(keep) == 0:
-				print 'skipping', band
+				print('skipping', band)
 				continue
 			n,b,p = plt.hist(vals[:,i], 100, range=(mn,mx), color=cmap[band], histtype='step', alpha=0.7)
 			pp[band] = p
@@ -966,7 +967,7 @@ def stage07(tractor=None, allp=None, Ibright=None, mp=None, **kwargs):
 		plt.ylim(0, 75)
 		plt.xlim(mn,mx)
 		plt.savefig(fn)
-		print 'Wrote', fn
+		print('Wrote', fn)
 
 	goodimages = []
 	Iimages = []
@@ -978,7 +979,7 @@ def stage07(tractor=None, allp=None, Ibright=None, mp=None, **kwargs):
 	tractor.setImages(Images(*goodimages))
 
 	cache = createCache(maxsize=10000)
-	print 'Using multiprocessing cache', cache
+	print('Using multiprocessing cache', cache)
 	tractor.cache = cache
 	tractor.pickleCache = True
 	tractor.freezeParam('images')
@@ -988,7 +989,7 @@ def stage07(tractor=None, allp=None, Ibright=None, mp=None, **kwargs):
 	plotims = [0,]
 	plotsa = dict(imis=plotims, mp=mp)
 
-	print 'Tractor:', tractor
+	print('Tractor:', tractor)
 
 	# Set all bands = i2, and save those params.
 	for src in bright:
@@ -999,10 +1000,10 @@ def stage07(tractor=None, allp=None, Ibright=None, mp=None, **kwargs):
 	tractor.catalog.thawParamsRecursive(*sbands)
 	params0 = tractor.getParams()
 
-	print 'Tractor:', tractor
-	print 'Active params:'
+	print('Tractor:', tractor)
+	print('Active params:')
 	for nm in tractor.getParamNames():
-		print '  ', nm
+		print('  ', nm)
 
 	step = 8000
 	plots(tractor, ['modbest', 'chibest'], step, pp=np.array([tractor.getParams()]),
@@ -1021,12 +1022,12 @@ def stage07(tractor=None, allp=None, Ibright=None, mp=None, **kwargs):
 	return dict(tractor=tractor, Ibright=Ibright, Iimages=Iimages)
 
 def stage08(tractor=None, Ibright=None, Iimages=None, mp=None, **kwargs):
-	print 'Tractor:', tractor
+	print('Tractor:', tractor)
 	sbands = ['g','r','i']
 
 	# Grab individual-image fits from stage06
 	pfn = 'tractor%02i.pickle' % 6
-	print 'Reading pickle', pfn
+	print('Reading pickle', pfn)
 	R = unpickle_from_file(pfn)
 	allp = R['allp']
 	del R
@@ -1036,13 +1037,13 @@ def stage08(tractor=None, Ibright=None, Iimages=None, mp=None, **kwargs):
 
 	allimages = tractor.getImages()
 	# = 4 + all SDSS
-	print 'All images:', len(allimages)
+	print('All images:', len(allimages))
 
 	# 78 = 26 * 3 good-scoring images
 	# index is in 'allimages'.
-	print 'Iimages:', len(Iimages)
+	print('Iimages:', len(Iimages))
 	# 219 = 73 * 3 all SDSS images
-	print 'allp:', len(allp)
+	print('allp:', len(allp))
 
 	# HACK -- assume CFHT images are at the front
 	Ncfht = len(allimages) - len(allp)
@@ -1058,12 +1059,12 @@ def stage08(tractor=None, Ibright=None, Iimages=None, mp=None, **kwargs):
 		allmags[band] = vals
 		nimg,nsrcs = vals.shape
 		goodmags[band] = np.array(goodmags[band])
-	print 'nsrcs', nsrcs
+	print('nsrcs', nsrcs)
 
 	for i in range(nsrcs):
 		##### 
 		continue
-		print 'source', i
+		print('source', i)
 		#print tractor.getCatalog()[i]
 		plt.clf()
 		#cmap = dict(r='r', g='g', i='m')
@@ -1075,7 +1076,7 @@ def stage08(tractor=None, Ibright=None, Iimages=None, mp=None, **kwargs):
 			mn,mx = 15,25
 			keep = ((X >= mn) * (X <= mx))
 			if sum(keep) == 0:
-				print 'skipping', band
+				print('skipping', band)
 				continue
 			cc = cmap[band]
 			s = 0.2
@@ -1088,7 +1089,7 @@ def stage08(tractor=None, Ibright=None, Iimages=None, mp=None, **kwargs):
 			mn,mx = 15,25
 			keep = ((X >= mn) * (X <= mx))
 			if sum(keep) == 0:
-				print 'skipping', band
+				print('skipping', band)
 				continue
 			n,b,p = plt.hist(X, 100, range=(mn,mx), color=cmap[band], histtype='step', alpha=0.7)
 			pp[band] = p
@@ -1106,13 +1107,13 @@ def stage08(tractor=None, Ibright=None, Iimages=None, mp=None, **kwargs):
 		plt.ylim(0, 60)
 		plt.xlim(mn,mx)
 		plt.savefig(fn)
-		print 'Wrote', fn
+		print('Wrote', fn)
 
 
 	goodimages = Images(*[allimages[i] for i in Iimages])
 	tractor.setImages(goodimages)
 	tractor.setCatalog(bright)
-	print 'MCMC with tractor:', tractor
+	print('MCMC with tractor:', tractor)
 
 	# DEBUG
 	#goodimages = Images(*[allimages[i] for i in Iimages[:4]])
@@ -1136,9 +1137,9 @@ def stage08(tractor=None, Ibright=None, Iimages=None, mp=None, **kwargs):
 	# so maybe something is bogus...
 
 	p0 = np.array(tractor.getParams())
-	print 'Tractor params:'
+	print('Tractor params:')
 	for i,nm in enumerate(tractor.getParamNames()):
-		print '  ', nm, '=', p0[i]
+		print('  ', nm, '=', p0[i])
 
 	ndim = len(p0)
 	# DEBUG
@@ -1157,23 +1158,23 @@ def stage08(tractor=None, Ibright=None, Iimages=None, mp=None, **kwargs):
 	smags = []
 	for step in range(1, 201):
 		smags.append(pp.copy())
-		print 'Run MCMC step', step
+		print('Run MCMC step', step)
 		kwargs = dict(storechain=False)
 		t0 = Time()
 		pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate, **kwargs)
-		print 'Running acceptance fraction: emcee'
-		print 'after', sampler.iterations, 'iterations'
-		print 'mean', np.mean(sampler.acceptance_fraction)
+		print('Running acceptance fraction: emcee')
+		print('after', sampler.iterations, 'iterations')
+		print('mean', np.mean(sampler.acceptance_fraction))
 		t_mcmc = (Time() - t0)
-		print 'Best lnprob:', np.max(lnp)
-		print 'dlnprobs:', ', '.join(['%.1f' % d for d in lnp - np.max(lnp)])
-		print 'MCMC took', t_mcmc, 'sec'
+		print('Best lnprob:', np.max(lnp))
+		print('dlnprobs:', ', '.join(['%.1f' % d for d in lnp - np.max(lnp)]))
+		print('MCMC took', t_mcmc, 'sec')
 
 		#print 'Cache stats'
 		#cache.printStats()
 
-		print 'SDSS galaxy cache:'
-		print get_galaxy_cache()
+		print('SDSS galaxy cache:')
+		print(get_galaxy_cache())
 		
 
 		break
@@ -1207,7 +1208,7 @@ def stage06old():
 		pp[0,:] = p0
 		lnp = np.array(mp.map(tractor, pp))
 		dlnp = lnp - np.max(lnp)
-		print 'dlnp min', np.min(dlnp), 'median', np.median(dlnp)
+		print('dlnp min', np.min(dlnp), 'median', np.median(dlnp))
 		if np.median(dlnp) > -10:
 			break
 		psteps *= 0.1
@@ -1226,7 +1227,7 @@ def stage06old():
 			plots(tractor, #['modsum', 'chisum', 'modbest', 'chibest', 'lnps'],
 				  ['modbest', 'chibest', 'lnps'],
 				  step, pp=pp, ibest=ibest, alllnp=alllnp, **plotsa)
-		print 'Run MCMC step', step
+		print('Run MCMC step', step)
 		kwargs = dict(storechain=False)
 		# Alternate 5 steps of stretch move, 5 steps of MH.
 		t0 = Time()
@@ -1236,15 +1237,15 @@ def stage06old():
 			dlnp = lnp - bestlnp
 			cut = -20
 			I = np.flatnonzero(dlnp < cut)
-			print len(I), 'walkers have lnprob more than', -cut, 'worse than the best'
+			print(len(I), 'walkers have lnprob more than', -cut, 'worse than the best')
 			if len(I):
 				ok = np.flatnonzero(dlnp >= cut)
-				print 'Resampling from', len(ok), 'good walkers'
+				print('Resampling from', len(ok), 'good walkers')
 				# Sample another walker
 				J = ok[np.random.randint(len(ok), size=len(I))]
 				lnp0 = lnp[I]
 				lnp1 = lnp[J]
-				print 'J', J.shape, J
+				print('J', J.shape, J)
 				#print 'lnp0', lnp0.shape, lnp0
 				#print 'lnp1', lnp1.shape, lnp1
 				#print 'pp[J,:]', pp[J,:].shape
@@ -1254,39 +1255,39 @@ def stage06old():
 				#print 'ppnew', ppnew.shape
 				lnp2 = np.array(mp.map(tractor, ppnew))
 				#print 'lnp2', lnp2.shape, lnp2
-				print 'dlnps', ', '.join(['%.1f' % d for d in lnp2 - np.max(lnp)])
+				print('dlnps', ', '.join(['%.1f' % d for d in lnp2 - np.max(lnp)]))
 				# M-H acceptance rule (from original position, not resampled)
 				acc = emcee.EnsembleSampler.mh_accept(lnp0, lnp2)
 				dlnp = lnp2[acc] - lnp[I[acc]]
 				lnp[I[acc]] = lnp2[acc]
 				pp[I[acc],:] = ppnew[acc,:]
-				print 'Accepted', sum(acc), 'resamplings'
-				print '  with dlnp mean', np.mean(dlnp), 'median', np.median(dlnp)
+				print('Accepted', sum(acc), 'resamplings')
+				print('  with dlnp mean', np.mean(dlnp), 'median', np.median(dlnp))
 				# FIXME: Should record the acceptance rate of this...
 
 		elif step % 10 >= 5:
-			print 'Using MH proposal'
+			print('Using MH proposal')
 			kwargs['mh_proposal'] = emcee.MH_proposal_axisaligned(psteps)
 			pp,lnp,rstate = mhsampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate, **kwargs)
-			print 'Running acceptance fraction: MH'#, mhsampler.acceptance_fraction
-			print 'after', mhsampler.iterations, 'iterations'
-			print 'mean', np.mean(mhsampler.acceptance_fraction)
+			print('Running acceptance fraction: MH')#, mhsampler.acceptance_fraction
+			print('after', mhsampler.iterations, 'iterations')
+			print('mean', np.mean(mhsampler.acceptance_fraction))
 		else:
 			pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate, **kwargs)
-			print 'Running acceptance fraction: emcee'#, sampler.acceptance_fraction
-			print 'after', sampler.iterations, 'iterations'
-			print 'mean', np.mean(sampler.acceptance_fraction)
+			print('Running acceptance fraction: emcee')#, sampler.acceptance_fraction
+			print('after', sampler.iterations, 'iterations')
+			print('mean', np.mean(sampler.acceptance_fraction))
 		t_mcmc = (Time() - t0)
-		print 'Best lnprob:', np.max(lnp)
-		print 'dlnprobs:', ', '.join(['%.1f' % d for d in lnp - np.max(lnp)])
-		print 'MCMC took', t_mcmc, 'sec'
+		print('Best lnprob:', np.max(lnp))
+		print('dlnprobs:', ', '.join(['%.1f' % d for d in lnp - np.max(lnp)]))
+		print('MCMC took', t_mcmc, 'sec')
 
 		# Tweak step sizes...
-		print 'Walker stdevs / psteps:'
+		print('Walker stdevs / psteps:')
 		st = np.std(pp, axis=0)
 		f = st / np.abs(psteps)
-		print '  median', np.median(f)
-		print '  range', np.min(f), np.max(f)
+		print('  median', np.median(f))
+		print('  range', np.min(f), np.max(f))
 		if step % 10 == 9:
 			# After this batch of MH updates, tweak step sizes.
 			acc = np.mean(mhsampler.acceptance_fraction)
@@ -1294,12 +1295,12 @@ def stage06old():
 			if acc < 0.33:
 				psteps /= tweak
 				stepscales /= tweak
-				print 'Acceptance rate too low: decreasing step sizes'
+				print('Acceptance rate too low: decreasing step sizes')
 			elif acc > 0.66:
 				psteps *= tweak
 				stepscales *= tweak
-				print 'Acceptance rate too high: increasing step sizes'
-			print 'log-mean step scales', np.exp(np.mean(np.log(stepscales)))
+				print('Acceptance rate too high: increasing step sizes')
+			print('log-mean step scales', np.exp(np.mean(np.log(stepscales))))
 
 		# # Note that this is per-parameter.
 		# mx = 1.2
@@ -1311,17 +1312,17 @@ def stage06old():
 		# print '  range', np.min(f), np.max(f)
 	tractor.setCatalog(allsources)
 	tractor.setImages(allimages)
-	print 'Checking all-image, all-source logprob...'
+	print('Checking all-image, all-source logprob...')
 	params1 = tractor.getParams()
-	print 'Getting initial logprob...'
+	print('Getting initial logprob...')
 	tractor.setParams(params0)
 	alllnp0 = tractor.getLogProb()
-	print 'Initial log-prob (all images, all sources)', alllnp0
-	print 'Getting final logprob...'
+	print('Initial log-prob (all images, all sources)', alllnp0)
+	print('Getting final logprob...')
 	tractor.setParams(params1)
 	alllnp1 = tractor.getLogProb()
-	print 'Initial log-prob (all images, all sources)', alllnp0
-	print 'Final   log-prob (all images, all sources)', alllnp1
+	print('Initial log-prob (all images, all sources)', alllnp0)
+	print('Final   log-prob (all images, all sources)', alllnp1)
 	return dict(tractor=tractor, allp3=allp, pp3=pp, psteps3=psteps, Ibright3=Ibright)
 
 
@@ -1334,7 +1335,7 @@ def fakeRebuildProxy(*args, **kwargs):
 	try:
 		return realRebuildProxy(*args, **kwargs)
 	except Exception as e:
-		print 'real RebuildProxy failed:', e
+		print('real RebuildProxy failed:', e)
 		return None
 
 
@@ -1415,14 +1416,14 @@ import emcee
 def print_frozen(tractor):
 	for nm,meliq,liq in tractor.getParamStateRecursive():
 		if liq:
-			print ' ',
+			print(' ', end=' ')
 		else:
-			print 'F',
+			print('F', end=' ')
 		if meliq:
-			print ' ',
+			print(' ', end=' ')
 		else:
-			print 'F',
-		print nm
+			print('F', end=' ')
+		print(nm)
 
 def get_cfht_image(fn, psffn, pixscale, RA, DEC, sz, bandname=None,
 				   filtermap=None, rotate=True):
@@ -1432,14 +1433,14 @@ def get_cfht_image(fn, psffn, pixscale, RA, DEC, sz, bandname=None,
 	x,y = wcs.radec2pixelxy(RA,DEC)
 	x -= 1
 	y -= 1
-	print 'x,y', x,y
+	print('x,y', x,y)
 	S = int(sz / pixscale) / 2
-	print '(half) S', S
+	print('(half) S', S)
 	cfx,cfy = int(np.round(x)),int(np.round(y))
 
 	P = pyfits.open(fn)
 	I = P[1].data
-	print 'Img data', I.shape
+	print('Img data', I.shape)
 	H,W = I.shape
 
 	cfroi = [np.clip(cfx-S, 0, W),
@@ -1451,7 +1452,7 @@ def get_cfht_image(fn, psffn, pixscale, RA, DEC, sz, bandname=None,
 	roislice = (slice(y0,y1), slice(x0,x1))
 	image = I[roislice]
 	sky = np.median(image)
-	print 'Sky', sky
+	print('Sky', sky)
 	# save for later...
 	cfsky = sky
 	skyobj = ConstantSky(sky)
@@ -1485,7 +1486,7 @@ def get_cfht_image(fn, psffn, pixscale, RA, DEC, sz, bandname=None,
 	#print 'Mask:', mask
 	hdr = P[2].header
 	badbits = [hdr.get('MP_%s' % nm) for nm in ['BAD', 'SAT', 'INTRP', 'CR']]
-	print 'Bad bits:', badbits
+	print('Bad bits:', badbits)
 	badmask = sum([1 << bit for bit in badbits])
 	#print 'Bad mask:', badmask
 	#print 'Mask dtype', mask.dtype
@@ -1494,7 +1495,7 @@ def get_cfht_image(fn, psffn, pixscale, RA, DEC, sz, bandname=None,
 	del var
 
 	psfimg = pyfits.open(psffn)[0].data
-	print 'PSF image shape', psfimg.shape
+	print('PSF image shape', psfimg.shape)
 	# number of Gaussian components
 	K = 3
 	PS = psfimg.shape[0]
@@ -1503,20 +1504,20 @@ def get_cfht_image(fn, psffn, pixscale, RA, DEC, sz, bandname=None,
 	II /= II.sum()
 	# HACK
 	II = np.maximum(II, 0)
-	print 'Multi-Gaussian PSF fit...'
+	print('Multi-Gaussian PSF fit...')
 	xm,ym = -(PS/2), -(PS/2)
 	em_fit_2d(II, xm, ym, w, mu, sig)
-	print 'w,mu,sig', w,mu,sig
+	print('w,mu,sig', w,mu,sig)
 	psf = GaussianMixturePSF(w, mu, sig)
 
 	if bandname is None:
 		# try looking up in filtermap.
 		filt = phdr['FILTER']
 		if filt in filtermap:
-			print 'Mapping filter', filt, 'to', filtermap[filt]
+			print('Mapping filter', filt, 'to', filtermap[filt])
 			bandname = filtermap[filt]
 		else:
-			print 'No mapping found for filter', filt
+			print('No mapping found for filter', filt)
 			bandname = flit
 
 	photocal = cf.CfhtPhotoCal(hdr=phdr, bandname=bandname)
@@ -1524,22 +1525,22 @@ def get_cfht_image(fn, psffn, pixscale, RA, DEC, sz, bandname=None,
 	filename = phdr['FILENAME'].strip()
 
 	(H,W) = image.shape
-	print 'Image shape', W, H
-	print 'x0,y0', x0,y0
-	print 'Original WCS:', wcs
+	print('Image shape', W, H)
+	print('x0,y0', x0,y0)
+	print('Original WCS:', wcs)
 	rdcorners = [wcs.pixelxy2radec(x+x0,y+y0) for x,y in [(1,1),(W,1),(W,H),(1,H)]]
-	print 'Original RA,Dec corners:', rdcorners
+	print('Original RA,Dec corners:', rdcorners)
 	wcs = crop_wcs(wcs, x0, y0, W, H)
-	print 'Cropped WCS:', wcs
+	print('Cropped WCS:', wcs)
 	rdcorners = [wcs.pixelxy2radec(x,y) for x,y in [(1,1),(W,1),(W,H),(1,H)]]
-	print 'cropped RA,Dec corners:', rdcorners
+	print('cropped RA,Dec corners:', rdcorners)
 	if rotate:
 		wcs = rot90_wcs(wcs, W, H)
-		print 'Rotated WCS:', wcs
+		print('Rotated WCS:', wcs)
 		rdcorners = [wcs.pixelxy2radec(x,y) for x,y in [(1,1),(H,1),(H,W),(1,W)]]
-		print 'rotated RA,Dec corners:', rdcorners
+		print('rotated RA,Dec corners:', rdcorners)
 
-		print 'rotating images...'
+		print('rotating images...')
 		image = np.rot90(image, k=1)
 		invvar = np.rot90(invvar, k=1)
 
@@ -1575,7 +1576,7 @@ def rot90_wcs(wcs, W, H):
 
 def _mapf_sdss_im((r, c, f, band, sdss, sdss_psf, cut_sdss, RA, DEC, S, objname,
 				   nanomaggies)):
-	print 'Retrieving', r,c,f,band
+	print('Retrieving', r,c,f,band)
 	kwargs = {}
 	if cut_sdss:
 		kwargs.update(roiradecsize=(RA,DEC,S/2))
@@ -1585,23 +1586,23 @@ def _mapf_sdss_im((r, c, f, band, sdss, sdss_psf, cut_sdss, RA, DEC, S, objname,
 									   **kwargs)
 	except:
 		import traceback
-		print 'Exception in get_tractor_image():'
+		print('Exception in get_tractor_image():')
 		traceback.print_exc()
-		print 'Failed to get R,C,F,band', r,c,f,band
+		print('Failed to get R,C,F,band', r,c,f,band)
 		return None,None
 		#raise
 	if im is None:
 		return None,None
 
 	if objname is not None:
-		print 'info', info
+		print('info', info)
 		obj = info['object']
-		print 'Header object: "%s"' % obj
+		print('Header object: "%s"' % obj)
 		if obj != objname:
-			print 'Skipping obj !=', objname
+			print('Skipping obj !=', objname)
 			return None,None
 		
-	print 'Image size', im.getWidth(), im.getHeight()
+	print('Image size', im.getWidth(), im.getHeight())
 	if im.getWidth() == 0 or im.getHeight() == 0:
 		return None,None
 	im.rcf = (r,c,f)
@@ -1621,7 +1622,7 @@ def get_tractor(RA, DEC, sz, cffns, mp, filtermap=None, sdssbands=None,
 	skies = []
 	ims = []
 	pixscale = 0.187
-	print 'CFHT images:', cffns
+	print('CFHT images:', cffns)
 	for fn in cffns:
 		psffn = fn.replace('-cr', '-psf')
 		cfimg,cfsky,cfstd = get_cfht_image(fn, psffn, pixscale, RA, DEC, sz,
@@ -1634,14 +1635,14 @@ def get_tractor(RA, DEC, sz, cffns, mp, filtermap=None, sdssbands=None,
 
 	pixscale = 0.396
 	S = int(sz / pixscale)
-	print 'SDSS size:', S, 'pixels'
+	print('SDSS size:', S, 'pixels')
 	# Find all SDSS images that could overlap the RA,Dec +- S/2,S/2 box
 	R = np.sqrt(2.*(S/2.)**2 + (2048/2.)**2 + (1489/2.)**2) * pixscale / 60.
-	print 'Search radius:', R, 'arcmin'
+	print('Search radius:', R, 'arcmin')
 	rcf = radec_to_sdss_rcf(RA,DEC, radius=R, tablefn='s82fields.fits')
-	print 'SDSS fields nearby:', len(rcf)
+	print('SDSS fields nearby:', len(rcf))
 	rcf = [(r,c,f,ra,dec) for r,c,f,ra,dec in rcf if r != 206]
-	print 'Filtering out run 206:', len(rcf)
+	print('Filtering out run 206:', len(rcf))
 
 	if just_rcf:
 		return rcf
@@ -1650,37 +1651,37 @@ def get_tractor(RA, DEC, sz, cffns, mp, filtermap=None, sdssbands=None,
 
 	if good_sdss_only:
 		W = fits_table('window_flist-DR8-S82.fits')
-		print 'Building fidmap...'
+		print('Building fidmap...')
 		fidmap = dict(zip(W.run * 10000 + W.camcol * 1000 + W.field, W.score))
-		print 'finding scores...'
+		print('finding scores...')
 		scores = []
 		noscores = []
 		rcfscore = {}
 		for r,c,f,nil,nil in rcf:
-			print 'RCF', r,c,f
+			print('RCF', r,c,f)
 			fid = r*10000 + c*1000 + f
 			score = fidmap.get(fid, None)
 			if score is None:
-				print 'No entry'
+				print('No entry')
 				noscores.append((r,c,f))
 				continue
-			print 'score', score
+			print('score', score)
 			scores.append(score)
 			rcfscore[(r,c,f)] = score
-		print 'No scores:', noscores
+		print('No scores:', noscores)
 		#plt.clf()
 		#plt.hist(scores, 20)
 		#plt.savefig('scores.png')
-		print len(scores), 'scores'
+		print(len(scores), 'scores')
 		scores = np.array(scores)
-		print sum(scores > 0.5), '> 0.5'
+		print(sum(scores > 0.5), '> 0.5')
 
 	args = []
 	for r,c,f,ra,dec in rcf:
 		if good_sdss_only:
 			score = rcfscore.get((r,c,f), 0.)
 			if score < 0.5:
-				print 'Skipping,', r,c,f
+				print('Skipping,', r,c,f)
 				continue
 		for band in sdssbands:
 			args.append((r, c, f, band, sdss, sdss_psf, cut_sdss, RA, DEC, S, sdss_object, nanomaggies))
@@ -1689,22 +1690,22 @@ def get_tractor(RA, DEC, sz, cffns, mp, filtermap=None, sdssbands=None,
 	if nimages:
 		args = args[:nimages]
 
-	print 'Getting', len(args), 'SDSS images...'
+	print('Getting', len(args), 'SDSS images...')
 	X = mp.map(_mapf_sdss_im, args)
-	print 'Got', len(X), 'SDSS images.'
+	print('Got', len(X), 'SDSS images.')
 	for im,sky in X:
 		if im is None:
 			continue
 		ims.append(im)
 		skies.append(sky)
-	print 'Kept', len(X), 'SDSS images.'
+	print('Kept', len(X), 'SDSS images.')
 
 	tractor.setImages(Images(*ims))
 	return tractor,skies
 
 def mysavefig(fn):
 	plt.savefig(fn)
-	print 'Wrote', fn
+	print('Wrote', fn)
 
 def get_cf_sources2(RA, DEC, sz, maglim=25, mags=['u','g','r','i','z'],
 					nanomaggies=False):
@@ -1735,11 +1736,11 @@ def get_cf_sources2(RA, DEC, sz, maglim=25, mags=['u','g','r','i','z'],
 	dec0,dec1 = DEC-S/2., DEC+S/2.
 
 	T = Tcomb
-	print 'Read', len(T), 'sources'
+	print('Read', len(T), 'sources')
 	T.ra  = T.alpha_j2000
 	T.dec = T.delta_j2000
 	T = T[(T.ra > ra0) * (T.ra < ra1) * (T.dec > dec0) * (T.dec < dec1)]
-	print 'Cut to', len(T), 'objects nearby.'
+	print('Cut to', len(T), 'objects nearby.')
 
 	srcs = Catalog()
 	for t in T:
@@ -1786,7 +1787,7 @@ def get_cf_sources2(RA, DEC, sz, maglim=25, mags=['u','g','r','i','z'],
 
 		srcs.append(CompositeGalaxy(pos, m_exp, shape_exp, m_dev, shape_dev))
 
-	print 'Sources:', len(srcs)
+	print('Sources:', len(srcs))
 	return srcs
 
 def get_cf_sources3(RA, DEC, sz, magcut=100, mags=['u','g','r','i','z']):
@@ -1817,11 +1818,11 @@ def get_cf_sources3(RA, DEC, sz, magcut=100, mags=['u','g','r','i','z']):
 	dec0,dec1 = DEC-S/2., DEC+S/2.
 
 	T = Tcomb
-	print 'Read', len(T), 'sources'
+	print('Read', len(T), 'sources')
 	T.ra  = T.alpha_j2000
 	T.dec = T.delta_j2000
 	T = T[(T.ra > ra0) * (T.ra < ra1) * (T.dec > dec0) * (T.dec < dec1)]
-	print 'Cut to', len(T), 'objects nearby.'
+	print('Cut to', len(T), 'objects nearby.')
 
 	maglim = 27.
 	
@@ -1866,7 +1867,7 @@ def get_cf_sources3(RA, DEC, sz, magcut=100, mags=['u','g','r','i','z']):
 		# exp + deV
 		#print 'comp'
 		srcs.append(CompositeGalaxy(pos, m_exp, shape_exp, m_dev, shape_dev))
-	print 'Sources:', len(srcs)
+	print('Sources:', len(srcs))
 	#for src in srcs:
 	#	print '  ', src
 	return srcs
@@ -1878,16 +1879,16 @@ def tweak_wcs((tractor, im)):
 	#print 'Tractor', tractor
 	#print 'Image', im
 	tractor.images = Images(im)
-	print 'tweak_wcs: fitting params:', tractor.getParamNames()
+	print('tweak_wcs: fitting params:', tractor.getParamNames())
 	for step in range(10):
-		print 'Run optimization step', step
+		print('Run optimization step', step)
 		t0 = Time()
 		dlnp,X,alpha = tractor.optimize(alphas=[0.5, 1., 2., 4.])
 		t_opt = (Time() - t0)
-		print 'alpha', alpha
-		print 'Optimization took', t_opt, 'sec'
+		print('alpha', alpha)
+		print('Optimization took', t_opt, 'sec')
 		lnp0 = tractor.getLogProb()
-		print 'Lnprob', lnp0
+		print('Lnprob', lnp0)
 		if dlnp == 0:
 			break
 	return im.getParams()
@@ -1898,7 +1899,7 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf, colorbar, fmt)):
 	plt.clf()
 	plotpos0 = [0.01, 0.01, 0.98, 0.94]
 
-	print 'zr = ', zr
+	print('zr = ', zr)
 
 	ima = dict(interpolation='nearest', origin='lower',
 			   vmin=zr[0], vmax=zr[1], cmap='gray')
@@ -1910,7 +1911,7 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf, colorbar, fmt)):
 
 	data = tim.getImage()
 	q0,q1,q2,q3,q4 = np.percentile(data.ravel(), [0, 25, 50, 75, 100])
-	print 'Data quartiles:', q0, q1, q2, q3, q4
+	print('Data quartiles:', q0, q1, q2, q3, q4)
 
 	ima.update(norm=ArcsinhNormalize(mean=q2, std=(q3-q1)/2., vmin=zr[0], vmax=zr[1]),
 			   vmin=None, vmax=None,    nonl=True)
@@ -2034,7 +2035,7 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf, colorbar, fmt)):
 		if pp is None:
 			pp = np.array([tractor.getParams()])
 		nw = len(pp)
-		print 'modsum/chisum plots for', nw, 'walkers'
+		print('modsum/chisum plots for', nw, 'walkers')
 		for k in xrange(nw):
 			tractor.setParams(pp[k,:])
 			mod = tractor.getModelImage(i)
@@ -2083,7 +2084,7 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf, colorbar, fmt)):
 
 def plots(tractor, plotnames, step, pp=None, mp=None, ibest=None, imis=None, alllnp=None,
 		  tsuf=None, colorbar=True, format='.png'):
-	print 'plots...'
+	print('plots...')
 	if 'lnps' in plotnames:
 		plotnames.remove('lnps')
 		plt.figure(figsize=(6,6))
@@ -2100,7 +2101,7 @@ def plots(tractor, plotnames, step, pp=None, mp=None, ibest=None, imis=None, all
 	NI = len(tractor.getImages())
 	for i in imis:
 		if i >= NI:
-			print 'Skipping plot of image', i, 'with N images', NI
+			print('Skipping plot of image', i, 'with N images', NI)
 			continue
 		zr = tractor.getImage(i).zr
 		args.append((tractor, i, zr, plotnames, step, pp, ibest, tsuf, colorbar, format))
@@ -2108,7 +2109,7 @@ def plots(tractor, plotnames, step, pp=None, mp=None, ibest=None, imis=None, all
 		map(plot1, args)
 	else:
 		mp.map(plot1, args)
-	print 'plots done'
+	print('plots done')
 
 
 def nlmap(X):
@@ -2137,7 +2138,7 @@ dpool = None
 def pool_stats():
 	if dpool is None:
 		return
-	print 'Total pool CPU time:', dpool.get_worker_cpu()
+	print('Total pool CPU time:', dpool.get_worker_cpu())
 
 def cut_bright(cat, magcut=24, mag='i'):
 	brightcat = Catalog()
@@ -2189,7 +2190,7 @@ def get_cfht_coadd_image(RA, DEC, S, bandname=None, filtermap=None,
 	P = pyfits.open(fn)
 	image = P[0].data
 	phdr = P[0].header
-	print 'Image', image.shape
+	print('Image', image.shape)
 	(H,W) = image.shape
 	OH,OW = H,W
 
@@ -2201,49 +2202,49 @@ def get_cfht_coadd_image(RA, DEC, S, bandname=None, filtermap=None,
 	x,y = wcs.radec2pixelxy(RA, DEC)
 	x -= 1
 	y -= 1
-	print 'Center pix:', x,y
+	print('Center pix:', x,y)
 	xc,yc = int(x), int(y)
 	image = image[yc-S: yc+S, xc-S: xc+S]
 	image = image.copy()
-	print 'Subimage:', image.shape
+	print('Subimage:', image.shape)
 	twcs = FitsWcs(wcs)
 	twcs.setX0Y0(xc-S, yc-S)
 	xs,ys = twcs.positionToPixel(RaDecPos(RA, DEC))
-	print 'Subimage center pix:', xs,ys
+	print('Subimage center pix:', xs,ys)
 	rd = twcs.pixelToPosition(xs, ys)
-	print 'RA,DEC vs RaDec', RA,DEC, rd
+	print('RA,DEC vs RaDec', RA,DEC, rd)
 
 	if bandname is None:
 		# try looking up in filtermap.
 		filt = phdr['FILTER']
 		if filt in filtermap:
-			print 'Mapping filter', filt, 'to', filtermap[filt]
+			print('Mapping filter', filt, 'to', filtermap[filt])
 			bandname = filtermap[filt]
 		else:
-			print 'No mapping found for filter', filt
+			print('No mapping found for filter', filt)
 			bandname = filt
 
 	zp = float(phdr['MAGZP'])
-	print 'Zeropoint', zp
+	print('Zeropoint', zp)
 	if nanomaggies:
 		photocal = LinearPhotoCal(NanoMaggies.zeropointToScale(zp), band=bandname)
 	else:
 		photocal = MagsPhotoCal(bandname, zp)
-	print photocal
+	print(photocal)
 
 	fn = 'cs82data/W4p1m1_i.V2.7A.swarp.cut.weight.fits'
 	P = pyfits.open(fn)
 	weight = P[0].data
 	weight = weight[yc-S:yc+S, xc-S:xc+S].copy()
-	print 'Weight', weight.shape
-	print 'Median', np.median(weight.ravel())
+	print('Weight', weight.shape)
+	print('Median', np.median(weight.ravel()))
 	invvar = weight
 
 	fn = 'cs82data/W4p1m1_i.V2.7A.swarp.cut.flag.fits'
 	P = pyfits.open(fn)
 	flags = P[0].data
 	flags = flags[yc-S:yc+S, xc-S:xc+S].copy()
-	print 'Flags', flags.shape
+	print('Flags', flags.shape)
 	del P
 	invvar[flags == 1] = 0.
 
@@ -2255,12 +2256,12 @@ def get_cfht_coadd_image(RA, DEC, S, bandname=None, filtermap=None,
 	# Select which of the NxN PSF images applies to our cutout.
 	ix = int(N * float(xc) / OW)
 	iy = int(N * float(yc) / OH)
-	print 'PSF image number', ix,iy
+	print('PSF image number', ix,iy)
 	PW,PH = W/N, H/N
-	print 'PSF image shape', PW,PH
+	print('PSF image shape', PW,PH)
 
 	psfim = psfim[iy*PH: (iy+1)*PH, ix*PW: (ix+1)*PW]
-	print 'my PSF image shape', PW,PH
+	print('my PSF image shape', PW,PH)
 	psfim = np.maximum(psfim, 0)
 	psfim /= np.sum(psfim)
 
@@ -2308,7 +2309,7 @@ def get_cfht_coadd_image(RA, DEC, S, bandname=None, filtermap=None,
 	plt.colorbar()
 	plt.savefig('copsf.png')
 
-	print 'image min', image.min()
+	print('image min', image.min())
 	plt.clf()
 	plt.imshow(image, interpolation='nearest', origin='lower',
 			   vmin=0, vmax=10.)
@@ -2384,11 +2385,11 @@ def optsources_searchlight(tractor, im, step0,
 	XX = np.linspace(npix/2, W-npix/2, nx)
 	YY = np.linspace(npix/2, H-npix/2, ny)
 	dx,dy = XX[1]-XX[0], YY[1]-YY[0]
-	print 'Optimizing on a grid of', len(XX), 'x', len(YY), 'cells'
-	print 'Cell sizes', dx,'x',dy, 'pixels'
+	print('Optimizing on a grid of', len(XX), 'x', len(YY), 'cells')
+	print('Cell sizes', dx,'x',dy, 'pixels')
 	XY = zip(XX,YY)
 	R = np.sqrt(2.)*npix/2. * np.sqrt(np.abs(np.linalg.det(im.wcs.cdAtPixel(0,0))))
-	print 'Radius', R, 'deg'
+	print('Radius', R, 'deg')
 
 	# while len(hpqueue):
 	# 	hp = hpqueue.pop()
@@ -2416,12 +2417,12 @@ def optsources_searchlight(tractor, im, step0,
 	# 	# FIXME -- add PSF-sized margin to radius
 	# 	#ra,dec = (radecroi[0]+radecroi[1])/2., (radecroi[2]+radecroi[3])/2.
 	for xi,yi in XY:
-		print 'x,y', xi,yi
+		print('x,y', xi,yi)
 		rd = im.wcs.pixelToPosition(xi, yi)
 		ra,dec = rd.ra, rd.dec
-		print 'ra,dec', ra,dec
+		print('ra,dec', ra,dec)
 
-		print 'All sources:', len(tractor.catalog)
+		print('All sources:', len(tractor.catalog))
 		tractor.catalog.freezeAllParams()
 		tractor.catalog.thawSourcesInCircle(RaDecPos(ra, dec), R/60.)
 
@@ -2445,16 +2446,16 @@ def optsources_searchlight(tractor, im, step0,
 		plt.axis([0,W,0,H])
 		fn = 'circle-%04i.png' % step
 		plt.savefig(fn)
-		print 'Saved', fn
+		print('Saved', fn)
 
 		for ss in range(10):
-			print 'Optimizing:', len(tractor.getParamNames())
+			print('Optimizing:', len(tractor.getParamNames()))
 			for nm in tractor.getParamNames()[:10]:
-				print nm
-			print '...'
+				print(nm)
+			print('...')
 			(dlnp,X,alpha) = tractor.optimize() #damp=1.)
-			print 'dlnp', dlnp
-			print 'alpha', alpha
+			print('dlnp', dlnp)
+			print('alpha', alpha)
 			lnp0 = tractor.getLogProb()
 			alllnp.append([lnp0])
 
@@ -2476,15 +2477,15 @@ def optsourcestogether(tractor, step0, doplots=True, plotsa={}, mindlnp=1e-3):
 	step = step0
 	alllnp = []
 	while True:
-		print 'Run optimization step', step
+		print('Run optimization step', step)
 		t0 = Time()
 		dlnp,X,alpha = tractor.optimize(alphas=[0.01, 0.125, 0.25, 0.5, 1., 2., 4.])
 		t_opt = (Time() - t0)
 		#print 'alpha', alpha
-		print 'Optimization took', t_opt, 'sec'
+		print('Optimization took', t_opt, 'sec')
 		assert(all(np.isfinite(X)))
 		lnp0 = tractor.getLogProb()
-		print 'Lnprob', lnp0
+		print('Lnprob', lnp0)
 		alllnp.append([lnp0])
 		if doplots:
 			pp = np.array([tractor.getParams()])
@@ -2510,12 +2511,12 @@ def optsourcesseparate(tractor, step0, plotmod=10, plotsa={}, doplots=True, sort
 	alllnp = []
 	for j,srci in enumerate(I):
 		srci = int(srci)
-		print 'source', j, 'of', len(I), ', srci', srci, ':', tractor.catalog[srci]
+		print('source', j, 'of', len(I), ', srci', srci, ':', tractor.catalog[srci])
 		tractor.catalog.thawParam(srci)
-		print tractor.numberOfParams(), 'active parameters'
+		print(tractor.numberOfParams(), 'active parameters')
 		for nm in tractor.getParamNames():
-			print '  ', nm
-		print 'Source:', tractor.catalog[srci]
+			print('  ', nm)
+		print('Source:', tractor.catalog[srci])
 
 		# Here we subtract the other models from each image.
 		# We could instead keep a table of model patches x images,
@@ -2530,33 +2531,33 @@ def optsourcesseparate(tractor, step0, plotmod=10, plotsa={}, doplots=True, sort
 			im.data = sub
 		tractor.catalog = Catalog(allsources[srci])
 		tpre = Time()-tt0
-		print 'Removing other sources:', tpre
+		print('Removing other sources:', tpre)
 		src = allsources[srci]
 
 		tt0 = Time()
 		p0 = tractor.catalog.getParams()
 		while True:
 			step += 1
-			print 'Run optimization step', step
+			print('Run optimization step', step)
 			t0 = Time()
 			dlnp,X,alpha = tractor.optimize(alphas=[0.01, 0.125, 0.25, 0.5, 1., 2., 4.])
 			t_opt = (Time() - t0)
-			print 'Optimization took', t_opt, 'sec'
-			print src
+			print('Optimization took', t_opt, 'sec')
+			print(src)
 			lnp0 = tractor.getLogProb()
-			print 'Lnprob', lnp0
+			print('Lnprob', lnp0)
 			alllnp.append([lnp0])
 			if doplots and step % plotmod == 0:
-				print 'Plots...'
+				print('Plots...')
 				pp = np.array([tractor.getParams()])
 				ibest = 0
 				plots(tractor,
 					  ['modbest', 'chibest', 'lnps'],
 					  step, pp=pp, ibest=ibest, alllnp=alllnp, **plotsa)
-				print 'Done plots.'
+				print('Done plots.')
 			if alpha == 0 or dlnp < mindlnp:
 				break
-		print 'removing other sources:', Time()-tt0
+		print('removing other sources:', Time()-tt0)
 
 		tractor.catalog = allsources
 		for im,dat in zip(tractor.images, origims):
@@ -2590,17 +2591,17 @@ def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
 	# nanomaggies?
 	donm = True
 
-	print 'Grabbing WISE images'
+	print('Grabbing WISE images')
 	wiseims = get_wise_coadd_images(RA, DEC, sz/2., nanomaggies=donm)
 
 	import cPickle
-	print 'Pickling WISE images...'
+	print('Pickling WISE images...')
 	SS = cPickle.dumps(wiseims)
 
-	print 'UnPickling WISE images...'
+	print('UnPickling WISE images...')
 	wims = cPickle.loads(SS)
 
-	print wims
+	print(wims)
 
 	srcs = get_cf_sources2(RA, DEC, sz, mags=['i2'] + sdssbands,
 						   nanomaggies=donm)
@@ -2620,7 +2621,7 @@ def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
 	
 	pixscale = 0.187
 	S = int(1.01 * sz / pixscale) / 2
-	print 'Grabbing S =', S, 'subregion of CFHT coadd'
+	print('Grabbing S =', S, 'subregion of CFHT coadd')
 	coim = get_cfht_coadd_image(RA, DEC, S, filtermap=filtermap, doplots=False,
 								nanomaggies=donm)
 	tractor.images.prepend(coim)
@@ -2628,7 +2629,7 @@ def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
 	tractor.catalog = srcs
 
 	tims = tractor.getImages()
-	print 'Plotting outlines of', len(tims), 'images'
+	print('Plotting outlines of', len(tims), 'images')
 	plt.clf()
 	for tim in tims:
 		H,W = tim.shape
@@ -2648,7 +2649,7 @@ def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
 	plt.savefig('radec.png')
 
 	if doplots:
-		print 'Data plots...'
+		print('Data plots...')
 		plots(tractor, ['data'], 0, **plotsa)
 
 	# clear unused image planes.
@@ -2665,7 +2666,7 @@ def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
 	
 
 def stage100(tractor=None, mp=None, **kwargs):
-	print 'Tractor cache is', tractor.cache
+	print('Tractor cache is', tractor.cache)
 
 	allsources = tractor.getCatalog()
 	allimages = tractor.getImages()
@@ -2677,7 +2678,7 @@ def stage100(tractor=None, mp=None, **kwargs):
 	brightcat,Ibright = cut_bright(allsources, magcut=maglim, mag='i2')
 	tractor.setCatalog(brightcat)
 
-	print 'Cut to', len(brightcat), 'sources'
+	print('Cut to', len(brightcat), 'sources')
 
 	sbands = ['u','g','r','i','z']
 	allbands = ['i2'] + sbands
@@ -2692,10 +2693,10 @@ def stage100(tractor=None, mp=None, **kwargs):
 	tractor.freezeParam('images')
 	tractor.catalog.freezeParamsRecursive('pos', 'shape', 'shapeExp', 'shapeDev')
 
-	print 'params0:'
+	print('params0:')
 	for nm in tractor.getParamNames()[:10]:
-		print '  ', nm
-	print '...'
+		print('  ', nm)
+	print('...')
 	params0 = tractor.getParams()
 
 	####
@@ -2730,8 +2731,8 @@ def stage100(tractor=None, mp=None, **kwargs):
 		# LinearPhotoCal -- nanomaggies
 		band = im.photocal.band
 
-		print im
-		print 'Band', band
+		print(im)
+		print('Band', band)
 
 		(ii,bb,pp) = ap[imi]
 		assert(ii == imi)
@@ -2774,7 +2775,7 @@ def stage01(tractor=None, mp=None, **kwargs):
 	#tractor.cache = cache
 	#tractor.pickleCache = True
 
-	print 'Tractor cache is', tractor.cache
+	print('Tractor cache is', tractor.cache)
 
 	allsources = tractor.getCatalog()
 	allimages = tractor.getImages()
@@ -2787,7 +2788,7 @@ def stage01(tractor=None, mp=None, **kwargs):
 	brightcat,Ibright = cut_bright(allsources, magcut=maglim, mag='i2')
 	tractor.setCatalog(brightcat)
 
-	print 'Cut to', len(brightcat), 'sources'
+	print('Cut to', len(brightcat), 'sources')
 
 	sbands = ['u','g','r','i','z']
 	allbands = ['i2'] + sbands
@@ -2803,9 +2804,9 @@ def stage01(tractor=None, mp=None, **kwargs):
 	tractor.catalog.freezeParamsRecursive('pos', 'shape', 'shapeExp', 'shapeDev')
 
 	# ... and save those params.
-	print 'params0:'
+	print('params0:')
 	for nm in tractor.getParamNames()[:10]:
-		print '  ', nm
+		print('  ', nm)
 	params0 = tractor.getParams()
 
 	allp = []
@@ -2813,11 +2814,11 @@ def stage01(tractor=None, mp=None, **kwargs):
 	for imi,im in enumerate(allimages):
 
 		if imi == 0:
-			print 'Skipping', im.name
+			print('Skipping', im.name)
 			continue
 
-		print 'Fitting image', imi, 'of', len(allimages)
-		print im.name
+		print('Fitting image', imi, 'of', len(allimages))
+		print(im.name)
 		tractor.setImages(Images(im))
 
 		#if im.name.startswith('SDSS'):
@@ -2825,9 +2826,9 @@ def stage01(tractor=None, mp=None, **kwargs):
 		#else:
 		#	band = im.photocal.band
 
-		print im
+		print(im)
 		band = im.photocal.band
-		print 'Band', band
+		print('Band', band)
 
 		### Plot CMD results so far...
 		i2mags = np.array([src.getBrightness().i2 for src in tractor.catalog])
@@ -2873,7 +2874,7 @@ def stage01(tractor=None, mp=None, **kwargs):
 		pfn = 's2-%03i.pickle' % imi
 		
 		pickle_to_file((allp, i2mags, tractor.catalog), pfn)
-		print 'saved pickle', pfn
+		print('saved pickle', pfn)
 
 		# Reset params; need to thaw first though!
 		tractor.catalog.thawParamsRecursive(*allbands)
@@ -2887,15 +2888,15 @@ def stage01(tractor=None, mp=None, **kwargs):
 			tractor.thawParam('images')
 			im.freezeAllBut('sky', 'psf')
 			im.psf.freezeAllBut('sigmas')
-			print 'Image params:', im.getParamNames()
-			print 'Initial sky:', im.sky
-			print 'Initial psf:', im.psf
+			print('Image params:', im.getParamNames())
+			print('Initial sky:', im.sky)
+			print('Initial psf:', im.psf)
 
-		print 'Tractor:', tractor
-		print 'Active params:', len(tractor.getParamNames())
+		print('Tractor:', tractor)
+		print('Active params:', len(tractor.getParamNames()))
 		for nm in tractor.getParamNames()[:10]:
-			print '  ', nm
-		print '...'
+			print('  ', nm)
+		print('...')
 
 		plotims = [0,]
 		plotsa = dict(imis=plotims, mp=mp)
@@ -2929,23 +2930,23 @@ def stage01(tractor=None, mp=None, **kwargs):
 
 
 		
-		print 'Final sky:', im.sky
-		print 'Final psf:', im.psf
+		print('Final sky:', im.sky)
+		print('Final psf:', im.psf)
 
 		# WISE sky
 		tractor.freezeParam('images')
 
 		p = tractor.getParams()
-		print 'params', p
+		print('params', p)
 		#print 'Saving params:'
 		#for nm,val in zip(tractor.getParamNames(), p):
 		#print '  ', nm, '=', val
 		allp.append((imi, band, p))
 
-		print 'Cache stats:'
-		print 'tractor:'
+		print('Cache stats:')
+		print('tractor:')
 		tractor.cache.printStats()
-		print 'galaxies:'
+		print('galaxies:')
 		get_galaxy_cache().printStats()
 
 	tractor.setImages(allimages)
@@ -2959,19 +2960,19 @@ def stage200(tractor=None, mp=None, **kwargs):
 	allsources = tractor.getCatalog()
 
 	def addw(br):
-		print 'bright', br
+		print('bright', br)
 		bands = ['w1','w2','w3','w4']
 		i2 = br.i2
 		kwa = dict([(b,getattr(br,b)) for b in br.order])
 		kwa.update(dict([(b,i2) for b in bands]))
 		br = NanoMaggies(order=br.order+bands, **kwa)
-		print 'updated brightness', br
+		print('updated brightness', br)
 		return br
 
 	# add w[1234] to brightnesses
 	cat = tractor.getCatalog()
 	for src in cat:
-		print src
+		print(src)
 		if (isinstance(src, PointSource) or
 			isinstance(src, ExpGalaxy) or
 			isinstance(src, DevGalaxy)):
@@ -2980,7 +2981,7 @@ def stage200(tractor=None, mp=None, **kwargs):
 			# Comp
 			src.brightnessExp = addw(src.brightnessExp)
 			src.brightnessDev = addw(src.brightnessDev)
-		print '-->', src
+		print('-->', src)
 
 	return dict(tractor=tractor)
 
@@ -3006,14 +3007,14 @@ def runstage(stage, force=[], threads=1, doplots=True, opt=None):
 	else:
 		mp = multiproc(threads)
 
-	print 'Runstage', stage
+	print('Runstage', stage)
 
 	pfn = 'tractor%02i.pickle' % stage
 	if os.path.exists(pfn):
 		if stage in force:
-			print 'Ignoring pickle', pfn, 'and forcing stage', stage
+			print('Ignoring pickle', pfn, 'and forcing stage', stage)
 		else:
-			print 'Reading pickle', pfn
+			print('Reading pickle', pfn)
 			R = unpickle_from_file(pfn)
 			return R
 
@@ -3028,7 +3029,7 @@ def runstage(stage, force=[], threads=1, doplots=True, opt=None):
 
 	else:
 		P = {}
-	print 'Running stage', stage
+	print('Running stage', stage)
 	F = eval('stage%02i' % stage)
 
 	P.update(mp=mp, doplots=doplots)
@@ -3054,7 +3055,7 @@ def runstage(stage, force=[], threads=1, doplots=True, opt=None):
 	P.update(opt=opt)
 	
 	R = F(**P)
-	print 'Stage', stage, 'finished'
+	print('Stage', stage, 'finished')
 
 	if 'tractor' in R:
 		try:
@@ -3062,9 +3063,9 @@ def runstage(stage, force=[], threads=1, doplots=True, opt=None):
 			tractor.pickleCache = False
 		except:
 			pass
-	print 'Saving pickle', pfn
+	print('Saving pickle', pfn)
 	pickle_to_file(R, pfn)
-	print 'Saved', pfn
+	print('Saved', pfn)
 	return R
 
 
@@ -3073,13 +3074,13 @@ def kicktires():
 	Tcomb.about()
 
 	I = np.flatnonzero(Tcomb.chi2_psf < Tcomb.chi2_model)
-	print len(I), 'point sources'
+	print(len(I), 'point sources')
 	plt.clf()
 	plt.hist(Tcomb[I].mag_psf, 100, range=(15,25))
 	plt.savefig('psf-mag.png')
 
 	I = np.flatnonzero(Tcomb.chi2_psf > Tcomb.chi2_model)
-	print len(I), 'galaxies'
+	print(len(I), 'galaxies')
 
 	plt.clf()
 	ha=dict(histtype='step', range=(15,40), bins=100)
@@ -3154,8 +3155,8 @@ def checkstarmags():
 	T.ra  = T.alpha_j2000
 	T.dec = T.delta_j2000
 
-	print 'RA', T.ra.min(), T.ra.max()
-	print 'Dec', T.dec.min(), T.dec.max()
+	print('RA', T.ra.min(), T.ra.max())
+	print('Dec', T.dec.min(), T.dec.max())
 
 	'''select probpsf, psfmag_i, devmag_i, expmag_i, cmodelmag_i, fracDev_i, ra, dec into mydb.MyTable from photoprimary
 	where
@@ -3175,7 +3176,7 @@ def checkstarmags():
 	TT = T[I]
 	SS = S[J]
 
-	print len(TT), 'matches'
+	print(len(TT), 'matches')
 
 	plt.clf()
 	#plothist(TT.mag_psf, SS.psfmag_i)

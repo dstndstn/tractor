@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 from math import pi, sqrt
 
@@ -25,9 +26,9 @@ def qn1fit(I, x0, y0, K=2, w=None, mu=None, sig=None):
 
     def ghatfunc(theta):
         tnew = em_update_theta(I, theta)
-        print 'ghat function:'
-        print '  theta = ', theta
-        print '  tnew  = ', tnew
+        print('ghat function:')
+        print('  theta = ', theta)
+        print('  tnew  = ', tnew)
         return tnew - theta
 
     # number of parameters
@@ -37,28 +38,28 @@ def qn1fit(I, x0, y0, K=2, w=None, mu=None, sig=None):
     theta = makevector(w, mu, sig)
     P = len(theta)
 
-    print 'w,mu,sig', w.shape, mu.shape, sig.shape
-    print 'theta', theta.shape
+    print('w,mu,sig', w.shape, mu.shape, sig.shape)
+    print('theta', theta.shape)
 
     ghat = ghatfunc(theta)
     #em_update_theta(I, theta) - theta
-    print 'ghat', ghat.shape
-    print ghat
+    print('ghat', ghat.shape)
+    print(ghat)
     A = -np.eye(P)
-    print 'A', A.shape
+    print('A', A.shape)
 
     steps = 10
     for step in range(steps):
         deltheta = -np.dot(A, ghat)
-        print 'deltheta', deltheta.shape
-        print deltheta
+        print('deltheta', deltheta.shape)
+        print(deltheta)
         delghat = ghatfunc(theta + deltheta) - ghat
-        print 'delghat', delghat.shape
-        print delghat
+        print('delghat', delghat.shape)
+        print(delghat)
 
         delA = (np.dot(np.dot((deltheta - np.dot(A, delghat)), deltheta.T), A)
                 / (np.dot(np.dot(deltheta.T, A), delghat)))
-        print 'delA', delA.shape
+        print('delA', delA.shape)
         theta += deltheta
         ghat += delghat
         A += delA
@@ -112,10 +113,10 @@ def emfit(I, x0, y0, K=2, w=None, mu=None, sig=None, plots=False,
     steps = 1000
     for step in range(steps):
         if printlog:
-            print 'step', step
-            print '  w=', w
-            print '  mu=', mu
-            print '  sig=', sig
+            print('step', step)
+            print('  w=', w)
+            print('  mu=', mu)
+            print('  sig=', sig)
 
         if plots and step % 10 == 0:
             IM = render_image(X, Y, w, mu, sig)

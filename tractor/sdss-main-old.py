@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
 	import matplotlib
 	matplotlib.use('Agg')
@@ -10,9 +11,9 @@ def choose_field2():
 	import astrometry.libkd.spherematch as spherematch
 
 	fields = fits_table('window_flist.fits')
-	print len(ngc2000), 'NGC/IC objects'
+	print(len(ngc2000), 'NGC/IC objects')
 	goodngc = [n for n in ngc2000 if n.get('classification', None) == 'Gx']
-	print len(goodngc), 'NGC galaxies'
+	print(len(goodngc), 'NGC galaxies')
 
 	nra  = np.array([n['ra']  for n in goodngc])
 	ndec = np.array([n['dec'] for n in goodngc])
@@ -28,20 +29,20 @@ def choose_field2():
 		isngc = n['is_ngc']
 		num = n['id']
 		if (sum(ii) > 10) & (n['dec'] > 2.0):
-			print '<p>'
-			print ('NGC' if isngc else 'IC'), num, 'has', sum(ii), 'fields, and is at RA = ', n['ra'], 'Dec=', n['dec']
-			print '</p>'
+			print('<p>')
+			print(('NGC' if isngc else 'IC'), num, 'has', sum(ii), 'fields, and is at RA = ', n['ra'], 'Dec=', n['dec'])
+			print('</p>')
 
 			ff = fields[J[ii]]
-			print 'rcfi = [',
+			print('rcfi = [', end=' ')
 			for f in ff:
-				print '(', f.run, ',', f.camcol, ',', f.field, ',', f.incl, ')',
-			print ']'
+				print('(', f.run, ',', f.camcol, ',', f.field, ',', f.incl, ')', end=' ')
+			print(']')
 			for f in ff:
-				print 'Incl', f.incl, '<br />'
-				print ('<img src="%s" /><br /><br />' %
-					   ('http://skyservice.pha.jhu.edu/DR8/ImgCutout/getjpegcodec.aspx?R=%i&C=%i&F=%i&Z=25' % (f.run, f.camcol, f.field)))
-				print '<br />'
+				print('Incl', f.incl, '<br />')
+				print(('<img src="%s" /><br /><br />' %
+					   ('http://skyservice.pha.jhu.edu/DR8/ImgCutout/getjpegcodec.aspx?R=%i&C=%i&F=%i&Z=25' % (f.run, f.camcol, f.field))))
+				print('<br />')
 
 	# NGC 2511 has 12 fields, and is at RA = 120.575 Dec= 9.4 
 
@@ -120,7 +121,7 @@ def plotfootprints(radecs, radecrange=None, catalog=None, labels=None):
 def prepareTractor(initialPlots=False, useSimplexy=True, rcfcut=None):
 	rcfi = [ ( 5194 , 2 , 44 , 22.500966 ), ( 4275 , 2 , 224 , 90.003437 ), ( 3638 , 2 , 209 , 90.002781 ), ( 4291 , 2 , 227 , 90.003589 ), ( 4275 , 2 , 225 , 90.003437 ), ( 5849 , 4 , 27 , 20.003216 ), ( 5803 , 5 , 41 , 19.990683 ), ( 5194 , 2 , 43 , 22.500966 ), ( 3638 , 2 , 210 , 90.002781 ), ( 5803 , 5 , 42 , 19.990683 ), ( 5925 , 5 , 30 , 19.933986 ), ( 5935 , 5 , 27 , 20.000022 ), ]			
 	rcf = [(r,c,f) for r,c,f,i in rcfi if i < 85]
-	print 'RCF', rcf
+	print('RCF', rcf)
 
 	sdss = DR7()
 
@@ -132,15 +133,15 @@ def prepareTractor(initialPlots=False, useSimplexy=True, rcfcut=None):
 		for r,c,f in rcf:
 			for filetype in ['fpC', 'fpM', 'psField', 'tsField']:
 				fn = sdss_filename(filetype, r, c, f, band=bandname)
-				print 'Need', fn
+				print('Need', fn)
 				#if not os.path.exists(fn):
-				print 'Getting from DAS'
+				print('Getting from DAS')
 				das.sdss_das_get(filetype, fn, r, c, f, band=bandname)
 
 	# we only got some of them...
 	rcf = [ (5194, 2, 44), (5194, 2, 43), (5849, 4, 27), (5935, 5, 27) ]
 	rcf = [rcf[0], rcf[2]]
-	print 'RCF', rcf
+	print('RCF', rcf)
 
 	rois = [
 		# Mostly overlapping:
@@ -161,7 +162,7 @@ def prepareTractor(initialPlots=False, useSimplexy=True, rcfcut=None):
 		]
 	fullsizes = []
 
-	print 'Reading SDSS input files...'
+	print('Reading SDSS input files...')
 
 	band = band_index(bandname)
 
@@ -187,9 +188,9 @@ def prepareTractor(initialPlots=False, useSimplexy=True, rcfcut=None):
 			fpcfn = sdss.getFilename('fpC', run, camcol, field, bandname)
 			xyfn = fpcfn.replace('.fit', '.xy')
 			if not os.path.exists(xyfn):
-				print 'Running image2xy...'
+				print('Running image2xy...')
 				cmd = 'image2xy %s -o %s' % (fpcfn, xyfn)
-				print 'Command:', cmd
+				print('Command:', cmd)
 				os.system(cmd)
 			assert(os.path.exists(xyfn))
 			xy = fits_table(xyfn)
@@ -220,7 +221,7 @@ def prepareTractor(initialPlots=False, useSimplexy=True, rcfcut=None):
 		x0,x1,y0,y1 = rois[i]
 
 		if initialPlots:
-			print 'Initial plots...'
+			print('Initial plots...')
 			plt.clf()
 			plotimage(image, vmin=zr[0], vmax=zr[1])
 			ax = plt.axis()
@@ -238,8 +239,8 @@ def prepareTractor(initialPlots=False, useSimplexy=True, rcfcut=None):
 			plt.savefig('img-%02i.png' % i)
 
 		dgpsf = psfield.getDoubleGaussian(band)
-		print 'Creating double-Gaussian PSF approximation'
-		print '  ', dgpsf
+		print('Creating double-Gaussian PSF approximation')
+		print('  ', dgpsf)
 		(a,s1, b,s2) = dgpsf
 		psf = NCircularGaussianPSF([s1, s2], [a, b])
 
@@ -254,7 +255,7 @@ def prepareTractor(initialPlots=False, useSimplexy=True, rcfcut=None):
 					name='Image%i(r/c/f=%i/%i%i)' % (i, run, camcol, field))
 		images.append(img)
 
-	print 'Creating footprint image...'
+	print('Creating footprint image...')
 	radecs = []
 	for i,img in enumerate(images):
 		# Find full-size and ROI boxes
@@ -305,7 +306,7 @@ def main():
 	(images, simplexys, rois, zrange, nziv, footradecs
 	 ) = prepareTractor(opt.initialplots, use_simplexy)
 
-	print 'Firing up tractor...'
+	print('Firing up tractor...')
 	tractor = SDSSTractor(images, debugnew=False, debugchange=True)
 
 	footradecrange = None
@@ -336,18 +337,18 @@ def main():
 		for i in range(tractor.getNImages()):
 			tractor.getImage(i).setPsf(psfs[i])
 			tractor.getImage(i).setSky(skys[i])
-		print 'Starting from step', stepi
-		print 'there are', len(steps), 'steps'
-		print 'remaining steps:', steps[stepi:]
+		print('Starting from step', stepi)
+		print('there are', len(steps), 'steps')
+		print('remaining steps:', steps[stepi:])
 
 		# HACK
-		print 'REPLACING STEPS:'
+		print('REPLACING STEPS:')
 		steps = ( ['']*(stepi) +
 				  [ 'changeall' ]
 				  )
-		print steps
-		print 'there are', len(steps), 'steps'
-		print 'remaining steps:', steps[stepi:]
+		print(steps)
+		print('there are', len(steps), 'steps')
+		print('remaining steps:', steps[stepi:])
 				  
 		
 
@@ -362,11 +363,11 @@ def main():
 			break
 		step = steps[stepi]
 
-		print
-		print '-----------------------------'
-		print 'Step', stepi, ':', step
-		print '-----------------------------'
-		print
+		print()
+		print('-----------------------------')
+		print('Step', stepi, ':', step)
+		print('-----------------------------')
+		print()
 
 		if step == 'changeall':
 			Nsrcs = len(tractor.getCatalog())
@@ -375,10 +376,10 @@ def main():
 			Nsteps = int(ceil(Nsrcs / float(batchchange)))
 			addsteps = ['changenext', 'plots', 'save'] * Nsteps
 			steps = steps[:stepi+1] + addsteps + steps[stepi+1:]
-			print 'modified steps array:', steps
+			print('modified steps array:', steps)
 
 		elif step == 'changenext':
-			print 'Changing next batch of sources.'
+			print('Changing next batch of sources.')
 			cat = tractor.getCatalog()
 			srcis = range(changenext, len(cat))
 			if len(srcis) == 0:
@@ -389,7 +390,7 @@ def main():
 			changenext += batchchange
 
 		elif step == 'plots':
-			print 'Making plots...'
+			print('Making plots...')
 			NS = len(tractor.getCatalog())
 
 			chis = tractor.getChiImages()
@@ -430,7 +431,7 @@ def main():
 				plt.title(tt)
 				fn = 'mod-%02i-%02i.png' % (ploti, i)
 				plt.savefig(fn)
-				print 'Wrote', fn
+				print('Wrote', fn)
 				fns.append(fn)
 
 				if len(chiAimargs) <= i:
@@ -445,7 +446,7 @@ def main():
 				plt.title(tt)
 				fn = 'chiA-%02i-%02i.png' % (ploti, i)
 				plt.savefig(fn)
-				print 'Wrote', fn
+				print('Wrote', fn)
 				fns.append(fn)
 
 				chiBimarg = dict(interpolation='nearest', origin='lower',
@@ -457,7 +458,7 @@ def main():
 				plt.title(tt)
 				fn = 'chiB-%02i-%02i.png' % (ploti, i)
 				plt.savefig(fn)
-				print 'Wrote', fn
+				print('Wrote', fn)
 				fns.append(fn)
 
 			tractor.boxes = []
@@ -467,7 +468,7 @@ def main():
 											tractor.getCatalog())
 			fn = 'footprints-%02i.png' % (ploti)
 			plt.savefig(fn)
-			print 'Wrote', fn
+			print('Wrote', fn)
 			footfn = fn
 
 			html = '<html><head><title>Step %i</title></head><body>' % ploti
@@ -516,12 +517,12 @@ def main():
 			ploti += 1
 
 		elif step == 'sky':
-			print 'Optimizing sky...'
+			print('Optimizing sky...')
 			for i in range(tractor.getNImages()):
 				tractor.optimizeSkyAtFixedComplexityStep(i)
 
 		elif step == 'opt':
-			print 'Optimizing catalog...'
+			print('Optimizing catalog...')
 			tractor.optimizeCatalogAtFixedComplexityStep()
 
 		elif step == 'source':
@@ -532,10 +533,10 @@ def main():
 									   avoidExisting=False)
 
 		elif step == 'simplesources':
-			print "Initializing with simplexy's source lists..."
+			print("Initializing with simplexy's source lists...")
 			cat = tractor.getCatalog()
 			for sxy,img,roi in zip(simplexys, tractor.getImages(), rois):
-				print 'Making mask image...'
+				print('Making mask image...')
 				# Mask out a small region around each existing source.
 				mask = np.zeros_like(img.getImage()).astype(bool)
 				wcs = img.getWcs()
@@ -549,11 +550,11 @@ def main():
 					yhi = min(py+r, H)
 					mask[ylo:yhi, xlo:xhi] = True
 
-				print 'Simplexy has', len(sxy), 'sources'
+				print('Simplexy has', len(sxy), 'sources')
 				(x0,x1,y0,y1) = roi
 				I = (sxy.x >= x0) * (sxy.x <= x1) * (sxy.y >= y0) * (sxy.y <= y1)
 				sxy = sxy[I]
-				print 'Keeping', len(sxy), 'in bounds'
+				print('Keeping', len(sxy), 'in bounds')
 				for i in range(len(sxy)):
 					# MAGIC -1: simplexy produces FITS-convention coords
 					x = sxy.x[i] - x0 - 1.
@@ -580,7 +581,7 @@ def main():
 			tractor.changeSourceTypes()
 
 		elif step == 'change1':
-			print 'Changing one source.'
+			print('Changing one source.')
 			srci = int(random.random() * len(tractor.getCatalog()))
 			srcs = [tractor.getCatalog()[srci]]
 			tractor.changeSourceTypes(srcs)
@@ -635,7 +636,7 @@ def main():
 						   'catalog-%02i.pickle' % savei)
 			savei += 1
 			
-		print 'Tractor cache has', len(tractor.cache), 'entries'
+		print('Tractor cache has', len(tractor.cache), 'entries')
 
 if __name__ == '__main__':
 	main()

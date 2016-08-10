@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -27,13 +28,13 @@ class TractorCeresTest(unittest.TestCase):
         tr = CeresTractor([tim1,tim2], [star])
 
         mods = tr.getModelImages()
-        print 'mods:', mods
-        print list(mods)
+        print('mods:', mods)
+        print(list(mods))
         chis = tr.getChiImages()
-        print 'chis:', chis
-        print list(chis)
+        print('chis:', chis)
+        print(list(chis))
         lnp = tr.getLogProb()
-        print 'lnp', lnp
+        print('lnp', lnp)
 
         tr.freezeParam('images')
         #dlnp,x,a = tr.optimize()
@@ -43,9 +44,9 @@ class TractorCeresTest(unittest.TestCase):
 
         star.brightness.setParams([100.])
         star.freezeAllBut('brightness')
-        print 'star', star
+        print('star', star)
         tr.optimize_forced_photometry()
-        print 'star', star
+        print('star', star)
 
 
 

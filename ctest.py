@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
@@ -12,7 +13,7 @@ ps = PlotSequence('ctest')
 
 class MyTractor(Tractor):
     def setParams(self, p):
-        print 'MyTractor.setParams', p
+        print('MyTractor.setParams', p)
         super(MyTractor, self).setParams(p)
 
         tim = self.getImage(0)
@@ -52,30 +53,30 @@ tim.data = mod + np.random.normal(scale=sig1, size=mod.shape)
 src.brightness = Flux(10.)
 src.pos = PixPos(W/2 - 1, H/2 - 1)
 
-print 'All params:'
+print('All params:')
 tractor.printThawedParams()
 
 tim.freezeParams('psf', 'photocal')
 
-print 'Thawed param:'
+print('Thawed param:')
 tractor.printThawedParams()
-print 'Params:', tractor.getParams()
+print('Params:', tractor.getParams())
 lnp0 = tractor.getLogProb()
-print 'Logprob:', lnp0
+print('Logprob:', lnp0)
 
 #print 'Testing _getOneImageDerivs...'
 #tractor._getOneImageDerivs(0)
 
-print 'Calling ceres optimizer...'
+print('Calling ceres optimizer...')
 from tractor.ceres_optimizer import CeresOptimizer
 tractor.optimizer = CeresOptimizer()
 tractor.optimize()
 
-print 'Ceres opt finished'
-print 'Params:', tractor.getParams()
+print('Ceres opt finished')
+print('Params:', tractor.getParams())
 lnp1 = tractor.getLogProb()
-print 'Logprob:', lnp1
+print('Logprob:', lnp1)
 
-print 'Thawed param:'
+print('Thawed param:')
 tractor.printThawedParams()
 

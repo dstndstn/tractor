@@ -1,3 +1,4 @@
+from __future__ import print_function
 class TractorMultiprocMixin(object):
 
     def __init__(self, mp=None, **kwargs):
@@ -142,8 +143,8 @@ class TractorMultiprocMixin(object):
                     #     deriv = d
                         
                     if not np.all(np.isfinite(deriv.patch.ravel())):
-                        print 'Derivative for source', src
-                        print 'deriv index', i
+                        print('Derivative for source', src)
+                        print('deriv index', i)
                         assert(False)
                     srcderivs[k].append((deriv, img))
             allderivs.extend(srcderivs)
@@ -168,7 +169,7 @@ def getmodelimagefunc2(X):
         return tr.getModelImage(im)
     except:
         import traceback
-        print 'Exception in getmodelimagefun2:'
+        print('Exception in getmodelimagefun2:')
         traceback.print_exc()
         raise
 

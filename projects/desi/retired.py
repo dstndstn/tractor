@@ -1,3 +1,4 @@
+from __future__ import print_function
 ### Code that is not being used but that I'm not quite ready
 ### to part with...
 
@@ -5,7 +6,7 @@
 def read_source_extractor_catalog(secatfn, zp):
     T = fits_table(secatfn, hdu=2,
                    column_map={'alpha_j2000':'ra', 'delta_j2000':'dec'},)
-    print len(T), 'sources in SExtractor catalog'
+    print(len(T), 'sources in SExtractor catalog')
     T.mag_psf      += zp
     T.mag_spheroid += zp
     T.mag_disk     += zp
@@ -18,8 +19,8 @@ def read_source_extractor_catalog(secatfn, zp):
 
 
 def checkout_psf_models():
-    print 'PSF', psf
-    print type(psf)
+    print('PSF', psf)
+    print(type(psf))
     flux = SEcat.flux_auto
     ima = dict(interpolation='nearest', origin='lower', cmap='gray')
 
@@ -37,7 +38,7 @@ def checkout_psf_models():
         ext = [ix-S, ix+S, iy-S, iy+S]
         subiv = tim.getInvvar()[iy-S:iy+S+1, ix-S:ix+S+1]
 
-        print 'Subimage max', subim.max()
+        print('Subimage max', subim.max())
 
         psfimg = psf.instantiateAt(ix, iy, nativeScale=True)
 
@@ -49,7 +50,7 @@ def checkout_psf_models():
         sh,sw = subim.shape
         #subrgb = np.zeros((h,w,3))
         subrgb = plt.cm.gray((subim - ima['vmin']) / (ima['vmax'] - ima['vmin']))
-        print 'subrgb', subrgb.shape
+        print('subrgb', subrgb.shape)
         bad = (1,0,0)
         for i in range(3):
             subrgb[:,:,i][subiv == 0] = bad[i]
@@ -68,29 +69,29 @@ def checkout_psf_models():
 
         pixpsf = PixelizedPSF(psfimg)
         patch = pixpsf.getPointSourcePatch(x - (ix-S), y - (iy-S))
-        print 'Patch', patch.x0, patch.y0, patch.patch.shape
+        print('Patch', patch.x0, patch.y0, patch.patch.shape)
 
         psfsub = np.zeros_like(subim)
         patch.addTo(psfsub)
         psfsub /= psfsub.sum()
-        print 'Pix sum', patch.patch.sum()
-        print 'Pix max', psfsub.max()
+        print('Pix sum', patch.patch.sum())
+        print('Pix max', psfsub.max())
 
         plt.imshow(psfsub, **ima)
         plt.title('PSF pix')
 
         mog = psf.mogAt(x, y)
-        print 'PSF MOG:', mog
+        print('PSF MOG:', mog)
         patch = mog.getPointSourcePatch(x, y)
-        print 'Patch', patch.x0, patch.y0, patch.patch.shape
+        print('Patch', patch.x0, patch.y0, patch.patch.shape)
         patch.x0 -= (ix - S)
         patch.y0 -= (iy - S)
         psfg = np.zeros_like(subim)
         patch.addTo(psfg)
         psfg /= psfg.sum()
 
-        print 'Gauss sum', patch.patch.sum()
-        print 'Gauss max', psfg.max()
+        print('Gauss sum', patch.patch.sum())
+        print('Gauss max', psfg.max())
 
         # Re-fit the PSF image as MoG
         # im = np.maximum(psfimg, 0)
@@ -143,13 +144,13 @@ def checkout_psf_models():
         ims = []
         ratios = []
         for i in I[:20]:
-            print
+            print()
             x,y = T.x_image[i], T.y_image[i]
             ix,iy = int(np.round(x)), int(np.round(y))
 
             psfim = tim.getPsf().getPointSourcePatch(x-1,y-1)
             ph,pw = psfim.shape
-            print 'PSF shape', pw,ph
+            print('PSF shape', pw,ph)
             S = ph/2
             if ix < S or ix > (W-S) or iy < S or iy > (H-S):
                 continue
@@ -158,16 +159,16 @@ def checkout_psf_models():
             subim = tim.getImage()[y0:y0+ph, x0:x0+pw]
 
             pixim = tim.getPsf().instantiateAt(x-1, y-1)
-            print 'pixim', pixim.sum()
+            print('pixim', pixim.sum())
             
             mn,mx = [np.percentile(subim, p) for p in [25,100]]
             zp = tim.ozpscale
-            print 'subim sum', np.sum(subim)
-            print 'flux', T.flux_psf[i]
-            print 'zpscale', zp
+            print('subim sum', np.sum(subim))
+            print('flux', T.flux_psf[i])
+            print('zpscale', zp)
             flux = T.flux_psf[i] / zp
-            print 'flux/zpscale', flux
-            print 'psfim sum', psfim.patch.sum()
+            print('flux/zpscale', flux)
+            print('psfim sum', psfim.patch.sum())
 
             dy = y - iy
             dx = x - ix
@@ -212,14 +213,14 @@ def checkout_psf_models():
             imx = np.sum(xx * subim) / subim.sum()
             imy = np.sum(yy * subim) / subim.sum()
             
-            print
-            print 'Dx,Dy', dx,dy
-            print 'Model    centroid %.5f, %.5f' % (modx,mody)
-            print 'Shiftpix centroid %.5f, %.5f' % (shx, shy )
-            print 'Image    centroid %.5f, %.5f' % (imx,imy)
+            print()
+            print('Dx,Dy', dx,dy)
+            print('Model    centroid %.5f, %.5f' % (modx,mody))
+            print('Shiftpix centroid %.5f, %.5f' % (shx, shy ))
+            print('Image    centroid %.5f, %.5f' % (imx,imy))
             #print 'Pixim    centroid %.5f, %.5f' % (pixx,pixy)
 
-            print 'Image - Model     %.5f, %.5f' % (imx-shx,imy-shy)
+            print('Image - Model     %.5f, %.5f' % (imx-shx,imy-shy))
 
             #shiftpix2 = shift(shiftpix, (imy-shy, imx-shx))
             shiftpix2 = shift(shiftpix,

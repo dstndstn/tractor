@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 import pyfits as pyf
 import os
@@ -21,7 +22,7 @@ def add_to_table_nsatlas(name):
     record = data[mask]
 
     fn = name+"-updated.pickle"
-    print fn
+    print(fn)
 
     CG,r50s,r90s,concs=unpickle_from_file(fn)
 
@@ -70,9 +71,9 @@ def add_to_table_nsatlas(name):
     tbuhdulist =pyf.HDUList([pri_hdu,hdu])
 
     #tbuhdulist.writeto('large_galaxies.fits',clobber=True)
-    print os.getcwd()
+    print(os.getcwd())
     os.chdir('/data1/dwm261/tractor/')
-    print os.getcwd()
+    print(os.getcwd())
 
     
 
@@ -87,7 +88,7 @@ def add_to_table(name):
 
 
     fn = name+"-updated.pickle"
-    print fn
+    print(fn)
 
     CG,r50s,r90s,concs=unpickle_from_file(fn)
 
@@ -136,7 +137,7 @@ def add_to_table(name):
     tbuhdulist =pyf.HDUList([pri_hdu,hdu])
 
     tbuhdulist.writeto('large_galaxies.fits',clobber=True)
-    print os.getcwd()
+    print(os.getcwd())
     os.chdir('/data1/dwm261/tractor/')
-    print os.getcwd()
+    print(os.getcwd())
 

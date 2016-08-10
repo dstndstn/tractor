@@ -1,3 +1,4 @@
+from __future__ import print_function
 import sys
 import numpy as np
 import logging
@@ -46,16 +47,16 @@ tractor.printThawedParams()
 
 allderivs = tractor.getDerivs()
 X1 = tractor.getUpdateDirection(allderivs, use_tsnnls=True, **kwa)
-print 'tsnnls:', X1
+print('tsnnls:', X1)
 
 X2 = tractor.getUpdateDirection(allderivs, **kwa)
-print 'lsqr:', X2
+print('lsqr:', X2)
 
 kwa = dict(shared_params=False)
 
 cat = tractor.getCatalog()
 
-print
+print()
 
 tractor.setCatalog(cat.copy())
 for src in tractor.getCatalog():
@@ -63,9 +64,9 @@ for src in tractor.getCatalog():
 tractor.printThawedParams()
 
 X2 = tractor.optimize_forced_photometry(use_tsnnls=False, **kwa)
-print 'Got normal:' #, X2
+print('Got normal:') #, X2
 for src in tractor.getCatalog():
-    print src.getBrightness()
+    print(src.getBrightness())
 
 
 tractor.setCatalog(cat.copy())
@@ -73,9 +74,9 @@ for src in tractor.getCatalog():
     src.freezeParam('pos')
 
 X1 = tractor.optimize_forced_photometry(use_tsnnls=True, **kwa)
-print 'Got TSNNLS:' #, X1
+print('Got TSNNLS:') #, X1
 for src in tractor.getCatalog():
-    print src.getBrightness()
+    print(src.getBrightness())
 
 
 

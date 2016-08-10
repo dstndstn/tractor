@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -23,10 +24,10 @@ def _bounce_one_blob(args):
     try:
         oneblob(*args)
     except:
-        print 'Error running oneblob:'
+        print('Error running oneblob:')
         import traceback
         traceback.print_exc()
-        print
+        print()
 
 
 def s82_main():
@@ -40,11 +41,11 @@ def s82_main():
     #        and (run = 106 or run = 206)  -> s82.fits
 
     T = fits_table('s82.fits')
-    print 'Read', len(T), 'objects'
+    print('Read', len(T), 'objects')
     T.cut(T.nchild == 0)
-    print len(T), 'children'
+    print(len(T), 'children')
     T.cut(T.insidemask == 0)
-    print len(T), 'not in mask'
+    print(len(T), 'not in mask')
 
     #T.cut(np.hypot(T.ra - 5.0562, T.dec - 0.0643) < 0.001)
     
@@ -63,11 +64,11 @@ def s82_main():
                              ('MAYBE_EGHOST', 0x200000000000000),
                   ]:
         T.cut(T.flags & flagval == 0)
-        print len(T), 'without', flagname, 'bit set'
+        print(len(T), 'without', flagname, 'bit set')
     
     # Cut to objects that are likely to appear in the individual images
     T.cut(T.psfmag_r < 22.)
-    print 'Cut to', len(T), 'with psfmag_r < 22 in coadd'
+    print('Cut to', len(T), 'with psfmag_r < 22 in coadd')
 
     T.tag = np.array(['%.4f-%.4f.fits' % (r,d) for r,d in zip(T.ra, T.dec)])
     T[:Nkeep].writeto(os.path.join(outdir, 'stamps.fits'),
@@ -94,9 +95,9 @@ def write_catalogs(T, Nkeep, outdir):
     for i in range(Nkeep):
         I,J,d = match_radec(np.array([T.ra[i]]), np.array([T.dec[i]]),
                             T.ra, T.dec, radius)
-        print len(J), 'matched within', radius*3600., 'arcsec'
+        print(len(J), 'matched within', radius*3600., 'arcsec')
         t = T[J]
-        print len(t), 'matched within', radius*3600., 'arcsec'
+        print(len(t), 'matched within', radius*3600., 'arcsec')
         
         tt = fits_table()            
         cols = ['ra','dec','run','camcol','field',#'probpsf',
@@ -152,7 +153,7 @@ def write_catalogs(T, Nkeep, outdir):
 
         catfn = os.path.join(outdir, 'cat-s82-%.4f-%.4f.fits' % (t.ra[0], t.dec[0]))
         tt.writeto(catfn)
-        print 'Wrote', catfn
+        print('Wrote', catfn)
         
         
 def main():
@@ -181,7 +182,7 @@ def oldjunk():
         # ]
     
         T = fits_table('stars2.fits')
-        print 'Read stars:'
+        print('Read stars:')
         T.about()
         stars.extend(zip(T.teff, T.teff_sigma, T.ra, T.dec))
 
@@ -203,11 +204,11 @@ def oldjunk():
             'theta_exp', 'theta_experr', 'ab_exp', 'ab_experr', 'phi_exp_deg',
             'resolve_status', 'nchild', 'flags', 'objc_flags',
             'run','camcol','field','id'])
-        print len(T), 'objects'
+        print(len(T), 'objects')
         T.cut(T.objc_type == 3)
-        print len(T), 'galaxies'
+        print(len(T), 'galaxies')
         T.cut(T.nchild == 0)
-        print len(T), 'children'
+        print(len(T), 'children')
         T.cut(np.argsort(-T.modelflux[:,2]))
 
         # keep only one child in each blend family
@@ -219,7 +220,7 @@ def oldjunk():
             keepi.append(i)
             parents.add(T.parent[i])
         T.cut(np.array(keepi))
-        print len(T), 'unique blend families'
+        print(len(T), 'unique blend families')
         T = T[:25]
 
         stars = [(ra,dec,[],cutToPrimary) for ra,dec in zip(T.ra, T.dec)]
@@ -242,10 +243,10 @@ def oldjunk():
                 bands = 'ugriz'
                 fns = ['cat'] + [stamp_pattern % band for band in bands]
                 for j,fn in enumerate(fns[1:]):
-                    print 'Filename', fn
+                    print('Filename', fn)
                     F = fitsio.FITS(fn)
                     n = len(F) / 2
-                    print 'n ext:', n
+                    print('n ext:', n)
                     cols = int(np.ceil(np.sqrt(n)))
                     rows = int(np.ceil(n / float(cols)))
                     plt.clf()
@@ -265,7 +266,7 @@ def oneblob(ra, dec, addToHeader, cutToPrimary, outdir):
 
     plotfn = os.path.join(outdir, 'stamps-%.4f-%.4f.png' % (ra, dec))
     if os.path.exists(plotfn):
-        print 'Exists:', plotfn
+        print('Exists:', plotfn)
         return []
 
     outfns = []
@@ -294,19 +295,19 @@ def oneblob(ra, dec, addToHeader, cutToPrimary, outdir):
     wlistfn = sdss.filenames.get('window_flist', 'window_flist.fits')
     #wfn = os.path.join(os.environ['PHOTO_RESOLVE'], 'window_flist.fits')
     RCF = radec_to_sdss_rcf(ra, dec, tablefn=wlistfn)
-    print 'Found', len(RCF), 'fields in range.'
+    print('Found', len(RCF), 'fields in range.')
 
     keepRCF = []
     for run,camcol,field,r,d in RCF:
         rr = sdss.get_rerun(run, field)
-        print 'Rerun:', rr
+        print('Rerun:', rr)
         if rr == '157':
             continue
         keepRCF.append((run,camcol,field))
     RCF = keepRCF
 
     if len(RCF) == 0:
-        print 'No run/camcol/fields in rerun 301'
+        print('No run/camcol/fields in rerun 301')
         return
         
     TT = []
@@ -321,9 +322,9 @@ def oneblob(ra, dec, addToHeader, cutToPrimary, outdir):
                                             cutToPrimary=cutToPrimary,
                                             getsourceobjs=True,
                                             useObjcType=True)
-        print 'Got sources:'
+        print('Got sources:')
         for src in srcs:
-            print '  ', src
+            print('  ', src)
 
         if len(srcs) == 0:
             continue
@@ -380,20 +381,20 @@ def oneblob(ra, dec, addToHeader, cutToPrimary, outdir):
 
         for ifield,(run,camcol,field) in enumerate(RCF):
             fn = sdss.retrieve('photoField', run, camcol, field)
-            print 'Retrieved', fn
+            print('Retrieved', fn)
             F = fits_table(fn)
             F.cut((F.run == run) * (F.camcol == camcol) * (F.field == field))
-            print len(F), 'fields'
+            print(len(F), 'fields')
             assert(len(F) == 1)
             F = F[0]
 
             boundpixradius = int(np.ceil(np.sqrt(2.) * pixradius))
-            print 'RA,Dec,size', (ra, dec, boundpixradius)
+            print('RA,Dec,size', (ra, dec, boundpixradius))
             tim,tinfo = get_tractor_image_dr9(
                 run, camcol, field, band, sdss=sdss, nanomaggies=True,
                 roiradecsize=(ra, dec, boundpixradius))
             
-            print 'Got tim:', tim
+            print('Got tim:', tim)
             frame = sdss.readFrame(run, camcol, field, band)
             if tim is None:
                 continue
@@ -467,7 +468,7 @@ def oneblob(ra, dec, addToHeader, cutToPrimary, outdir):
             tanwcs.add_to_header(ivhdr)
             
             fn = stamp_pattern % band
-            print 'writing', fn
+            print('writing', fn)
 
             F = fitsio.FITS(fn, mode='rw', clobber=True)
             tim.toFits(F, primheader=hdr,
@@ -554,7 +555,7 @@ def oneblob(ra, dec, addToHeader, cutToPrimary, outdir):
                 rimgs.append(img)
             
             fn = stamp_pattern % band
-            print 'writing', fn
+            print('writing', fn)
             fitsio.write(fn, img.astype(np.float32), clobber=clobber, header=hdr)
             fitsio.write(fn, iv.astype(np.float32))
             if clobber:

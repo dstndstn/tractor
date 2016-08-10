@@ -1,3 +1,4 @@
+from __future__ import print_function
 import sys
 import pstats
 import numpy as np
@@ -22,21 +23,21 @@ def main():
         P = [pstats.Stats(fn) for fn in args]
     
     for p in P:
-        print
-        print 'Cumulative time'
-        print
+        print()
+        print('Cumulative time')
+        print()
         #p = pstats.Stats(fn)
         p = p.strip_dirs()
         p.sort_stats('cumulative').print_stats(100)
 
-        print
-        print 'Callees ordered by cumulative time:'
-        print
+        print()
+        print('Callees ordered by cumulative time:')
+        print()
         p.print_callees(40)
 
-        print
-        print 'Time'
-        print
+        print()
+        print('Time')
+        print()
 
         #p = pstats.Stats(fn)
         p.sort_stats('time').print_stats(40)
@@ -49,13 +50,13 @@ def main():
             p.calc_callees()
             name_size = width
             arrow = '->'
-            print 'lst length:', len(lst)
+            print('lst length:', len(lst))
             for func in lst:
                 #print 'func', func
                 if func in p.all_callees:
                     p.print_call_heading(width, "called...")
-                    print pstats.func_std_string(func).ljust(name_size) + arrow,
-                    print
+                    print(pstats.func_std_string(func).ljust(name_size) + arrow, end=' ')
+                    print()
                     #p.print_call_line(width, func, p.all_callees[func])
                     cc = p.all_callees[func]
                     #print 'Callees:', cc
@@ -69,7 +70,7 @@ def main():
                             CT.append(ct)
                             #print '  ', func, ct, tt
                         else:
-                            print 'NON-TUPLE', value
+                            print('NON-TUPLE', value)
 
                     I = np.argsort(CT)
                     FV = list(cc.items())
@@ -83,12 +84,12 @@ def main():
                             else:
                                 substats = '%d' % (nc,)
                             substats = '%-20s %s %s  %s' % (substats, pstats.f8(tt), pstats.f8(ct), name)
-                        print '   ' + substats
+                        print('   ' + substats)
 
                 else:
                     p.print_call_line(width, func, {})
-                print
-                print
+                print()
+                print()
 
 
 

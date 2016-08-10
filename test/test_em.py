@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 
 from astrometry.util.plotutils import *
@@ -85,8 +86,8 @@ if __name__ == '__main__':
     
     fit1 = GaussianMixturePSF.fromStamp(img, **fsa)
 
-    print 'truth:', truepsf
-    print 'fit1 :', fit1
+    print('truth:', truepsf)
+    print('fit1 :', fit1)
 
     for mu,sigma in [#(0, 1e-6), (1e-6,1e-6), (1e-5,1e-6),
                      (0.,1e-4), #(1e-4,1e-4), (2e-4,1e-4), (-1e-4,1e-4), (-2e-4,1e-4),
@@ -95,8 +96,8 @@ if __name__ == '__main__':
         # (1e-2, 1e-2), #(0, 2e-2)
         # (-1e-2, 1e-2),
                      ]:
-        print
-        print 'Fit with noise mu,sigma', mu,sigma
+        print()
+        print('Fit with noise mu,sigma', mu,sigma)
         h,w = img.shape
         plt.clf()
         plt.subplot(2,1,1)
@@ -106,8 +107,8 @@ if __name__ == '__main__':
             plt.plot(img[h/2,:] + noise[h/2,:], 'g-', alpha=0.1)
             fit2,sky = GaussianMixturePSF.fromStamp(img + noise, **fsa)
             fit2.radius = truepsf.radius
-            print 'fit sky=', sky
-            print fit2
+            print('fit sky=', sky)
+            print(fit2)
             fitparams.append(fit2.getParams())
             
             fitimg = fit2.getPointSourcePatch(0.,0.)
@@ -144,8 +145,8 @@ if __name__ == '__main__':
     nrounds = 1
     
     psfimg = psf.instantiateAt(100,100)
-    print 'psfimg sum', psfimg.sum()
-    print '  ', psfimg.min(), psfimg.max()
+    print('psfimg sum', psfimg.sum())
+    print('  ', psfimg.min(), psfimg.max())
     plt.clf()
     dimshow(np.log10(psfimg + 1e-3))
     ps.savefig()
@@ -153,13 +154,13 @@ if __name__ == '__main__':
     from tractor.fitpsf import em_init_params
     N = 3
     w,mu,var = em_init_params(N, None, None, None)
-    print 'w,mu,var', w.shape,mu.shape,var.shape
+    print('w,mu,var', w.shape,mu.shape,var.shape)
     
     ph,pw = psfimg.shape
     parm = np.hstack([[w[i], mu[i,1] + ph/2, mu[i,0] + pw/2,
                        var[i,1,1],var[i,0,1],var[i,0,0]]
                        for i in range(len(w))])
-    print 'parm', parm
+    print('parm', parm)
 
     t0 = Time()
     for i in range(nrounds):
@@ -169,12 +170,12 @@ if __name__ == '__main__':
         start = GMix(pars=parm)
         mix.run_em(start, sky, maxiter=10000)
         res = mix.get_gmix()
-    print 'Sheldon:', Time()-t0
-    print 'Result:', res
+    print('Sheldon:', Time()-t0)
+    print('Result:', res)
     parm = res.get_full_pars()
-    print 'Params:', parm
+    print('Params:', parm)
     meta = mix.get_result()
-    print 'Sky:', meta['psky']
+    print('Sky:', meta['psky'])
     w = np.array(parm[0::6])
     w /= w.sum()
     mu = np.array([parm[2::6]-pw/2, parm[1::6]-ph/2]).T
@@ -183,7 +184,7 @@ if __name__ == '__main__':
     #print 'w,mu,var', w,mu,var
     #print w.shape, mu.shape, var.shape
     espsf = GaussianMixturePSF(w, mu, var)
-    print 'ES psf:', espsf
+    print('ES psf:', espsf)
 
     plot_result(espsf, psfimg)
     plt.suptitle('Sheldon')
@@ -195,31 +196,31 @@ if __name__ == '__main__':
         # Pull the minimum pixel lower and lower, and see what happens.
         psfimgx = psfimg.copy()
         psfimgx[1,1] = psfimgx.min()
-        print 'Min:', psfimgx.min()
+        print('Min:', psfimgx.min())
         for i in range(10):
-            print
-            print 'Round', i
+            print()
+            print('Round', i)
             psfimgx[1,1] *= 2.
-            print 'Min:', psfimgx.min()
+            print('Min:', psfimgx.min())
             imx,sky = prep_image(psfimgx)
-            print 'Sky:', sky
+            print('Sky:', sky)
             ob = Observation(imx)
             mix = GMixEM(ob)
             start = GMix(pars=parm)
             mix.run_em(start, sky, maxiter=10000)
             res = mix.get_gmix()
-            print 'Result:', res
+            print('Result:', res)
             parm = res.get_full_pars()
-            print 'Params:', parm
+            print('Params:', parm)
             meta = mix.get_result()
-            print 'Sky:', meta['psky']
+            print('Sky:', meta['psky'])
             w = np.array(parm[0::6])
             w /= w.sum()
             mu = np.array([parm[2::6]-pw/2, parm[1::6]-ph/2]).T
             var = np.array([ [[cc, rc], [rc,rr]]
                              for rr,rc,cc in zip(parm[3::6], parm[4::6], parm[5::6])])
             espsf = GaussianMixturePSF(w, mu, var)
-            print 'ES psf:', espsf
+            print('ES psf:', espsf)
             plot_result(espsf, psfimgx)
             plt.suptitle('Sheldon: round %i' % i)
             ps.savefig()
@@ -238,8 +239,8 @@ if __name__ == '__main__':
     t0 = Time()
     for i in range(nrounds):
         gpsf1 = GaussianMixturePSF.fromStamp(psfimg, **fsa)
-    print 'fromStamp:', Time()-t0
-    print gpsf1
+    print('fromStamp:', Time()-t0)
+    print(gpsf1)
 
     plot_result(gpsf1, psfimg)
     plt.suptitle('fromStamp (orig)')
@@ -249,8 +250,8 @@ if __name__ == '__main__':
         t0 = Time()
         for i in range(nrounds):
             gpsf2 = GaussianMixturePSF.fromStamp(psfimg, v2=True, **fsa)
-        print 'fromStamp (v2):', Time()-t0
-        print gpsf2
+        print('fromStamp (v2):', Time()-t0)
+        print(gpsf2)
     
         plot_result(gpsf2, psfimg)
         plt.suptitle('fromStamp (v2)')
@@ -259,8 +260,8 @@ if __name__ == '__main__':
         t0 = Time()
         for i in range(nrounds):
             gpsf3 = GaussianMixturePSF.fromStamp(psfimg, v2=True, approx=1e-8, **fsa)
-        print 'fromStamp (v3):', Time()-t0
-        print gpsf3
+        print('fromStamp (v3):', Time()-t0)
+        print(gpsf3)
 
         plot_result(gpsf3, psfimg)
         plt.suptitle('fromStamp (v2, 1e-8)')
@@ -269,8 +270,8 @@ if __name__ == '__main__':
     t0 = Time()
     for i in range(nrounds):
         gpsf4,sky = GaussianMixturePSF.fromStamp(psfimg, v2=True, approx=1e-6, **fsa)
-    print 'fromStamp (v4):', Time()-t0
-    print gpsf4
+    print('fromStamp (v4):', Time()-t0)
+    print(gpsf4)
     plot_result(gpsf4, psfimg)
     plt.suptitle('fromStamp (v2, 1e-6)')
     ps.savefig()
@@ -281,8 +282,8 @@ if __name__ == '__main__':
     t0 = Time()
     for i in range(nrounds):
         gpsf5 = GaussianMixturePSF.fromStamp(psfimg, v2=True, approx=1e-4, **fsa)
-    print 'fromStamp (v5):', Time()-t0
-    print gpsf5
+    print('fromStamp (v5):', Time()-t0)
+    print(gpsf5)
     plot_result(gpsf5, psfimg)
     plt.suptitle('fromStamp (v2, 1e-4)')
     ps.savefig()
@@ -294,8 +295,8 @@ if __name__ == '__main__':
         for i in range(nrounds):
             gpsf5 = GaussianMixturePSF.fromStamp(psfimg, v2=True, approx=1e-6,
                                                  clamp=False, **fsa)
-        print 'fromStamp (v5):', Time()-t0
-        print gpsf5
+        print('fromStamp (v5):', Time()-t0)
+        print(gpsf5)
         plot_result(gpsf5, psfimg)
         plt.suptitle('fromStamp (v5, 1e-6, no clamp)')
         ps.savefig()
@@ -321,12 +322,12 @@ if __name__ == '__main__':
         #tpsfs.append(psftim.psf.copy())
         dlnp,X,alpha = psftractor.optimize(priors=False, shared_params=False,
                                            damp=0.1, alphas=[0.1, 0.3, 1.0, 2.0])
-        print 'dlnp:', dlnp
+        print('dlnp:', dlnp)
         if dlnp < 1e-6:
             break
-    print 'Tractor fit PSF:'
-    print thepsf
-    print 'tim PSF fitting via Tractor:', Time()-t0
+    print('Tractor fit PSF:')
+    print(thepsf)
+    print('tim PSF fitting via Tractor:', Time()-t0)
 
     plot_result(thepsf, psfimg)
     plt.suptitle('Tractor')

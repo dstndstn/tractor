@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -27,15 +28,15 @@ def main():
     src = PointSource(PixPos(50, 50), Flux(100.))
     src.fixedRadius = 10
     patch1 = src.getModelPatch(tim)
-    print 'Patch1', patch1
+    print('Patch1', patch1)
 
     src.pos = PixPos(1, 50)
     patch2 = src.getModelPatch(tim)
-    print 'Patch2', patch2
+    print('Patch2', patch2)
 
     tr = Tractor([tim], [src])
     patch3 = tr.getModelPatch(tim, src)
-    print 'Patch3', patch3
+    print('Patch3', patch3)
 
     pos0 = PixPos(10, 50)
     src.pos = pos0
@@ -44,8 +45,8 @@ def main():
     dimshow(mod0)
     ps.savefig()
 
-    print 'Mod0 sum', mod0.sum()
-    print 'Mod0 center of mass', center_of_mass(mod0)
+    print('Mod0 sum', mod0.sum())
+    print('Mod0 center of mass', center_of_mass(mod0))
 
     pos1 = PixPos(10.25, 50.5)
     src.pos = pos1
@@ -54,24 +55,24 @@ def main():
     dimshow(mod1)
     ps.savefig()
 
-    print 'Mod1 sum', mod1.sum()
-    print 'Mod1 center of mass', center_of_mass(mod1)
+    print('Mod1 sum', mod1.sum())
+    print('Mod1 center of mass', center_of_mass(mod1))
 
     psfim = psf.getPointSourcePatch(0., 0.)
-    print 'PSF Image', psfim.shape
+    print('PSF Image', psfim.shape)
     pixpsf = PixelizedPSF(psfim.patch)
-    print 'Pix PSF', pixpsf
+    print('Pix PSF', pixpsf)
 
     tim.psf = pixpsf
     p = src.getModelPatch(tim)
     #print 'patch', p
 
-    print 'Pixelized PSF'
+    print('Pixelized PSF')
 
     src.pos = pos0
     mod = tr.getModelImage(0)
-    print 'Model sum', mod.sum()
-    print 'Model center of mass', center_of_mass(mod)
+    print('Model sum', mod.sum())
+    print('Model center of mass', center_of_mass(mod))
 
     plt.clf()
     plt.subplot(1,2,1)
@@ -83,8 +84,8 @@ def main():
     src.pos = pos1
     mod = tr.getModelImage(0)
 
-    print 'Model sum', mod.sum()
-    print 'Model center of mass', center_of_mass(mod)
+    print('Model sum', mod.sum())
+    print('Model center of mass', center_of_mass(mod))
 
     plt.clf()
     plt.subplot(1,2,1)
@@ -98,13 +99,13 @@ def main():
     modelMask = Patch(-5, 40, np.ones((30,30), bool))
     tr.setModelMasks([{ src: modelMask }])
 
-    print 'Pixelized PSF + ModelMask'
+    print('Pixelized PSF + ModelMask')
 
     src.pos = pos0
     mod = tr.getModelImage(0)
 
-    print 'Model sum', mod.sum()
-    print 'Model center of mass', center_of_mass(mod)
+    print('Model sum', mod.sum())
+    print('Model center of mass', center_of_mass(mod))
 
     plt.clf()
     plt.subplot(1,2,1)
@@ -116,8 +117,8 @@ def main():
     src.pos = pos1
     mod = tr.getModelImage(0)
 
-    print 'Model sum', mod.sum()
-    print 'Model center of mass', center_of_mass(mod)
+    print('Model sum', mod.sum())
+    print('Model center of mass', center_of_mass(mod))
 
     plt.clf()
     plt.subplot(1,2,1)
@@ -130,13 +131,13 @@ def main():
     modelMask = Patch(-5, 30, np.ones((80,80), bool))
     tr.setModelMasks([{ src: modelMask }])
 
-    print 'Pixelized PSF + ModelMask'
+    print('Pixelized PSF + ModelMask')
 
     src.pos = pos0
     mod = tr.getModelImage(0)
 
-    print 'Model sum', mod.sum()
-    print 'Model center of mass', center_of_mass(mod)
+    print('Model sum', mod.sum())
+    print('Model center of mass', center_of_mass(mod))
 
     plt.clf()
     plt.subplot(1,2,1)
@@ -148,8 +149,8 @@ def main():
     src.pos = pos1
     mod = tr.getModelImage(0)
 
-    print 'Model sum', mod.sum()
-    print 'Model center of mass', center_of_mass(mod)
+    print('Model sum', mod.sum())
+    print('Model center of mass', center_of_mass(mod))
 
     plt.clf()
     plt.subplot(1,2,1)
@@ -166,11 +167,11 @@ def main():
     src = ExpGalaxy(PixPos(50,50), Flux(100.), EllipseESoft(1., 0., 0.5))
     src.halfsize = 10
     patch1 = src.getModelPatch(tim)
-    print 'Patch1', patch1
+    print('Patch1', patch1)
 
     src.pos = PixPos(1, 50)
     patch2 = src.getModelPatch(tim)
-    print 'Patch2', patch2
+    print('Patch2', patch2)
 
 
 
@@ -222,14 +223,14 @@ def main():
 
         get_galaxy_cache().clear()
         
-        print
-        print 'minval =', mv
-        print
+        print()
+        print('minval =', mv)
+        print()
         
         patch0 = src.getModelPatch(tim)
 
         p = patch0.patch
-        print 'patch smallest non-zero value:', np.min(p[p > 0])
+        print('patch smallest non-zero value:', np.min(p[p > 0]))
 
         plt.clf()
         im = np.log10(patch0.patch + tiny)
@@ -256,11 +257,11 @@ def main():
         for deriv in derivs:
             if deriv is None:
                 continue
-            print
-            print deriv.name
-            print 'Deriv :', deriv.getExtent()
-            print 'Patch0:', patch0.getExtent()
-            print
+            print()
+            print(deriv.name)
+            print('Deriv :', deriv.getExtent())
+            print('Patch0:', patch0.getExtent())
+            print()
             plt.clf()
             deriv.patch[deriv.patch == 0] = np.nan
             dimshow(deriv.patch, extent=deriv.getExtent())
@@ -281,11 +282,11 @@ def main():
     for deriv in derivs:
         if deriv is None:
             continue
-        print
-        print deriv.name
-        print 'Deriv :', deriv.getExtent()
-        print 'Patch0:', patch0.getExtent()
-        print
+        print()
+        print(deriv.name)
+        print('Deriv :', deriv.getExtent())
+        print('Patch0:', patch0.getExtent())
+        print()
         plt.clf()
         dimshow(deriv.patch, extent=deriv.getExtent())
         plt.axis([0,W,0,H])
@@ -314,7 +315,7 @@ def main():
     
         ax = [0, W, 0, H]
         derivs = ptsrc.getParamDerivatives(tim, fastPosDerivs=False)
-        print 'Derivs:', derivs
+        print('Derivs:', derivs)
         rows,cols = 2,2
         plt.clf()
         for i,deriv in enumerate(derivs):
@@ -326,7 +327,7 @@ def main():
         ps.savefig()
     
         derivs = ptsrc.getParamDerivatives(tim)
-        print 'Derivs:', derivs
+        print('Derivs:', derivs)
         plt.clf()
         for i,deriv in enumerate(derivs):
             plt.subplot(rows,cols,i+1)
@@ -351,24 +352,24 @@ def main():
     de = e.getParamDerivatives(tim)
     dcomp = fsrc.getParamDerivatives(tim)
     f = fsrc.fracDev.getClippedValue()
-    print 'de before:', np.sum(np.abs(de[0].patch))
-    print 'dd before:', np.sum(np.abs(dd[0].patch))
+    print('de before:', np.sum(np.abs(de[0].patch)))
+    print('dd before:', np.sum(np.abs(dd[0].patch)))
     for deriv in de:
         if deriv is not None:
             deriv *= (1.-f)
     for deriv in dd:
         if deriv is not None:
             deriv *= f
-    print 'de after:', np.sum(np.abs(de[0].patch))
-    print 'dd after:', np.sum(np.abs(dd[0].patch))
+    print('de after:', np.sum(np.abs(de[0].patch)))
+    print('dd after:', np.sum(np.abs(dd[0].patch)))
             
     e2 = ExpGalaxy(fsrc.pos, fsrc.brightness * (1.-f), fsrc.shapeExp)
     d2 = DevGalaxy(fsrc.pos, fsrc.brightness *     f , fsrc.shapeDev)
     de2 = e2.getParamDerivatives(tim)
     dd2 = d2.getParamDerivatives(tim)
     
-    print 'de2:', np.sum(np.abs(de2[0].patch))
-    print 'dd2:', np.sum(np.abs(dd2[0].patch))
+    print('de2:', np.sum(np.abs(de2[0].patch)))
+    print('dd2:', np.sum(np.abs(dd2[0].patch)))
     
     if True:
         plt.clf()
@@ -419,11 +420,11 @@ def main():
         
     for src,tt in [(csrc,'Comp'), (fsrc,'FixedComp'), (e,'E'), (d,'D'),
                    (e2,'E2'), (d2,'D2')]:
-        print
+        print()
 
         patch0 = src.getModelPatch(tim)
         derivs = src.getParamDerivatives(tim)
-        print tt, ':', np.sum(np.abs(derivs[0].patch))
+        print(tt, ':', np.sum(np.abs(derivs[0].patch)))
         cols = int(np.ceil(np.sqrt(len(derivs))))
         rows = int(np.ceil(float(len(derivs)) / cols))
         plt.clf()
@@ -431,11 +432,11 @@ def main():
         for i,deriv in enumerate(derivs):
             plt.subplot(rows,cols,i+1)
 
-            print
-            print deriv.name
-            print 'Deriv :', deriv.getExtent()
-            print 'Patch0:', patch0.getExtent()
-            print
+            print()
+            print(deriv.name)
+            print('Deriv :', deriv.getExtent())
+            print('Patch0:', patch0.getExtent())
+            print()
                         
             mx = max(np.abs(deriv.patch.min()), deriv.patch.max())
             dimshow(deriv.patch, extent=deriv.getExtent(), vmin=-mx, vmax=mx)
@@ -448,7 +449,7 @@ def main():
         ps.savefig()
         
         patch0 = src.getModelPatch(tim)
-        print 'Patch sum:', patch0.patch.sum()    
+        print('Patch sum:', patch0.patch.sum())    
     
         p0 = src.getParams()
         ss = src.getStepSizes()
@@ -464,7 +465,7 @@ def main():
             dp = (patchx - patch0) / s
     
             if i == 0:
-                print tt, 'stepping:', np.sum(np.abs(dp.patch))
+                print(tt, 'stepping:', np.sum(np.abs(dp.patch)))
             
             dimshow(dp.patch, extent=dp.getExtent(), vmin=-maxes[i], vmax=maxes[i])
             plt.axis(ax)
@@ -488,14 +489,14 @@ def main():
         fsrc.setParam(i, p0[i])
         dp = (patchx - patch0) / s
         
-        print 'Step FixedComp: %12.1f' % np.sum(np.abs(dp.patch))
-        print 'FixedComp:      %12.1f' % np.sum(np.abs(dcomp[i].patch))
-        print 'E component:    %12.1f' % np.sum(np.abs(de[i].patch))
-        print 'D component:    %12.1f' % np.sum(np.abs(dd[i].patch))
-        print 'E+D:            %12.1f' % np.sum(np.abs((dd[i] + de[i]).patch))
-        print 'E2:             %12.1f' % np.sum(np.abs(de2[i].patch))
-        print 'D2:             %12.1f' % np.sum(np.abs(dd2[i].patch))
-        print 'E2+D2:          %12.1f' % np.sum(np.abs((dd2[i] + de2[i]).patch))
+        print('Step FixedComp: %12.1f' % np.sum(np.abs(dp.patch)))
+        print('FixedComp:      %12.1f' % np.sum(np.abs(dcomp[i].patch)))
+        print('E component:    %12.1f' % np.sum(np.abs(de[i].patch)))
+        print('D component:    %12.1f' % np.sum(np.abs(dd[i].patch)))
+        print('E+D:            %12.1f' % np.sum(np.abs((dd[i] + de[i]).patch)))
+        print('E2:             %12.1f' % np.sum(np.abs(de2[i].patch)))
+        print('D2:             %12.1f' % np.sum(np.abs(dd2[i].patch)))
+        print('E2+D2:          %12.1f' % np.sum(np.abs((dd2[i] + de2[i]).patch)))
     
     
         

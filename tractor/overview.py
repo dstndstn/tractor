@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 import matplotlib.pyplot as plt
 from astrometry.sdss.fields import *
@@ -13,7 +14,7 @@ from tractor import basics as ba
 def fieldPlot(x0,y0,radius,ngc):
 
     rcfs = radec_to_sdss_rcf(x0,y0,tablefn="dr8fields.fits",radius=hypot(radius,13./2.))
-    print rcfs
+    print(rcfs)
 
     radius = radius/60.
 
@@ -21,8 +22,8 @@ def fieldPlot(x0,y0,radius,ngc):
     width = 2049
     height = 1489
 
-    print x0
-    print y0
+    print(x0)
+    print(y0)
 
 
     x,y = [],[]
@@ -45,8 +46,8 @@ def fieldPlot(x0,y0,radius,ngc):
         wcs = timg.getWcs()
         rd = wcs.pixelToPosition(0,0)
         rd2 = wcs.pixelToPosition(width,height)
-        print rd
-        print rd2
+        print(rd)
+        print(rd2)
 
         plt.plot((rd.ra,rd.ra,rd2.ra,rd2.ra,rd.ra),(rd.dec,rd2.dec,rd2.dec,rd.dec,rd.dec))
         plt.text((rd.ra+rd2.ra)/2.,(rd.dec+rd2.dec)/2.,"Run: %s, Camcol: %s, Field: %s" % (rcf[0],rcf[1],rcf[2]),fontsize=10.,va='center',ha='center')
@@ -57,7 +58,7 @@ def fieldPlot(x0,y0,radius,ngc):
     #    plt.plot(rd2.ra,rd2.dec,'+',color=col)
 
 
-    print "Saving figure"
+    print("Saving figure")
     plt.savefig("fieldplot-ngc%d.png" % (ngc))
 
 def main():
@@ -78,16 +79,16 @@ def main():
     radius=size/4.
 
 
-    print x0
-    print y0
-    print size
-    print radius
+    print(x0)
+    print(y0)
+    print(size)
+    print(radius)
 
 
 
     if ngc is None:
         parser.print_help()
-        print 'Please give an id'
+        print('Please give an id')
         sys.exit(-1)
 
     fieldPlot(x0,y0,radius,ngc)

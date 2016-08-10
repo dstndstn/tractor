@@ -1,5 +1,6 @@
 # -*- mode: python; indent-tabs-mode: nil -*-
 # (this tells emacs to indent with spaces)
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 
@@ -33,7 +34,7 @@ def plotarea(ra, dec, radius, ngcnum, tims=None, rds=[]):
     from astrometry.util.util import Tan
     W,H = 512,512
     scale = (radius * 60. * 4) / float(W)
-    print 'SDSS jpeg scale', scale
+    print('SDSS jpeg scale', scale)
     imgfn = 'sdss-mosaic-ngc%04i.png' % ngcnum
     if not os.path.exists(imgfn):
         url = (('http://skyservice.pha.jhu.edu/DR8/ImgCutout/getjpeg.aspx?' +
@@ -61,7 +62,7 @@ def plotarea(ra, dec, radius, ngcnum, tims=None, rds=[]):
     plt.gca().add_artist(matplotlib.patches.Circle(xy=(x,y), radius=R, color='g',
                                                    lw=3, alpha=0.5, fc='none'))
     if tims is not None:
-        print 'Plotting outlines of', len(tims), 'images'
+        print('Plotting outlines of', len(tims), 'images')
         for tim in tims:
             H,W = tim.shape
             twcs = tim.getWcs()
@@ -69,11 +70,11 @@ def plotarea(ra, dec, radius, ngcnum, tims=None, rds=[]):
             for x,y in [(1,1),(W,1),(W,H),(1,H),(1,1)]:
                 rd = twcs.pixelToPosition(x,y)
                 xx,yy = wcs.radec2pixelxy(rd.ra, rd.dec)
-                print 'x,y', x, y
+                print('x,y', x, y)
                 x1,y1 = twcs.positionToPixel(rd)
-                print '  x1,y1', x1,y1
-                print '  r,d', rd.ra, rd.dec,
-                print '  xx,yy', xx, yy
+                print('  x1,y1', x1,y1)
+                print('  r,d', rd.ra, rd.dec, end=' ')
+                print('  xx,yy', xx, yy)
                 px.append(xx)
                 py.append(yy)
             plt.plot(px, py, 'g-', lw=3, alpha=0.5)
@@ -91,7 +92,7 @@ def plotarea(ra, dec, radius, ngcnum, tims=None, rds=[]):
     if rds is not None:
         px,py = [],[]
         for ra,dec in rds:
-            print 'ra,dec', ra,dec
+            print('ra,dec', ra,dec)
             xx,yy = wcs.radec2pixelxy(ra, dec)
             px.append(xx)
             py.append(yy)
@@ -100,7 +101,7 @@ def plotarea(ra, dec, radius, ngcnum, tims=None, rds=[]):
     plt.axis(ax)
     fn = 'ngc-%04i.png' % ngcnum
     plt.savefig(fn)
-    print 'saved', fn
+    print('saved', fn)
 
 def get_ims_and_srcs((r,c,f,rr,dd, bands, ra, dec, roipix, imkw, getim, getsrc)):
     tims = []
@@ -108,7 +109,7 @@ def get_ims_and_srcs((r,c,f,rr,dd, bands, ra, dec, roipix, imkw, getim, getsrc))
     for band in bands:
         tim,tinf = getim(r, c, f, band, roiradecsize=(ra,dec,roipix), **imkw)
         if tim is None:
-            print "Zero roi"
+            print("Zero roi")
             return None,None
         if roi is None:
             roi = tinf['roi']
@@ -139,7 +140,7 @@ def main():
     ngc = int(args[0])
 
     j = getNGC(ngc)
-    print j
+    print(j)
     ra = float(j['RA'][0])
     dec = float(j['DEC'][0])
     itune1 = opt.itune1
@@ -150,18 +151,18 @@ def main():
     dr8 = True
     noarcsinh = False
 
-    print 'Radius', radius
-    print 'RA,Dec', ra, dec
+    print('Radius', radius)
+    print('RA,Dec', ra, dec)
 
     sras, sdecs, smags = tychoMatch(ra,dec,(radius*1.5)/60.)
 
     for sra,sdec,smag in zip(sras,sdecs,smags):
-        print sra,sdec,smag
+        print(sra,sdec,smag)
 
 
 
     rcfs = radec_to_sdss_rcf(ra,dec,radius=math.hypot(radius,13./2.),tablefn="dr8fields.fits")
-    print rcfs
+    print(rcfs)
 
     #fieldPlot(ra,dec,radius,ngc)
     
@@ -213,11 +214,11 @@ def main():
         sg.disable_galaxy_cache()
 
     zr = timgs[0].zr
-    print "zr is: ",zr
+    print("zr is: ",zr)
 
-    print bands
+    print(bands)
 
-    print "Number of images: ", len(timgs)
+    print("Number of images: ", len(timgs))
 #    for timg,band in zip(timgs,bands):
 #        data = timg.getImage()/np.sqrt(timg.getInvvar())
 #        plt.hist(data,bins=100)
@@ -230,7 +231,7 @@ def main():
     
 
     for sra,sdec,smag in zip(sras,sdecs,smags):
-        print sra,sdec,smag
+        print(sra,sdec,smag)
 
         for img in tractor.getImages():
             wcs = img.getWcs()
@@ -250,7 +251,7 @@ def main():
         wcs = timg.getWcs()
         xtr,ytr = wcs.positionToPixel(RaDecPos(ra,dec))
     
-        print xtr,ytr
+        print(xtr,ytr)
 
         xt = xtr 
         yt = ytr
@@ -258,45 +259,45 @@ def main():
         for src in sources:
             xs,ys = wcs.positionToPixel(src.getPosition(),src)
             if (xs-xt)**2+(ys-yt)**2 <= r**2:
-                print "Removed:", src
-                print xs,ys
+                print("Removed:", src)
+                print(xs,ys)
                 tractor.removeSource(src)
 
     #saveAll('removed-'+prefix, tractor,**sa)
     newShape = sg.GalaxyShape(30.,1.,0.)
     newBright = ba.Mags(r=15.0,g=15.0,u=15.0,z=15.0,i=15.0,order=['u','g','r','i','z'])
     EG = st.ExpGalaxy(RaDecPos(ra,dec),newBright,newShape)
-    print EG
+    print(EG)
     tractor.addSource(EG)
 
 
     saveAll('added-'+prefix,tractor,**sa)
 
-    print 'Tractor has', tractor.getParamNames()
+    print('Tractor has', tractor.getParamNames())
 
     for im in tractor.images:
         im.freezeAllParams()
         im.thawParam('sky')
     tractor.catalog.freezeAllBut(EG)
 
-    print 'Tractor has', tractor.getParamNames()
-    print 'values', tractor.getParams()
+    print('Tractor has', tractor.getParamNames())
+    print('values', tractor.getParams())
 
     for i in range(itune1):
         tractor.optimize()
-        print resource.getpagesize()
-        print resource.getrusage(resource.RUSAGE_SELF)[2]
+        print(resource.getpagesize())
+        print(resource.getrusage(resource.RUSAGE_SELF)[2])
         tractor.changeInvvar(IRLS_scale)
-        print resource.getpagesize()
-        print resource.getrusage(resource.RUSAGE_SELF)[2]
+        print(resource.getpagesize())
+        print(resource.getrusage(resource.RUSAGE_SELF)[2])
         saveAll('itune1-%d-' % (i+1)+prefix,tractor,**sa)
-        print resource.getpagesize()
-        print resource.getrusage(resource.RUSAGE_SELF)[2]
+        print(resource.getpagesize())
+        print(resource.getrusage(resource.RUSAGE_SELF)[2])
         tractor.clearCache()
         sg.get_galaxy_cache().clear()
         gc.collect()
-        print resource.getpagesize()
-        print resource.getrusage(resource.RUSAGE_SELF)[2]
+        print(resource.getpagesize())
+        print(resource.getrusage(resource.RUSAGE_SELF)[2])
         
 
     CGPos = EG.getPosition()
@@ -311,28 +312,28 @@ def main():
     CGz = EGBright[4] + 0.75
     CGBright1 = ba.Mags(r=CGr,g=CGg,u=CGu,z=CGz,i=CGi,order=['u','g','r','i','z'])
     CGBright2 = ba.Mags(r=CGr,g=CGg,u=CGu,z=CGz,i=CGi,order=['u','g','r','i','z'])
-    print EGBright
-    print CGBright1
+    print(EGBright)
+    print(CGBright1)
 
     CG = st.CompositeGalaxy(CGPos,CGBright1,CGShape1,CGBright2,CGShape2)
     tractor.removeSource(EG)
     tractor.addSource(CG)
 
     tractor.catalog.freezeAllBut(CG)
-    print resource.getpagesize()
-    print resource.getrusage(resource.RUSAGE_SELF)[2]
+    print(resource.getpagesize())
+    print(resource.getrusage(resource.RUSAGE_SELF)[2])
 
 
     for i in range(itune2):
         tractor.optimize()
         tractor.changeInvvar(IRLS_scale)
         saveAll('itune2-%d-' % (i+1)+prefix,tractor,**sa)
-        print resource.getpagesize()
-        print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
+        print(resource.getpagesize())
+        print("RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2])
         tractor.clearCache()
         sg.get_galaxy_cache().clear()
-        print resource.getpagesize()
-        print resource.getrusage(resource.RUSAGE_SELF)[2]
+        print(resource.getpagesize())
+        print(resource.getrusage(resource.RUSAGE_SELF)[2])
 
 
 
@@ -345,14 +346,14 @@ def main():
     sa.update(plotBands=True)
     saveAll('allBands-' + prefix,tractor,**sa)
 
-    print CG
-    print CG.getPosition()
-    print CGBright1
-    print CGBright2
-    print CGShape1
-    print CGShape2
-    print CGBright1+CGBright2
-    print CG.getBrightness()
+    print(CG)
+    print(CG.getPosition())
+    print(CGBright1)
+    print(CGBright2)
+    print(CGShape1)
+    print(CGShape2)
+    print(CGBright1+CGBright2)
+    print(CG.getBrightness())
 
     pfn = 'ngc-%d.pickle' % ngc
     pickle_to_file(CG,pfn)
@@ -397,7 +398,7 @@ def makeflipbook(prefix,numImg,itune1=0,itune2=0,ntune=0):
     
     tex += r'\end{document}' + '\n'
     fn = 'flip-' + prefix + '.tex'
-    print 'Writing', fn
+    print('Writing', fn)
     open(fn, 'wb').write(tex)
     os.system("pdflatex '%s'" % fn)
 

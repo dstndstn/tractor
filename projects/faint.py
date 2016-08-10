@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 import matplotlib
 matplotlib.use('Agg')
@@ -20,9 +21,9 @@ from tractor.fitpsf import em_init_params
 def getdata(RA, DEC):
 	rcf = radec_to_sdss_rcf(RA, DEC, radius=0., tablefn='s82fields.fits',
 							contains=True)
-	print 'SDSS fields nearby:', len(rcf)
+	print('SDSS fields nearby:', len(rcf))
 	rcf = [(r,c,f,ra,dec) for r,c,f,ra,dec in rcf if r != 206]
-	print 'Filtering out run 206:', len(rcf)
+	print('Filtering out run 206:', len(rcf))
 
 	sdss = DR7()
 	sdss.setBasedir('faint')
@@ -34,8 +35,8 @@ def getdata(RA, DEC):
 	#S = 50
 	S = 40
 	for i,(r,c,f,ra,dec) in enumerate(rcf):
-		print
-		print 'Retrieving', (i+1), 'of', len(rcf), r,c,f,band
+		print()
+		print('Retrieving', (i+1), 'of', len(rcf), r,c,f,band)
 		try:
 			im,info = st.get_tractor_image(r, c, f, band, psf='dg', useMags=True,
 										   sdssobj=sdss,
@@ -56,7 +57,7 @@ def getdata(RA, DEC):
 def mysavefig(fn):
 	for suff in ['.png']:#,'.pdf']:
 		plt.savefig(fn + suff)
-		print 'Wrote', fn + suff
+		print('Wrote', fn + suff)
 
 def main():
 	# faint
@@ -80,14 +81,14 @@ def main():
 
 	pfn = 'faint%i.pickle' % N
 	if os.path.exists(pfn):
-		print 'Reading pickle', pfn
+		print('Reading pickle', pfn)
 		X = unpickle_from_file(pfn)
 	else:
 		#X = getdata(358.5436, 0.7213)
 		X = getdata(RA, DEC)
 		pickle_to_file(X, pfn)
 	(ims,skies,tais,rcfs) = X
-	print 'Got', len(rcfs), 'fields'
+	print('Got', len(rcfs), 'fields')
 
 	omit = [94, 5759]
 
@@ -97,11 +98,11 @@ def main():
 		if r in uruns:
 			continue
 		if r in omit:
-			print 'Omitting run', r
+			print('Omitting run', r)
 			continue
 		uruns.add(r)
 		I.append(i)
-	print 'Cut to', len(uruns), 'unique runs'
+	print('Cut to', len(uruns), 'unique runs')
 	rcfs = [rcfs[i] for i in I]
 	ims = [ims[i] for i in I]
 	skies = [skies[i] for i in I]

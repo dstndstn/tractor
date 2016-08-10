@@ -1,3 +1,4 @@
+from __future__ import print_function
 import sys
 from math import pi
 
@@ -33,7 +34,7 @@ def main():
 	parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
 					  help='Make more verbose')
 	opt,args = parser.parse_args()
-	print 'Opt.verbose = ', opt.verbose
+	print('Opt.verbose = ', opt.verbose)
 	if opt.verbose == 0:
 		lvl = logging.INFO
 	else: # opt.verbose == 1:
@@ -43,7 +44,7 @@ def main():
 	(images, simplexys, rois, zrange, nziv, footradecs
 	 ) = prepareTractor(False, False, rcfcut=[0])
 
-	print 'Creating tractor...'
+	print('Creating tractor...')
 	tractor = SDSSTractor(images, debugnew=False, debugchange=True)
 
 	'''
@@ -113,7 +114,7 @@ def main():
 			#plt.title('inv err')
 			fn = fnpat % i
 			plt.savefig(fn)
-			print 'wrote', fn
+			print('wrote', fn)
 
 	makePlots(tractor, 'opt-s00-%02i.png', #'pre-%02i.png',
 			  title2='re %.1f, ab %.2f, phi %.1f' % (src.re, src.ab, src.phi))
@@ -135,8 +136,8 @@ def main():
 		src.setParams(p0)
 
 	for ostep in range(10):
-		print
-		print 'Optimizing...'
+		print()
+		print('Optimizing...')
 		#alphas = [1., 0.5, 0.25, 0.1, 0.01]
 		alphas=None
 		ppre = src.getParams()
@@ -147,17 +148,17 @@ def main():
 				  title1='dlnp = %.1f' % dlnp,
 				  title2='re %.1f, ab %.2f, phi %.1f' % (src.re, src.ab, src.phi))
 
-		print
+		print()
 		src.setParams(ppre)
-		print 'Pre :', src
+		print('Pre :', src)
 
 		src.setParams(ppost)
-		print 'Post:', src
+		print('Post:', src)
 
 		src.setParams(ppre)
 		src.stepParams(X * 0.001)
 		dlnptiny = tractor.getLogProb() - lnppre
-		print '1e-3:', src
+		print('1e-3:', src)
 		makePlots(tractor, 'opt-s%02i-%%02ib.png' % (ostep+1),
 				  title1='dlnp = %.1f' % dlnptiny,
 				  title2='re %.1f, ab %.2f, phi %.1f' % (src.re, src.ab, src.phi))
@@ -165,19 +166,19 @@ def main():
 		src.setParams(ppre)
 		src.stepParams(X)
 		dlnpfull = tractor.getLogProb() - lnppre
-		print 'Full:', src
+		print('Full:', src)
 		makePlots(tractor, 'opt-s%02i-%%02ic.png' % (ostep+1),
 				  title1='dlnp = %.1f' % dlnpfull,
 				  title2='re %.1f, ab %.2f, phi %.1f' % (src.re, src.ab, src.phi))
 		src.setParams(ppost)
-		print
+		print()
 
 		if dlnp < 1e-3:
 			break
 
-	print 'Final source:', src
+	print('Final source:', src)
 
-	print 'Params:',  src.getParams()
+	print('Params:',  src.getParams())
 
 	sys.exit(0)
 
@@ -219,10 +220,10 @@ def main():
 		(H,W) = chi.shape
 		deriv.clipTo(W,H)
 		sl = deriv.getSlice(chi)
-		print 'slice', sl
-		print 'deriv:', deriv
-		print 'chi sliced:', chi[sl].shape
-		print 'deriv:', deriv.getImage().shape
+		print('slice', sl)
+		print('deriv:', deriv)
+		print('chi sliced:', chi[sl].shape)
+		print('deriv:', deriv.getImage().shape)
 		plt.imshow(chi[sl] * deriv.getImage(), **imargs1)
 		plt.colorbar()
 		plt.title('chi * derivative ' + deriv.getName())
@@ -233,7 +234,7 @@ def main():
 		src = PointSource(pos, SdssFlux(2512.0 / SdssPhotoCal.scale))
 		tractor.catalog.append(src)
 		x,y = images[1].getWcs().positionToPixel(pos, src=src)
-		print 'Pixel position in image 1:', x,y
+		print('Pixel position in image 1:', x,y)
 		tractor.changeSourceTypes(srcs=[src])
 
 
@@ -267,18 +268,18 @@ if __name__ == '__main__':
 	GG = re_deg * np.array([[ cp, sp * abfactor],
 							[-sp, cp * abfactor]])
 
-	print 'R', R
-	print 'S', S
+	print('R', R)
+	print('S', S)
 
 	RS = np.dot(R, S)
 
-	print 'RS', RS
+	print('RS', RS)
 
-	print 'G', G
+	print('G', G)
 	#G = RS
 	G = GG
 	rd = np.dot(G, np.vstack((x,y)))
-	print 'rd', rd.shape
+	print('rd', rd.shape)
 
 	r = rd[0,:]
 	d = rd[1,:]
@@ -315,7 +316,7 @@ if __name__ == '__main__':
 	XY = vstack((XX,YY))
 	Tij = np.dot(T, XY)
 
-	print 'Tij', Tij.shape
+	print('Tij', Tij.shape)
 	for i in range(len(XX)):
 		plt.text(XX[i], YY[i], '(%.1f,%.1f)' % (Tij[0,i], Tij[1,i]),
 				 fontsize=8, ha='center', va='center')
@@ -327,7 +328,7 @@ if __name__ == '__main__':
 	#re_deg = 0.005 # 9 pix
 	re_deg = 0.002 # 
 	repix = re_deg / scale
-	print 'repix', repix
+	print('repix', repix)
 
 	cp = np.cos(phi)
 	sp = np.sin(phi)
@@ -340,9 +341,9 @@ if __name__ == '__main__':
 
 	(xlo,xhi,ylo,yhi, cre,cn, cpixw, cpixh, re_factor, ab_factor,
 	 Tij, ii, jj) = X
-	print 'box size', cpixw, cpixh
-	print 're_factor', re_factor
-	print 'ab_factor', ab_factor
+	print('box size', cpixw, cpixh)
+	print('re_factor', re_factor)
+	print('ab_factor', ab_factor)
 
 	plt.clf()
 	plt.plot(Tij[0,:], Tij[1,:], 'b.')
@@ -354,7 +355,7 @@ if __name__ == '__main__':
 	plt.savefig('g5.png')
 
 	plt.clf()
-	print 'boxes:', len(xlo)
+	print('boxes:', len(xlo))
 	plt.plot(np.vstack((xlo,xhi,xhi,xlo,xlo)),
 			 np.vstack((ylo,ylo,yhi,yhi,ylo)), 'b-')
 	plt.savefig('g6.png')

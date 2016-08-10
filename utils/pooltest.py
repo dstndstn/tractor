@@ -1,3 +1,4 @@
+from __future__ import print_function
 import multiprocessing as mp
 import multiprocessing.queues
 import multiprocessing.pool
@@ -55,18 +56,18 @@ class DebugConnection():
 		t0 = time.time()
 		obj = pickle.loads(bytes)
 		dt = time.time() - t0
-		print 'unpickling took', dt
+		print('unpickling took', dt)
 		#print 'received', obj
 		return obj
 
 	def send(self, obj):
 		# return self.real.send(obj)
-		print 'sending', obj
+		print('sending', obj)
 		t0 = time.time()
 		s = pickle.dumps(obj, -1)
 		dt = time.time() - t0
-		print '-->', len(s), 'bytes'
-		print 'pickling took', dt
+		print('-->', len(s), 'bytes')
+		print('pickling took', dt)
 		return self.real.send_bytes(s)
 
 	def close(self):
@@ -109,8 +110,8 @@ if __name__ == '__main__':
 								   useMags=True, roi=roi)
 	sources = st.get_tractor_sources(run, camcol, field, band, roi=roi)
 	tractor = Tractor([im], sources)
-	print tractor
-	print tractor.getLogProb()
+	print(tractor)
+	print(tractor.getLogProb())
 	tractor.freezeParam('images')
 	pool = DebugPool(4)
 	tractor.mp = multiproc.multiproc(pool=pool)

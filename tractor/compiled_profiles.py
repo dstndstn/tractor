@@ -1,4 +1,5 @@
 # Copyright 2011 Dustin Lang.  All rights reserved.
+from __future__ import print_function
 
 import sys
 import pyfits
@@ -294,21 +295,21 @@ if __name__ == '__main__':
 
 	# Create profiles.
 	pexp = CompiledProfile(modelname='exp', profile_func=profile_exp, re=100, nrad=4)
-	print 'Created:', pexp
+	print('Created:', pexp)
 	hdu = pexp.get_hdu()
 	hdu.writeto('exp.fits', clobber=True)
 
 	pdev = CompiledProfile(modelname='deV', profile_func=profile_dev, re=100, nrad=8)
-	print 'Created:', pdev
+	print('Created:', pdev)
 	hdu = pdev.get_hdu()
 	hdu.writeto('dev.fits', clobber=True)
 
 
 	# Test profiles.
 	pexp = CompiledProfile('exp.fits')
-	print 'Read:', pexp
+	print('Read:', pexp)
 	pdev = CompiledProfile('dev.fits')
-	print 'Read:', pdev
+	print('Read:', pdev)
 
 	re = 5
 	ab = 0.4
@@ -340,18 +341,18 @@ if __name__ == '__main__':
 	esum = []
 	for r in R:
 		(P1,x0,y0) = pexp.sample(r, ab, phi, 1000, 1000, 2000, 2000, 1)
-		print 'Radius', r, 'shape', P1.shape, 'exp sum', sum(P1)
+		print('Radius', r, 'shape', P1.shape, 'exp sum', sum(P1))
 		esum.append(sum(P1))
 
 	clf()
 	plot(R, esum, 'r.')
 	savefig('edsum.png')
 
-	print
+	print()
 	dsum = []
 	for r in R:
 		(P2,x0,y0) = pdev.sample(r, ab, phi, 1000, 1000, 2000, 2000, 1)
-		print 'Radius', r, 'shape', P2.shape, 'dev sum', sum(P2)
+		print('Radius', r, 'shape', P2.shape, 'dev sum', sum(P2))
 		dsum.append(sum(P2))
 
 	clf()

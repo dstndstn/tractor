@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
@@ -25,11 +26,11 @@ def save(idstr, tractor, nlscale=1., debug=False, plotAll=False, imgi=0,
     mod = tractor.getModelImage(imgi)
     chi = tractor.getChiImage(imgi=imgi)
     synthfn = 'synth-%s.fits' % idstr
-    print 'Writing synthetic image to', synthfn
+    print('Writing synthetic image to', synthfn)
     fitsio.write(synthfn, mod, clobber=True)
 
     pfn = 'tractor-%s.pickle' % idstr
-    print 'Saving state to', pfn
+    print('Saving state to', pfn)
     pickle_to_file(tractor, pfn)
 
     plt.clf()
@@ -38,11 +39,11 @@ def save(idstr, tractor, nlscale=1., debug=False, plotAll=False, imgi=0,
 
     timg = tractor.getImage(imgi)
     data = timg.getImage()
-    print 'Mod type:', mod.dtype
-    print 'Chi type:', chi.dtype
-    print 'Data type:', data.dtype
+    print('Mod type:', mod.dtype)
+    print('Chi type:', chi.dtype)
+    print('Data type:', data.dtype)
     zr = timg.zr
-    print 'zr', zr
+    print('zr', zr)
     # Set up nonlinear mapping based on the statistics of the data image.
     #sigma = np.median(timg.getInvError())
     #print 'sigma', sigma
@@ -50,9 +51,9 @@ def save(idstr, tractor, nlscale=1., debug=False, plotAll=False, imgi=0,
     if nlscale == 0.:
         ima.update(vmin=zr[0], vmax=zr[1])
     else:
-        print data.shape
+        print(data.shape)
         q1,q2,q3 = np.percentile(data.ravel(), [25, 50, 75])
-        print 'Data quartiles:', q1, q2, q3
+        print('Data quartiles:', q1, q2, q3)
         ima.update(norm = ArcsinhNormalize(mean=q2, std=(1./nlscale) * (q3-q1)/2.,
                                            vmin=zr[0], vmax=zr[1]))
 
@@ -89,7 +90,7 @@ def save(idstr, tractor, nlscale=1., debug=False, plotAll=False, imgi=0,
                 pointx.append(xt)
                 pointy.append(yt)
                 continue
-            print type(obj)
+            print(type(obj))
             shapes = []
             attrType = []
             if (isinstance(obj,st.CompositeGalaxy)):
@@ -102,14 +103,14 @@ def save(idstr, tractor, nlscale=1., debug=False, plotAll=False, imgi=0,
             x0,y0 = wcs.positionToPixel(obj.getPosition(), obj)
             
             cd = timg.getWcs().cdAtPixel(x0,y0)
-            print "CD",cd
+            print("CD",cd)
             for i,shape in enumerate(shapes):
                 xplotx.append(x0)
                 xploty.append(y0)
                 T=np.linalg.inv(shape.getTensor(cd))
-                print "Inverted tensor:",T
-                print obj.getPosition()
-                print i
+                print("Inverted tensor:",T)
+                print(obj.getPosition())
+                print(i)
 
                 x,y = [],[]
                 for theta in np.linspace(0,2*np.pi,100):
@@ -129,12 +130,12 @@ def save(idstr, tractor, nlscale=1., debug=False, plotAll=False, imgi=0,
 
     def savepng(pre, img, title=None, **kwargs):
         fn = '%s-%s.png' % (pre, idstr)
-        print 'Saving', fn
+        print('Saving', fn)
         plt.clf()
         plt.imshow(img, **kwargs)
         ax = plt.axis()
         if debug:
-            print len(xplotx),len(allobjx)
+            print(len(xplotx),len(allobjx))
             for i,(objx,objy,objc) in enumerate(zip(allobjx,allobjy,allobjc)):
                 plt.plot(objx,objy,'-',c=objc)
                 tempx = []
@@ -227,31 +228,31 @@ def main():
         opt.curl = True
         tune.extend([('i',[1,1]), ('n',1)])
         opt.roi = [100,600,100,600]
-        print
-        print 'Demo mode: grabbing Run/Camcol/Field/Band %i/%i/%i/%s' % (run, camcol, field, opt.band)
-        print 'Using SDSS DR9 data'
-        print
+        print()
+        print('Demo mode: grabbing Run/Camcol/Field/Band %i/%i/%i/%s' % (run, camcol, field, opt.band))
+        print('Using SDSS DR9 data')
+        print()
         
     if opt.band is None:
         parser.print_help()
-        print
-        print 'Must supply band (-b [u | g |r |i | z])'
-        print
+        print()
+        print('Must supply band (-b [u | g |r |i | z])')
+        print()
         sys.exit(-1)
     for char in opt.band:
         bands.append(char)
         if not char in ['u','g','r','i','z']:
             parser.print_help()
-            print
-            print 'Must supply band (u/g/r/i/z)'
-            print
+            print()
+            print('Must supply band (u/g/r/i/z)')
+            print()
             sys.exit(-1)
     rerun = 0
     usercf = (run is not None and field is not None and camcol is not None)
     userd = (opt.radec is not None and opt.pixsize is not None)
     if not (usercf or userd) or len(bands)==0:
         parser.print_help()
-        print 'Must supply (--run, --camcol, --field) or (--radec, --size), and --band'
+        print('Must supply (--run, --camcol, --field) or (--radec, --size), and --band')
         sys.exit(-1)
     bandname = bands[0] #initial position and shape
     prefix = opt.prefix
@@ -294,10 +295,10 @@ def main():
                     tfn = 'dr%ifields.fits' % drnum
                 rcfs = radec_to_sdss_rcf(ra, dec, radius=math.hypot(radius,13./2.), tablefn=tfn)
                 if len(rcfs) == 0:
-                    print 'RA,Dec (%.3f,%.3f): found no overlapping SDSS fields in file %s' % (ra, dec, tfn)
+                    print('RA,Dec (%.3f,%.3f): found no overlapping SDSS fields in file %s' % (ra, dec, tfn))
                     sys.exit(-1)
                 if len(rcfs) > 1:
-                    print 'Found %i Run,Camcol,Fields overlapping RA,Dec (%.3f,%.3f): taking the first one' % (len(rcfs), ra, dec)
+                    print('Found %i Run,Camcol,Fields overlapping RA,Dec (%.3f,%.3f): taking the first one' % (len(rcfs), ra, dec))
                 rcfs = rcfs[0]
                 run,camcol,field = rcfs[:3]
             imkw.update(roiradecsize = (ra, dec, opt.pixsize))
@@ -313,7 +314,7 @@ def main():
         tims.append(tim)
 
     if opt.scale:
-        print 'Scaling images by', opt.scale
+        print('Scaling images by', opt.scale)
         tims = [st.scale_sdss_image(tim, opt.scale) for tim in tims]
         
     sources = getsrc(run, camcol, field, bandname, bands=bands, curl=opt.curl, roi=opt.roi)
@@ -327,7 +328,7 @@ def main():
         save('initial-%s-' % (band) + prefix, tractor, imgi=j, **sa)
 
     lnp0 = tractor.getLogProb()
-    print 'Initial lnprob:', lnp0
+    print('Initial lnprob:', lnp0)
 
     for im in tractor.images:
         im.freezeAllParams()
@@ -345,8 +346,8 @@ def main():
                 for j,band in enumerate(bands):
                     save('tune-%d-%d-%s-' % (count+1, i+1,band) + prefix, tractor, imgi=j, **sa)
                 lnp1 = tractor.getLogProb()
-                print 'After optimization: lnprob', lnp1
-                print '  delta-lnprob:', lnp1 - lnp0
+                print('After optimization: lnprob', lnp1)
+                print('  delta-lnprob:', lnp1 - lnp0)
     
         elif each[0]=='i':
             tractor.images.freezeParamsRecursive('sky')
@@ -355,12 +356,12 @@ def main():
                     tractor.catalog.freezeAllBut(src)
 
                     if i < 6:
-                        print 'Freezing position'
+                        print('Freezing position')
                         src.freezeParam('pos')
 
-                    print 'Optimizing:'
+                    print('Optimizing:')
                     for nm in tractor.getParamNames():
-                        print nm
+                        print(nm)
 
                     for step in range(each[1][1]):
                         if opt.lbfgsb:
@@ -375,12 +376,12 @@ def main():
                 tractor.clearCache()
 
                 lnp1 = tractor.getLogProb()
-                print 'After optimization: lnprob', lnp1
-                print '  delta-lnprob:', lnp1 - lnp0
+                print('After optimization: lnprob', lnp1)
+                print('  delta-lnprob:', lnp1 - lnp0)
 
     makeflipbook(opt, prefix,tune,len(tractor.getCatalog()),bands)
-    print
-    print 'Created flip-book flip-%s.pdf' % prefix
+    print()
+    print('Created flip-book flip-%s.pdf' % prefix)
 
 
 
@@ -452,7 +453,7 @@ def makeflipbook(opt, prefix,tune,numSrcs,bands):
                ('initial-%s-' %(lBand) +prefix, 'tune-%d-%d-%s-' % (lastSet+1,final,lBand)+ prefix)*3))
     tex += r'\end{document}' + '\n'
     fn = 'flip-' + prefix + '.tex'
-    print 'Writing', fn
+    print('Writing', fn)
     open(fn, 'wb').write(tex)
     os.system("pdflatex '%s'" % fn)
 

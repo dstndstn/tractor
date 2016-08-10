@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -29,14 +30,14 @@ if __name__ == '__main__':
 
     if False:
         xyz = radectoxyz(T.ra, T.dec)
-        print 'xyz', xyz.shape
+        print('xyz', xyz.shape)
         xyzc = np.mean(xyz, axis=0)
         xyzc /= np.sqrt(np.sum(xyzc**2))
-        print 'xyzc', xyzc
+        print('xyzc', xyzc)
         rc,dc = xyztoradec(xyzc)
-        print 'rc,dc', rc,dc
+        print('rc,dc', rc,dc)
         dist = np.max(np.sqrt(np.sum((xyz - xyzc)**2, axis=1)))
-        print 'dist', dist
+        print('dist', dist)
         width = dist2deg(dist)
     
     #allsky = True
@@ -61,18 +62,18 @@ if __name__ == '__main__':
         W,H = 1000,1000
         sz = width * 0.6
         T.cut((np.abs(T.ra - rc) < sz) * (np.abs(T.dec - dc) < sz))
-        print 'Cut to', len(T), 'in range'
-        print 'Bands', np.unique(T.filter)
+        print('Cut to', len(T), 'in range')
+        print('Bands', np.unique(T.filter))
         plot_bricks = False
 
         #fmt = 'pdf'
         
-        print 'Unique exposures:', np.unique(T.expnum)
+        print('Unique exposures:', np.unique(T.expnum))
 
         allTT = []
         band = 'g'
         T.cut(T.filter == band)
-        print len(T), 'in', band
+        print(len(T), 'in', band)
 
         expos = T.expnum[np.argsort(degrees_between(T.ra_bore, T.dec_bore, rc, dc))]
         closest = []
@@ -82,7 +83,7 @@ if __name__ == '__main__':
             closest.append(e)
             if len(closest) == 21:
                 break
-        print 'Closest exposures:', closest
+        print('Closest exposures:', closest)
 
         #[348256, 348235, 348279, 348278, 348234, 348277, 348257, 348255, 348260, 348282]
         closest = [closest[i] for i in [0,1,2, 7,4,3, 5,6,8,9,10,11,12,13,14,15,16,17,18,19,20]]
@@ -125,7 +126,7 @@ if __name__ == '__main__':
     if plot_bricks:
         B.index = np.arange(len(B))
         B.cut((np.abs(B.ra - rc) < sz) * (np.abs(B.dec - dc) < sz))
-        print len(B), 'bricks in range'
+        print(len(B), 'bricks in range')
     
     #r0,r1 = T.ra.min(),  T.ra.max()
     #d0,d1 = T.dec.min(), T.dec.max()
@@ -157,7 +158,7 @@ if __name__ == '__main__':
         allTT = []
         for band in np.unique(T.filter):
             TT = T[T.filter == band]
-            print len(TT), 'in band', band
+            print(len(TT), 'in band', band)
             allTT.append((TT,band))
 
     
@@ -298,7 +299,7 @@ if __name__ == '__main__':
 
         fn = ps.getnext()
         plot.write(fn)
-        print 'wrote', fn
+        print('wrote', fn)
 
         if fmt == 'png' and cut:
             cutfn = ps.getnext()

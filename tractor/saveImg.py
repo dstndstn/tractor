@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 import logging
 import numpy as np
@@ -12,11 +13,11 @@ from tractor import sdss as st
 
 
 def save(idstr, tractor, nlscale=1.,debug=False,plotAll=False,imgi=0,chilo=-10.,chihi=10.):
-	print "Index: ", imgi
+	print("Index: ", imgi)
 	mod = tractor.getModelImage(imgi)
 	chi = tractor.getChiImage(imgi=imgi)
 	synthfn = 'synth-%s.fits' % idstr
-	print 'Writing synthetic image to', synthfn
+	print('Writing synthetic image to', synthfn)
 	pyfits.writeto(synthfn, mod, clobber=True)
 
 	#pfn = 'tractor-%s.pickle' % idstr
@@ -29,11 +30,11 @@ def save(idstr, tractor, nlscale=1.,debug=False,plotAll=False,imgi=0,chilo=-10.,
 
 	timg = tractor.getImage(imgi)
 	data = timg.getImage()
-	print 'Mod type:', mod.dtype
-	print 'Chi type:', chi.dtype
-	print 'Data type:', data.dtype
+	print('Mod type:', mod.dtype)
+	print('Chi type:', chi.dtype)
+	print('Data type:', data.dtype)
 	zr = timg.zr
-	print 'zr', zr
+	print('zr', zr)
 	# Set up nonlinear mapping based on the statistics of the data image.
 	#sigma = np.median(timg.getInvError())
 	#print 'sigma', sigma
@@ -42,7 +43,7 @@ def save(idstr, tractor, nlscale=1.,debug=False,plotAll=False,imgi=0,chilo=-10.,
 		ima.update(vmin=zr[0], vmax=zr[1])
 	else:
 		q1,q2,q3 = np.percentile(data.ravel(), [25, 50, 75])
-		print 'Data quartiles:', q1, q2, q3
+		print('Data quartiles:', q1, q2, q3)
 		ima.update(norm = ArcsinhNormalize(mean=q2, std=(1./nlscale) * (q3-q1)/2., 
 						   vmin=zr[0], vmax=zr[1]))
 
@@ -111,12 +112,12 @@ def save(idstr, tractor, nlscale=1.,debug=False,plotAll=False,imgi=0,chilo=-10.,
 
 	def savepng(pre, img, title=None,**kwargs):
 		fn = '%s-%s.png' % (pre, idstr)
-		print 'Saving', fn
+		print('Saving', fn)
 		plt.clf()
 		plt.imshow(img, **kwargs)
 		ax = plt.axis()
 		if debug:
-			print len(xplotx),len(allobjx)
+			print(len(xplotx),len(allobjx))
 			for i,(objx,objy,objc) in enumerate(zip(allobjx,allobjy,allobjc)):
 				plt.plot(objx,objy,'-',c=objc)
 				tempx = []
@@ -139,8 +140,8 @@ def save(idstr, tractor, nlscale=1.,debug=False,plotAll=False,imgi=0,chilo=-10.,
 	savepng('model', mod, title='Model '+timg.name, **ima)
 	savepng('diff', data - mod, title='Data - Model, ' + timg.name, **imdiff)
 	savepng('chi',chi,title='Chi ' + timg.name, **imchi)
-	print "Chi mean: ", np.mean(chi)
-	print "Chi median: ", np.median(chi)
+	print("Chi mean: ", np.mean(chi))
+	print("Chi median: ", np.median(chi))
 	if plotAll:
 		debug = False
 		for i,src in enumerate(tractor.getCatalog()):

@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 
 from astrometry.util.util import Tan
@@ -68,10 +69,10 @@ if __name__ == '__main__':
     
     # Evaluate likelihood
     lnp = tr.getLogProb()
-    print 'Logprob:', lnp
+    print('Logprob:', lnp)
 
     for nm,val in zip(tr.getParamNames(), tr.getParams()):
-        print '  ', nm, val
+        print('  ', nm, val)
     
 
     # Or, without creating a Tractor object:
@@ -84,7 +85,7 @@ if __name__ == '__main__':
             continue
         patch.addTo(model)
     lnp = -0.5 * ((model - data)**2 * iv).sum()
-    print 'Logprob:', lnp
+    print('Logprob:', lnp)
 
     
 

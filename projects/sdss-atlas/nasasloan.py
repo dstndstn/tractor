@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
@@ -50,7 +51,7 @@ def main():
     skyobj = ba.ConstantSky(header['skyval'])
     psffn = 'J082742.02+212844.7-r-bpsf.fits.gz'
     psfimg = pyfits.open(psffn)[0].data
-    print 'PSF image shape', psfimg.shape
+    print('PSF image shape', psfimg.shape)
     # number of Gaussian components
     PS = psfimg.shape[0]
     K = 3
@@ -59,10 +60,10 @@ def main():
     II /= II.sum()
     # HACK
     II = np.maximum(II, 0)
-    print 'Multi-Gaussian PSF fit...'
+    print('Multi-Gaussian PSF fit...')
     xm,ym = -(PS/2), -(PS/2)
     em_fit_2d(II, xm, ym, w, mu, sig)
-    print 'w,mu,sig', w,mu,sig
+    print('w,mu,sig', w,mu,sig)
     psf = GaussianMixturePSF(w, mu, sig)
 
     sources = []
@@ -83,7 +84,7 @@ def main():
 
     zr = np.array([-5.,+5.])# * info['skysig']
 
-    print bands
+    print(bands)
 
     prefix = 'ngc2595'
 #    saveAll('initial-'+prefix, tractor,zr,flipBands,debug=True)
@@ -95,7 +96,7 @@ def main():
         wcs = timg.getWcs()
         xtr,ytr = wcs.positionToPixel(RaDecPos(ra,dec))
     
-        print xtr,ytr
+        print(xtr,ytr)
 
         xt = xtr 
         yt = ytr
@@ -103,15 +104,15 @@ def main():
         for src in sources:
             xs,ys = wcs.positionToPixel(src.getPosition(),src)
             if (xs-xt)**2+(ys-yt)**2 <= r**2:
-                print "Removed:", src
-                print xs,ys
+                print("Removed:", src)
+                print(xs,ys)
                 tractor.removeSource(src)
 
 #    saveAll('removed-'+prefix, tractor,zr,flipBands,debug=True)
     newShape = sg.GalaxyShape(30.,1.,0.)
     newBright = ba.Mags(r=15.0,g=15.0,u=15.0,z=15.0,i=15.0)
     EG = st.ExpGalaxy(RaDecPos(ra,dec),newBright,newShape)
-    print EG
+    print(EG)
     tractor.addSource(EG)
 
 
@@ -131,15 +132,15 @@ def main():
     CGPos = EG.getPosition()
     CGShape = EG.getShape()
     EGBright = EG.getBrightness()
-    print EGBright
+    print(EGBright)
     CGg = EGBright[0]*1.25
     CGi = EGBright[1]*1.25
     CGr = EGBright[2]*1.25
     CGu = EGBright[3]*1.25
     CGz = EGBright[4]*1.25
     CGBright = ba.Mags(r=CGr,g=CGg,u=CGu,z=CGz,i=CGi)
-    print EGBright
-    print CGBright
+    print(EGBright)
+    print(CGBright)
 
     CG = st.CompositeGalaxy(CGPos,CGBright,CGShape,CGBright,CGShape)
     tractor.removeSource(EG)
@@ -198,7 +199,7 @@ def makeflipbook(prefix,numImg,itune1=0,itune2=0,ntune=0):
     
     tex += r'\end{document}' + '\n'
     fn = 'flip-' + prefix + '.tex'
-    print 'Writing', fn
+    print('Writing', fn)
     open(fn, 'wb').write(tex)
     os.system("pdflatex '%s'" % fn)
 

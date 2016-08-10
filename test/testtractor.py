@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
 	import matplotlib
 	matplotlib.use('Agg')
@@ -61,7 +62,7 @@ def main():
 	plt.savefig('test-mod0.png')
 
 	derivs = src.getParamDerivatives(data)
-	print len(derivs), 'derivatives'
+	print(len(derivs), 'derivatives')
 	for i,deriv in enumerate(derivs):
 		plt.clf()
 		plt.imshow(deriv.getImage(), **imargs1)
