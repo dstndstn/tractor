@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -141,7 +142,7 @@ def runtest(tims, realsrcs, fitsrcs, niters):
             fluxes.append(tr.getParams()[0])
         else:
             flux0 = tr.getParams()[0]
-            print 'Noise-free fit flux:', flux0
+            print('Noise-free fit flux:', flux0)
 
     return mod, modx, chix, flux0, fluxes
             

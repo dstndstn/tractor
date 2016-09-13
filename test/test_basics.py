@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -14,29 +15,29 @@ var[1,0,0] = var[1,1,1] = 4.
 g = GaussianMixturePSF([0.7, 0.3], np.zeros((2,2)), var)
 c = g.copy()
 
-print g
-print c
+print(g)
+print(c)
 
-print g.getParams()
-print c.getParams()
+print(g.getParams())
+print(c.getParams())
 
 g.setParam(0, 999.)
 g.setParam(2, 9999.)
 g.setParam(6, 99999.)
-print g
-print c
+print(g)
+print(c)
 
 
-print g.hashkey()
+print(g.hashkey())
 
 e = GaussianMixtureEllipsePSF([0.7, 0.3], np.array([[0.1,0.],[0.,0.2]]),
                               [EllipseESoft(0., 0., 0.),
                                EllipseESoft(0.1, 0.1, -0.1)])
-print e
+print(e)
 p = e.getParams()
-print 'params', p
+print('params', p)
 e.setParams(p)
-print e
+print(e)
 
 n1,n2 = 7,7
 E1list = np.linspace(-1.2, 1.2, n1)
@@ -53,23 +54,23 @@ ps = PlotSequence('gell')
 for logre,cc in zip([1., 2., 3.], 'rgb'):
     plt.clf()
     for e1,e2 in zip(E1.ravel(), E2.ravel()):
-        print 
+        print() 
         e = EllipseESoft(logre, e1, e2)
-        print 'Original:', e
-        print 'theta:', np.rad2deg(e.theta)
-        print 'r:', e.re
+        print('Original:', e)
+        print('theta:', np.rad2deg(e.theta))
+        print('r:', e.re)
         ee = e.e
         ab = (1.+ee)/(1.-ee)
-        print 'ab:', 1./ab
-        print 'hard:', EllipseE.fromEllipseESoft(e)
+        print('ab:', 1./ab)
+        print('hard:', EllipseE.fromEllipseESoft(e))
 
-        print
+        print()
         cov = e.getCovariance()
-        print 'cov', cov
+        print('cov', cov)
         ec = EllipseE.fromCovariance(cov)
-        print 'ec', ec
+        print('ec', ec)
         ec2 = EllipseESoft.fromEllipseE(ec)
-        print 'ec2', ec2
+        print('ec2', ec2)
 
         T = e.getRaDecBasis()
         txy = np.dot(T, xy)

@@ -1,3 +1,4 @@
+from __future__ import print_function
 from .utils import BaseParams
 import ducks
     
@@ -151,7 +152,7 @@ class ShiftedWcs(ParamsWrapper, ducks.ImageCalibration):
                             comment='ShiftedWcs x0'))
         hdr.add_record(dict(name=prefix + 'Y0', value=self.y0,
                             comment='ShiftedWcs y0'))
-        print 'Sub wcs:', self.wcs
+        print('Sub wcs:', self.wcs)
         self.wcs.toFitsHeader(hdr, prefix=prefix)
         
     def hashkey(self):

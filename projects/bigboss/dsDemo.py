@@ -1,3 +1,4 @@
+from __future__ import print_function
 import sys
 import logging
 import traceback
@@ -36,7 +37,7 @@ class ScaledWCS(object):
 def fakeimg_plots():
 	zrf = np.array([-1./float(fakescale**2),
 					+6./float(fakescale**2)]) * info['skysig'] + info['sky']
-	print 'zrf', zrf
+	print('zrf', zrf)
 	imfake = dict(interpolation='nearest', origin='lower',
 				  vmin=zrf[0], vmax=zrf[1], cmap='gray')
 	mod = tractor.getModelImage(fakeimg)
@@ -48,21 +49,21 @@ def fakeimg_plots():
 	#plt.title('step %i: %s' % (step-1, action))
 	#plt.colorbar()
 	plt.savefig('mod-fake.png')
-	print 'Wrote fake model'
+	print('Wrote fake model')
 
 	seg = sources[1]
-	print 'Source:', seg
+	print('Source:', seg)
 	mod = tractor.getModelImage(fakeimg, srcs=[seg])
 	plt.clf()
 	plt.imshow(mod, **imfake)
 	#plt.title('step %i: %s' % (step-1, action))
 	#plt.colorbar()
 	plt.savefig('mod-fake-eg.png')
-	print 'Wrote fake model'
+	print('Wrote fake model')
 
 	patch = seg.getModelPatch(fakeimg)
 	px0,py0 = patch.x0, patch.y0
-	print 'Patch', patch
+	print('Patch', patch)
 	plt.clf()
 	zrf2 = np.array([-1./float(fakescale**2),
 					+6./float(fakescale**2)]) * info['skysig']
@@ -84,7 +85,7 @@ def fakeimg_plots():
 			 for dec in decvals]
 	xvals = np.array(xvals) - px0
 	yvals = np.array(yvals) - py0
-	print 'yvals', yvals
+	print('yvals', yvals)
 	plt.xticks(xvals, ['%.3f'%ra for ra in ravals])
 	plt.xlabel('RA (deg)')
 	plt.yticks(yvals, ['%.3f'%dec for dec in decvals])
@@ -134,11 +135,11 @@ def fakeimg_plots():
 	derivs = seg.getParamDerivatives(fakeimg)
 	for j,d in enumerate(derivs):
 		if d is None:
-			print 'No derivative for param', j
+			print('No derivative for param', j)
 		mx = max(abs(d.patch.max()), abs(d.patch.min()))
-		print 'mx', mx
-		print 'Patch size:', d.patch.shape
-		print 'patch x0,y0', d.x0, d.y0
+		print('mx', mx)
+		print('Patch size:', d.patch.shape)
+		print('patch x0,y0', d.x0, d.y0)
 		mim = np.zeros_like(fakeimg.getImage())
 		d.addTo(mim)
 		S = 25
@@ -179,17 +180,17 @@ def get_cfht_img(ra, dec, extent):
 	psffn = 'psfimg.fits'
 
 	wcs = FitsWcs(Tan(cffn, 0))
-	print 'CFHT WCS', wcs
+	print('CFHT WCS', wcs)
 
 	x,y = wcs.positionToPixel(RaDecPos(ra,dec))
-	print 'x,y', x,y
+	print('x,y', x,y)
 	cfx,cfy = x,y
 
 	cd = wcs.cdAtPixel(x,y)
 	pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
-	print 'pixscale', pixscale
+	print('pixscale', pixscale)
 	S = int(extent / pixscale)
-	print 'S', S
+	print('S', S)
 
 	#cfx,cfy = 734,4352
 	#S = 200
@@ -201,12 +202,12 @@ def get_cfht_img(ra, dec, extent):
 	#wcs.setX0Y0(535.14208988131043, 4153.665639423165)
 
 	I = pyfits.open(cffn)[1].data
-	print 'Img data', I.shape
+	print('Img data', I.shape)
 	roislice = (slice(y0,y1), slice(x0,x1))
 	image = I[roislice]
 
 	sky = np.median(image)
-	print 'Sky', sky
+	print('Sky', sky)
 	# save for later...
 	cfsky = sky
 	skyobj = ConstantSky(sky)
@@ -236,7 +237,7 @@ def get_cfht_img(ra, dec, extent):
 	del var
 
 	psfimg = pyfits.open(psffn)[0].data
-	print 'PSF image shape', psfimg.shape
+	print('PSF image shape', psfimg.shape)
 	from tractor.emfit import em_fit_2d
 	from tractor.fitpsf import em_init_params
 	# number of Gaussian components
@@ -247,10 +248,10 @@ def get_cfht_img(ra, dec, extent):
 	II /= II.sum()
 	# HACK
 	II = np.maximum(II, 0)
-	print 'Multi-Gaussian PSF fit...'
+	print('Multi-Gaussian PSF fit...')
 	xm,ym = -(S/2), -(S/2)
 	em_fit_2d(II, xm, ym, w, mu, sig)
-	print 'w,mu,sig', w,mu,sig
+	print('w,mu,sig', w,mu,sig)
 	psf = GaussianMixturePSF(w, mu, sig)
 
 	photocal = cf.CfhtPhotoCal(hdr=phdr,
@@ -282,7 +283,7 @@ def makeTractor(bands, ra, dec, S, RCFS):
 				# print 'RA,Dec', ra,dec
 				cd = wcs.cdAtPixel(xc,yc)
 				pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
-				print 'pixscale', pixscale * 3600.
+				print('pixscale', pixscale * 3600.)
 				extent = pixscale * S
 
 	#for timg,info in TI:
@@ -291,12 +292,12 @@ def makeTractor(bands, ra, dec, S, RCFS):
 	sources = st.get_tractor_sources(run, camcol, field, roi=roi,
 									 bands=bands)
 
-	print 'Sources:'
+	print('Sources:')
 	for s in sources:
-		print s
-	print
+		print(s)
+	print()
 
-	print 'Tractor images:', TI
+	print('Tractor images:', TI)
 
 	cftimg,cfsky,cfstd = get_cfht_img(ra,dec, extent)
 
@@ -478,7 +479,7 @@ def main():
 	for step in range(step0, NS+1):
 
 		stype = steptypes[step]
-		print 'Step', step, ':', stype
+		print('Step', step, ':', stype)
 
 		if step == 1:
 			for j,((ri,gi,bi),rgbname) in enumerate(RGBS):
@@ -596,24 +597,24 @@ def main():
 		if step == NS:
 			break
 
-		print
-		print '---------------------------------'
-		print 'Step', step
-		print '---------------------------------'
-		print
+		print()
+		print('---------------------------------')
+		print('Step', step)
+		print('---------------------------------')
+		print()
 		if stype == 'wcs':
 			#action = 'skip'
 			#continue
 			action = 'astrometry'
 			# fine-tune astrometry
-			print 'Optimizing CFHT astrometry...'
+			print('Optimizing CFHT astrometry...')
 			cfim = tractor.getImage(CFI)
 			pa = FitsWcsShiftParams(cfim.getWcs())
-			print '# params', pa.numberOfParams()
+			print('# params', pa.numberOfParams())
 			derivs = [[] for i in range(pa.numberOfParams())]
 			# getParamDerivatives
 			p0 = pa.getParams()
-			print 'p0:', p0
+			print('p0:', p0)
 			mod0 = tractor.getModelImage(cfim)
 			psteps = pa.getStepSizes()
 			#plt.clf()
@@ -621,60 +622,60 @@ def main():
 			#plt.savefig('dwcs.png')
 			for i,pstep in enumerate(psteps):
 				pa.stepParam(i,pstep)
-				print 'pstep:', pa.getParams()
+				print('pstep:', pa.getParams())
 				mod = tractor.getModelImageNoCache(cfim)
 				#print 'model', mod
 				#plt.clf()
 				#plt.imshow(mod, **ima)
 				#plt.savefig('dwcs%i.png' % (i))
 				pa.setParams(p0)
-				print 'revert pstep:', pa.getParams()
+				print('revert pstep:', pa.getParams())
 				D = (mod - mod0) / pstep
 				# --> convert to Patch
-				print 'derivative:', D.min(), np.median(D), D.max()
+				print('derivative:', D.min(), np.median(D), D.max())
 				D = Patch(0,0,D)
 				derivs[i].append((D, cfim))
 			
-			print 'Derivs', derivs
+			print('Derivs', derivs)
 			X = tractor.optimize(derivs)
-			print 'X:',X
+			print('X:',X)
 			(dlogprob, alpha) = tractor.tryParamUpdates([pa], X) #, alphas)
-			print 'pa after:', pa
-			print pa.getParams()
+			print('pa after:', pa)
+			print(pa.getParams())
 
 		elif stype == 'bright':
 			action = 'brightness, separately'
 
-			print 'Optimizing brightnesses separately...'
+			print('Optimizing brightnesses separately...')
 			for j,src in enumerate(tractor.getCatalog()):
 				#tractor.optimizeCatalogLoop(nsteps=1, srcs=[src],
 				#							brightnessonly=True)
-				print 'source', j, src
+				print('source', j, src)
 				dlnp,dX,alph = tractor.optimizeCatalogBrightnesses(srcs=[src])
-				print 'dlnp', dlnp
-				print 'dX', dX
-				print 'alpha', alph
+				print('dlnp', dlnp)
+				print('dX', dX)
+				print('alpha', alph)
 
 
 			if step == -2:
 				# troublesome guy...
 				src = tractor.getCatalog()[6]
-				print 'Troublesome source:', src
+				print('Troublesome source:', src)
 				im = tractor.getImage(0)
 				derivs = src.getParamDerivatives(im)
 				f1 = src.brightnessExp
 				f2 = src.brightnessDev
-				print 'Brightnesses', f1, f2
+				print('Brightnesses', f1, f2)
 				c1 = im.getPhotoCal().brightnessToCounts(f1)
 				c2 = im.getPhotoCal().brightnessToCounts(f2)
-				print 'Counts', c1, c2
+				print('Counts', c1, c2)
 				for j,d in enumerate(derivs):
 					if d is None:
-						print 'No derivative for param', j
+						print('No derivative for param', j)
 					mx = max(abs(d.patch.max()), abs(d.patch.min()))
-					print 'mx', mx
-					print 'Patch size:', d.patch.shape
-					print 'patch x0,y0', d.x0, d.y0
+					print('mx', mx)
+					print('Patch size:', d.patch.shape)
+					print('patch x0,y0', d.x0, d.y0)
 					plt.clf()
 					plt.imshow(d.patch, interpolation='nearest',
 							   origin='lower', cmap='gray',
@@ -692,13 +693,13 @@ def main():
 					plt.savefig('derivb%i.png' % j)
 
 				derivs = src.getParamDerivatives(im, brightnessonly=True)
-				print 'Brightness derivs', derivs
+				print('Brightness derivs', derivs)
 				for j,d in enumerate(derivs):
 					if d is None:
-						print 'No derivative for param', j
+						print('No derivative for param', j)
 						continue
 					mx = max(abs(d.patch.max()), abs(d.patch.min()))
-					print 'mx', mx
+					print('mx', mx)
 					plt.clf()
 					plt.imshow(d.patch, interpolation='nearest',
 							   origin='lower', cmap='gray',
@@ -719,13 +720,13 @@ def main():
 
 		elif stype == 'source':
 			action = 'sources, separately'
-			print 'Optimizing sources individually...'
+			print('Optimizing sources individually...')
 			for src in tractor.getCatalog():
 				tractor.optimizeCatalogLoop(nsteps=1, srcs=[src])
 
 		elif stype == 'jbright':
 			action = 'brightnesses, jointly'
-			print 'Optimizing brightnesses jointly...'
+			print('Optimizing brightnesses jointly...')
 			tractor.optimizeCatalogLoop(nsteps=1, brightnessonly=True)
 			#for src in tractor.getCatalog():
 			#	tractor.optimizeCatalogLoop(nsteps=1, srcs=[src],
@@ -734,7 +735,7 @@ def main():
 
 		elif stype == 'jsource':
 			action = 'sources, jointly'
-			print 'Optimizing sources jointly...'
+			print('Optimizing sources jointly...')
 			tractor.optimizeCatalogLoop(nsteps=1)
 
 		elif stype == 'simplify':
@@ -744,14 +745,14 @@ def main():
 				ii = cat.index(src)
 				lnp0 = tractor.getLogProb()
 				p0 = cat.getParams()
-				print 'Try removing source', src
-				print 'lnp0:', lnp0
+				print('Try removing source', src)
+				print('lnp0:', lnp0)
 				tractor.removeSource(src)
 				lnp1 = tractor.getLogProb()
-				print 'dlnp1:', (lnp1 - lnp0)
+				print('dlnp1:', (lnp1 - lnp0))
 				tractor.optimizeCatalogLoop(nsteps=5)
 				lnp2 = tractor.getLogProb()
-				print 'dlnp2:', (lnp2 - lnp0)
+				print('dlnp2:', (lnp2 - lnp0))
 
 				plt.clf()
 				plt.gca().set_position(plotpos0)
@@ -763,7 +764,7 @@ def main():
 				cfimshow(mod, **ima)
 				fn = 'mod-rem%02i-%02i-%02i.png' % (j, CFI, step)
 				plt.savefig(fn)
-				print 'saved', fn
+				print('saved', fn)
 
 				if lnp2 > lnp0:
 					continue
@@ -771,9 +772,9 @@ def main():
 					# reinsert
 					cat.insert(ii, src)
 					cat.setParams(p0)
-					print 'Reverted'
+					print('Reverted')
 					lnp3 = tractor.getLogProb()
-					print 'lnp3', lnp3
+					print('lnp3', lnp3)
 					assert(lnp3 == lnp0)
 					
 			
@@ -782,7 +783,7 @@ def main():
 				cat = tractor.getCatalog()
 				ii = cat.index(src)
 				p0 = cat.getParams()
-				print 'Try complexifying source', src
+				print('Try complexifying source', src)
 				#if isinstance(src, PointSource):
 				newsrc = None
 				if (isinstance(src, stgal.ExpGalaxy) or
@@ -790,7 +791,7 @@ def main():
 					# HACK
 					faintmag = 21
 					faint = Mags(**dict([(b,faintmag) for b in bands]))
-					print 'Faint mag:', faint
+					print('Faint mag:', faint)
 					args = [src.pos]
 					if isinstance(src, stgal.ExpGalaxy):
 						args.extend([src.brightness, src.shape])
@@ -803,22 +804,22 @@ def main():
 					continue
 
 				lnp0 = tractor.getLogProb()
-				print 'lnp0:', lnp0
+				print('lnp0:', lnp0)
 
-				print 'Replacing', src
-				print '     with', newsrc
+				print('Replacing', src)
+				print('     with', newsrc)
 				tractor.removeSource(src)
 				tractor.addSource(newsrc)
 				lnp1 = tractor.getLogProb()
-				print 'dlnp1:', (lnp1 - lnp0)
-				print 'Optimizing new source...'
+				print('dlnp1:', (lnp1 - lnp0))
+				print('Optimizing new source...')
 				tractor.optimizeCatalogLoop(nsteps=5, srcs=[newsrc])
 				lnp2 = tractor.getLogProb()
-				print 'dlnp2:', (lnp2 - lnp0)
-				print 'Optimizing everything...'
+				print('dlnp2:', (lnp2 - lnp0))
+				print('Optimizing everything...')
 				tractor.optimizeCatalogLoop(nsteps=5)
 				lnp3 = tractor.getLogProb()
-				print 'dlnp3:', (lnp3 - lnp0)
+				print('dlnp3:', (lnp3 - lnp0))
 
 				plt.clf()
 				plt.gca().set_position(plotpos0)
@@ -830,24 +831,24 @@ def main():
 				cfimshow(mod, **ima)
 				fn = 'mod-complex%02i-%02i-%02i.png' % (j, CFI, step)
 				plt.savefig(fn)
-				print 'saved', fn
+				print('saved', fn)
 
 				if lnp3 > lnp0:
-					print 'Keeping this change!'
+					print('Keeping this change!')
 					continue
 				else:
 					# reinsert
 					cat.remove(newsrc)
 					cat.insert(ii, src)
 					cat.setParams(p0)
-					print 'Reverted'
+					print('Reverted')
 					lnp3 = tractor.getLogProb()
-					print 'lnp3', lnp3
+					print('lnp3', lnp3)
 					assert(lnp3 == lnp0)
 
 			
 		else:
-			print 'Unknown step type', stype
+			print('Unknown step type', stype)
 
 
 class FitsWcsShiftParams(ParamList):

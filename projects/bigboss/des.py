@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
 	import matplotlib
 	matplotlib.use('Agg')
@@ -32,7 +33,7 @@ if __name__ == '__main__':
 	hdr = P[0].header
 	band = hdr.get('FILTER')
 	band = band.split()[0]
-	print 'band', band
+	print('band', band)
 
 	pixscale = hdr.get('PIXSCAL1')
 	# it would be evil to make PIXSCAL1 != PIXSCAL2...

@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
@@ -68,7 +69,7 @@ def main():
 
     # Check command-line arguments
     if len(args):
-        print 'Extra arguments:', args
+        print('Extra arguments:', args)
         parser.print_help()
         sys.exit(-1)
     for fn,name,exists in [(opt.outfn, 'output filename (-o)', False),
@@ -78,10 +79,10 @@ def main():
                            #(opt.postxt, 'Source positions filename (-s)', True),
                            ]:
         if fn is None:
-            print 'Must specify', name
+            print('Must specify', name)
             sys.exit(-1)
         if exists and not os.path.exists(fn):
-            print 'Input file', fn, 'does not exist'
+            print('Input file', fn, 'does not exist')
             sys.exit(-1)
 
     lvl = logging.DEBUG
@@ -98,26 +99,26 @@ def main():
         sdss.saveUnzippedFiles('data/unzip')
 
     # Read inputs
-    print 'Reading input image', opt.imgfn
+    print('Reading input image', opt.imgfn)
     img,hdr = fitsio.read(opt.imgfn, header=True)
-    print 'Read img', img.shape, img.dtype
+    print('Read img', img.shape, img.dtype)
     H,W = img.shape
     img = img.astype(np.float32)
 
     sky = hdr['SKYADU']
-    print 'Sky:', sky
+    print('Sky:', sky)
 
     cal = hdr['CALIA73']
-    print 'Zeropoint cal:', cal
+    print('Zeropoint cal:', cal)
     zpscale = 10.**((2.5 + cal) / 2.5)
-    print 'Zp scale', zpscale
+    print('Zp scale', zpscale)
     
     wcs = anwcs(opt.imgfn)
-    print 'WCS pixel scale:', wcs.pixel_scale()
+    print('WCS pixel scale:', wcs.pixel_scale())
     
-    print 'Reading flags', opt.flagfn
+    print('Reading flags', opt.flagfn)
     flag = fitsio.read(opt.flagfn)
-    print 'Read flag', flag.shape, flag.dtype
+    print('Read flag', flag.shape, flag.dtype)
 
     imslice = None
     if opt.sub:
@@ -129,31 +130,31 @@ def main():
         wcs.set_width(W)
         wcs.set_height(H)
 
-    print 'Reading PSF', opt.psffn
+    print('Reading PSF', opt.psffn)
     psf = PsfEx(opt.psffn, W, H)
 
     if opt.gaussianpsf:
         picpsffn = opt.psffn + '.pickle'
         if not os.path.exists(picpsffn):
             psf.savesplinedata = True
-            print 'Fitting PSF model...'
+            print('Fitting PSF model...')
             psf.ensureFit()
             pickle_to_file(psf.splinedata, picpsffn)
-            print 'Wrote', picpsffn
+            print('Wrote', picpsffn)
         else:
-            print 'Reading PSF model parameters from', picpsffn
+            print('Reading PSF model parameters from', picpsffn)
             data = unpickle_from_file(picpsffn)
-            print 'Fitting PSF...'
+            print('Fitting PSF...')
             psf.fitSavedData(*data)
 
     #
     x = psf.instantiateAt(0., 0.)
-    print 'PSF', x.shape
+    print('PSF', x.shape)
     x = x.shape[0]
     #psf.radius = (x+1)/2.
     psf.radius = 20
     
-    print 'Computing image sigma...'
+    print('Computing image sigma...')
     if opt.flagzero:
         bad = np.flatnonzero((flag == 0))
         good = (flag != 0)
@@ -167,7 +168,7 @@ def main():
     plo,phi = [percentile_f(igood, p) for p in [25, 75]]
     # Wikipedia says:  IRQ -> sigma:
     sigma = (phi - plo) / (0.6745 * 2)
-    print 'Sigma:', sigma
+    print('Sigma:', sigma)
     invvar = np.zeros_like(img) + (1./sigma**2)
     invvar.flat[bad] = 0.
     del bad
@@ -178,7 +179,7 @@ def main():
 
     # Get SDSS sources within the image...
 
-    print 'Reading SDSS objects...'
+    print('Reading SDSS objects...')
     cols = ['objid', 'ra', 'dec', 'fracdev', 'objc_type',
             'theta_dev', 'theta_deverr', 'ab_dev', 'ab_deverr', 'phi_dev_deg',
             'theta_exp', 'theta_experr', 'ab_exp', 'ab_experr', 'phi_exp_deg',
@@ -189,7 +190,7 @@ def main():
             'modelflux', 'modelflux_ivar',
             'extinction']
     T = read_photoobjs_in_wcs(wcs, 1./60., sdss=sdss, cols=cols)
-    print 'Got', len(T), 'SDSS objs'
+    print('Got', len(T), 'SDSS objs')
 
     T.treated_as_pointsource = treat_as_pointsource(T, band_index(opt.band))
 
@@ -245,8 +246,8 @@ def main():
             imstats.xhi[celli] = xhi
             imstats.ylo[celli] = ylo
             imstats.yhi[celli] = yhi
-            print
-            print 'Doing image cell %i: x=[%i,%i), y=[%i,%i)' % (celli, xlo,xhi,ylo,yhi)
+            print()
+            print('Doing image cell %i: x=[%i,%i), y=[%i,%i)' % (celli, xlo,xhi,ylo,yhi))
             # We will fit for sources in the [xlo,xhi), [ylo,yhi) box.
             # We add a margin in the image around that ROI
             # Beyond that, we add a margin of extra sources
@@ -264,7 +265,7 @@ def main():
             if not opt.gaussianpsf:
                 # Instantiate pixelized PSF at this cell center.
                 pixpsf = fullpsf.instantiateAt((xlo+xhi)/2., (ylo+yhi)/2.)
-                print 'Pixpsf:', pixpsf.shape
+                print('Pixpsf:', pixpsf.shape)
                 psf = PixelizedPSF(pixpsf)
             else:
                 psf = fullpsf
@@ -294,8 +295,8 @@ def main():
             imstats.ntotal[celli] = len(T)
     
             # print 'Image subregion:', img.shape
-            print 'Number of sources in ROI:', sum(T.inbounds)
-            print 'Number of sources in ROI + margin:', len(T)
+            print('Number of sources in ROI:', sum(T.inbounds))
+            print('Number of sources in ROI + margin:', len(T))
             #print 'Source positions: x', T.x.min(), T.x.max(), 'y', T.y.min(), T.y.max()
 
             twcs = WcslibWcs(None, wcs=wcs)
@@ -313,7 +314,7 @@ def main():
                 sdss=sdss, objs=T.copy(), bands=[band],
                 nanomaggies=True, fixedComposites=True, useObjcType=True,
                 getobjinds=True)
-            print 'Got', len(cat), 'Tractor sources'
+            print('Got', len(cat), 'Tractor sources')
 
             assert(len(cat) == len(catI))
 
@@ -349,7 +350,7 @@ def main():
             IV = X.IV
             fs = X.fitstats
 
-            print 'Forced photometry took', Time()-t0
+            print('Forced photometry took', Time()-t0)
             
             # print 'Fit params:'
             # tractor.printThawedParams()
@@ -438,9 +439,9 @@ def main():
                 tind = catI[ii]
                 src = cat[ii]
                 fluxes = [T.psfflux[tind,0], src.getBrightness().getBand(band)]
-                print 'Fluxes', fluxes
+                print('Fluxes', fluxes)
                 mags = [-2.5*(np.log10(flux)-9) for flux in fluxes]
-                print 'Mags', mags
+                print('Mags', mags)
 
                 t = ''
                 if type(src) == ExpGalaxy:
@@ -465,11 +466,11 @@ def main():
                     continue
                 tind = catI[i]
                 fluxes = [T.psfflux[tind,0], flux]
-                print 'RA,Dec', T.ra[tind],T.dec[tind]
-                print src.getPosition()
-                print 'Fluxes', fluxes
+                print('RA,Dec', T.ra[tind],T.dec[tind])
+                print(src.getPosition())
+                print('Fluxes', fluxes)
                 mags = [-2.5*(np.log10(flux)-9) for flux in fluxes]
-                print 'Mags', mags
+                print('Mags', mags)
                 plt.text(T.x[tind], T.y[tind]-3, '%.1f / %.1f' % (mags[0], mags[1]), color='g',
                          va='top', bbox=dict(facecolor='k', alpha=0.5))
                 plt.plot(T.x[tind]-1, T.y[tind]-1, 'g.')
@@ -518,11 +519,11 @@ def main():
     TT.cut(np.argsort(TT.row))
     #TT.delete_column('row')
     TT.writeto(opt.outfn)
-    print 'Wrote results to', opt.outfn
+    print('Wrote results to', opt.outfn)
     
     if opt.statsfn:
         imstats.writeto(opt.statsfn)
-        print 'Wrote image statistics to', opt.statsfn
+        print('Wrote image statistics to', opt.statsfn)
 
     plot_results(opt.outfn, ps)
 
@@ -531,10 +532,10 @@ def main():
 def plot_results(outfn, ps, T=None):
     if T is None:
         T = fits_table(outfn)
-        print 'read', len(T)
+        print('read', len(T))
 
     I = np.flatnonzero(T.tractor_u_has_phot)
-    print 'Plotting', len(I), 'with phot'
+    print('Plotting', len(I), 'with phot')
 
     stars = (T.objc_type[I] == 6)
     gals  = (T.objc_type[I] == 3)
@@ -715,7 +716,7 @@ def plot_results(outfn, ps, T=None):
     # (don't use T.cut(): const T)
     T = T[T.tractor_u_has_phot]
 
-    print 'C stargal:', np.unique(C.stargal)
+    print('C stargal:', np.unique(C.stargal))
 
     I,J,d = match_radec(T.ra, T.dec, C.alpha, C.delta, 1./3600.)
 

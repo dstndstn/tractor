@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
 	import matplotlib
 	matplotlib.use('Agg')
@@ -53,7 +54,7 @@ def galex_read_image(basefn, radecroi=None, nanomaggies=True,
 	#H,W = Fint[0].get_info()['dims']
 	intimg = pyfits.open(intfn)[0].data
 	H,W = intimg.shape
-	print 'Intensity img:', H,W
+	print('Intensity img:', H,W)
 
 	phdr = pyfits.getheader(intfn, 0)
 
@@ -78,7 +79,7 @@ def galex_read_image(basefn, radecroi=None, nanomaggies=True,
 		xy = np.array(xy)
 		x0,x1 = xy[:,0].min(), xy[:,0].max()
 		y0,y1 = xy[:,1].min(), xy[:,1].max()
-		print 'RA,Dec ROI', ralo,rahi, declo,dechi, 'becomes x,y ROI', x0,x1,y0,y1
+		print('RA,Dec ROI', ralo,rahi, declo,dechi, 'becomes x,y ROI', x0,x1,y0,y1)
 		roi = (x0,x1+1, y0,y1+1)
 
 	if roi is not None:
@@ -94,7 +95,7 @@ def galex_read_image(basefn, radecroi=None, nanomaggies=True,
 		y0 = np.clip(y0, 0, H)
 		y1 = np.clip(y1, 0, H)
 		if x0 == x1 or y0 == y1:
-			print 'ROI is empty'
+			print('ROI is empty')
 			return None
 		assert(x0 < x1)
 		assert(y0 < y1)
@@ -175,14 +176,14 @@ if __name__ == '__main__':
 	sfn = 'objs-eboss-w3-dr9.fits'
 
 	S = fits_table(sfn, columns=['ra','dec'])
-	print 'EBOSS region:', S.ra.min(), S.ra.max(), S.dec.min(), S.dec.max()
+	print('EBOSS region:', S.ra.min(), S.ra.max(), S.dec.min(), S.dec.max())
 
 	mr = 0.01
 	md = 0.01
 	
 	I = np.flatnonzero((S.ra  > (r0-mr)) * (S.ra  < (r1+mr)) *
 					   (S.dec > (d0-md)) * (S.dec < (d1+md)))
-	print 'Reading', len(I), 'in range'
+	print('Reading', len(I), 'in range')
 
 	S = fits_table(sfn, rows=I, column_map=dict(r_dev='theta_dev',
 												r_exp='theta_exp',
@@ -198,7 +199,7 @@ if __name__ == '__main__':
 	cat = get_tractor_sources_dr9(None, None, None, bandname=sband,
 								  objs=S, bands=[], nanomaggies=True, extrabands=bands,
 								  fixedComposites=True, forcePointSources=ptsrc)
-	print 'Created', len(cat), 'Tractor sources'
+	print('Created', len(cat), 'Tractor sources')
 	assert(len(cat) == len(S))
 
 	ps = PlotSequence('galex')
@@ -223,14 +224,14 @@ if __name__ == '__main__':
 		#print '250,550', tim.getWcs().pixelToPosition(250,550)
 
 		tractor = Tractor([tim], cat)
-		print 'Created', tractor
+		print('Created', tractor)
 
 		# ima = dict(interpolation='nearest', origin='lower', vmin=tim.zr[0], vmax=tim.zr[1])
 		#ima = dict(interpolation='nearest', origin='upper', vmin=0, vmax=0.1)
 		ima = dict(interpolation='nearest', origin='upper', vmin=0, vmax=0.03)
 
 		im = tim.getImage()
-		print 'Image range:', im.min(), im.max()
+		print('Image range:', im.min(), im.max())
 		
 		plt.clf()
 		plt.imshow(tim.getImage(), **ima)

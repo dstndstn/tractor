@@ -1,3 +1,4 @@
+from __future__ import print_function
 import sys
 from common import *
 from desi_common import *
@@ -32,16 +33,16 @@ if __name__ == '__main__':
 
     if opt.sources:
         if opt.outcat is None:
-            print 'If --sources are being re-optimized, must specify output file with --out'
+            print('If --sources are being re-optimized, must specify output file with --out')
             sys.exit(-1)
     cal = opt.sky or opt.astrom or opt.psf or opt.photom
     if cal:
         if opt.outdir is None:
-            print 'If --sky, --astrom, --psf, or --photom are being re-optimized, must specify output directory with --outdir'
+            print('If --sky, --astrom, --psf, or --photom are being re-optimized, must specify output directory with --outdir')
             sys.exit(-1)
 
     if not (opt.sources or cal):
-        print 'Nothing to do!  Must specify --sources, --sky, --astrom, --psf, or --photom.'
+        print('Nothing to do!  Must specify --sources, --sky, --astrom, --psf, or --photom.')
         sys.exit(-1)
 
     # zoomslice = None
@@ -51,35 +52,35 @@ if __name__ == '__main__':
 
     C = fits_table(catfn)
     cat,invvars = read_fits_catalog(C, invvars=True)
-    print 'Got cat:', cat
+    print('Got cat:', cat)
 
     TT = []
     if opt.images:
         T = fits_table(opt.images)
-        print len(T), 'ccds in', opt.images
+        print(len(T), 'ccds in', opt.images)
         TT.append(T)
     for fnhdu in opt.image:
         try:
             i = fnhdu.rindex('+')
         except:
-            print 'Warning: expected FILENAME+HDU in', fn
+            print('Warning: expected FILENAME+HDU in', fn)
             raise
 
         fn = fnhdu[:i]
         hdu = int(fnhdu[i+1:])
-        print 'Filename', fn, 'HDU', hdu
+        print('Filename', fn, 'HDU', hdu)
 
         T = exposure_metadata([fn], hdus=[hdu])
         TT.append(T)
     T = merge_tables(TT)
-    print 'Total of', len(T), 'CCDs'
+    print('Total of', len(T), 'CCDs')
 
     decals = Decals()
     tims = []
     for t in T:
         im = DecamImage(decals, t)
         tim = im.get_tractor_image() #, slc=zoomslice)
-        print 'Got tim:', tim
+        print('Got tim:', tim)
         from tractor.psfex import CachingPsfEx
         tim.psfex.radius = 20
         tim.psfex.fitSavedData(*tim.psfex.splinedata)
@@ -109,7 +110,7 @@ if __name__ == '__main__':
         for tim in tims:
             tim.freezeAllBut(*but)
 
-    print 'Parameters to fit:'
+    print('Parameters to fit:')
     tr.printThawedParams()
 
     # kwa = {}
@@ -119,11 +120,11 @@ if __name__ == '__main__':
     #R = tr.optimize_forced_photometry(variance=True, **kwa)
 
     for i in range(50):
-        print 'Optimizing...'
+        print('Optimizing...')
         dlnp,x,alpha,variance = tr.optimize(shared_params=False, variance=True)
         if dlnp < 0.1:
             break
-        print 'dlnp', dlnp
+        print('dlnp', dlnp)
 
 
 
@@ -142,7 +143,7 @@ if __name__ == '__main__':
         cat = tr.catalog
         T2,hdr = prepare_fits_catalog(cat, invvars, TT, hdr, bands, fs)
         T2.writeto(opt.outcat, header=hdr)
-        print 'Wrote', opt.outcat
+        print('Wrote', opt.outcat)
 
     if opt.sky:
         for tim in tims:
@@ -156,16 +157,16 @@ if __name__ == '__main__':
                                 comment='Sky class'))
             sky.toFitsHeader(hdr,  prefix + 'SKY_')
 
-            print 'Header:', hdr
+            print('Header:', hdr)
 
             fn = tim.imobj.skyfn.replace(decals_dir, opt.outdir)
-            print 'Output filename', fn
+            print('Output filename', fn)
             try:
                 os.makedirs(os.path.dirname(fn))
             except:
                 pass
             fitsio.write(fn, None, header=hdr, clobber=True)
-            print 'Wrote', fn
+            print('Wrote', fn)
             
 
     if opt.photom:
@@ -179,14 +180,14 @@ if __name__ == '__main__':
             hdr.add_record(dict(name=prefix + 'PHOT', value=photom_type,
                                 comment='Photom class'))
             photom.toFitsHeader(hdr,  prefix + 'PHOT_')
-            print 'Header:', hdr
+            print('Header:', hdr)
 
             fn = tim.imobj.skyfn.replace(decals_dir, opt.outdir).replace('sky','photom')
-            print 'Output filename', fn
+            print('Output filename', fn)
             try:
                 os.makedirs(os.path.dirname(fn))
             except:
                 pass
             fitsio.write(fn, None, header=hdr, clobber=True)
-            print 'Wrote', fn
+            print('Wrote', fn)
 

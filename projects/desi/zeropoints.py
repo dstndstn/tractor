@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -39,18 +40,18 @@ if __name__ == '__main__':
 
     for expnum in expnums:
         TT = T[T.expnum == expnum]
-        print len(TT), 'with expnum', expnum
+        print(len(TT), 'with expnum', expnum)
         bands = np.unique(TT.filter)
         assert(len(bands) == 1)
         band = bands[0]
-        print 'Band:', band
+        print('Band:', band)
         exptime = TT.exptime[0]
-        print 'Exposure time', exptime
+        print('Exposure time', exptime)
 
         ims = []
         for t in TT:
-            print
-            print 'Image file', t.cpimage, 'hdu', t.cpimage_hdu
+            print()
+            print('Image file', t.cpimage, 'hdu', t.cpimage_hdu)
             im = DecamImage(D, t)
             ims.append(im)
 
@@ -58,26 +59,26 @@ if __name__ == '__main__':
         corrs = []
         for im in ims:
             if not os.path.exists(im.corrfn):
-                print 'NO SUCH FILE:', im.corrfn
+                print('NO SUCH FILE:', im.corrfn)
                 continue
 
             sdss = fits_table(im.sdssfn)
 
             #sefn = im.morphfn
             sefn = im.sefn
-            print 'Looking for', sefn
+            print('Looking for', sefn)
 
             morph = fits_table(sefn, hdu=2)
 
             wcs = Sip(im.wcsfn)
             if len(sdss) == 0:
-                print 'EMPTY:', im.sdssfn
+                print('EMPTY:', im.sdssfn)
                 continue
             if len(morph) == 0:
-                print 'EMPTY:', im.morphfn
+                print('EMPTY:', im.morphfn)
                 continue
-            print len(sdss), 'SDSS sources from', im.sdssfn
-            print len(morph), 'SE sources from', sefn
+            print(len(sdss), 'SDSS sources from', im.sdssfn)
+            print(len(morph), 'SE sources from', sefn)
             morph.ra,morph.dec = wcs.pixelxy2radec(morph.x_image, morph.y_image)
 
             I,J,d = match_radec(morph.ra, morph.dec, sdss.ra, sdss.dec, 0.5/3600.)
@@ -88,7 +89,7 @@ if __name__ == '__main__':
             #corr = fits_table(im.corrfn)
 
             corrs.append(corr)
-            print im, ':', len(corr), 'correspondences'
+            print(im, ':', len(corr), 'correspondences')
 
         for col,cut in ([('flux_auto',None)] + [('flux_aper',i) for i in range(3)]
                         + [('flux_psf',None), ('flux_model',None)]):
@@ -106,7 +107,7 @@ if __name__ == '__main__':
                 smag = -2.5 * (np.log10(sflux[I]) - 9)
                 dmags.append(dmag)
                 smags.append(smag)
-                print 'median', np.median(smag - dmag)
+                print('median', np.median(smag - dmag))
                 #print 'mags', dmag, smag
             if len(dmags) == 0:
                 continue
@@ -142,4 +143,4 @@ if __name__ == '__main__':
         T.ccdzpt  = np.array([v[1] for v in allzps.values()])
         T.exptime = np.array([v[2] for v in allzps.values()])
         T.writeto(outfn)
-        print 'Wrote', outfn
+        print('Wrote', outfn)

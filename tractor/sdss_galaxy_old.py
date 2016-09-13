@@ -1,4 +1,5 @@
 # Copyright 2011 Dustin Lang and David W. Hogg.  All rights reserved.
+from __future__ import print_function
 
 '''
 This is an old, flawed, attempt by dstn to model the galaxy
@@ -46,7 +47,7 @@ class Galaxy(MultiParams):
 		cd = img.getWcs().cdAtPixel(px, py)
 		patch = self.getGalaxyPatch(img, px, py, cd)
 		if patch is None:
-			print 'Warning, is Galaxy(subclass).getProfile() defined?'
+			print('Warning, is Galaxy(subclass).getProfile() defined?')
 			return Patch(0, 0, None)
 		if patch.getImage() is None:
 			return Patch(patch.getX0(), patch.getY0(), None)
@@ -82,18 +83,18 @@ class ExpGalaxy(Galaxy):
 
 	def debugPatchImage(self, img):
 		if img is None:
-			print 'Exp patch', img
+			print('Exp patch', img)
 		elif np.product(img.shape) == 0:
-			print 'Patch empty:', img.shape
+			print('Patch empty:', img.shape)
 		else:
-			print 'Patch', img.shape
+			print('Patch', img.shape)
 			plt.clf()
 			plt.imshow(img, interpolation='nearest', origin='lower')
 			plt.hot()
 			plt.colorbar()
 			fn = 'exp-patch-%02i-%03i.png' % (self.num, self.plotnum)
 			plt.savefig(fn)
-			print 'saved', fn
+			print('saved', fn)
 			self.plotnum += 1
 
 class DevGalaxy(Galaxy):

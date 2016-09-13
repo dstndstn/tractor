@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 
@@ -31,7 +32,7 @@ from astrometry.sdss import *
 
 def _run_one((cmd, outfn)):
     if os.path.exists(outfn):
-        print 'Output file exists:', outfn, '; not running command'
+        print('Output file exists:', outfn, '; not running command')
         return
     os.system(cmd)
 
@@ -43,7 +44,7 @@ def main():
     
     if False:
         cmd = 'hpsplit %s -o %s -n 2' % (reffn, splitpat)
-        print cmd
+        print(cmd)
         os.system(cmd)
     
     # hpsplit data/decam/sdss-indexes/calibObj-merge-both{,-2}.fits -o data/decam/sdss-indexes/sdss-hp%02i-ns2.fits -n 2
@@ -55,16 +56,16 @@ def main():
     for hp in range(48):
         indfn = 'tmp/index-ps1-hp%02i-%i.fits' % (hp, scale)
         if os.path.exists(indfn):
-            print 'Exists:', indfn
+            print('Exists:', indfn)
             continue
         catfn = splitpat % hp
         if not os.path.exists(catfn):
-            print 'No input catalog:', catfn
+            print('No input catalog:', catfn)
             continue
         nstars = 30
         cmd = ('build-astrometry-index -o %s -P %i -i %s -S rmag -H %i -s 2 -L 20 -I 1409260 -t tmp -n %i'
                % (indfn, scale, catfn, hp, nstars))
-        print cmd
+        print(cmd)
         cmds.append((cmd,indfn))
 
     mp = multiproc(8)

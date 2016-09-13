@@ -29,6 +29,7 @@ and
 abs(ra - 52.646659) + abs(dec + 0.42659916) < 0.003
 '''
 
+from __future__ import print_function
 
 import matplotlib
 matplotlib.rc('text', usetex=True)
@@ -110,8 +111,8 @@ def plot_chain(fn, ps, ra, dec, band, stari, tag, opt):
 	allp = np.array(X['allp'])
 	tr = X['tr']
 	
-	print 'allp shape', allp.shape
-	print 'all lnp shape', alllnp.shape
+	print('allp shape', allp.shape)
+	print('all lnp shape', alllnp.shape)
 
 	# number of steps, number of walkers, number of params
 	(N, W, P) = allp.shape
@@ -130,13 +131,13 @@ def plot_chain(fn, ps, ra, dec, band, stari, tag, opt):
 	t0 = min(times)
 	t1 = max(times)
 
-	print 'SDSS parallax angles:'
+	print('SDSS parallax angles:')
 	for t in times:
-		print '  ', np.fmod(360. + np.rad2deg(t.getSunTheta()), 360.)
+		print('  ', np.fmod(360. + np.rad2deg(t.getSunTheta()), 360.))
 		
 	if opt.wise:
 		wise = gator2fits('wise_allsky.wise_allsky_4band_p1bs_psd29506.tbl')
-		print 'Read WISE table:'
+		print('Read WISE table:')
 		wise.about()
 		wise.writeto('wise.fits')
 
@@ -150,9 +151,9 @@ def plot_chain(fn, ps, ra, dec, band, stari, tag, opt):
 		t0 = min(t0, min(utimes))
 		t1 = max(t1, max(utimes))
 
-		print 'UKIDSS parallax angles:'
+		print('UKIDSS parallax angles:')
 		for t in utimes:
-			print '  ', np.rad2deg(t.getSunTheta())
+			print('  ', np.rad2deg(t.getSunTheta()))
 
 	if opt.twomass:
 		twomass = gator2fits('fp_2mass.fp_psc12438.tbl')
@@ -173,11 +174,11 @@ def plot_chain(fn, ps, ra, dec, band, stari, tag, opt):
 	# 	usnob[0].about()
 	# 	usnob.writeto('usnob-%i.fits' % stari)
 		
-	print 'Times', t0, t1
+	print('Times', t0, t1)
 	sixmonths = (3600. * 24. * 180)
 	t0 = t0 - sixmonths
 	t1 = t1 + sixmonths
-	print 'Times', t0, t1
+	print('Times', t0, t1)
 	TT = [TAITime(x) for x in np.linspace(t0.getValue(), t1.getValue(), 300)]
 
 	sdss = DR9(basedir='data-dr9')
@@ -185,7 +186,7 @@ def plot_chain(fn, ps, ra, dec, band, stari, tag, opt):
 
 	pfn = 'pobjs-%s.pickle' % tag
 	if os.path.exists(pfn):
-		print 'Reading', pfn
+		print('Reading', pfn)
 		pobjs = unpickle_from_file(pfn)
 	else:
 		pobjs = []
@@ -197,11 +198,11 @@ def plot_chain(fn, ps, ra, dec, band, stari, tag, opt):
 				r,c,f, bandname=band,
 				sdss=sdss, radecrad=(ra,dec,rad),
 				getobjs=True, getobjinds=True)
-			print 'Got', len(cat), 'sources;', len(objI)
+			print('Got', len(cat), 'sources;', len(objI))
 			if len(cat) == 0:
 				continue
 			if len(cat) > 1:
-				print 'Found too many objects!'
+				print('Found too many objects!')
 				continue
 			assert(len(objI) == len(cat))
 			objs.cut(objI)
@@ -213,7 +214,7 @@ def plot_chain(fn, ps, ra, dec, band, stari, tag, opt):
 			ast = frame.getAsTrans()
 			# r-i color
 			color = obj.psfmag[band_index('r')] - obj.psfmag[band_index('i')]
-			print 'color', color
+			print('color', color)
 			x,y = obj.colc[bandnum], obj.rowc[bandnum]
 			r0,d0 = ast.pixel_to_radec(x, y, color=color)
 			#pos = RaDecPos(ra, dec)
@@ -316,9 +317,9 @@ def plot_chain(fn, ps, ra, dec, band, stari, tag, opt):
 			for w in range(1,4+1):
 				mags.append(('W%i' % w, t.get('w%impro' % w)))
 
-	print 'Got mags:'
+	print('Got mags:')
 	for b,m in mags:
-		print b, m
+		print(b, m)
 
 	plt.clf()
 	bandmap = { 'u': 354,
@@ -357,7 +358,7 @@ def plot_chain(fn, ps, ra, dec, band, stari, tag, opt):
 			plt.plot(r0, d0, 'bo')
 	
 			xe,ye = obj.colcerr[bandnum], obj.rowcerr[bandnum]
-			print 'Pixel error:', (xe+ye)/2.
+			print('Pixel error:', (xe+ye)/2.)
 			dradec = ((xe + ye)/2.) * 0.396 / 3600.
 
 			angle = np.linspace(0, 2.*np.pi, 360)
@@ -412,7 +413,7 @@ def plot_chain(fn, ps, ra, dec, band, stari, tag, opt):
 	
 	for i in range(P+1):
 
-		print 'param', i, ':', nm[i]
+		print('param', i, ':', nm[i])
 		
 		if i < P:
 			pp = allp[:,:,i]
@@ -501,7 +502,7 @@ def plot_chain(fn, ps, ra, dec, band, stari, tag, opt):
 	plt.clf()
 	k = 1
 	pp = allp[-500:,:,:].reshape((-1, P))
-	print 'pp shape', pp.shape
+	print('pp shape', pp.shape)
 	for i in range(P):
 		for j in range(P):
 			plt.subplot(P, P, k)
@@ -660,9 +661,9 @@ class CatalogFakeImage(BaseParams):
 def run_star(src, band, tag, opt):
 	window_flist_fn = 'window_flist-DR9.fits'
 	T = fits_table(window_flist_fn)
-	print 'Read', len(T), 'S82 fields'
+	print('Read', len(T), 'S82 fields')
 	T.cut(T.score >= 0.5)
-	print 'Cut to', len(T), 'photometric'
+	print('Cut to', len(T), 'photometric')
 
 	sdss = DR9(basedir='data-dr9')
 
@@ -672,7 +673,7 @@ def run_star(src, band, tag, opt):
 
 	if opt.wise:
 		wise = gator2fits('wise_allsky.wise_allsky_4band_p1bs_psd29506.tbl')
-		print 'Read WISE table:'
+		print('Read WISE table:')
 		wise.about()
 		wise.writeto('wise.fits')
 	ra = src.ra
@@ -683,12 +684,12 @@ def run_star(src, band, tag, opt):
 	bandnum = band_index(band)
 	
 	if opt.freeze_parallax:
-		print 'Freezing parallax to zero.'
+		print('Freezing parallax to zero.')
 		parallax = 0.
 	
 	I = np.flatnonzero(np.hypot(T.ra - ra, T.dec - dec) < np.hypot(13.,9.)/(2.*60.))
-	print 'Got', len(I), 'fields possibly in range'
-	print 'Runs:', np.unique(T.run[I])
+	print('Got', len(I), 'fields possibly in range')
+	print('Runs:', np.unique(T.run[I]))
 	S = 15
 
 	# We use this to estimate the source position within each image
@@ -708,8 +709,8 @@ def run_star(src, band, tag, opt):
 	
 	for ii in I:
 		t = T[ii]
-		print
-		print 'R/C/F', t.run, t.camcol, t.field
+		print()
+		print('R/C/F', t.run, t.camcol, t.field)
 
 		if opt.cat:
 			# search radius for catalog sources, in deg
@@ -718,21 +719,21 @@ def run_star(src, band, tag, opt):
 				t.run, t.camcol, t.field, bandname=band,
 				sdss=sdss, radecrad=(ra,dec,rad),
 				getobjs=True, getobjinds=True)
-			print 'Got', len(cat), 'sources;', len(objI)
+			print('Got', len(cat), 'sources;', len(objI))
 			if len(cat) == 0:
 				continue
 			if len(cat) > 1:
-				print 'Found too many objects!'
+				print('Found too many objects!')
 				continue
 			assert(len(objI) == len(cat))
 			objs.cut(objI)
 			obj = objs[0]
-			print 'Score', obj.score
+			print('Score', obj.score)
 			if obj.score < 0.5:
 				continue
 			y = obj.rowc[bandnum]
 			if y < 64. or y > 1425.:
-				print 'Duplicate field -- y=%f' % y
+				print('Duplicate field -- y=%f' % y)
 				continue
 
 			src = cat[0]
@@ -754,23 +755,23 @@ def run_star(src, band, tag, opt):
 
 			# r-i color
 			color = obj.psfmag[band_index('r')] - obj.psfmag[band_index('i')]
-			print 'color', color
+			print('color', color)
 			
 			x,y = obj.colc[bandnum], obj.rowc[bandnum]
 
 			ra,dec = ast.pixel_to_radec(x, y, color=color)
 			pos = RaDecPos(ra, dec)
 			
-			print band, 'pixel position ->', pos.ra, pos.dec
-			print '          vs RA,Dec', obj.ra, obj.dec
+			print(band, 'pixel position ->', pos.ra, pos.dec)
+			print('          vs RA,Dec', obj.ra, obj.dec)
 
 			wcs = SdssWcs(ast)
 			p2 = wcs.pixelToPosition(x, y)
-			print '          vs no-color WCS RA,Dec', p2.ra, p2.dec
+			print('          vs no-color WCS RA,Dec', p2.ra, p2.dec)
 
 			
 			xe,ye = obj.colcerr[bandnum], obj.rowcerr[bandnum]
-			print 'xerr,yerr', xe,ye
+			print('xerr,yerr', xe,ye)
 			# isotropize, convert to ra,dec deg
 			dradec = ((xe + ye)/2.) * 0.396 / 3600.
 
@@ -801,13 +802,13 @@ def run_star(src, band, tag, opt):
 		#print 'W,H', W,H
 		#print 'roi', tinf['roi']
 		if x < 0 or y < 0 or x >= W or y >= H:
-			print 'Skipping -- OOB'
+			print('Skipping -- OOB')
 			continue
 
 		roi = tinf['roi']
 		ymid = (roi[2]+roi[3]) / 2.
 		if ymid < 64. or ymid > 1425.:
-			print 'Duplicate field -- ymid=%f' % ymid
+			print('Duplicate field -- ymid=%f' % ymid)
 			continue
 			
 		tim.rcf = (t.run, t.camcol, t.field)
@@ -827,11 +828,11 @@ def run_star(src, band, tag, opt):
 
 	times = [tim.time for tim in tims]
 	t0 = min(times)
-	print 't0:', t0
+	print('t0:', t0)
 	t1 = max(times)
-	print 't1:', t1
+	print('t1:', t1)
 	tmid = (t0 + t1)/2.
-	print 'tmid:', tmid
+	print('tmid:', tmid)
 
 	# Re-create this object now that we have the real "tmid".
 	pos = RaDecPos(ra, dec)
@@ -845,7 +846,7 @@ def run_star(src, band, tag, opt):
 
 	tr = Tractor(tims, [src])
 	tr.freezeParam('images')
-	print 'Tractor:', tr
+	print('Tractor:', tr)
 
 	if opt.cat:
 		tr.modtype = np.float64
@@ -853,7 +854,7 @@ def run_star(src, band, tag, opt):
 		
 	if opt.freeze_parallax:
 		mps.freezeParam('parallax')
-	print 'MPS args:'
+	print('MPS args:')
 	mps.printThawedParams()
 	
 	PA = plot_images(tr, ptype='img')
@@ -895,22 +896,22 @@ def run_star(src, band, tag, opt):
 	mps.freezeParams('parallax', 'pm')
 	while True:
 		dlnp,X,alpha = tr.optimize()
-		print 'Stepping by', alpha, 'for dlnp', dlnp
+		print('Stepping by', alpha, 'for dlnp', dlnp)
 		if alpha == 0:
 			break
 		if dlnp < 1e-3:
 			break
 	mps.thawParams('parallax', 'pm')
-	print 'opt source 1:', src
+	print('opt source 1:', src)
 	while True:
 		dlnp,X,alpha = tr.optimize()
-		print 'Stepping by', alpha, 'for dlnp', dlnp
+		print('Stepping by', alpha, 'for dlnp', dlnp)
 		if alpha == 0:
 			break
 		if dlnp < 1e-3:
 			break
 
-	print 'opt source:', src
+	print('opt source:', src)
 
 	plot_images(tr, ptype='mod')
 	plt.suptitle('%s band: opt model' % band)
@@ -940,7 +941,7 @@ def run_star(src, band, tag, opt):
 	pp = pp0
 	rstate = None
 	for step in range(1001):
-		print 'Taking emcee step', step
+		print('Taking emcee step', step)
 		pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
 		#print 'lnprobs:', lnp
 
@@ -972,7 +973,7 @@ def run_star(src, band, tag, opt):
 					plt.subplot(nparams, nparams, k)
 					if i == j:
 						plt.hist(pp[:,i], 20)
-						print nm[i], ': mean', np.mean(pp[:,i]), 'std', np.std(pp[:,i])
+						print(nm[i], ': mean', np.mean(pp[:,i]), 'std', np.std(pp[:,i]))
 					else:
 						plt.plot(pp[:,j], pp[:,i], 'b.')
 
@@ -1001,8 +1002,8 @@ def run_star(src, band, tag, opt):
 				plt.xlabel(ll)
 			ps.savefig()
 			
-		print 'Max lnprob:', max(lnp)
-		print 'Std in lnprobs:', np.std(lnp)
+		print('Max lnprob:', max(lnp))
+		print('Std in lnprobs:', np.std(lnp))
 
 		alllnp.append(lnp.copy())
 		allp.append(pp.copy())
@@ -1034,8 +1035,8 @@ def compare1(src, tag1, tag2, pfn1, pfn2, opt, band):
 
 	ps = PlotSequence('compare1-%s-%s' % (tag1, tag2))
 	
-	print 'allp shape', allp1.shape
-	print 'all lnp shape', alllnp1.shape
+	print('allp shape', allp1.shape)
+	print('all lnp shape', alllnp1.shape)
 	
 	plt.clf()
 	n,b,p1 = plt.hist(alllnp1[-500:, :].ravel(), 100, histtype='step', color=c1)
@@ -1056,12 +1057,12 @@ def compare1(src, tag1, tag2, pfn1, pfn2, opt, band):
 		times = [tim.time for tim in tims]
 		t0 = min(times)
 		t1 = max(times)
-		print 'Times', t0, t1
+		print('Times', t0, t1)
 		sixmonths = (3600. * 24. * 180)
 		t0 = t0 - sixmonths
 		t1 = t1 + sixmonths
-		print 'Times', t0, t1
-		print 't0', t0.getValue(), t0.getParams()
+		print('Times', t0, t1)
+		print('t0', t0.getValue(), t0.getParams())
 		TT = [TAITime(x) for x in np.linspace(t0.getValue(), t1.getValue(), 300)]
 		for i in range(10):
 			tr.setParams(allp[-1, i, :])
@@ -1077,12 +1078,12 @@ def compare1(src, tag1, tag2, pfn1, pfn2, opt, band):
 
 	i1 = np.argmax(alllnp1.ravel())
 	i2 = np.argmax(alllnp2.ravel())
-	print 'max lnp1', alllnp1.flat[i1]
-	print 'max lnp2', alllnp2.flat[i2]
+	print('max lnp1', alllnp1.flat[i1])
+	print('max lnp2', alllnp2.flat[i2])
 	(s1,w1) = np.unravel_index(i1, (alllnp1.shape))
 	(s2,w2) = np.unravel_index(i2, (alllnp2.shape))
-	print 's1,w1', s1,w1
-	print 's2,w2', s2,w2
+	print('s1,w1', s1,w1)
+	print('s2,w2', s2,w2)
 
 	tr1.setParams(allp1[s1, w1, :])
 	tr2.setParams(allp2[s2, w2, :])
@@ -1112,15 +1113,15 @@ def run_ptf(src, tag, opt):
 
 	stari = src.srci
 	fns = glob('ptf-%i/*.fits' % stari)
-	print 'Found files:', len(fns)
+	print('Found files:', len(fns))
 	stamps = []
 	for fn in fns:
-		print '  ', fn
+		print('  ', fn)
 		wcs = Sip(fn, 0)
 		x,y = wcs.radec2pixelxy(src.ra, src.dec)
-		print '  source at', x, y
+		print('  source at', x, y)
 		img = pyfits.open(fn)[0].data
-		print '  image', img.shape
+		print('  image', img.shape)
 		H,W = img.shape
 		ix = int(np.round(x))
 		iy = int(np.round(y))

@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 
 from .utils import BaseParams, ParamList, MultiParams, ArithmeticParams
@@ -81,7 +82,7 @@ class WcslibWcs(BaseParams, ducks.ImageCalibration):
 
     def debug(self):
         from astrometry.util.util import anwcs_print_stdout
-        print 'WcslibWcs:'
+        print('WcslibWcs:')
         anwcs_print_stdout(self.wcs)
 
     def pixel_scale(self):
@@ -258,7 +259,7 @@ class TanWcs(ConstantFitsWcs, ducks.ImageCalibration):
 
         '''
         if hasattr(self, 'x0'):
-            print 'TanWcs has an x0 attr:', self.x0
+            print('TanWcs has an x0 attr:', self.x0)
         self.x0 = 0
         self.y0 = 0
 

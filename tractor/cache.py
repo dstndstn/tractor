@@ -1,3 +1,4 @@
+from __future__ import print_function
 class TractorCacheMixin(object):
     def __init__(self, *args, **kwargs):
         from .cache import Cache
@@ -128,11 +129,11 @@ class Cache(object):
         except:
             return default
     def about(self):
-        print 'Cache has', len(self), 'items:'
+        print('Cache has', len(self), 'items:')
         for k,v in self.dict.items():
             if v is None:
                 continue
-            print '  size', v.size, 'hits', v.hits
+            print('  size', v.size, 'hits', v.hits)
     def __str__(self):
         s =  'Cache: %i items, total of %i hits, %i misses' % (len(self), self.hits, self.misses)
         nnone = 0
@@ -161,7 +162,7 @@ class Cache(object):
                     val = v.val
                     hits = v.hits
                     size = v.size
-            print '  ', hits, size, k
+            print('  ', hits, size, k)
 
     def totalSize(self):
         sz = 0
@@ -172,8 +173,8 @@ class Cache(object):
         return sz
         
     def printStats(self):
-        print 'Cache has', len(self), 'items'
-        print 'Total of', self.hits, 'cache hits and', self.misses, 'misses'
+        print('Cache has', len(self), 'items')
+        print('Total of', self.hits, 'cache hits and', self.misses, 'misses')
         nnone = 0
         hits = 0
         size = 0
@@ -183,9 +184,9 @@ class Cache(object):
                 continue
             hits += v.hits
             size += v.size
-        print '  ', nnone, 'entries are None'
-        print 'Total number of hits of cache entries:', hits
-        print' Total size (pixels) of cache entries:', size
+        print('  ', nnone, 'entries are None')
+        print('Total number of hits of cache entries:', hits)
+        print(' Total size (pixels) of cache entries:', size)
         
 
 class NullCache(object):

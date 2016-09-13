@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
 	import matplotlib
 	matplotlib.use('Agg')
@@ -44,7 +45,7 @@ def gettractor():
 def writeimg(tractor, visit):
 	dirnm = 't%04i' % visit
 	if not os.path.exists(dirnm):
-		print 'Creating director', dirnm
+		print('Creating director', dirnm)
 		os.mkdir(dirnm)
 
 	mods = tractor.getModelImages()
@@ -62,7 +63,7 @@ def writeimg(tractor, visit):
 	plt.colorbar()
 	fn = os.path.join(dirnm, 'mod.png')
 	plt.savefig(fn)
-	print 'wrote', fn
+	print('wrote', fn)
 
 	plt.clf()
 	plt.imshow(mod + noise, **args)
@@ -70,7 +71,7 @@ def writeimg(tractor, visit):
 	plt.colorbar()
 	fn = os.path.join(dirnm, 'mod2.png')
 	plt.savefig(fn)
-	print 'wrote', fn
+	print('wrote', fn)
 
 	wcs1.write_to('wcs.fits')
 	hdr = pyfits.open('wcs.fits')[0].header
@@ -89,7 +90,7 @@ def writeimg(tractor, visit):
 						   pyfits.ImageHDU(var.astype(np.float32))])
 	fn = os.path.join(dirnm, 't.fits')
 	hdus.writeto(fn, clobber=True)
-	print 'wrote', fn
+	print('wrote', fn)
 
 	fn = os.path.join(dirnm, 'srcs.fits')
 	srcs = tractor.getCatalog()
@@ -103,7 +104,7 @@ def writeimg(tractor, visit):
 		pyfits.Column(name='X', format='E', array=np.array(sx)),
 		pyfits.Column(name='Y', format='E', array=np.array(sy)),])
 	tab.writeto(fn, clobber=True)
-	print 'Wrote', fn
+	print('Wrote', fn)
 
 # two galaxies, bright & fairly well separated
 def test0():
@@ -146,7 +147,7 @@ def test10():
 		for j,y in enumerate(Y):
 			ab = (i+0.5)/len(X)
 			theta = (j+0.5)/len(Y) * 90.
-			print 'ab', ab, 'theta', theta
+			print('ab', ab, 'theta', theta)
 			addexpgal(x, y, 1e5, 20., ab,  theta, wcs, tractor)
 	writeimg(tractor, 10)
 
@@ -159,7 +160,7 @@ def test11():
 		for j,y in enumerate(Y):
 			ab = (i+0.5)/len(X) * 0.33
 			theta = (j+0.5)/len(Y) * 90.
-			print 'ab', ab, 'theta', theta
+			print('ab', ab, 'theta', theta)
 			addexpgal(x, y, 1e6 * np.sqrt(ab), 20., ab,  theta, wcs, tractor)
 	writeimg(tractor, 11)
 

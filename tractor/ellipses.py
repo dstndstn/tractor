@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
@@ -273,19 +274,19 @@ if __name__ == '__main__':
                      (2., 0.1, -30.),
                      ]:
         ell = GalaxyShape(r, ab, phi)
-        print 'ell:', ell
+        print('ell:', ell)
         ebasis = ell.getRaDecBasis()
-        print 'basis:', ebasis
+        print('basis:', ebasis)
         
         esoft = EllipseESoft.fromRAbPhi(r, ab, phi)
-        print 'soft:', esoft
+        print('soft:', esoft)
         sbasis = esoft.getRaDecBasis()
-        print 'basis:', sbasis
+        print('basis:', sbasis)
 
         enorm = EllipseE.fromRAbPhi(r, ab, phi)
-        print 'e normal:', enorm
+        print('e normal:', enorm)
         nbasis = enorm.getRaDecBasis()
-        print 'basis:', nbasis
+        print('basis:', nbasis)
 
         angle = np.linspace(0., 2.*np.pi, 100)
         xx,yy = np.sin(angle), np.cos(angle)
@@ -315,7 +316,7 @@ if __name__ == '__main__':
     for logre,cc in zip([4,5,6], 'rgb'):
         for e1,e2 in zip(E1.ravel(), E2.ravel()):
             e = EllipseESoft(logre, e1, e2)
-            print e
+            print(e)
 
             #ec = e.copy()
             #print 'Copy:', ec
@@ -336,7 +337,7 @@ if __name__ == '__main__':
     for re,cc in zip([np.exp(4.), np.exp(5.), np.exp(6.)], 'rgb'):
         for e1,e2 in zip(E1.ravel(), E2.ravel()):
             e = EllipseE(re, e1, e2)
-            print e
+            print(e)
             T = e.getRaDecBasis()
             #print 'T', T
             txy = np.dot(T, xy)
@@ -374,7 +375,7 @@ if __name__ == '__main__':
         gal = ExpGalaxy(PixPos(x, y), Flux(500.*sig1), e)
         # FIXME -- if 'halfsize' is not set, checks e.ab, e.re, etc.
         gal.halfsize = int(np.ceil(gal.nre * np.exp(logre) / (pixscale/3600.)))
-        print 'Galaxy', gal
+        print('Galaxy', gal)
         cat.append(gal)
 
         # theta = np.arctan2(e2, e1) / 2.

@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -16,7 +17,7 @@ psf = PsfEx(fn, 2048, 4096)
 psfimg = psf.instantiateAt(100,100)
 gpsf = GaussianMixturePSF.fromStamp(psfimg)
 
-print 'PSF:', gpsf
+print('PSF:', gpsf)
 
 ps = PlotSequence('test-mix')
 
@@ -36,7 +37,7 @@ ima = dict(vmin=np.log10(max(floor, mn)), vmax=np.log10(mx))
 imda = dict(vmin=-approx, vmax=approx)
 
 for patch in [patch1, patch2]:
-    print 'Patch range', patch.patch.min(), patch.patch.max()
+    print('Patch range', patch.patch.min(), patch.patch.max())
     plt.clf()
     plt.subplot(2,2,1)
     dimshow(np.log10(np.maximum(floor, patch0.patch)), **ima)
@@ -52,7 +53,7 @@ for patch in [patch1, patch2]:
     plt.title('patch')
     plt.subplot(2,2,3)
     diff = patch.patch - patch0.patch
-    print 'Diff range:', diff.min(), diff.max()
+    print('Diff range:', diff.min(), diff.max())
     dimshow(diff, **imda)
     plt.colorbar()
     plt.title('difference')
@@ -138,7 +139,7 @@ x = mg.evaluate(np.array([[ 27.,  43.],
 X,Y = np.meshgrid(np.arange(27, 75),
 				  np.arange(43, 91))
 XY = np.vstack((X.ravel(), Y.ravel())).T
-print XY.shape
+print(XY.shape)
 x = mg.evaluate(XY)
 
 
@@ -176,10 +177,10 @@ mg = mp.MixtureOfGaussians(
 	
 X,Y = np.meshgrid(np.arange(27, 75), np.arange(43, 91))
 XY = np.vstack((X.ravel(), Y.ravel())).T
-print XY.shape
+print(XY.shape)
 x = mg.evaluate(XY)
 
 #Z = np.array([[27.,43.], [27.,44.], [27.,44.]])
 Z = XY[0,:]
-print Z.shape
+print(Z.shape)
 x = mg.evaluate(Z)

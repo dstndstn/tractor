@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 if __name__ == '__main__':
     matplotlib.use('Agg')
@@ -52,7 +53,7 @@ def get_tim(w, roi):
         if not os.path.exists(fn):
             #cmd = 'rsync -RLrvz carver:unwise/./%s .' % fn
             cmd = 'rsync -RLrvz carver:unwise/./%s* .' % basefn
-            print cmd
+            print(cmd)
             os.system(cmd)
     tim = read_wise_level1b(basefn, radecroi=roi, nanomaggies=True,
                             mask_gz=True, unc_gz=True, sipwcs=True,
@@ -240,7 +241,7 @@ def plot_tracks(src, fakewcs, spa=None, **kwargs):
 def search(tile):
 
     if os.path.exists('rogue-%s-02.png' % tile) and not os.path.exists('rogue-%s-03.png' % tile):
-        print 'Skipping', tile
+        print('Skipping', tile)
         return
 
     fn = os.path.join(tile[:3], tile, 'unwise-%s-w2-%%s-m.fits' % tile)
@@ -251,10 +252,10 @@ def search(tile):
         wcs = Tan(os.path.join('e%i' % 1, fn%'img'))
     except:
         import traceback
-        print
-        print 'Failed to read data for tile', tile
+        print()
+        print('Failed to read data for tile', tile)
         traceback.print_exc()
-        print
+        print()
         return
     H,W = II[0].shape
 
@@ -285,9 +286,9 @@ def search(tile):
 
     xthresh = 3.
     
-    print 'Value at rogue:', X[1452, 1596]
+    print('Value at rogue:', X[1452, 1596])
 
-    print 'pp at rogue:', [pp[1452,1596] for pp in PP]
+    print('pp at rogue:', [pp[1452,1596] for pp in PP])
     
     plt.clf()
     plt.imshow(X, interpolation='nearest', origin='lower')
@@ -356,7 +357,7 @@ def search(tile):
             continue
 
         mx2 = np.max((II[0][slc2] + II[1][slc2])/2.)
-        print 'Flux near object:', mx2
+        print('Flux near object:', mx2)
         if mx2 < 250:
             continue
         
@@ -366,7 +367,7 @@ def search(tile):
 
     keep = np.array(keep)
     if len(keep) == 0:
-        print 'No objects passed cuts'
+        print('No objects passed cuts')
         return
     xx = xx[keep]
     yy = yy[keep]
@@ -392,7 +393,7 @@ def search(tile):
     ps.savefig()
 
     for i,(x,y) in enumerate(zip(xx,yy)[:50]):
-        print x,y
+        print(x,y)
         rows,cols = 2,3
         ra,dec = wcs.pixelxy2radec(x+1, y+1)
         
@@ -400,7 +401,7 @@ def search(tile):
         slc2 = slice(y-3, y+3+1), slice(x-3, x+3+1)
 
         mx = max(np.max(II[0][slc]), np.max(II[1][slc]))
-        print 'Max within slice:', mx
+        print('Max within slice:', mx)
         miny = np.min(Y[slc2])
         maxy = np.max(Y[slc2])
         
@@ -524,7 +525,7 @@ if __name__ == '__main__':
     else:
         W = get_wise_frames(r-sz, r+sz, d-sz, d+sz, margin=1.2)
         W.writeto(wfn)
-    print len(W), 'WISE frames'
+    print(len(W), 'WISE frames')
 
     band = 2
     W.cut(W.band == band)
@@ -534,7 +535,7 @@ if __name__ == '__main__':
         W.inroi = np.zeros(len(W), bool)
         for i,w in enumerate(W):
             tim = get_tim(w, roi)
-            print 'Got', tim
+            print('Got', tim)
             if tim is None:
                 continue
             W.inroi[i] = True
@@ -548,7 +549,7 @@ if __name__ == '__main__':
 
     masks = 'unwise-coadds/134/1342m076/unwise-1342m076-w2-mask.tgz'
     cmd = 'tar xzf %s' % masks
-    print cmd
+    print(cmd)
     os.system(cmd)
 
     ima = dict(interpolation='nearest', origin='lower',
@@ -567,15 +568,15 @@ if __name__ == '__main__':
     tims = []
     keepi = []
     for i,w in enumerate(W):
-        print
+        print()
         tim = get_tim(w, roi)
-        print 'Got', tim
+        print('Got', tim)
         if tim is None:
             continue
 
         I = np.flatnonzero((unw.scan_id   == w.scan_id) *
                            (unw.frame_num == w.frame_num))
-        print 'I', I
+        print('I', I)
         if len(I) == 0:
             continue
         assert(len(I) == 1)
@@ -592,7 +593,7 @@ if __name__ == '__main__':
 
         maskfn = 'unwise-1342m076-w2-mask/unwise-mask-1342m076-%s%03i-w%i-1b.fits.gz' % (w.scan_id, w.frame_num, band)
         if not os.path.exists(maskfn):
-            print 'no such file:', maskfn
+            print('no such file:', maskfn)
             continue
 
         keepi.append(i)
@@ -619,7 +620,7 @@ if __name__ == '__main__':
     epochyr = 2010.5
 
     epoch = TAITime(None, mjd=datetomjd(datetime.datetime(2010, 9, 1)))
-    print 'Epoch:', epoch.toYear()
+    print('Epoch:', epoch.toYear())
     
     srcs = [
         PointSource(RaDecPos(133.7894517, -7.2508217),
@@ -639,9 +640,9 @@ if __name__ == '__main__':
     tractor.printThawedParams()
     tractor.catalog.freezeParamsRecursive('*')
     tractor.catalog.thawPathsTo('w%i' % band)
-    print 'Before fitting:', tractor.getParams()
+    print('Before fitting:', tractor.getParams())
     tractor.optimize_forced_photometry()
-    print 'After  fitting:', tractor.getParams()
+    print('After  fitting:', tractor.getParams())
 
     plt.figure(1)
     plt.subplots_adjust(left=0.02, right=0.98, bottom=0.02, top=0.95,
@@ -650,34 +651,34 @@ if __name__ == '__main__':
     epoch_coadd_plots(tractor, ps, S, ima, epochyr, fakewcs)
     #all_plots(tractor, ps, S, ima)
 
-    print 'Fitting PM/Parallax...'
+    print('Fitting PM/Parallax...')
     #tractor.catalog.thawPathsTo('pmra', 'pmdec', 'parallax')
     tractor.catalog.thawPathsTo('pmra', 'pmdec')
     src = tractor.catalog[-1]
     src.thawPathsTo('ra', 'dec')
-    print 'Thawed params:'
+    print('Thawed params:')
     tractor.printThawedParams()
 
-    print 'Source', src
+    print('Source', src)
 
     dlnp,X,alpha,var = tractor.optimize(shared_params=False, variance=True, damp=1e-3)
-    print 'Optimize:', dlnp
-    print 'var:', var
+    print('Optimize:', dlnp)
+    print('var:', var)
 
-    print 'Source', src
+    print('Source', src)
 
     epoch_coadd_plots(tractor, ps, S, ima, epochyr, fakewcs)
     plot_tracks(src, fakewcs, spa=[(2,3,2),(2,3,5)])
     ps.savefig()
 
-    print 'Sampling:'
+    print('Sampling:')
     tractor.catalog.thawPathsTo('parallax')
     tractor.catalog[0].freezeAllParams()
     tractor.catalog[1].freezeAllParams()
 
     dlnp,X,alpha,var = tractor.optimize(shared_params=False, variance=True, damp=1e-3)
-    print 'Optimize:', dlnp
-    print 'var:', var
+    print('Optimize:', dlnp)
+    print('var:', var)
 
     tractor.printThawedParams()
 
@@ -687,7 +688,7 @@ if __name__ == '__main__':
 
     p0 = tractor.getParams()
 
-    print 'p0', p0
+    print('p0', p0)
     
     import emcee
     # Create emcee sampler
@@ -697,14 +698,14 @@ if __name__ == '__main__':
     var[-1] = (0.025)**2
     p0[-1] = 0.025
 
-    print 'Cheating for parallax:'
-    print 'p0', p0
-    print 'var', var
+    print('Cheating for parallax:')
+    print('p0', p0)
+    print('var', var)
 
     # Initial walker params
     pp = sampleBall(p0, 0.5 * np.sqrt(var), nw)
 
-    print 'pp', pp.shape
+    print('pp', pp.shape)
 
     redraw = np.ones(nw, bool)
     while True:
@@ -714,7 +715,7 @@ if __name__ == '__main__':
         nre = np.sum(redraw)
         if nre == 0:
             break
-        print 'Re-drawing', nre, 'initial samples'
+        print('Re-drawing', nre, 'initial samples')
         pp[redraw,:] = sampleBall(p0, 0.5*np.sqrt(var), nre)
 
     #nsteps = 50
@@ -731,11 +732,11 @@ if __name__ == '__main__':
     lnp = None
     rstate = None
     for step in range(nsteps):
-        print 'Taking step', step
+        print('Taking step', step)
         pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
         #print 'Max lnprob:', np.max(lnp)
         imax = np.argmax(lnp)
-        print 'Max lnp:', lnp[imax], pp[imax,:]
+        print('Max lnp:', lnp[imax], pp[imax,:])
         if lnp[imax] > bestlnp:
             bestlnp = lnp[imax]
             bestp = pp[imax,:]
@@ -777,14 +778,14 @@ if __name__ == '__main__':
                  max([max(dd) for rr,dd in rrdd]) + margin)
     ps.savefig()
 
-    print 'March 2014 estimated RA,Decs:'
+    print('March 2014 estimated RA,Decs:')
     ii = 50
     rx = np.array([rr[ii] for rr,dd in rrdd])
     dx = np.array([dd[ii] for rr,dd in rrdd])
-    print rx
-    print dx
-    print 'Mean', rx.mean(), dx.mean()
-    print 'Std',  rx.std(),  dx.std()
+    print(rx)
+    print(dx)
+    print('Mean', rx.mean(), dx.mean())
+    print('Std',  rx.std(),  dx.std())
 
     tractor.setParams(bestp)
 
@@ -797,7 +798,7 @@ if __name__ == '__main__':
     ps.savefig()
 
     # Plot parameter distributions
-    print 'All params:', allp.shape
+    print('All params:', allp.shape)
     for i,nm in enumerate(tractor.getParamNames()):
         pp = allp[:,:,i].ravel()
         lo,hi = [np.percentile(pp,x) for x in [5,95]]

@@ -63,6 +63,7 @@
 #   Group 6: mag 17.3-18.0
 #   Group 7: mag > 18.0
 
+from __future__ import print_function
 if __name__ == '__main__':
 	import matplotlib
 	matplotlib.use('Agg')
@@ -95,7 +96,7 @@ def global_init(*args, **kwargs):
 	H = 4
 	hfrac = 0.94
 	W = (941 - 100.) / (2000 - 1311.) * H * hfrac
-	print 'W,H', W,H
+	print('W,H', W,H)
 	plt.figure(figsize=(W,H))
 	plt.clf()
 	b = 0.
@@ -120,7 +121,7 @@ def get_dm_table():
 		if i % 500 == 0 and len(t)>1:
 			sqls.append(t)
 			t = []
-	print 't=',t
+	print('t=',t)
 	if len(t):
 		sqls.append(t)
 
@@ -129,13 +130,13 @@ def get_dm_table():
 		dbname = 'dlz%i' % j
 		sql = 'select into mydb.%s\n' % dbname + ',\n'.join(t) + '\n'
 		jid = cas.submit_query(sql)
-		print 'Submitted job id', jid
+		print('Submitted job id', jid)
 		while True:
 			jobstatus = cas.get_job_status(jid)
-			print 'Job id', jid, 'is', jobstatus
+			print('Job id', jid, 'is', jobstatus)
 			if jobstatus in ['Finished', 'Failed', 'Cancelled']:
 				break
-			print 'Sleeping...'
+			print('Sleeping...')
 			time.sleep(5)
 		dbnames.append(dbname)
 	dodelete = True
@@ -145,10 +146,10 @@ def get_dm_table():
 	DL = []
 	Z = []
 	for tabfn in tabfns:
-		print 'Reading', tabfn
+		print('Reading', tabfn)
 		T = fits_table(tabfn)
 		for c in T.get_columns():
-			print 'col', c
+			print('col', c)
 			if c.startswith('dl') and len(c) == 6:
 				z = float(c[2] + '.' + c[3:])
 				Z.append(z)
@@ -179,9 +180,9 @@ def get_spectro_table(ra, dec, aco):
 		cas.login(username, password)
 		try:
 			cas.sql_to_fits(sql, fn, dbcontext='DR9')
-			print 'Saved', fn
+			print('Saved', fn)
 		except:
-			print 'Failed to execute SQL query on CasJobs'
+			print('Failed to execute SQL query on CasJobs')
 			return None
 	return fn
 
@@ -195,30 +196,30 @@ class LuminosityDistance(object):
 
 def compile_nyu_vagc(bandnum):
 	# Compile NYU-VAGC values
-	print 'Compiling NYU-VAGC catalog...'
+	print('Compiling NYU-VAGC catalog...')
 	nyudir = 'nyu-vagc-2'
 	Tcat = fits_table(os.path.join(nyudir, 'object_catalog.fits'))
 	I = np.flatnonzero((Tcat.sdss_imaging_position != -1) * (Tcat.sdss_spectro_position != -1))
-	print 'Found', len(I), 'rows with spectra and imaging'
+	print('Found', len(I), 'rows with spectra and imaging')
 	del Tcat
 
-	print 'Reading imaging...'
+	print('Reading imaging...')
 	Tim = fits_table(os.path.join(nyudir, 'object_sdss_imaging.fits'),
 					 rows=I, columns=['run','camcol','field','id',
 									  'devflux'])
-	print Tim
+	print(Tim)
 	Tim.about()
-	print 'Reading spec...'
+	print('Reading spec...')
 	Tspec = fits_table(os.path.join(nyudir, 'object_sdss_spectro.fits'),
 					   rows=I, columns=['vdisp','z', 'sn_median', 'zwarning', 'objtype',
 										'class', 'subclass'],
 						column_map={'class':'clazz'})
-	print Tspec
+	print(Tspec)
 	Tspec.about()
-	print 'Reading kcorrect...'
+	print('Reading kcorrect...')
 	Tk = fits_table(os.path.join(nyudir, 'kcorrect', 'kcorrect.nearest.model.z0.00.fits'),
 					rows=I, columns=['absmag','kcorrect','z'])
-	print Tk
+	print(Tk)
 	Tk.about()
 
 	Tnyu = tabledata()
@@ -265,7 +266,7 @@ def compile_nyu_vagc(bandnum):
 	#zband = band_index('z')
 	
 	for run,camcol in np.unique(zip(Tim.run, Tim.camcol)):
-		print 'Run', run, 'camcol', camcol
+		print('Run', run, 'camcol', camcol)
 		J = np.flatnonzero((Tim.run == run) * (Tim.camcol == camcol))
 		Tc = fits_table(os.path.join(nyudir, 'sdss', 'parameters',
 									 'calibObj-%06i-%i.fits' % (run, camcol)),
@@ -332,7 +333,7 @@ def fp():
 		rad = 1./3600.
 		I,J,d = sm.match_radec(T.ra, T.dec, ra, dec, rad,
 							   nearest=True)
-		print len(I), 'matches on RA,Dec'
+		print(len(I), 'matches on RA,Dec')
 		#print I, J
 		IJ.append((I,J))
 
@@ -362,7 +363,7 @@ def fp():
 
 	sdss = DR9()
 	p = sdss.readPhotoObj(run, camcol, field)
-	print 'PhotoObj:', p
+	print('PhotoObj:', p)
 	objs = p.getTable()
 	# from tractor.sdss.get_tractor_sources
 	x0,x1,y0,y1 = roi
@@ -376,7 +377,7 @@ def fp():
 	#objs.about()
 	I3,J3,d = sm.match_radec(T.ra, T.dec, objs.ra, objs.dec, rad,
 							 nearest=True)
-	print 'Got', len(I3), 'matches to photoObj'
+	print('Got', len(I3), 'matches to photoObj')
 	cat3 = Catalog()
 	for j in J3:
 		phi = -objs.phi_dev_deg[j, bandnum]
@@ -390,9 +391,9 @@ def fp():
 		cat3.append(gal)
 
 	# T.about()
-	print 'Spectro types:', T.sourcetype[I1]
-	print 'Spectro classes:', T.clazz[I1]
-	print 'Spectro subclasses:', T.subclass[I1]
+	print('Spectro types:', T.sourcetype[I1])
+	print('Spectro classes:', T.clazz[I1])
+	print('Spectro subclasses:', T.subclass[I1])
 
 	DL = LuminosityDistance()
 
@@ -410,20 +411,20 @@ def fp():
 
 		#Tnyu.cut((Tnyu.z > 0) * (Tnyu.z <= 1.))
 		# Bernardi-like cuts
-		print 'Got', len(Tnyu), 'NYU-VAGC objects'
+		print('Got', len(Tnyu), 'NYU-VAGC objects')
 		Tnyu.cut((Tnyu.z > 0) * (Tnyu.z <= 0.3))
-		print 'Cut on redshift:', len(Tnyu)
+		print('Cut on redshift:', len(Tnyu))
 		Tnyu.cut(Tnyu.clazz == 'GALAXY')
-		print 'Cut on GALAXY:', len(Tnyu)
-		print 'subclasses:', np.unique(Tnyu.subclass)
+		print('Cut on GALAXY:', len(Tnyu))
+		print('subclasses:', np.unique(Tnyu.subclass))
 		#Tnyu.cut(Tnyu.subclass == '')
 		#print 'Cut on plain GALAXY:', len(Tnyu)
 		Tnyu.cut(Tnyu.r90i / Tnyu.r50i > 2.5)
-		print 'Cut on concentration index:', len(Tnyu)
+		print('Cut on concentration index:', len(Tnyu))
 		Tnyu.cut(Tnyu.dev_lnl > Tnyu.exp_lnl)
-		print 'Cut on deV lnl:', len(Tnyu)
+		print('Cut on deV lnl:', len(Tnyu))
 		Tnyu.cut(Tnyu.sn_median > 10.)
-		print 'Cut on SN:', len(Tnyu)
+		print('Cut on SN:', len(Tnyu))
 		Tnyu.writeto(cutfn)
 	else:
 		Tnyu = fits_table(cutfn, lower=False)
@@ -474,7 +475,7 @@ def fp():
 	Tnyu.mdev = 22.5 - 2.5*log(Tnyu.devflux)
 	Tnyu.M = Tnyu.mdev - Tnyu.DMz - Tnyu.Kz
 
-	print 'M2 - M:', np.mean(Tnyu.M2 - Tnyu.M)
+	print('M2 - M:', np.mean(Tnyu.M2 - Tnyu.M))
 	#MFUDGE = np.mean(Tnyu.M2 - Tnyu.M)
 
 	#MFUDGE = 5.*log(h70)
@@ -660,7 +661,7 @@ def fp():
 				devflux = src.brightnessDev.getFlux(band)
 				expflux = src.brightnessExp.getFlux(band)
 				df = devflux / (devflux + expflux)
-				print '  dev fraction', df
+				print('  dev fraction', df)
 				if df > 0.8:
 					keep.append(src)
 					keepI.append(i)
@@ -827,12 +828,12 @@ def fp():
 		A[:,0] = 1.
 		A[:,1] = xx-mx
 		b,res,rank,s = np.linalg.lstsq(A, yy-my)
-		print 'b', b
+		print('b', b)
 		m = b[1]
 		b = b[0]
 		A[:,1] = yy-my
 		b2,res,rank,s = np.linalg.lstsq(A, xx-mx)
-		print 'b2', b2
+		print('b2', b2)
 		m2 = b2[1]
 		b2 = b2[0]
 		
@@ -963,9 +964,9 @@ def test1():
 
 	mags = [src.getBrightness().getMag(band) for src in srcs]
 	I = np.argsort(mags)
-	print 'Brightest sources:'
+	print('Brightest sources:')
 	for i in I[:10]:
-		print '  ', srcs[i]
+		print('  ', srcs[i])
 	
 	ima = dict(interpolation='nearest', origin='lower',
 			   extent=roi)
@@ -986,7 +987,7 @@ def test1():
 	T = fits_table('a1656-spectro.fits')
 	wcs = tim.getWcs()
 	x0,y0 = wcs.x0,wcs.y0
-	print 'x0,y0', x0,y0
+	print('x0,y0', x0,y0)
 	xy = np.array([wcs.positionToPixel(RaDecPos(r,d))
 				   for r,d in zip(T.ra, T.dec)])
 	sxy = np.array([wcs.positionToPixel(src.getPosition())
@@ -1021,7 +1022,7 @@ def test1():
 	pickle_to_file(tractor, 'clustersky-%02i.pickle' % pnum)
 	pnum += 1
 	
-	print tractor
+	print(tractor)
 
 	sdss = DR9()
 	fn = sdss.retrieve('frame', run, camcol, field, band)
@@ -1029,7 +1030,7 @@ def test1():
 
 	sky = st.get_sky_dr9(frame)
 
-	print tinf
+	print(tinf)
 	
 	plt.clf()
 	plt.imshow(sky, interpolation='nearest', origin='lower')
@@ -1085,17 +1086,17 @@ def test1():
 
 	tractor.catalog.freezeAllRecursive()
 	tractor.catalog.thawPathsTo(band)
-	print 'Params:'
+	print('Params:')
 	for nm in tractor.getParamNames():
-		print nm
+		print(nm)
 
 	j=0
 	while True:
-		print '-------------------------------------'
-		print 'Optimizing flux step', j
-		print '-------------------------------------'
+		print('-------------------------------------')
+		print('Optimizing flux step', j)
+		print('-------------------------------------')
 		dlnp,X,alpha = tractor.optimize()
-		print 'delta-logprob', dlnp
+		print('delta-logprob', dlnp)
 		nup = 0
 		for src in tractor.getCatalog():
 			for b in src.getBrightnesses():
@@ -1104,14 +1105,14 @@ def test1():
 					#print 'Clamping flux', f, 'up to zero'
 					nup += 1
 					b.setFlux(band, 0.)
-		print 'Clamped', nup, 'fluxes up to zero'
+		print('Clamped', nup, 'fluxes up to zero')
 		if dlnp < 1:
 			break
 		j += 1
 		plotmod()
 		
 		pickle_to_file(tractor, 'clustersky-%02i.pickle' % pnum)
-		print 'Saved pickle', pnum
+		print('Saved pickle', pnum)
 		pnum += 1
 		
 	
@@ -1126,11 +1127,11 @@ def test1():
 	
 	j=0
 	while True:
-		print '-------------------------------------'
-		print 'Optimizing all, step', j
-		print '-------------------------------------'
+		print('-------------------------------------')
+		print('Optimizing all, step', j)
+		print('-------------------------------------')
 		dlnp,X,alpha = tractor.optimize()
-		print 'delta-logprob', dlnp
+		print('delta-logprob', dlnp)
 		nup = 0
 		for src in tractor.getCatalog():
 			for b in src.getBrightnesses():
@@ -1139,7 +1140,7 @@ def test1():
 					#print 'Clamping flux', f, 'up to zero'
 					nup += 1
 					b.setFlux(band, 0.)
-		print 'Clamped', nup, 'fluxes up to zero'
+		print('Clamped', nup, 'fluxes up to zero')
 		if dlnp < 1:
 			break
 		j += 1
@@ -1147,7 +1148,7 @@ def test1():
 		plotmod()
 
 		pickle_to_file(tractor, 'clustersky-%02i.pickle' % pnum)
-		print 'Saved pickle', pnum
+		print('Saved pickle', pnum)
 		pnum += 1
 
 
@@ -1160,12 +1161,12 @@ def test1():
 		tractor.catalog.freezeAllBut(i)
 		j = 1
 		while True:
-			print '-------------------------------------'
-			print 'Optimizing source', i, 'step', j
-			print '-------------------------------------'
-			print tractor.catalog[i]
+			print('-------------------------------------')
+			print('Optimizing source', i, 'step', j)
+			print('-------------------------------------')
+			print(tractor.catalog[i])
 			dlnp,X,alpha = tractor.optimize()
-			print 'delta-logprob', dlnp
+			print('delta-logprob', dlnp)
 
 			for b in tractor.catalog[i].getBrightnesses():
 				f = b.getFlux(band)
@@ -1173,8 +1174,8 @@ def test1():
 					#print 'Clamping flux', f, 'up to zero'
 					b.setFlux(band, 0.)
 
-			print tractor.catalog[i]
-			print
+			print(tractor.catalog[i])
+			print()
 			if dlnp < 1:
 				break
 			j += 1
@@ -1183,7 +1184,7 @@ def test1():
 		tractor.catalog.thawAllParams()
 
 	pickle_to_file(tractor, 'clustersky-%02i.pickle' % pnum)
-	print 'Saved pickle', pnum
+	print('Saved pickle', pnum)
 	pnum += 1
 		
 def test2():
@@ -1194,7 +1195,7 @@ def test2():
 	pnum = 13
 	tractor = unpickle_from_file('clustersky-12.pickle')
 
-	print tractor
+	print(tractor)
 	tim = tractor.getImage(0)
 	rng = tim.zr[1]-tim.zr[0]
 	# Magic!
@@ -1261,11 +1262,11 @@ def test2():
 
 	j=0
 	while True:
-		print '-------------------------------------'
-		print 'Optimizing fluxes + sky step', j
-		print '-------------------------------------'
+		print('-------------------------------------')
+		print('Optimizing fluxes + sky step', j)
+		print('-------------------------------------')
 		dlnp,X,alpha = tractor.optimize()
-		print 'delta-logprob', dlnp
+		print('delta-logprob', dlnp)
 		nup = 0
 		for src in tractor.getCatalog():
 			for b in src.getBrightnesses():
@@ -1274,7 +1275,7 @@ def test2():
 					#print 'Clamping flux', f, 'up to zero'
 					nup += 1
 					b.setFlux(band, 0.)
-		print 'Clamped', nup, 'fluxes up to zero'
+		print('Clamped', nup, 'fluxes up to zero')
 		if dlnp < 1:
 			break
 		j += 1
@@ -1282,21 +1283,21 @@ def test2():
 		plotsky()
 		
 		pickle_to_file(tractor, 'clustersky-%02i.pickle' % pnum)
-		print 'Saved pickle', pnum
+		print('Saved pickle', pnum)
 		pnum += 1
 
-		print 'Sky:', tim.sky
+		print('Sky:', tim.sky)
 	
 
 	tractor.catalog.thawAllRecursive()
 
 	j=0
 	while True:
-		print '-------------------------------------'
-		print 'Optimizing all sources + sky step', j
-		print '-------------------------------------'
+		print('-------------------------------------')
+		print('Optimizing all sources + sky step', j)
+		print('-------------------------------------')
 		dlnp,X,alpha = tractor.optimize()
-		print 'delta-logprob', dlnp
+		print('delta-logprob', dlnp)
 		nup = 0
 		for src in tractor.getCatalog():
 			for b in src.getBrightnesses():
@@ -1305,7 +1306,7 @@ def test2():
 					#print 'Clamping flux', f, 'up to zero'
 					nup += 1
 					b.setFlux(band, 0.)
-		print 'Clamped', nup, 'fluxes up to zero'
+		print('Clamped', nup, 'fluxes up to zero')
 		if dlnp < 1:
 			break
 		j += 1
@@ -1313,10 +1314,10 @@ def test2():
 		plotsky()
 		
 		pickle_to_file(tractor, 'clustersky-%02i.pickle' % pnum)
-		print 'Saved pickle', pnum
+		print('Saved pickle', pnum)
 		pnum += 1
 
-		print 'Sky:', tim.sky
+		print('Sky:', tim.sky)
 
 
 	
@@ -1342,17 +1343,17 @@ def find():
 
 	for anum in [2151]:
 		I = np.flatnonzero(T.aco == anum)
-		print 'Abell', anum, ': found', len(I)
+		print('Abell', anum, ': found', len(I))
 		Ti = T[I[0]]
 		Ti.about()
 
 		rcf = LookupRcf(Ti.ra, Ti.dec, contains=True)
 		if len(rcf) == 0:
-			print '-> Not in SDSS'
+			print('-> Not in SDSS')
 			continue
-		print 'RCF', rcf
+		print('RCF', rcf)
 		for r,c,f,ra,dec in rcf:
-			print 'http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpegcodec.aspx?R=%i&C=%i&F=%i&Z=50' % (r,c,f)
+			print('http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpegcodec.aspx?R=%i&C=%i&F=%i&Z=50' % (r,c,f))
 		
 	return
 
@@ -1363,22 +1364,22 @@ def find():
 	ps.savefig()
 
 	T5 = T[T.rich == 5]
-	print 'Richness 5:', len(T5)
+	print('Richness 5:', len(T5))
 	T5[0].about()
 
 	#plt.clf()
 	#plt.hist(T.dclass
 	I = np.argsort(T.m10)
 	Tm = T[I]
-	print Tm.m10[:20]
+	print(Tm.m10[:20])
 	urls = []
 	for Ti in Tm[:20]:
-		print 'ACO', Ti.aco
+		print('ACO', Ti.aco)
 		rcf = radec_to_sdss_rcf(Ti.ra, Ti.dec, contains=True,
 								tablefn='dr9fields.fits')
 		if len(rcf) == 0:
 			continue
-		print 'RCF', rcf
+		print('RCF', rcf)
 		Ti.about()
 		run,camcol,field,nil,nil = rcf[0]
 		
@@ -1404,7 +1405,7 @@ def find():
 		plt.gray()
 		ps.savefig()
 
-	print '\n'.join(urls)
+	print('\n'.join(urls))
 
 
 
@@ -1414,7 +1415,7 @@ def find_clusters(tractor, tim):
 	dtype = np.int
 	clusters = []
 	for i,src in enumerate(tractor.getCatalog()):
-		print 'Clustering source', i
+		print('Clustering source', i)
 		p = tractor.getModelPatch(tim, src)
 		nz = p.getNonZeroMask()
 		nz.patch = nz.patch.astype(dtype)
@@ -1423,22 +1424,22 @@ def find_clusters(tractor, tim):
 		for j,(mask, srcs) in enumerate(clusters):
 			if not mask.hasNonzeroOverlapWith(nz):
 				continue
-			print 'Overlaps cluster', j
+			print('Overlaps cluster', j)
 			found.append(j)
 			#print '  Nonzero mask pixels:', len(np.flatnonzero(mask.patch))
 			mask.set(mask.performArithmetic(nz, '__iadd__', otype=dtype))
 			#print '  Nonzero mask pixels:', len(np.flatnonzero(mask.patch))
 			mask.trimToNonZero()
 			#print '  Nonzero mask pixels:', len(np.flatnonzero(mask.patch))
-			print '  mask type', mask.patch.dtype
+			print('  mask type', mask.patch.dtype)
 			srcs.append(src)
 				
 		if len(found) == 0:
-			print 'Creating new cluster', len(clusters)
+			print('Creating new cluster', len(clusters))
 			clusters.append((nz, [src]))
 
 		elif len(found) > 1:
-			print 'Merging clusters', found
+			print('Merging clusters', found)
 			m0,srcs0 = clusters[found[0]]
 			for j in found[1:]:
 				mi,srcsi = clusters[j]
@@ -1446,12 +1447,12 @@ def find_clusters(tractor, tim):
 				srcs0.extend(srcsi)
 			for j in reversed(found[1:]):
 				del clusters[j]
-			print 'Now have', len(clusters), 'clusters'
+			print('Now have', len(clusters), 'clusters')
 			
-	print 'Found', len(clusters), 'clusters'
+	print('Found', len(clusters), 'clusters')
 	for i,(mask,srcs) in enumerate(clusters):
 		n = len(np.flatnonzero(mask.patch))
-		print 'Cluster', i, 'has', len(srcs), 'sources and', n, 'pixels'
+		print('Cluster', i, 'has', len(srcs), 'sources and', n, 'pixels')
 		if n == 0:
 			continue
 		plt.clf()
@@ -1488,7 +1489,7 @@ def runlots(stage, N, force=[], threads=None):
 
 	for ai in range(len(T)):
 		Ti = T[ai]
-		print 'Abell', Ti.aco, 'with m10', Ti.m10
+		print('Abell', Ti.aco, 'with m10', Ti.m10)
 
 		#####
 		#if not Ti.aco in [2147, 1656]:
@@ -1505,7 +1506,7 @@ def runlots(stage, N, force=[], threads=None):
 					 195,
 					 ]
 		if Ti.aco in blacklist:
-			print 'Skipping blacklisted Abell', Ti.aco
+			print('Skipping blacklisted Abell', Ti.aco)
 			continue
 
 		# Totally arbitrary radius in arcmin
@@ -1514,7 +1515,7 @@ def runlots(stage, N, force=[], threads=None):
 		rcf = LookupRcf(Ti.ra, Ti.dec, radius=RS) #contains=True, 
 		if len(rcf) == 0:
 			continue
-		print 'RCF', rcf
+		print('RCF', rcf)
 
 		ofn = 'overview-n%04i-a%04i.png' % (ai, Ti.aco)
 		if not os.path.exists(ofn):
@@ -1554,7 +1555,7 @@ def runlots(stage, N, force=[], threads=None):
 
 
 		for run,camcol,field,nil,nil in rcf:
-			print 'RCF', run, camcol, field
+			print('RCF', run, camcol, field)
 
 			###
 			#if not (run in [4678, 5237, 
@@ -1563,7 +1564,7 @@ def runlots(stage, N, force=[], threads=None):
 
 			#for bandname in ['g','r','i']:
 			for bandname in ['i']:
-				print 'Band', bandname
+				print('Band', bandname)
 
 				ppat = 'clusky-a%04i-r%04i-c%i-f%04i-%s-s%%02i.pickle' % (Ti.aco, run, camcol, field, bandname)
 
@@ -1576,7 +1577,7 @@ def runlots(stage, N, force=[], threads=None):
 				#if res is None:
 				#	continue
 				RR.append(r)
-				print 'Got r/c/f', len(RR)
+				print('Got r/c/f', len(RR))
 				if len(RR) >= N:
 					break
 			if len(RR) >= N:
@@ -1596,12 +1597,12 @@ def runlots(stage, N, force=[], threads=None):
 	mp = multiproc(threads, **mpa)
 
 	# Run stage 0
-	print 'Running stage 0 on all...'
+	print('Running stage 0 on all...')
 	s = 0
 	res = mp.map(_run, [(R,s) for R in RR])
 	RR = [r for r,result in zip(RR,res) if result is not None]
 
-	print 'Running stage', stage, 'on all...'
+	print('Running stage', stage, 'on all...')
 	s = stage
 	mp.map(_run, [(R,s) for R in RR])
 
@@ -1709,11 +1710,11 @@ class RunAbell(object):
 		band = self.bandname
 		j=0
 		while True:
-			print '-------------------------------------'
-			print 'Optimizing: step', j
-			print '-------------------------------------'
+			print('-------------------------------------')
+			print('Optimizing: step', j)
+			print('-------------------------------------')
 		   	dlnp,X,alpha = tractor.optimize(**optargs)
-			print 'delta-logprob', dlnp
+			print('delta-logprob', dlnp)
 			nup = 0
 			for src in tractor.getCatalog():
 				for b in src.getBrightnesses():
@@ -1721,7 +1722,7 @@ class RunAbell(object):
 					if f < 0:
 						nup += 1
 						b.setFlux(band, 0.)
-			print 'Clamped', nup, 'fluxes up to zero'
+			print('Clamped', nup, 'fluxes up to zero')
 			if dlnp < 1:
 				break
 			j += 1
@@ -1763,26 +1764,26 @@ class RunAbell(object):
 			J = np.flatnonzero(A.family > -1)
 			if len(J) == 0:
 				break
-			print 'Updating', len(J), 'ancestors'
+			print('Updating', len(J), 'ancestors')
 			# update family pointers
 			objs.family[I[J]] = A.family[J]
 
 		kids = objs[objs.nchild == 0]
 
 		abell = self.abell
-		print abell.about()
+		print(abell.about())
 
 		fn = get_spectro_table(abell.ra, abell.dec, self.aco)
 		if fn is None:
 			return dict()
-		print 'Looking for', fn
+		print('Looking for', fn)
 		#fn = 'a%04i-spectro.fits' % self.aco
 		Tspec = fits_table(fn)
-		print len(Tspec), 'SDSS spectra'
+		print(len(Tspec), 'SDSS spectra')
 		Tspec.cut(Tspec.clazz == 'GALAXY')
-		print len(Tspec), 'after cut on GALAXY'
+		print(len(Tspec), 'after cut on GALAXY')
 		Tspec.cut((Tspec.z > 0) * (Tspec.z <= 0.3))
-		print len(Tspec), 'after cut on z'
+		print(len(Tspec), 'after cut on z')
 
 		ima = dict(interpolation='nearest', origin='lower')
 		zr2 = tinf['sky'] + tinf['skysig'] * np.array([-3, 100])
@@ -1792,9 +1793,9 @@ class RunAbell(object):
 
 		I,J,d = sm.match_radec(Tspec.ra, Tspec.dec, kids.ra, kids.dec,
 							   1./3600., nearest=True)
-		print len(Tspec), 'SDSS spectra'
-		print len(kids), 'SDSS kids'
-		print len(I), 'matched'
+		print(len(Tspec), 'SDSS spectra')
+		print(len(kids), 'SDSS kids')
+		print(len(I), 'matched')
 
 		plt.clf()
 		plt.imshow(tim.getImage(), **imc)
@@ -1865,7 +1866,7 @@ class RunAbell(object):
 		tobjs = objs[objI]
 		kids = tobjs
 		cat = tractor.getCatalog()
-		print 'Tractor catalog', len(cat), 'objs', tobjs
+		print('Tractor catalog', len(cat), 'objs', tobjs)
 
 		for src,i in zip(cat,objI):
 			src.sdssobj = objs[i]
@@ -1875,18 +1876,18 @@ class RunAbell(object):
 		I,J,d = sm.match_radec(Tspec.ra, Tspec.dec, kids.ra, kids.dec,
 							   1./3600.) #, nearest=True)
 
-		print len(Tspec), 'SDSS spectra'
-		print len(kids), 'SDSS kids'
-		print len(I), 'matched'
+		print(len(Tspec), 'SDSS spectra')
+		print(len(kids), 'SDSS kids')
+		print(len(I), 'matched')
 
 		for i,j in zip(I,J):
 			K = np.flatnonzero(i == I)
 			if len(K) > 1:
-				print len(K), 'matches for this spectro object'
+				print(len(K), 'matches for this spectro object')
 				#continue
 			K = np.flatnonzero(j == J)
 			if len(K) > 1:
-				print len(K), 'matches for this photo object'
+				print(len(K), 'matches for this photo object')
 				# Shouldn't happen due to fiber collisions, unless multiple plates
 				# per field
 				assert(False)
@@ -1961,7 +1962,7 @@ class RunAbell(object):
 					continue
 				donefams.append(kid.family)
 				fam = np.flatnonzero(kids.family == kid.family)
-			print len(fam), 'sources in deblend family'
+			print(len(fam), 'sources in deblend family')
 
 			family = Family()
 			fams.append(family)
@@ -2065,17 +2066,17 @@ class RunAbell(object):
 				if len(I) > 1:
 					for j,i in enumerate(I):
 						src = specsrcs[i]
-						print 'Source', src
+						print('Source', src)
 						sdss = src.sdssobj
 						flags  = sdss.objc_flags
 						flags2 = sdss.objc_flags2
-						print 'Bits set:'
+						print('Bits set:')
 						for bit,nm,desc in photo_flags1_info:
 							if (1 << bit) & flags:
-								print '  ', nm
+								print('  ', nm)
 						for bit,nm,desc in photo_flags2_info:
 							if (1 << bit) & flags2:
-								print '  ', nm
+								print('  ', nm)
 
 				Ts = Tspec[speci]
 				sx,sy = wcs.positionToPixel(RaDecPos(Ts.ra, Ts.dec))
@@ -2112,7 +2113,7 @@ class RunAbell(object):
 				  **kwargs):
 		bandnum = band_index(band)
 		pspat = self.pat.replace('-s%02i.pickle', '')
-		print 'plotsequence pattern:', pspat
+		print('plotsequence pattern:', pspat)
 		ps = PlotSequence(pspat)
 
 		tim = tractor.getImage(0)
@@ -2123,7 +2124,7 @@ class RunAbell(object):
 		ax = plt.axis()
 		plt.gray()
 		for fam in fams:
-			print 'Fam has', len(fam.specsrcs), 'spec', len(fam.srcs), 'srcs', len(fam.over), 'overlaps'
+			print('Fam has', len(fam.specsrcs), 'spec', len(fam.srcs), 'srcs', len(fam.over), 'overlaps')
 			for src in fam.over:
 				x,y = wcs.positionToPixel(src.getPosition())
 				plt.plot([x],[y], 'o', mec='g', mfc='none',
@@ -2144,7 +2145,7 @@ class RunAbell(object):
 			plt.imshow(tim.getImage(), **imc)
 			ax = plt.axis()
 			plt.gray()
-			print 'Fam has', len(fam.specsrcs), 'spec', len(fam.srcs), 'srcs', len(fam.over), 'overlaps'
+			print('Fam has', len(fam.specsrcs), 'spec', len(fam.srcs), 'srcs', len(fam.over), 'overlaps')
 			for src in fam.over:
 				x,y = wcs.positionToPixel(src.getPosition())
 				plt.plot([x],[y], 'o', mec='g', mfc='none',
@@ -2271,8 +2272,8 @@ class RunAbell(object):
 				yy = np.mean((Y-my)**2)
 				C = np.array([[xx,xy],[xy,yy]])
 				s,v = np.linalg.eigh(C)
-				print 'evals', s
-				print 'evecs', v
+				print('evals', s)
+				print('evecs', v)
 				[mini,maxi] = np.argsort(s)
 				a = v[maxi,:]
 				angle = np.rad2deg(np.arctan2(a[1],a[0]))
@@ -2309,7 +2310,7 @@ class RunAbell(object):
 				  imc=None, **kwargs):
 		bandnum = band_index(band)
 		pspat = self.pat.replace('-s%02i.pickle', '')
-		print 'plotsequence pattern:', pspat
+		print('plotsequence pattern:', pspat)
 		ps = PlotSequence(pspat, format='%03i')
 
 		plt.figure(figsize=(5,4))
@@ -2328,13 +2329,13 @@ class RunAbell(object):
 
 		mpatch = fam.mpatch
 		slc = mpatch.getSlice()
-		print 'Slice', slc
+		print('Slice', slc)
 
 		fam.mpatch = Patch(mpatch.x0, 100,
 						   mpatch.patch[100-mpatch.y0:, :2000 - mpatch.x0])
 		mpatch = fam.mpatch
 		slc = mpatch.getSlice()
-		print 'Slice', slc
+		print('Slice', slc)
 
 		fam.ext = list(fam.ext)
 		# Trim ugly edges
@@ -2342,15 +2343,15 @@ class RunAbell(object):
 		fam.ext[2] = 100
 		rext = fam.ext[2:] + fam.ext[:2]
 
-		print 'mpatch extent:', mpatch.getExtent()
-		print 'fam ext', fam.ext
+		print('mpatch extent:', mpatch.getExtent())
+		print('fam ext', fam.ext)
 
 
 
 
-		print 'Spectroscopic sources:'
+		print('Spectroscopic sources:')
 		for src in fam.specsrcs:
-			print '  ', src
+			print('  ', src)
 		#I = np.argsort([src.getBrightness().getMag(band) for src in fam.srcs])
 		#print 'Brightest sources:'
 		#for i in I[:10]:
@@ -2359,7 +2360,7 @@ class RunAbell(object):
 		plt.clf()
 		plt.imshow(tim.getImage(), **imc)
 		plt.gray()
-		print 'Fam has', len(fam.specsrcs), 'spec', len(fam.srcs), 'srcs', len(fam.over), 'overlaps'
+		print('Fam has', len(fam.specsrcs), 'spec', len(fam.srcs), 'srcs', len(fam.over), 'overlaps')
 		for src in fam.over:
 			x,y = wcs.positionToPixel(src.getPosition())
 			plt.plot([x],[y], 'o', mec='g', mfc='none',
@@ -2423,10 +2424,10 @@ class RunAbell(object):
 
 		ix0,iy0 = wcs.x0,wcs.y0
 		subext = mpatch.getExtent()
-		print 'Extent', subext
+		print('Extent', subext)
 		subext = [subext[0]+ix0, subext[1]+ix0,
 				  subext[2]+iy0, subext[3]+iy0]
-		print 'Subimage extent:', subext
+		print('Subimage extent:', subext)
 
 		#imsub = imc.copy()
 		#imsub.update(extent=subext)
@@ -2435,12 +2436,12 @@ class RunAbell(object):
 		mod = tractor.getModelImage(tim)
 		submod = mod[slc]
 		H,W = submod.shape
-		print 'Submod shape:', submod.shape
+		print('Submod shape:', submod.shape)
 		G = 100.
 		NX,NY = 2 + int(np.ceil(W/G)), 2 + int(np.ceil(H/G))
-		print 'NX,NY', NX,NY
+		print('NX,NY', NX,NY)
 		vals = np.zeros((NY,NX))
-		print 'vals shape', vals.shape
+		print('vals shape', vals.shape)
 		XX = np.linspace(0, W, NX)
 		YY = np.linspace(0, H, NY)
 		ssky = SplineSky(XX, YY, vals)
@@ -2449,7 +2450,7 @@ class RunAbell(object):
 		ie = tim.getInvError()
 		orig_ie = ie.copy()
 		sigma = 1./np.median(orig_ie)
-		print 'Sigma', sigma
+		print('Sigma', sigma)
 		ssky.setPriorSmoothness(sigma * 0.1)
 
 		sub_ie = np.zeros_like(ie)
@@ -2458,14 +2459,14 @@ class RunAbell(object):
 		sub_cat = Catalog()
 		for src in fam.srcs + fam.over + inbox:
 			mod = tractor.getModelImage(tim, [src])
-			print 'Source', src
-			print '  brightness:', src.getBrightness()
+			print('Source', src)
+			print('  brightness:', src.getBrightness())
 			ms = mod.max()/sigma
-			print '  max model pixel:', ms, 'sigma'
+			print('  max model pixel:', ms, 'sigma')
 			if ms < 3.:
 				continue
 			ms = (mod * sub_ie).max()
-			print '  max model pixel * sub_ie:', ms
+			print('  max model pixel * sub_ie:', ms)
 			if ms < 3.:
 				continue
 			sub_cat.append(src)
@@ -2493,15 +2494,15 @@ class RunAbell(object):
 			plt.xticks([]); plt.yticks([])
 			ps.savefig()
 
-		print 'After cutting to sub_cat, sub_ie, etc.'
+		print('After cutting to sub_cat, sub_ie, etc.')
 		plotem()
 
 
 
-		print 'Initial:'
-		print 'lnLikelihood', tractor.getLogLikelihood()
-		print 'lnPrior', tractor.getLogPrior()
-		print 'lnProb', tractor.getLogProb()
+		print('Initial:')
+		print('lnLikelihood', tractor.getLogLikelihood())
+		print('lnPrior', tractor.getLogPrior())
+		print('lnProb', tractor.getLogProb())
 
 		tractor.freezeParam('images')
 		tractor.catalog.freezeAllRecursive()
@@ -2509,19 +2510,19 @@ class RunAbell(object):
 		#tractor.catalog.freezeAllBut(*fam.srcs)
 		tractor.catalog.thawAllParams()
 
-		print 'Fluxes: opt'
+		print('Fluxes: opt')
 		for nm in tractor.getParamNames():
-			print '  ', nm
+			print('  ', nm)
 
 		self.optloop(tractor, scale_columns=False)
 		tractor.catalog.thawAllRecursive()
 
 		plotem()
 
-		print 'After optimizing fluxes:'
-		print 'lnLikelihood', tractor.getLogLikelihood()
-		print 'lnPrior', tractor.getLogPrior()
-		print 'lnProb', tractor.getLogProb()
+		print('After optimizing fluxes:')
+		print('lnLikelihood', tractor.getLogLikelihood())
+		print('lnPrior', tractor.getLogPrior())
+		print('lnProb', tractor.getLogProb())
 
 
 
@@ -2531,25 +2532,25 @@ class RunAbell(object):
 		iv = tim.getInvvar()
 		data = tim.getImage()
 		lnp0 = -0.5 * np.sum((data - mod0)**2 * iv)
-		print 'lnp0:', lnp0
+		print('lnp0:', lnp0)
 		for i,src in enumerate(cat):
-			print 'Source', src
-			print '  brightness:', src.getBrightness()
+			print('Source', src)
+			print('  brightness:', src.getBrightness())
 			mod = tractor.getModelImage(tim, cat[:i] + cat[i+1:])
 			#lnp1 = tractor.getLogLikelihood()
 			lnp = -0.5 * np.sum((data - mod)**2 * iv)
 			dlnp = lnp - lnp0
-			print '  removing it: lnp:', lnp
-			print '  dlnp:', dlnp
-			print '  delta-mod:', np.abs((mod - mod0) * tim.getInvError()).sum(), 'sigma'
+			print('  removing it: lnp:', lnp)
+			print('  dlnp:', dlnp)
+			print('  delta-mod:', np.abs((mod - mod0) * tim.getInvError()).sum(), 'sigma')
 			if dlnp < -1:
 				subsubcat.append(src)
 			else:
-				print '  dropping it'
+				print('  dropping it')
 
 		tractor.setCatalog(subsubcat)
 
-		print 'After dropping small dlnp:'
+		print('After dropping small dlnp:')
 		plotem()
 
 		I = np.argsort([src.getBrightness().getMag(band)
@@ -2568,9 +2569,9 @@ class RunAbell(object):
 			# plt.axis(rext)
 			# plt.title('Model for source %i' % i)
 			# ps.savefig()
-			print 'Source', i, ':', src
+			print('Source', i, ':', src)
 			ms = (mod * sub_ie).max()
-			print '  max model pixel * sub_ie:', ms
+			print('  max model pixel * sub_ie:', ms)
 
 		# HACK!!  Remove ones that offend me
 		# dropsrcs = [tractor.getCatalog()[i] for i in [50,53]]
@@ -2734,24 +2735,24 @@ class RunAbell(object):
 				src.freezeAllParams()
 				src.thawPathsTo(band)
 			else:
-				print 'Missing src:', src
+				print('Missing src:', src)
 				wcs = tim.getWcs()
 				x,y = wcs.positionToPixel(src.getPosition())
-				print 'x,y', x,y
+				print('x,y', x,y)
 		# Some of them were removed??
 		#tractor.catalog.freezeAllBut(*fam.specsrcs)
 
-		print 'Spline sky: opt'
+		print('Spline sky: opt')
 		for nm in tractor.getParamNames():
-			print '  ', nm
+			print('  ', nm)
 
 		j=0
 		while True:
-			print '-------------------------------------'
-			print 'Optimizing: step', j
-			print '-------------------------------------'
+			print('-------------------------------------')
+			print('Optimizing: step', j)
+			print('-------------------------------------')
 		   	dlnp,X,alpha = tractor.optimize()
-			print 'delta-logprob', dlnp
+			print('delta-logprob', dlnp)
 			nup = 0
 			for src in tractor.getCatalog():
 				for b in src.getBrightnesses():
@@ -2759,23 +2760,23 @@ class RunAbell(object):
 					if f < 0:
 						nup += 1
 						b.setFlux(band, 0.)
-			print 'Clamped', nup, 'fluxes up to zero'
+			print('Clamped', nup, 'fluxes up to zero')
 			if dlnp < 1:
 				break
 			j += 1
 
-			print 'After opt:'
-			print 'lnLikelihood', tractor.getLogLikelihood()
-			print 'lnPrior', tractor.getLogPrior()
-			print 'lnProb', tractor.getLogProb()
+			print('After opt:')
+			print('lnLikelihood', tractor.getLogLikelihood())
+			print('lnPrior', tractor.getLogPrior())
+			print('lnProb', tractor.getLogProb())
 
 			plotem()
 			plotsky()
 			
-		print 'After opt:'
-		print 'lnLikelihood', tractor.getLogLikelihood()
-		print 'lnPrior', tractor.getLogPrior()
-		print 'lnProb', tractor.getLogProb()
+		print('After opt:')
+		print('lnLikelihood', tractor.getLogLikelihood())
+		print('lnPrior', tractor.getLogPrior())
+		print('lnProb', tractor.getLogProb())
 
 		plotem()
 		plotsky()
@@ -2785,17 +2786,17 @@ class RunAbell(object):
 		for src in keptspecs:
 			src.thawAllParams()
 
-		print 'Spline sky: opt'
+		print('Spline sky: opt')
 		for nm in tractor.getParamNames():
-			print '  ', nm
+			print('  ', nm)
 
 		j=0
 		while True:
-			print '-------------------------------------'
-			print 'Optimizing: step', j
-			print '-------------------------------------'
+			print('-------------------------------------')
+			print('Optimizing: step', j)
+			print('-------------------------------------')
 		   	dlnp,X,alpha = tractor.optimize()
-			print 'delta-logprob', dlnp
+			print('delta-logprob', dlnp)
 			nup = 0
 			for src in tractor.getCatalog():
 				for b in src.getBrightnesses():
@@ -2803,12 +2804,12 @@ class RunAbell(object):
 					if f < 0:
 						nup += 1
 						b.setFlux(band, 0.)
-			print 'Clamped', nup, 'fluxes up to zero'
+			print('Clamped', nup, 'fluxes up to zero')
 			j += 1
-			print 'After opt:'
-			print 'lnLikelihood', tractor.getLogLikelihood()
-			print 'lnPrior', tractor.getLogPrior()
-			print 'lnProb', tractor.getLogProb()
+			print('After opt:')
+			print('lnLikelihood', tractor.getLogLikelihood())
+			print('lnPrior', tractor.getLogPrior())
+			print('lnProb', tractor.getLogProb())
 			plotem()
 			plotsky()
 			if dlnp < 1:
@@ -2874,7 +2875,7 @@ class RunAbell(object):
 			elif isinstance(src, CompositeGalaxy):
 				st = 'C'
 			plt.text(y+5, x+5, '%i' % i + st, color='w', fontsize=8)
-			print i, 'mag', src.getBrightness().getMag(band)
+			print(i, 'mag', src.getBrightness().getMag(band))
 		plt.axis(rext)
 		plt.title('Model')
 		ps.savefig()
@@ -2900,12 +2901,12 @@ class RunAbell(object):
 
 		tractor.setCatalog(newcat)
 
-		print 'Wrapping PSF in SdssBrightPSF'
+		print('Wrapping PSF in SdssBrightPSF')
 		sdss = DR9()
 		psfield = sdss.readPsField(run, camcol, field)
 		(a1,s1, a2,s2, a3,sigmap,beta) = psfield.getPowerLaw(bandnum)
 		mypsf = SdssBrightPSF(tim.getPsf(), a1,s1,a2,s2,a3,sigmap,beta)
-		print 'PSF:', mypsf
+		print('PSF:', mypsf)
 		tim.setPsf(mypsf)
 
 		mod = tractor.getModelImage(tim)
@@ -2949,11 +2950,11 @@ class RunAbell(object):
 				# Keep resetting the active set and checking them all until we
 				# find that none of them move.
 				firsttime = True
-				print 'Resetting active set to', len(activeset), 'sources'
+				print('Resetting active set to', len(activeset), 'sources')
 				while True:
 					# Narrow down to just the sources that are actually changing
-					print
-					print 'Looping through', len(activeset), 'active sources'
+					print()
+					print('Looping through', len(activeset), 'active sources')
 					moved = []
 					for j,i in enumerate(I):
 						src = tractor.getCatalog()[i]
@@ -2961,12 +2962,12 @@ class RunAbell(object):
 							continue
 						tractor.catalog.freezeAllBut(i)
 						src.thawAllRecursive()
-						print
-						print 'Optimizing source', i, '(%i of %i)' % (j, len(I))
+						print()
+						print('Optimizing source', i, '(%i of %i)' % (j, len(I)))
 						for nm in tractor.getParamNames():
-							print '  ', nm
+							print('  ', nm)
 						dlnp,X,alpha = tractor.optimize()
-						print 'delta-logprob', dlnp
+						print('delta-logprob', dlnp)
 						if dlnp > 1:
 							moved.append(src)
 					if len(moved) == 0:
@@ -3044,11 +3045,11 @@ class RunAbell(object):
 				# Keep resetting the active set and checking them all until we
 				# find that none of them move.
 				firsttime = True
-				print 'Resetting active set to', len(activeset), 'sources'
+				print('Resetting active set to', len(activeset), 'sources')
 				while True:
 					# Narrow down to just the sources that are actually changing
-					print
-					print 'Looping through', len(activeset), 'active sources'
+					print()
+					print('Looping through', len(activeset), 'active sources')
 					moved = []
 					for j,i in enumerate(I):
 						src = tractor.getCatalog()[i]
@@ -3056,12 +3057,12 @@ class RunAbell(object):
 							continue
 						tractor.catalog.freezeAllBut(i)
 						src.thawAllRecursive()
-						print
-						print 'Optimizing source', i, '(%i of %i)' % (j, len(I))
+						print()
+						print('Optimizing source', i, '(%i of %i)' % (j, len(I)))
 						for nm in tractor.getParamNames():
-							print '  ', nm
+							print('  ', nm)
 						dlnp,X,alpha = tractor.optimize()
-						print 'delta-logprob', dlnp
+						print('delta-logprob', dlnp)
 						if dlnp > 1:
 							moved.append(src)
 					if len(moved) == 0:
@@ -3091,8 +3092,8 @@ class RunAbell(object):
 		imchi2 = ima.copy()
 		imchi2.update(vmin=-50, vmax=50)
 
-		print 'kwargs:', kwargs.keys()
-		print 'kwargs', kwargs
+		print('kwargs:', kwargs.keys())
+		print('kwargs', kwargs)
 
 		noise = np.random.normal(size=tim.shape)
 		I = (tim.getInvvar() == 0)
@@ -3118,19 +3119,19 @@ class RunAbell(object):
 		# 	ps.savefig()
 
 		
-		print 'rext', rext
+		print('rext', rext)
 
 		P = unpickle_from_file('clusky-a1656-r5115-c5-f0150-i-s1001.pickle')
 		t0 = P['tractor']
 		ss0 = P['fams'][22].specsrcs
 
-		print 'Optimize spectro sources:'
+		print('Optimize spectro sources:')
 		for src in fam.specsrcs:
-			print '  ', src
+			print('  ', src)
 
-		print 'Original spectro sources:'
+		print('Original spectro sources:')
 		for src in ss0:
-			print '  ', src
+			print('  ', src)
 
 		#rd0 = [src.getPosition() for src in t0.getCatalog()]
 		#ra0  = np.array([rd.ra for rd in rd0])
@@ -3171,9 +3172,9 @@ class RunAbell(object):
 		plt.xticks([]); plt.yticks([])
 		ps.savefig()
 
-		print 'skyim', skyim.min(), skyim.max()
+		print('skyim', skyim.min(), skyim.max())
 
-		print 'imc', imc
+		print('imc', imc)
 		imsky = imc.copy()
 		imsky.update(vmax=skyim.max())
 
@@ -3211,21 +3212,21 @@ class RunAbell(object):
 
 		import emcee
 		lnp0 = tractor.getLogProb()
-		print 'Tractor: active params'
+		print('Tractor: active params')
 		for nm in tractor.getParamNames():
-			print '  ', nm
+			print('  ', nm)
 
 		p0 = np.array(tractor.getParams())
 		ndim = len(p0)
 		nw = 2*ndim
-		print 'ndim', ndim
-		print 'nw', nw
+		print('ndim', ndim)
+		print('nw', nw)
 
 		sampler = emcee.EnsembleSampler(nw, ndim, tractor,
 										threads=8)
 
 		steps = np.array(tractor.getStepSizes())
-		print 'steps: len', len(steps)
+		print('steps: len', len(steps))
 
 		# Scale the step sizes by the size of their derivatives.
 		cs = tractor.getParameterScales()
@@ -3240,7 +3241,7 @@ class RunAbell(object):
 		pp = pp0
 		rstate = None
 		for step in range(100):
-			print 'Taking emcee step', step
+			print('Taking emcee step', step)
 			pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
 			#print 'lnprobs:', lnp
 
@@ -3262,8 +3263,8 @@ class RunAbell(object):
 					if k == 4:
 						break
 
-			print 'Max lnprob:', max(lnp)
-			print 'Std in lnprobs:', np.std(lnp)
+			print('Max lnprob:', max(lnp))
+			print('Std in lnprobs:', np.std(lnp))
 
 			alllnp.append(lnp.copy())
 			allp.append(pp.copy())
@@ -3315,11 +3316,11 @@ class RunAbell(object):
 		pp = pp0
 		rstate = None
 		for step in range(step0, step0 + 100):
-			print 'Taking emcee step', step
+			print('Taking emcee step', step)
 			t0 = Time()
 			pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
-			print 'Emcee step took:'
-			print Time() - t0
+			print('Emcee step took:')
+			print(Time() - t0)
 			if (step+0) % 10 == 0:
 				for k,(p,x) in enumerate(zip(lnp,pp)):
 					tractor.setParams(x)
@@ -3343,8 +3344,8 @@ class RunAbell(object):
 				plt.plot(np.array(alllnp) - np.array(alllnp).max(), 'k-', alpha=0.1)
 				ps.savefig()
 
-			print 'Max lnprob:', max(lnp)
-			print 'Std in lnprobs:', np.std(lnp)
+			print('Max lnprob:', max(lnp))
+			print('Std in lnprobs:', np.std(lnp))
 
 			alllnp.append(lnp.copy())
 			allp.append(pp.copy())
@@ -3369,14 +3370,14 @@ class RunAbell(object):
 
 		ps = PlotSequence('corr')
 
-		print 'Shape', allp.shape
+		print('Shape', allp.shape)
 		allp = allp.reshape((-1, ndim))
-		print 'Reshaped to', allp.shape
+		print('Reshaped to', allp.shape)
 		ns,ndim = allp.shape
 
-		print 'Params:'
+		print('Params:')
 		for nm in tractor.getParamNames():
-			print '  ', nm
+			print('  ', nm)
 
 		names = tractor.getParamNames()
 		# Look for the largest correlation coefficients
@@ -3385,17 +3386,17 @@ class RunAbell(object):
 
 		sigmas = np.std(allp, axis=0)
 		means = np.mean(allp, axis=0)
-		print 'sigmas', sigmas.shape
+		print('sigmas', sigmas.shape)
 
 		aa = (allp - means[np.newaxis,:]) / sigmas[np.newaxis,:]
 
 		cov = np.dot(aa.T, aa)
-		print 'cov', cov.shape
+		print('cov', cov.shape)
 
 		for i,j in zip(*np.unravel_index(np.argsort(-np.abs(cov.flat)), cov.shape)):
 			if j >= i:
 				continue
-			print 'Cov:', i, j, cov[i,j], names[i], names[j]
+			print('Cov:', i, j, cov[i,j], names[i], names[j])
 
 			plt.clf()
 			plt.gca().set_position([0.17, 0.1, 0.81, 0.80])
@@ -3428,7 +3429,7 @@ class RunAbell(object):
 		if tim is None:
 			return None
 		if tim.shape == (0,0):
-			print 'Tim shape', tim.shape
+			print('Tim shape', tim.shape)
 			return None
 		roi = tinf.get('roi', None)
 		#print 'Stage 0: roi', roi
@@ -3463,13 +3464,13 @@ class RunAbell(object):
 				 run=None, camcol=None, field=None,
 				 ra=None, dec=None,
 				 **kwargs):
-		print 'Stage203: kwargs', kwargs
+		print('Stage203: kwargs', kwargs)
 		S = (self.R * 60.) / 0.396
 		getim = st.get_tractor_image_dr9
 		getsrc = st.get_tractor_sources_dr9
 		tim,tinf = getim(run, camcol, field, band,
 						 roiradecsize=(self.ra, self.dec, S), nanomaggies=True)
-		print 'tinf', tinf
+		print('tinf', tinf)
 		tim = tractor.getImage(0)
 		tim.origInvvar = None
 		tim.starMask = None
@@ -3481,12 +3482,12 @@ class RunAbell(object):
 				 **kwargs):
 
 		fn = get_spectro_table(ra, dec, self.aco)
-		print 'Looking for', fn
+		print('Looking for', fn)
 		T = fits_table(fn)
-		print 'Read', len(T), 'spectro targets'
+		print('Read', len(T), 'spectro targets')
 		T.about()
 		T.cut(T.clazz == 'GALAXY')
-		print 'Cut to', len(T), 'galaxies'
+		print('Cut to', len(T), 'galaxies')
 
 		cat = tractor.getCatalog()
 		for i,src in enumerate(cat):
@@ -3498,7 +3499,7 @@ class RunAbell(object):
 		rad = 1./3600.
 		I,J,d = sm.match_radec(T.ra, T.dec, ra, dec, rad,
 							   nearest=True)
-		print len(I), 'matches on RA,Dec'
+		print(len(I), 'matches on RA,Dec')
 		T.cut(I)
 		specI = J
 
@@ -3513,9 +3514,9 @@ class RunAbell(object):
 			np.array([src.getPosition().ra  for src in cat]),
 			np.array([src.getPosition().dec for src in cat]),
 			kids.ra, kids.dec, 1./3600., nearest=True)
-		print len(cat), 'tractor sources'
-		print len(kids), 'SDSS kids'
-		print len(I), 'matched'
+		print(len(cat), 'tractor sources')
+		print(len(kids), 'SDSS kids')
+		print(len(I), 'matched')
 		#kids = kids[J]
 
 		for src in cat:
@@ -3525,7 +3526,7 @@ class RunAbell(object):
 
 		P = np.array([src.parent for src in cat])
 		specP = P[specI]
-		print 'spec parents:', specP
+		print('spec parents:', specP)
 		sgis = []
 		gis = []
 		specgroups = []
@@ -3535,20 +3536,20 @@ class RunAbell(object):
 				sgis.append([i])
 				groups.append([cat[i]])
 				specgroups.append([cat[i]])
-		print len(groups), 'unblended'
+		print(len(groups), 'unblended')
 		for p in np.unique(specP):
 			if p in [-1, -2]:
 				continue
-			print 'parent', p
+			print('parent', p)
 			K = np.flatnonzero(p == specP)
-			print 'specs', K
+			print('specs', K)
 			specgroups.append([cat[i] for i in specI[K]])
 			sgis.append(specI[K])
 			K = np.flatnonzero(p == P)
-			print len(K), 'with parent', p
+			print(len(K), 'with parent', p)
 			groups.append([cat[i] for i in K])
 			gis.append([i for i in K if not i in sgis[-1]])
-		print 'Groups:', len(groups)
+		print('Groups:', len(groups))
 
 		#ps = PlotSequence(self.pat.replace('-s%02i.pickle', ''))
 		ps = PlotSequence(self.pat.replace('-s%02i.pickle', '') + '-groups')
@@ -3637,7 +3638,7 @@ class RunAbell(object):
 
 			mpatch = Patch(0, 0, mask)
 			mpatch.trimToNonZero()
-			print 'Mask:', mpatch
+			print('Mask:', mpatch)
 			
 			over = []
 			for src in cat:
@@ -3743,9 +3744,9 @@ class RunAbell(object):
 		plt.gray()
 		ps.savefig()
 
-		print 'Sub tractor: params'
+		print('Sub tractor: params')
 		for nm in tractor.getParamNames():
-			print '  ', nm
+			print('  ', nm)
 		
 		self.optloop(tractor)
 
@@ -3813,9 +3814,9 @@ class RunAbell(object):
 			if newsrc == src:
 				continue
 			subcat[i] = newsrc
-			print 'Switching source', i, 'from:'
-			print ' from  ', src
-			print ' to    ', newsrc
+			print('Switching source', i, 'from:')
+			print(' from  ', src)
+			print(' to    ', newsrc)
 		tractor.catalog.freezeAllBut(*sgi)
 
 		modj = tractor.getModelImage(0)
@@ -3831,9 +3832,9 @@ class RunAbell(object):
 		plt.gray()
 		ps.savefig()
 
-		print 'Model-switching: opt params'
+		print('Model-switching: opt params')
 		for nm in tractor.getParamNames():
-			print '  ', nm
+			print('  ', nm)
 		
 		self.optloop(tractor)
 
@@ -3851,9 +3852,9 @@ class RunAbell(object):
 		ps.savefig()
 
 		tractor.catalog.thawAllParams()
-		print 'Model-switching: opt all'
+		print('Model-switching: opt all')
 		for nm in tractor.getParamNames():
-			print '  ', nm
+			print('  ', nm)
 
 		modj = tractor.getModelImage(0)
 		chi = tractor.getChiImage(0)
@@ -3886,13 +3887,13 @@ class RunAbell(object):
 		ix0,iy0 = wcs.x0,wcs.y0
 		slc = mpatch.getSlice()
 
-		print 'Mpatch', mpatch
-		print 'Slice', slc
+		print('Mpatch', mpatch)
+		print('Slice', slc)
 		subext = mpatch.getExtent()
-		print 'Extent', subext
+		print('Extent', subext)
 		subext = [subext[0]+ix0, subext[1]+ix0,
 				  subext[2]+iy0, subext[3]+iy0]
-		print 'Subimage extent:', subext
+		print('Subimage extent:', subext)
 		imsub = imc.copy()
 		imsub.update(extent=subext)
 		imchi1 = ima.copy()
@@ -3905,10 +3906,10 @@ class RunAbell(object):
 		plt.imshow(modj[slc], **imsub)
 		plt.gray()
 		ax = plt.axis()
-		print 'Brightest sources:'
+		print('Brightest sources:')
 		for j,i in enumerate(I[:10]):
 			src = srcs[i]
-			print src
+			print(src)
 			x,y = wcs.positionToPixel(src.getPosition())
 			plt.plot([x+ix0],[y+iy0], 'o', mec='r', mfc='none',
 					 mew=1.5, ms=8, alpha=0.5)
@@ -3930,18 +3931,18 @@ class RunAbell(object):
 		modj = tractor.getModelImage(0)
 		submod = modj[slc]
 		H,W = submod.shape
-		print 'Submod shape:', submod.shape
+		print('Submod shape:', submod.shape)
 		G = 100.
 		NX,NY = 2 + int(np.ceil(W/G)), 2 + int(np.ceil(H/G))
-		print 'NX,NY', NX,NY
+		print('NX,NY', NX,NY)
 		vals = np.zeros((NY,NX))
-		print 'vals shape', vals.shape
+		print('vals shape', vals.shape)
 		XX = np.linspace(0, W, NX)
 		YY = np.linspace(0, H, NY)
 		ssky = SplineSky(XX, YY, vals)
 		###
 		sigma = 1./np.median(orig_ie)
-		print 'Sigma', sigma
+		print('Sigma', sigma)
 		ssky.setPriorSmoothness(sigma * 0.1)
 
 		subsky = SubSky(ssky, slc)		
@@ -3951,23 +3952,23 @@ class RunAbell(object):
 		tim.freezeAllBut('sky')
 		tractor.catalog.freezeAllBut(*sgi)
 
-		print 'Supposed to be thawing sources', sgi
+		print('Supposed to be thawing sources', sgi)
 
-		print 'Spline sky: opt'
+		print('Spline sky: opt')
 		for nm in tractor.getParamNames():
-			print '  ', nm
+			print('  ', nm)
 
-		print 'Initial:'
-		print 'lnLikelihood', tractor.getLogLikelihood()
-		print 'lnPrior', tractor.getLogPrior()
-		print 'lnProb', tractor.getLogProb()
+		print('Initial:')
+		print('lnLikelihood', tractor.getLogLikelihood())
+		print('lnPrior', tractor.getLogPrior())
+		print('lnProb', tractor.getLogProb())
 
 		self.optloop(tractor)
 
-		print 'After opt:'
-		print 'lnLikelihood', tractor.getLogLikelihood()
-		print 'lnPrior', tractor.getLogPrior()
-		print 'lnProb', tractor.getLogProb()
+		print('After opt:')
+		print('lnLikelihood', tractor.getLogLikelihood())
+		print('lnPrior', tractor.getLogPrior())
+		print('lnProb', tractor.getLogProb())
 
 		modj = tractor.getModelImage(0)
 		chi = tractor.getChiImage(0)
@@ -4010,7 +4011,7 @@ class RunAbell(object):
 		ix0,iy0 = wcs.x0,wcs.y0
 		slc = mpatch.getSlice()
 		subext = mpatch.getExtent()
-		print 'Extent', subext
+		print('Extent', subext)
 		subext = [subext[0]+ix0, subext[1]+ix0,
 				  subext[2]+iy0, subext[3]+iy0]
 		imsub = imc.copy()
@@ -4018,22 +4019,22 @@ class RunAbell(object):
 
 		import emcee
 		lnp0 = tractor.getLogProb()
-		print 'Tractor: active params'
+		print('Tractor: active params')
 		for nm in tractor.getParamNames():
-			print '  ', nm
+			print('  ', nm)
 
 		p0 = np.array(tractor.getParams())
 		ndim = len(p0)
 		#nw = max(50, 2*ndim)
 		nw = 2*ndim
-		print 'ndim', ndim
-		print 'nw', nw
+		print('ndim', ndim)
+		print('nw', nw)
 
 		sampler = emcee.EnsembleSampler(nw, ndim, tractor,
 										threads=8)
 
 		steps = np.array(tractor.getStepSizes())
-		print 'steps: len', len(steps)
+		print('steps: len', len(steps))
 		pp0 = np.vstack([p0 + 1e-2 * steps *
 						 np.random.normal(size=len(steps))
 						 for i in range(nw)])
@@ -4045,9 +4046,9 @@ class RunAbell(object):
 		pp = pp0
 		rstate = None
 		for step in range(100):
-			print 'Taking emcee step', step
+			print('Taking emcee step', step)
 			pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
-			print 'lnprobs:', lnp
+			print('lnprobs:', lnp)
 
 			if (step+0) % 10 == 0:
 				for k,(p,x) in enumerate(zip(lnp,pp)):
@@ -4082,11 +4083,11 @@ class RunAbell(object):
 
 		alllnp = np.array(alllnp)
 		allp = np.array(allp)
-		print 'alllnp shape', alllnp.shape
-		print 'allp shape', allp.shape
+		print('alllnp shape', alllnp.shape)
+		print('allp shape', allp.shape)
 		# steps, walkers, params
 
-		print 'sgi', sgi
+		print('sgi', sgi)
 
 		burn = 50
 
@@ -4100,9 +4101,9 @@ class RunAbell(object):
 		log = np.log10
 		h70 = 0.7
 
-		print 'Tractor: active params'
+		print('Tractor: active params')
 		for nm in tractor.getParamNames():
-			print '  ', nm
+			print('  ', nm)
 
 		# for i,nm in enumerate(tractor.getParamNames()):
 		# 	if not nm.startswith('catalog.source'):
@@ -4118,30 +4119,30 @@ class RunAbell(object):
 
 		# Deja vu...
 		fn = get_spectro_table(ra, dec, self.aco)
-		print 'Looking for', fn
+		print('Looking for', fn)
 		T = fits_table(fn)
 
 		svals = []
 
 		for si in sgi:
 			src = tractor.getCatalog()[si]
-			print 'Source', src
+			print('Source', src)
 
 			rd = src.getPosition()
 			ra,dec = rd.ra, rd.dec
 			rad = 1./3600.
 			I,J,d = sm.match_radec(T.ra, T.dec, ra, dec, rad,
 								   nearest=True)
-			print len(I), 'matches on RA,Dec'
+			print(len(I), 'matches on RA,Dec')
 			Ti = T[I]
-			print 'Matched spectro'
+			print('Matched spectro')
 			Ti.about()
 			Ti = Ti[0]
 
 			samp = []
 			for pp in allp[-10:]:
 				samp.extend(pp)
-			print len(samp), 'samples'
+			print(len(samp), 'samples')
 
 		   	# redshift
 	   		z = Ti.z
@@ -4198,7 +4199,7 @@ class RunAbell(object):
 			RR = Ti.R0
 			MU = Ti.mu0
 
-			print 'SS', SS
+			print('SS', SS)
 			xx = log(SS) + 0.2*(MU - 19.61)
 			plt.clf()
 			plt.hist(xx, 100)
@@ -4222,9 +4223,9 @@ class RunAbell(object):
 			ga = dict(color='g', lw=2,)
 
 			#print 'MM', MM.shape
-			print 'SS', SS.shape
-			print 'RR', RR.shape
-			print 'MU', MU.shape
+			print('SS', SS.shape)
+			print('RR', RR.shape)
+			print('MU', MU.shape)
 
 			plt.clf()
 			xl,xh = [1.25, 3.75]
@@ -4257,13 +4258,13 @@ class RunAbell(object):
 				 tinf=None, roi=None,
 				 **kwargs):
 
-		print 'tinf', tinf
+		print('tinf', tinf)
 		S = (self.R * 60.) / 0.396
 		getim = st.get_tractor_image_dr9
 		getsrc = st.get_tractor_sources_dr9
 		tim,tinf = getim(run, camcol, field, band,
 						 roiradecsize=(self.ra, self.dec, S), nanomaggies=True)
-		print 'tinf', tinf
+		print('tinf', tinf)
 		
 
 		ps = PlotSequence(self.pat.replace('-s%02i.pickle', ''))
@@ -4288,9 +4289,9 @@ class RunAbell(object):
 		I,J,d = sm.match_radec(np.array([src.getPosition().ra  for src in cat]),
 							   np.array([src.getPosition().dec for src in cat]),
 							   kids.ra, kids.dec, 1./3600., nearest=True)
-		print len(cat), 'tractor sources'
-		print len(kids), 'SDSS kids'
-		print len(I), 'matched'
+		print(len(cat), 'tractor sources')
+		print(len(kids), 'SDSS kids')
+		print(len(I), 'matched')
 
 		kids = kids[J]
 		tractor.catalog.freezeAllParams()
@@ -4301,7 +4302,7 @@ class RunAbell(object):
 		#tim.invvar = (tim.inverr)**2
 		psf = tim.getPsf()
 		psf.radius = min(25, int(np.ceil(psf.computeRadius())))
-		print 'PSF radius:', psf.radius
+		print('PSF radius:', psf.radius)
 
 		mod = tractor.getModelImage(0)
 		plt.clf()
@@ -4319,7 +4320,7 @@ class RunAbell(object):
 			if p == -1:
 				continue
 			K = np.flatnonzero(kids.parent == p)
-			print len(K), 'with parent', p
+			print(len(K), 'with parent', p)
 
 			srcs = []
 			nzsum = None
@@ -4346,8 +4347,8 @@ class RunAbell(object):
 				p.addTo(p2)
 				effect = np.sum(p2)
 				#effect = np.sum(p2.patch)
-				print 'Source:', src
-				print 'Total chi contribution:', effect, 'sigma'
+				print('Source:', src)
+				print('Total chi contribution:', effect, 'sigma')
 
 				srcs.append(src)
 			nzsum.trimToNonZero()
@@ -4364,7 +4365,7 @@ class RunAbell(object):
 					continue
 				if p.overlapsBbox(roi):
 					srcs.append(src)
-			print 'Found', len(srcs), 'total sources overlapping the bbox'
+			print('Found', len(srcs), 'total sources overlapping the bbox')
 
 			ax = plt.axis()
 			for i,src in enumerate(srcs):
@@ -4393,9 +4394,9 @@ class RunAbell(object):
 			subtractor = Tractor(Images(subimg), subcat)
 			subtractor.freezeParam('images')
 
-			print 'Subtractor: params'
+			print('Subtractor: params')
 			for nm in subtractor.getParamNames():
-				print '  ', nm
+				print('  ', nm)
 
 			#print 'Subimage shape', subimg.shape
 			#print 'Subimage image shape', subimg.getImage().shape
@@ -4443,7 +4444,7 @@ class RunAbell(object):
 		for i in I:
 			tractor.catalog.freezeAllBut(i)
 			self.optloop(tractor)
-			print tractor.catalog[i]
+			print(tractor.catalog[i])
 		#plotmod()
 		tractor.catalog.thawAllParams()
 		return dict(tractor=tractor)
@@ -4533,7 +4534,7 @@ if __name__ == '__main__':
 		band = 'i'
 		sdss = DR9()
 		fn = sdss.retrieve('idR', run, camcol, field, band)
-		print 'Got', fn
+		print('Got', fn)
 		P = pyfits.open(fn)[0]
 		from astrometry.util.fix_sdss_idr import fix_sdss_idr
 		P = fix_sdss_idr(P)

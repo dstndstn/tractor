@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 import urllib
 import urllib2
@@ -12,7 +13,7 @@ from astrometry.util.file import *
 def getcat(cat, cols, NC):
     ffn = '%s.fits' % cat
     if os.path.exists(ffn):
-        print 'File exists:', ffn
+        print('File exists:', ffn)
         return
 
     catfn = '%s.cat.xml' % cat
@@ -21,17 +22,17 @@ def getcat(cat, cols, NC):
         fn = '%s.dd.xml' % cat
         if not os.path.exists(fn):
             url = 'http://irsa.ipac.caltech.edu/cgi-bin/Gator/nph-dd?mode=xml&short=0&catalog=%s' % cat
-            print 'Retrieving', url
+            print('Retrieving', url)
             f = urllib2.urlopen(url)
             data = f.read()
             f = open(fn, 'w')
             f.write(data)
             f.close()
-            print 'Wrote', len(data), 'to', fn
+            print('Wrote', len(data), 'to', fn)
     
         tree = ET.parse(fn)
         root = tree.getroot()
-        print 'Parsed XML:', root
+        print('Parsed XML:', root)
     
         colnames = []
         for col in root.iter('column'):
@@ -41,7 +42,7 @@ def getcat(cat, cols, NC):
     else:
         colnames = [c for c in cols]
 
-    print 'Columns:', colnames
+    print('Columns:', colnames)
 
     colnames.remove('cntr')
 
@@ -69,29 +70,29 @@ def getcat(cat, cols, NC):
                 if len(cnorig) == 0:
                     break
             colnames = cnorig
-            print 'Taking columns:', cn
-            print 'Leaving columns:', colnames
+            print('Taking columns:', cn)
+            print('Leaving columns:', colnames)
 
         if os.path.exists(ffn2):
-            print 'File exists:', ffn2
+            print('File exists:', ffn2)
             fitsfns.append(ffn2)
             continue
         
         cn += ['cntr']
 
         if (os.path.exists(catfn2) and file_size(catfn2) > 100):
-            print 'File exists:', catfn2
+            print('File exists:', catfn2)
         else:
             url2 = 'http://irsa.ipac.caltech.edu/cgi-bin/Gator/nph-query?outfmt=3&spatial=NONE&catalog=%s&selcols=%s' % (cat, ','.join(cn))
-            print 'Retrieving', url2
+            print('Retrieving', url2)
             cmd = 'wget -nv --timeout 0 -O %s "%s"' % (catfn2, url2)
-            print 'Running:', cmd
+            print('Running:', cmd)
             os.system(cmd)
 
-        print 'Parsing', catfn2
+        print('Parsing', catfn2)
         tree = ET.parse(catfn2)
         root = tree.getroot()
-        print 'Parsed XML:', tree
+        print('Parsed XML:', tree)
 
         # print 'table:'
         # for x in root.iter('table'):
@@ -108,7 +109,7 @@ def getcat(cat, cols, NC):
         typemap = dict(char=str, int=np.int64, double=np.float64, float=np.float64)
         nullmap = {str:'', np.int64:-1, np.float64:np.nan}
         for f in tab.findall('FIELD'):
-            print 'Field', f.attrib
+            print('Field', f.attrib)
             nm = f.attrib['name']
             ty = f.attrib['datatype']
             fieldnames.append(nm)
@@ -126,8 +127,8 @@ def getcat(cat, cols, NC):
                     else:
                         dd.append(typ(td.text))
             except:
-                print 'Error in TR row', irow, 'of file', catfn2
-                print ET.dump(tr)
+                print('Error in TR row', irow, 'of file', catfn2)
+                print(ET.dump(tr))
                 raise
         
         data = [np.array(dd, dtype=tt) for dd,tt in zip(data, fieldtypes)]
@@ -146,14 +147,14 @@ def getcat(cat, cols, NC):
         T.about()
 
         T.writeto(ffn2)
-        print 'Wrote', ffn2
+        print('Wrote', ffn2)
 
         fitsfns.append(ffn2)
 
     Tall = None
     for fn in fitsfns:
         T = fits_table(fn)
-        print 'Read', len(T), 'from', ffn2
+        print('Read', len(T), 'from', ffn2)
         T.about()
         if Tall is None:
             Tall = T
@@ -162,13 +163,13 @@ def getcat(cat, cols, NC):
         for c in T.get_columns():
             if c == 'cntr':
                 continue
-            print 'copying column', c
+            print('copying column', c)
             Tall.set(c, T.get(c))
 
-    print 'Writing:'
+    print('Writing:')
     Tall.about()
     Tall.writeto(ffn)
-    print 'Wrote', ffn
+    print('Wrote', ffn)
 
     
 threads = []
@@ -202,6 +203,6 @@ if True:
 
 
 for t in threads:
-    print 'Waiting for threads to finish...'
+    print('Waiting for threads to finish...')
     t.join()
-print 'Done!'
+print('Done!')

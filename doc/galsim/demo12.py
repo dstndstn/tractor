@@ -53,7 +53,7 @@ New features introduced in this demo:
 - ChromaticObject.drawImage(bandpass)
 - PSF = galsim.ChromaticAtmosphere(GSObject, base_wavelength, zenith_angle)
 """
-
+from __future__ import print_function
 import sys
 import os
 import math
@@ -68,7 +68,7 @@ def main(argv):
     outpath = os.path.abspath(os.path.join(path, "output/"))
 
     if not os.path.exists(outpath):
-        print 'Creating', outpath
+        print('Creating', outpath)
         os.makedirs(outpath)
 
     # In non-script code, use getLogger(__name__) at module scope instead.

@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -37,10 +38,10 @@ tim1 = Image(data=img, invvar=np.ones_like(img),
 
 for seed in range(100):
 
-    print
-    print
-    print 'Starting with seed', seed
-    print
+    print()
+    print()
+    print('Starting with seed', seed)
+    print()
     
     np.random.seed(seed)
 
@@ -74,7 +75,7 @@ for seed in range(100):
             dat = mod[slc].astype(np.float32)
             #mod0 = np.zeros_like(dat)
             mod0 = None
-            print 'data type', dat.dtype
+            print('data type', dat.dtype)
             data = (x0, y0, dat, mod0,
                     np.sqrt(iv[slc]).astype(np.float32))
             blocks.append((data, []))
@@ -119,17 +120,17 @@ for seed in range(100):
                 
     nonneg = 1
     
-    print 'Ceres forced phot:'
+    print('Ceres forced phot:')
     fluxes = np.zeros(len(srcs)) + 10.
     x = ceres_forced_phot(blocks, fluxes, nonneg)
-    print 'Fluxes:', fluxes
+    print('Fluxes:', fluxes)
 
     tractor.setParams(np.zeros(tractor.numberOfParams()) + 10.)
     X2 = tractor.optimize_forced_photometry()
-    print 'optimize_forced_photometry() fluxes:', tractor.getParams()
+    print('optimize_forced_photometry() fluxes:', tractor.getParams())
 
     tractor.setParams(np.zeros(tractor.numberOfParams()) + 10.)
     X2 = tractor.optimize_forced_photometry(use_ceres=True, nonneg=nonneg)
-    print 'Ceres optimize_forced_photometry() fluxes:', tractor.getParams()
+    print('Ceres optimize_forced_photometry() fluxes:', tractor.getParams())
 
     

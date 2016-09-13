@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 
 def gauss2d(X, mu, sigma):
@@ -28,7 +29,7 @@ def em_step(X, weights, mu, sigma, background, B):
     weights = np.atleast_1d(weights)
     weights /= np.sum(weights)
 
-    print '    em_step: weights', weights, 'mu', mu, 'sigma', sigma, 'background fraction', B
+    print('    em_step: weights', weights, 'mu', mu, 'sigma', sigma, 'background fraction', B)
     # E:
     # fg = p( Y, Z=f | theta ) = p( Y | Z=f, theta ) p( Z=f | theta )
     fg = gauss2d(X, mu, sigma) * (1. - B) * weights
@@ -80,7 +81,7 @@ def em_step(X, weights, mu, sigma, background, B):
     # Total expected log-likelihood
     Q = np.sum(fore*lfg + back[:,np.newaxis]*lbg)
 
-    print 'Fore', fore.shape
+    print('Fore', fore.shape)
     if len(mu_orig.shape) == 1:
         return (1., mu[0,:], sigma[0], B, Q, fore[:,0])
     return (weights, mu, sigma, B, Q, fore)

@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 from astrometry.util.ttime import Time
 from .engine import logverb, OptResult, logmsg
@@ -129,7 +130,7 @@ class Optimizer(object):
 
         imsBest = getattr(result, 'ims1', None)
         if fitstats and imsBest is None:
-            print 'Warning: fit stats not computed because imsBest is None'
+            print('Warning: fit stats not computed because imsBest is None')
             result.fitstats = None
         elif fitstats:
             t0 = Time()
@@ -191,8 +192,8 @@ class Optimizer(object):
                         isallzero = False
 
                     if not np.all(np.isfinite(um.patch)):
-                        print 'Non-finite patch for source', src
-                        print 'In image', img
+                        print('Non-finite patch for source', src)
+                        print('In image', img)
                         assert(False)
 
                 # first image only:
@@ -455,7 +456,7 @@ class Optimizer(object):
                 if counts == 0.:
                     continue
                 if not np.isfinite(counts):
-                    print 'Warning: counts', counts, 'f', f, 'scale', scale
+                    print('Warning: counts', counts, 'f', f, 'scale', scale)
                 assert(np.isfinite(counts))
                 assert(np.all(np.isfinite(um.patch)))
                 #print 'Adding umod', um, 'with counts', counts, 'to mod', mod.shape
@@ -470,14 +471,14 @@ class Optimizer(object):
 
             # DEBUG
             if not np.all(np.isfinite(chi)):
-                print 'Chi has non-finite pixels:'
-                print np.unique(chi[np.logical_not(np.isfinite(chi))])
-                print 'Inv error range:', ie.min(), ie.max()
-                print 'All finite:', np.all(np.isfinite(ie))
-                print 'Mod range:', mod.min(), mod.max()
-                print 'All finite:', np.all(np.isfinite(mod))
-                print 'Img range:', im.min(), im.max()
-                print 'All finite:', np.all(np.isfinite(im))
+                print('Chi has non-finite pixels:')
+                print(np.unique(chi[np.logical_not(np.isfinite(chi))]))
+                print('Inv error range:', ie.min(), ie.max())
+                print('All finite:', np.all(np.isfinite(ie)))
+                print('Mod range:', mod.min(), mod.max())
+                print('All finite:', np.all(np.isfinite(mod)))
+                print('Img range:', im.min(), im.max())
+                print('All finite:', np.all(np.isfinite(im)))
             assert(np.all(np.isfinite(chi)))
             ims.append((im, mod, ie, chi, roi))
         return ims

@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
@@ -66,8 +67,8 @@ def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
         r,d,rad = radecrad
         x,y = twcs.positionToPixel(tractor.RaDecPos(r,d))
         pixrad = rad / (twcs.pixel_scale() / 3600.)
-        print 'Tractor WCS:', twcs
-        print 'RA,Dec,rad', r,d,rad, 'becomes x,y,pixrad', x,y,pixrad
+        print('Tractor WCS:', twcs)
+        print('RA,Dec,rad', r,d,rad, 'becomes x,y,pixrad', x,y,pixrad)
         roi = (x-pixrad, x+pixrad+1, y-pixrad, y+pixrad+1)
 
     if radecroi is not None:
@@ -77,7 +78,7 @@ def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
         xy = np.array(xy)
         x0,x1 = xy[:,0].min(), xy[:,0].max()
         y0,y1 = xy[:,1].min(), xy[:,1].max()
-        print 'RA,Dec ROI', ralo,rahi, declo,dechi, 'becomes x,y ROI', x0,x1,y0,y1
+        print('RA,Dec ROI', ralo,rahi, declo,dechi, 'becomes x,y ROI', x0,x1,y0,y1)
         roi = (x0,x1+1, y0,y1+1)
 
     if roi is not None:
@@ -93,7 +94,7 @@ def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
         y0 = np.clip(y0, 0, H)
         y1 = np.clip(y1, 0, H)
         if x0 == x1 or y0 == y1:
-            print 'ROI is empty'
+            print('ROI is empty')
             return None
         assert(x0 < x1)
         assert(y0 < y1)
@@ -234,19 +235,19 @@ def read_wise_level3(basefn, radecroi=None, filtermap={},
     intfn = basefn + '-int-3.fits'
     uncfn = basefn + '-unc-3.fits'
 
-    print 'intensity image', intfn
-    print 'uncertainty image', uncfn
+    print('intensity image', intfn)
+    print('uncertainty image', uncfn)
 
     P = pyfits.open(intfn)
     ihdr = P[0].header
     data = P[0].data
-    print 'Read', data.shape, 'intensity'
+    print('Read', data.shape, 'intensity')
     band = ihdr['BAND']
 
     P = pyfits.open(uncfn)
     uhdr = P[0].header
     unc = P[0].data
-    print 'Read', unc.shape, 'uncertainty'
+    print('Read', unc.shape, 'uncertainty')
 
     ''' cov:
     BAND    =                    1 / wavelength band number
@@ -270,16 +271,16 @@ def read_wise_level3(basefn, radecroi=None, filtermap={},
     '''
 
     twcs = tractor.WcslibWcs(intfn)
-    print 'WCS', twcs
+    print('WCS', twcs)
     #twcs.debug()
-    print 'pixel scale', twcs.pixel_scale()
+    print('pixel scale', twcs.pixel_scale())
 
     # HACK -- circular Gaussian PSF of fixed size...
     # in arcsec 
     fwhms = { 1: 6.1, 2: 6.4, 3: 6.5, 4: 12.0 }
     # -> sigma in pixels
     sig = fwhms[band] / 2.35 / twcs.pixel_scale()
-    print 'PSF sigma', sig, 'pixels'
+    print('PSF sigma', sig, 'pixels')
     tpsf = tractor.NCircularGaussianPSF([sig], [1.])
 
     if radecroi is not None:
@@ -289,7 +290,7 @@ def read_wise_level3(basefn, radecroi=None, filtermap={},
         xy = np.array(xy)
         x0,x1 = xy[:,0].min(), xy[:,0].max()
         y0,y1 = xy[:,1].min(), xy[:,1].max()
-        print 'RA,Dec ROI', ralo,rahi, declo,dechi, 'becomes x,y ROI', x0,x1,y0,y1
+        print('RA,Dec ROI', ralo,rahi, declo,dechi, 'becomes x,y ROI', x0,x1,y0,y1)
 
         # Clip to image size...
         H,W = data.shape
@@ -297,12 +298,12 @@ def read_wise_level3(basefn, radecroi=None, filtermap={},
         x1 = max(0, min(x1, W))
         y0 = max(0, min(y0, H-1))
         y1 = max(0, min(y1, H))
-        print ' clipped to', x0,x1,y0,y1
+        print(' clipped to', x0,x1,y0,y1)
 
         data = data[y0:y1, x0:x1]
         unc = unc[y0:y1, x0:x1]
         twcs.setX0Y0(x0,y0)
-        print 'Cut data to', data.shape
+        print('Cut data to', data.shape)
 
     else:
         H,W = data.shape
@@ -319,8 +320,8 @@ def read_wise_level3(basefn, radecroi=None, filtermap={},
     else:
         photocal = tractor.MagsPhotoCal(filter, zp)
 
-    print 'Image median:', np.median(data)
-    print 'unc median:', np.median(unc)
+    print('Image median:', np.median(data))
+    print('unc median:', np.median(unc))
 
     sky = np.median(data)
     tsky = tractor.ConstantSky(sky)
@@ -380,10 +381,10 @@ def get_psf_model(band, pixpsf=False, xy=None, positive=True, cache={}):
     res = em_fit_2d(II, xm, ym, w, mu, sig)
     if res != 0:
         raise RuntimeError('Failed to fit PSF')
-    print 'W1 PSF:'
-    print '  w', w
-    print '  mu', mu
-    print '  sigma', sig
+    print('W1 PSF:')
+    print('  w', w)
+    print('  mu', mu)
+    print('  sigma', sig)
     psf = GaussianMixturePSF(w, mu, sig)
     psf.computeRadius()
     cache[key] = psf
@@ -451,19 +452,19 @@ def main():
     #srcs = get_cfht_catalog(mags=bands, maglim=25.)
 
     srcs,T = get_cfht_catalog(mags=['i'] + bands, maglim=25., returnTable=True)
-    print 'Got', len(srcs), 'CFHT sources'
+    print('Got', len(srcs), 'CFHT sources')
 
 
     wise = fits_table('/project/projectdirs/bigboss/data/wise/catalogs/wisecat.fits')
-    print 'Read', len(wise), 'WISE sources'
+    print('Read', len(wise), 'WISE sources')
     #(ra0,ra1, dec0,dec1) = radecroi
     wise.cut((wise.ra > ra0) * (wise.ra < ra1) * (wise.dec > dec0) * (wise.dec < dec1))
-    print 'Cut to', len(wise), 'objects in ROI.'
+    print('Cut to', len(wise), 'objects in ROI.')
 
     I,J,D = match_radec(T.ra, T.dec, wise.ra, wise.dec, 1./3600.)
-    print len(I), 'matches'
-    print len(np.unique(I)), 'unique CFHT sources in matches'
-    print len(np.unique(J)), 'unique WISE sources in matches'
+    print(len(I), 'matches')
+    print(len(np.unique(I)), 'unique CFHT sources in matches')
+    print(len(np.unique(J)), 'unique WISE sources in matches')
 
     for j in np.unique(J):
         K = np.flatnonzero(J == j)
@@ -480,7 +481,7 @@ def main():
                 setattr(srcs[i].brightnessDev, band, half)
             else:
                 setattr(srcs[i].brightness, band, wise.get(band+'mag')[j])
-        print 'Plugged in WISE mags for source:', srcs[i]
+        print('Plugged in WISE mags for source:', srcs[i])
     
     #### Cut to just sources that had a match to the WISE catalog
     # ### uhh, why don't we just use the WISE catalog then?
@@ -544,7 +545,7 @@ def main():
     for im,bandnum in zip(ims,bandnums):
         tr.setImages(tractor.Images(im))
         band = im.photocal.band
-        print 'band', band
+        print('band', band)
         # thaw this band
         tr.catalog.thawParamsRecursive(band)
 
@@ -554,8 +555,8 @@ def main():
         R = 1.
         Rpix = R / 60. / np.sqrt(np.abs(np.linalg.det(im.wcs.cdAtPixel(0,0))))
         nside = int(healpix_nside_for_side_length_arcmin(R/2.))
-        print 'Nside', nside
-        print 'radius in pixels:', Rpix
+        print('Nside', nside)
+        print('radius in pixels:', Rpix)
 
         # start in one corner.
         pos = im.wcs.pixelToPosition(0, 0)
@@ -569,25 +570,25 @@ def main():
         while len(hpqueue):
             hp = hpqueue.pop()
             hpdone.append(hp)
-            print 'looking at healpix', hp
+            print('looking at healpix', hp)
             ra,dec = healpix_to_radecdeg(hp, nside, 0.5, 0.5)
-            print 'RA,Dec center', ra,dec
+            print('RA,Dec center', ra,dec)
             x,y = im.wcs.positionToPixel(tractor.RaDecPos(ra,dec))
             H,W  = im.shape
             if x < -Rpix or y < -Rpix or x >= W+Rpix or y >= H+Rpix:
-                print 'pixel', x,y, 'out of bounds'
+                print('pixel', x,y, 'out of bounds')
                 continue
 
             # add neighbours
             nn = healpix_get_neighbours(hp, nside)
-            print 'healpix neighbours', nn
+            print('healpix neighbours', nn)
             for ni in nn:
                 if ni in hpdone:
                     continue
                 if ni in hpqueue:
                     continue
                 hpqueue.append(ni)
-                print 'enqueued neighbour', ni
+                print('enqueued neighbour', ni)
 
             # FIXME -- add PSF-sized margin to radius
             #ra,dec = (radecroi[0]+radecroi[1])/2., (radecroi[2]+radecroi[3])/2.
@@ -595,15 +596,15 @@ def main():
             tr.catalog.thawSourcesInCircle(tractor.RaDecPos(ra, dec), R/60.)
 
             for step in range(10):
-                print 'Optimizing:'
+                print('Optimizing:')
                 for nm in tr.getParamNames():
-                    print nm
+                    print(nm)
                 (dlnp,X,alpha) = tr.optimize(damp=1.)
-                print 'dlnp', dlnp
-                print 'alpha', alpha
+                print('dlnp', dlnp)
+                print('alpha', alpha)
             
                 if True:
-                    print 'plotting', j
+                    print('plotting', j)
                     make_plots('wise-%i-step%03i-' % (bandnum,j), im, tr=tr, plots=['model','chi'])
                     j += 1
 
@@ -659,9 +660,9 @@ def main():
 
 def forcedphot():
     T1 = fits_table('cs82data/cas-primary-DR8.fits')
-    print len(T1), 'primary'
+    print(len(T1), 'primary')
     T1.cut(T1.nchild == 0)
-    print len(T1), 'children'
+    print(len(T1), 'children')
 
     rl,rh = T1.ra.min(), T1.ra.max()
     dl,dh = T1.dec.min(), T1.dec.max()
@@ -688,7 +689,7 @@ def forcedphot():
         #   tim.mask = np.zeros(tim.shape, dtype=bool)
         tim.invvar = tim.origInvvar
         tim.mask = np.zeros(tim.shape, dtype=bool)
-    print 'tim:', tim
+    print('tim:', tim)
 
     ps = PlotSequence('forced')
 
@@ -710,7 +711,7 @@ def forcedphot():
     T2.w1 = T2.w1mpro
     R = 1./3600.
     I,J,d = match_radec(T1.ra, T1.dec, T2.ra, T2.dec, R)
-    print len(I), 'matches'
+    print(len(I), 'matches')
 
     refband = 'r'
     #bandnum = band_index('r')
@@ -783,9 +784,9 @@ def forcedphot():
             nexp += 1
 
         cat.append(gal)
-    print 'Created', ndev, 'pure deV', nexp, 'pure exp and',
-    print ncomp, 'composite galaxies',
-    print 'and', nstar, 'stars'
+    print('Created', ndev, 'pure deV', nexp, 'pure exp and', end=' ')
+    print(ncomp, 'composite galaxies', end=' ')
+    print('and', nstar, 'stars')
 
     tractor = Tractor(tims, cat)
 
@@ -883,11 +884,11 @@ def wisemap():
         for part in range(1, 7):
             fn = 'index-allsky-astr-L1b-part%i.fits' % part
             catfn = os.path.join(wisedatadir, fn)
-            print 'Reading', catfn
+            print('Reading', catfn)
             T = fits_table(catfn)
-            print 'Read', len(T)
+            print('Read', len(T))
             I,J,d = match_radec(ra, dec, T.ra, T.dec, width)
-            print 'Found', len(I), 'RA,Dec matches'
+            print('Found', len(I), 'RA,Dec matches')
             if len(I) == 0:
                 del T
                 continue
@@ -919,9 +920,9 @@ def wisemap():
 
     T = fits_table(rfn)
 
-    print 'Scan/Frame:'
+    print('Scan/Frame:')
     for s,f in zip(T.scan_id, T.frame_num):
-        print '  ', s, f
+        print('  ', s, f)
 
     plot = Plotstuff(outformat='png', ra=ra, dec=dec, width=width, size=(800,800))
     out = plot.outline
@@ -944,10 +945,10 @@ def wisemap():
     plot.write('wisemap.png')
 
     I,J,d = match_radec(ra, dec, T.ra, T.dec, width)
-    print 'Found', len(I), 'RA,Dec matches'
+    print('Found', len(I), 'RA,Dec matches')
     i = np.argmin(d)
     i = J[i]
-    print 'ra,dec', ra,dec, 'closest', T.ra[i], T.dec[i]
+    print('ra,dec', ra,dec, 'closest', T.ra[i], T.dec[i])
     hdrstr = T.headerstr[i]
     if len(hdrstr) % 80:
         hdrstr = hdrstr + (' ' * (80 - (len(hdrstr)%80)))
@@ -967,7 +968,7 @@ def wise_psf_plots():
     # Plot Aaron's PSF models
     for i in range(1,5):
         P=pyfits.open('psf%i.fits' % i)[0].data
-        print P.min(), P.max()
+        print(P.min(), P.max())
         P/=P.max()
         plt.clf()
         plt.imshow(np.log10(np.maximum(P,1e-8)), interpolation='nearest', origin='lower', vmax=0.01)
@@ -994,10 +995,10 @@ def wise_psf_plots():
         II = np.maximum(II, 0)
         xm,ym = -(S/2), -(S/2)
         res = em_fit_2d(II, xm, ym, w, mu, sig)
-        print 'em_fit_2d result:', res
+        print('em_fit_2d result:', res)
         if res != 0:
             raise RuntimeError('Failed to fit PSF')
-        print 'w,mu,sig', w,mu,sig
+        print('w,mu,sig', w,mu,sig)
         mypsf = GaussianMixturePSF(w, mu, sig)
         mypsf.computeRadius()
 
@@ -1115,9 +1116,9 @@ def plot_unmatched():
         r,d = np.mean(rng[0]), np.mean(rng[1])
     
         RCF = radec_to_sdss_rcf(r, d, radius=2. * 60., tablefn='window_flist-DR9.fits')
-        print 'Found', len(RCF), 'fields in range'
+        print('Found', len(RCF), 'fields in range')
         for run,c,f,ra,dec in RCF:
-            print '  ',run,c,f, 'at', ra,dec
+            print('  ',run,c,f, 'at', ra,dec)
     
         from astrometry.blind.plotstuff import *
         plot = Plotstuff(rdw=(r,d, 10), size=(1000,1000), outformat='png')
@@ -1127,7 +1128,7 @@ def plot_unmatched():
         T = fits_table('window_flist-DR9.fits')
         I,J,d = match_radec(T.ra, T.dec, r,d, 10)
         T.cut(I)
-        print 'Plotting', len(T)
+        print('Plotting', len(T))
         for i,(m0,m1,n0,n1,node,incl) in enumerate(zip(T.mu_start, T.mu_end, T.nu_start, T.nu_end, T.node, T.incl)):
             #rr,dd = [],[]
             for j,(m,n) in enumerate([(m0,n0),(m0,n1),(m1,n1),(m1,n0),(m0,n0)]):
@@ -1170,7 +1171,7 @@ def plot_unmatched():
         for j,(flags,txt) in enumerate([ (sprim, 'PRIM'), (sbad, 'BAD'), (sedge, 'EDGE'),
                          (sbest, 'BEST')]):
             I = np.flatnonzero((T.resolvestatus & (sprim | sbad | sedge | sbest)) == flags)
-            print len(I), 'with', txt
+            print(len(I), 'with', txt)
             if len(I) == 0:
                 continue
             plt.clf()
@@ -1182,7 +1183,7 @@ def plot_unmatched():
                          (sprim | sedge, 'PRIM + EDGE'),
                          (sprim | sbest, 'PRIM + BEST') ]):
             I = np.flatnonzero((T.resolvestatus & flags) > 0)
-            print len(I), 'with', txt
+            print(len(I), 'with', txt)
             if len(I) == 0:
                 continue
             plt.clf()
@@ -1200,7 +1201,7 @@ def plot_unmatched():
 
         R = 1./3600.
         I,J,d = match_radec(T.ra, T.dec, T.ra, T.dec, R, notself=True)
-        print len(I), 'matches'
+        print(len(I), 'matches')
         plt.clf()
         loghist((T.ra[I]-T.ra[J])*3600., (T.dec[I]-T.dec[J])*3600., 200, range=((-1,1),(-1,1)))
         ps.savefig()
@@ -1223,23 +1224,23 @@ def plot_unmatched():
     #cas = fits_table('sdss-cas-testarea.fits')
     #cas = fits_table('sdss-cas-testarea-2.fits')
     cas = fits_table('sdss-cas-testarea-3.fits')
-    print 'Read', len(cas), 'CAS sources'
+    print('Read', len(cas), 'CAS sources')
 
     cas.cut((cas.resolvestatus & sedge) == 0)
-    print 'Cut to ', len(cas), 'without SURVEY_EDGE set'
+    print('Cut to ', len(cas), 'without SURVEY_EDGE set')
 
 
     # Check out WISE / SDSS matches.
     wise = wisecat
     sdss = cas
-    print len(sdss), 'SDSS sources'
-    print len(wise), 'WISE sources'
+    print(len(sdss), 'SDSS sources')
+    print(len(wise), 'WISE sources')
     R = 10.
     I,J,d = match_radec(wise.ra, wise.dec, sdss.ra, sdss.dec,
                         R/3600., nearest=True)
-    print len(I), 'matches'
+    print(len(I), 'matches')
 
-    print 'max dist:', d.max()
+    print('max dist:', d.max())
 
     plt.clf()
     plt.hist(d * 3600., 100, range=(0,R), log=True)
@@ -1260,7 +1261,7 @@ def plot_unmatched():
 
     I,J,d = match_radec(wise.ra, wise.dec, sdss.ra, sdss.dec,
                         R/3600., nearest=True)
-    print len(I), 'matches'
+    print(len(I), 'matches')
 
     unmatched = np.ones(len(wise), bool)
     unmatched[I] = False
@@ -1325,25 +1326,25 @@ def plot_unmatched():
 
     pfn = 'wcses.pickle'
     if os.path.exists(pfn):
-        print 'Reading', pfn
+        print('Reading', pfn)
         wcses,fns = unpickle_from_file(pfn)
     else:
         for r,c,f in RCF:
             fn = sdssobj.retrieve('frame', r, c, f, band)
-            print 'got', fn
+            print('got', fn)
             fns.append(fn)
             wcs = Tan(fn, 0)
-            print 'got wcs', wcs
+            print('got wcs', wcs)
             wcses.append(wcs)
         pickle_to_file((wcses,fns), pfn)
-        print 'Wrote to', pfn
+        print('Wrote to', pfn)
 
     wisefns = glob(os.path.join(wisedatadir, 'level3', '*w1-int-3.fits'))
     wisewcs = []
     for fn in wisefns:
-        print 'Reading', fn
+        print('Reading', fn)
         wcs = anwcs(fn, 0)
-        print 'Got', wcs
+        print('Got', wcs)
         wisewcs.append(wcs)
         
     I = np.argsort(wun.w1mpro)
@@ -1463,7 +1464,7 @@ def plot_unmatched():
                 subim = im[y0:y1, x0:x1]
                 if np.prod(subim.shape) == 0:
                     continue
-                print 'subim shape', subim.shape
+                print('subim shape', subim.shape)
                 plt.subplot(2,N,2)
                 plt.imshow(subim.T, interpolation='nearest', origin='lower',
                        vmax=0.3, extent=[y0,y1,x0,x1])
@@ -1522,7 +1523,7 @@ def plot_unmatched():
         ps.savefig()
 
         rcfs = zip(sdssnear.run, sdssnear.camcol, sdssnear.field)
-        print 'Nearby SDSS sources are from:', np.unique(rcfs)
+        print('Nearby SDSS sources are from:', np.unique(rcfs))
 
     return
 
@@ -1548,9 +1549,9 @@ def forced2():
     dec = (dec0 + dec1) / 2.
 
     cas = fits_table('sdss-cas-testarea-3.fits')
-    print 'Read', len(cas), 'CAS sources'
+    print('Read', len(cas), 'CAS sources')
     cas.cut((cas.resolvestatus & sedge) == 0)
-    print 'Cut to ', len(cas), 'without SURVEY_EDGE set'
+    print('Cut to ', len(cas), 'without SURVEY_EDGE set')
 
     # Drop "sbest" sources that have an "sprim" nearby.
     Ibest = (cas.resolvestatus & (sprim | sbest)) == sbest
@@ -1561,7 +1562,7 @@ def forced2():
     #Ikeep = np.ones(len(Ibest), bool)
     #Ikeep[I] = False
     cas.cut(np.logical_or(Ibest, Iprim))
-    print 'Cut to', len(cas), 'PRIMARY + BEST-not-near-PRIMARY'
+    print('Cut to', len(cas), 'PRIMARY + BEST-not-near-PRIMARY')
 
     I,J,d = match_radec(cas.ra, cas.dec, cas.ra, cas.dec, 2./3600., notself=True)
     plt.clf()
@@ -1581,30 +1582,30 @@ def forced2():
     res = em_fit_2d(II, xm, ym, w, mu, sig)
     if res != 0:
         raise RuntimeError('Failed to fit PSF')
-    print 'W1 PSF:'
-    print '  w', w
-    print '  mu', mu
-    print '  sigma', sig
+    print('W1 PSF:')
+    print('  w', w)
+    print('  mu', mu)
+    print('  sigma', sig)
     w1psf = GaussianMixturePSF(w, mu, sig)
     w1psf.computeRadius()
 
-    print 'PSF radius:', w1psf.getRadius(), 'pixels'
+    print('PSF radius:', w1psf.getRadius(), 'pixels')
     
     T = fits_table('wise-roi.fits')
     for i in range(len(T)):
         basefn = os.path.join(l1bdir, '%s%i-w1' % (T.scan_id[i], T.frame_num[i]))
         fn = basefn + '-int-1b.fits'
-        print 'Looking for', fn
+        print('Looking for', fn)
         if not os.path.exists(fn):
             continue
-        print '  -> Found it!'
+        print('  -> Found it!')
 
         tim = read_wise_image(basefn, nanomaggies=True)
         tim.psf = w1psf
         
         wcs = tim.wcs.wcs
         r0,r1,d0,d1 = wcs.radec_bounds()
-        print 'RA,Dec bounds:', r0,r1, d0,d1
+        print('RA,Dec bounds:', r0,r1, d0,d1)
         
         w,h = wcs.imagew, wcs.imageh
         rd = np.array([wcs.pixelxy2radec(x,y) for x,y in
@@ -1633,13 +1634,13 @@ def forced2():
                 #keepsrcs.append(src)
         #tsrcs = keepsrcs
                 
-        print 'Created', len(tsrcs), 'tractor sources in this image'
+        print('Created', len(tsrcs), 'tractor sources in this image')
 
         I = np.flatnonzero((wisecat.ra > r0) * (wisecat.ra < r1) *
                            (wisecat.dec > d0) * (wisecat.dec < d1))
         J = point_in_poly(wisecat.ra[I], wisecat.dec[I], rd)
         I = I[J]
-        print 'Found', len(I), 'WISE catalog sources in this image'
+        print('Found', len(I), 'WISE catalog sources in this image')
 
         wc = wisecat[I]
         tra  = np.array([src.getPosition().ra  for src in tsrcs])
@@ -1649,7 +1650,7 @@ def forced2():
         I,J,d = match_radec(wc.ra, wc.dec, tra, tdec,
                             R/3600., nearest=True)
         # cashere.ra, cashere.dec, 
-        print 'Found', len(I), 'SDSS-WISE matches within', R, 'arcsec'
+        print('Found', len(I), 'SDSS-WISE matches within', R, 'arcsec')
 
         for i,j in zip(I,J):
             w1 = wc.w1mpro[i]
@@ -1665,12 +1666,12 @@ def forced2():
             if b.getBand(sdssband) > 0 or b.getBand(wbands[0]) > 0:
                 keepsrcs.append(src)
         tsrcs = keepsrcs
-        print 'Keeping', len(tsrcs), 'tractor sources from SDSS'
+        print('Keeping', len(tsrcs), 'tractor sources from SDSS')
 
         unmatched = np.ones(len(wc), bool)
         unmatched[I] = False
         wun = wc[unmatched]
-        print len(wun), 'unmatched WISE sources'
+        print(len(wun), 'unmatched WISE sources')
         for i in range(len(wun)):
             pos = RaDecPos(wun.ra[i], wun.dec[i])
             nm = NanoMaggies.magToNanomaggies(wun.w1mpro[i])
@@ -1706,7 +1707,7 @@ def forced2():
         tr.freezeParam('images')
 
         for jj in range(2):
-            print 'Rendering WISE model image...'
+            print('Rendering WISE model image...')
             wmod = tr.getModelImage(0)
             plt.clf()
             plt.imshow(wmod, **ima)
@@ -1732,7 +1733,7 @@ def forced2():
 
 
         tr = Tractor([tim], tsrcs)
-        print 'Rendering model image...'
+        print('Rendering model image...')
         mod = tr.getModelImage(0)
 
         plt.clf()
@@ -1740,8 +1741,8 @@ def forced2():
         plt.title(tim.name + ': SDSS + WISE sources')
         ps.savefig()
 
-        print 'tim', tim
-        print 'tim.photocal:', tim.photocal
+        print('tim', tim)
+        print('tim.photocal:', tim.photocal)
         
         wsrcs = []
         for i in range(len(wc)):
@@ -1751,7 +1752,7 @@ def forced2():
             wsrcs.append(PointSource(pos, br))
 
         tr = Tractor([tim], wsrcs)
-        print 'Rendering WISE model image...'
+        print('Rendering WISE model image...')
         wmod = tr.getModelImage(0)
 
         plt.clf()
@@ -1775,25 +1776,25 @@ if __name__ == '__main__':
     import pylab as plt
 
     T1 = fits_table('cs82data/cas-primary-DR8.fits')
-    print len(T1), 'SDSS'
-    print '  RA', T1.ra.min(), T1.ra.max()
+    print(len(T1), 'SDSS')
+    print('  RA', T1.ra.min(), T1.ra.max())
 
     cutfn = 'wise-cut.fits'
     if not os.path.exists(cutfn):
         T2 = fits_table('wise-27-tag.fits')
-        print len(T2), 'WISE'
-        print '  RA', T2.ra.min(), T2.ra.max()
+        print(len(T2), 'WISE')
+        print('  RA', T2.ra.min(), T2.ra.max())
         T2.cut((T2.ra  > T1.ra.min())  * (T2.ra < T1.ra.max()) *
                (T2.dec > T1.dec.min()) * (T2.dec < T1.dec.max()))
-        print 'Cut WISE to same RA,Dec region:', len(T2)
+        print('Cut WISE to same RA,Dec region:', len(T2))
         T2.writeto('wise-cut.fits')
     else:
         T2 = fits_table(cutfn)
-        print len(T2), 'WISE (cut)'
+        print(len(T2), 'WISE (cut)')
 
     R = 1./3600.
     I,J,d = match_radec(T1.ra, T1.dec, T2.ra, T2.dec, R)
-    print len(I), 'matches'
+    print(len(I), 'matches')
 
     plt.clf()
     #loghist(T1.r[I] - T1.i[I], T1.r[I] - T2.w1mpro[J], 200, range=((0,2),(-2,5)))
@@ -1816,7 +1817,7 @@ if __name__ == '__main__':
 
     R = 2./3600.
     I2,J2,d = match_radec(T1.ra, T1.dec, T2.ra, T2.dec, R)
-    print len(I), 'matches'
+    print(len(I), 'matches')
     plt.plot(T2.ra[J2], T2.dec[J2], '^', mec='g', mfc='none', ms=10)
     plt.savefig('wise3.png')
 
