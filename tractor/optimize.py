@@ -28,6 +28,7 @@ class Optimizer(object):
                           nilcounts=-1e30,
                           wantims=True,
                           negfluxval=None,
+                          **kwargs
                           ):
         from basics import LinearPhotoCal, ShiftedWcs
 
@@ -117,7 +118,7 @@ class Optimizer(object):
             nonneg=nonneg, wantims0=wantims0, wantims1=wantims1,
             negfluxval=negfluxval, rois=rois, priors=priors, sky=sky,
             justims0=justims0, subimgs=subimgs, damp=damp, alphas=alphas,
-            Nsky=Nsky, mindlnp=mindlnp, shared_params=shared_params)
+            Nsky=Nsky, mindlnp=mindlnp, shared_params=shared_params, **kwargs)
                 
         if variance:
             # Inverse variance
