@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -39,7 +40,7 @@ P=pyfits.open('CORR01269265.fits')
 
 var = P[2].data
 sigma = np.sqrt(np.median(var))
-print 'Sigma:', sigma
+print('Sigma:', sigma)
 
 FW,FH = 14,10
 
@@ -124,7 +125,7 @@ ps.savefig()
 S = 15
 good.cut((good.x > (x0+S)) * (good.x < (x0+W-S)) *
 		 (good.y > (y0+S)) * (good.y < (y0+H-S)))
-print len(good), 'good galaxies in range'
+print(len(good), 'good galaxies in range')
 
 R,C = FH,FW
 #ima = dict(interpolation='nearest', origin='lower',
@@ -146,12 +147,12 @@ for jveto in [ [], [ 4,5,6,7,13,15,18,23,25,32,37,
 		if j in jveto:
 			continue
 		if k == R*C:
-			print 'Lowest S/N:', good.SN[i]
+			print('Lowest S/N:', good.SN[i])
 			break
 		plt.subplot(R,C, k+1)
 		k += 1
 		ix,iy = int(good.x[i]) - x0, int(good.y[i]) - y0
-		print 'galaxy at', ix,iy
+		print('galaxy at', ix,iy)
 		plt.imshow(sub[iy-S: iy+S, ix-S: ix+S], **ima)
 	
 		#plt.text(S, S, '%i' % j, color='g')

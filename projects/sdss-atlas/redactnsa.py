@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import numpy as np
@@ -41,7 +42,7 @@ def getImage(x):
     mask = e==x
     t = data[mask][0]
     iau = str(t['IAUNAME'])
-    print iau
+    print(iau)
     if t['DEC'] > 0: 
         url='http://sdss.physics.nyu.edu/mblanton/v0/detect/v0_1/%sh/p%02d/%s/%s.jpg' %(iau[1:3],((int(iau[11:13]))/2)*2,iau,iau)
     else: 
@@ -57,14 +58,14 @@ for entry in rc3[1].data:
     m1,m2,d12 = match_radec(gra,gdec,entry['RA'],entry['DEC'],radius)
     newGood[m1]=False
 
-print len(g[newGood])
+print(len(g[newGood]))
 
 gra=gra[newGood]
 g=g[newGood] #list of all nsaids that should now be checked 
 gdec=gdec[newGood]
 grad = grad[newGood]
 i = 0
-print len(g)
+print(len(g))
 
 fekta = open("objs2_ekta.txt",'w')
 fmykytyn = open("objs2_mykytyn.txt",'w')

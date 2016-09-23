@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -32,10 +33,10 @@ sdss = DR9(basedir='data/unzip')
 sdss.useLocalTree()
 sdss.saveUnzippedFiles('data/unzip')
 
-print 'Score range:', F.score.min(), F.score.max()
-print 'Before score cut:', len(F)
+print('Score range:', F.score.min(), F.score.max())
+print('Before score cut:', len(F))
 F.cut(F.score > 0.5)
-print 'Cut on score:', len(F)
+print('Cut on score:', len(F))
 
 ra0 = T.ra.min()
 ra1 = T.ra.max()
@@ -66,7 +67,7 @@ for m in masks:
     if mr1 < rlo or mr0 > rhi or md1 < dlo or md0 > dhi:
         continue
     masksi.append(m)
-print len(masksi), 'masks overlap this slice'
+print(len(masksi), 'masks overlap this slice')
 
 # Cut to CS82 sources overlapping
 Ibox = np.flatnonzero(
@@ -76,25 +77,25 @@ T.marginal[:] = False
 T.marginal[Ibox] = np.logical_not(
     (T.dec[Ibox] >= dlo) * (T.dec[Ibox] <= dhi) *
     (T.ra [Ibox] >= rlo) * (T.ra [Ibox] <= rhi))
-print len(Ibox), 'sources in RA,Dec slice'
-print len(np.flatnonzero(T.marginal)), 'are in the margins'
+print(len(Ibox), 'sources in RA,Dec slice')
+print(len(np.flatnonzero(T.marginal)), 'are in the margins')
 
 # Cut to SDSS fields overlapping
 Fi = F[np.logical_not(np.logical_or(F.dec0 > dhi, F.dec1 < dlo)) *
        np.logical_not(np.logical_or(F.ra0  > rhi, F.ra1  < rlo))]
-print len(Fi), 'fields in RA,Dec slice'
+print(len(Fi), 'fields in RA,Dec slice')
 
 band = 'r'
 bands = 'r'
 
-print 'Creating Tractor sources...'
+print('Creating Tractor sources...')
 maglim = 24
 cat,icat = get_cs82_sources(T[Ibox], maglim=maglim, bands=bands)
-print 'Got', len(cat), 'sources'
+print('Got', len(cat), 'sources')
 # Icat: index into T, row-parallel to cat
 Icat = Ibox[icat]
 del icat
-print len(Icat), 'sources created'
+print(len(Icat), 'sources created')
 
 cat.freezeParamsRecursive('*')
 cat.thawPathsTo(band)
@@ -109,7 +110,7 @@ else:
     sigs = []
     npix = 0
     for i,(r,c,f) in enumerate(zip(Fi.run, Fi.camcol, Fi.field)):
-        print 'Reading', (i+1), 'of', len(Fi), ':', r,c,f,band
+        print('Reading', (i+1), 'of', len(Fi), ':', r,c,f,band)
         tim,inf = get_tractor_image_dr9(
             r, c, f, band, sdss=sdss,
             nanomaggies=True, zrange=[-2,5],
@@ -118,7 +119,7 @@ else:
         if tim is None:
             continue
         (H,W) = tim.shape
-        print 'Tim', tim.shape
+        print('Tim', tim.shape)
         tim.wcs.setConstantCd(W/2., H/2.)
         del tim.origInvvar
         del tim.starMask
@@ -127,7 +128,7 @@ else:
         tims.append(tim)
         sigs.append(1./np.sqrt(np.median(tim.invvar)))
         npix += (H*W)
-        print 'got', (H*W), 'pixels, total', npix
+        print('got', (H*W), 'pixels, total', npix)
         #print 'Read image', i+1, 'in band', band, ':', Time()-tb0
     
         #tm0 = Time()
@@ -162,8 +163,8 @@ else:
 
     pickle_to_file((tims,sigs,npix), pfn)
 
-print 'Read', len(tims), 'images'
-print 'total of', npix, 'pixels'
+print('Read', len(tims), 'images')
+print('total of', npix, 'pixels')
 
 # Create a fake WCS for this subregion -- for plots only
 pixscale = 0.396 / 3600.
@@ -185,14 +186,14 @@ for tim in tims:
             wcs, wcswrap, [], 3)
     except:
         import traceback
-        print 'Failed to resample:'
+        print('Failed to resample:')
         traceback.print_exc()
         continue
     coadd[Yo,Xo] += tim.getImage()[Yi,Xi]
     coiv[Yo,Xo] += tim.getInvvar()[Yi,Xi]
     ncoadd[Yo,Xo] += 1
 coadd = coadd / np.maximum(1, ncoadd).astype(np.float32)
-print len(tims), 'tims; ncoadd range %i %i; coadd range %g, %g' % (ncoadd.min(), ncoadd.max(), coadd.min(), coadd.max())
+print(len(tims), 'tims; ncoadd range %i %i; coadd range %g, %g' % (ncoadd.min(), ncoadd.max(), coadd.min(), coadd.max()))
 plt.clf()
 #coa = dict(interpolation='nearest', origin='lower',
 #           extent=[rlo,rhi,dlo,dhi], vmin=-0.05, vmax=0.5)
@@ -216,7 +217,7 @@ ps.savefig()
 sig1 = np.median(sigs)
 minsig = 0.1
 minsb = minsig * sig1
-print 'Sigma1:', sig1, 'minsig', minsig, 'minsb', minsb
+print('Sigma1:', sig1, 'minsig', minsig, 'minsb', minsb)
                 
 tractor = Tractor(tims, cat)
 
@@ -258,7 +259,7 @@ for i,tim in enumerate(tims):
             wcs, wcswrap, [], 3)
     except:
         import traceback
-        print 'Failed to resample:'
+        print('Failed to resample:')
         traceback.print_exc()
         continue
     mcoadd[Yo,Xo] += mod[Yi,Xi]
@@ -303,30 +304,30 @@ sys.exit(0)
 
 C = merge_tables([fits_table('data/cs82/cats/masked.S82p%ip_y.V2.7A.swarp.cut.deVexp.fit' % i, hdu=2)
                   for i in [40,41,42,43]])
-print len(C), 'CS82 catalog'
+print(len(C), 'CS82 catalog')
 #C.about()
 C.ptsrc = (C.spread_model < 0.0036)
 
 F = merge_tables([fits_table('cs82-phot-S82p%ip.fits' % i)
                   for i in [40,41,42,43]])
-print len(F), 'Forced-phot catalog'
+print(len(F), 'Forced-phot catalog')
 
 S = fits_table('cas-p4043p.fits')
-print len(S), 'SDSS CASJobs'
+print(len(S), 'SDSS CASJobs')
 
 S.cut(S.nchild == 0)
-print len(S), 'child objects'
+print(len(S), 'child objects')
 
 if not 'inmask' in S.get_columns():
     from cs82 import get_cs82_masks
     masks = [get_cs82_masks('S82p%ip' % i) for i in [40,41,42,43]]
-    print 'masks', masks[0][0]
+    print('masks', masks[0][0])
     inmask = np.zeros(len(S), bool)
     kd = tree_build(np.vstack((S.ra, S.dec)).T)
     for mm in masks:
         for mi,m in enumerate(mm):
             if mi % 1000 == 0:
-                print mi
+                print(mi)
             # mr0,md0 = np.min(m, axis=0)
             # mr1,md1 = np.max(m, axis=0)
             # I = np.flatnonzero((S.ra > mr0) * (S.ra < mr1) * (S.dec > md0) * (S.dec < md1))
@@ -342,9 +343,9 @@ if not 'inmask' in S.get_columns():
     S.inmask = inmask
     S.writeto('cas-p4043p.fits')
 
-print sum(S.inmask), 'of', len(S), 'sources from CAS are inside masks'
+print(sum(S.inmask), 'of', len(S), 'sources from CAS are inside masks')
 S.cut(np.logical_not(S.inmask))
-print len(S), 'CAS after mask cut'
+print(len(S), 'CAS after mask cut')
 
 Idet = ((S.flags_i & 0x30000000) > 0)# binned1 | binned2
 #S.cut(
@@ -392,7 +393,7 @@ ps.savefig()
 FI = F[F.phot_done]
 
 I,J,d = match_radec(S.ra, S.dec, FI.ra, FI.dec, 1./3600.)
-print len(I), 'matches'
+print(len(I), 'matches')
 
 for bi,band in enumerate('ugriz'):
     plt.clf()

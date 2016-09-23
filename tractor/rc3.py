@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 import pylab as plt
 import pyfits
@@ -31,19 +32,19 @@ def getName(name,fn="newrc3limited.fits"):
     mask = data.field("NAME") == name
 
     record = data[mask]
-    print record
+    print(record)
     if len(record) ==0:
-        print "NONE"
+        print("NONE")
         altnames = data.field("ALT_NAME_1")
         mask = data.field("ALT_NAME_1") == name
         record = data[mask]
     if len(record) ==0:
-        print "NONE"
+        print("NONE")
         altnames = data.field("ALT_NAME_2")
         mask = data.field("ALT_NAME_2") == name
         record = data[mask]
     if len(record) ==0:
-        print "NONE"
+        print("NONE")
         altnames = data.field("PGC_NAME")
         mask = data.field("PGC_NAME") == name
         record = data[mask]

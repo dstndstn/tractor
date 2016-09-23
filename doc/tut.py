@@ -1,3 +1,4 @@
+from __future__ import print_function
 from tractor import MultiParams, PointSource, ParamList, RaDecPos, Mags
 from tractor.galaxy import DevGalaxy, GalaxyShape
 
@@ -59,8 +60,8 @@ fudge = MagFudge(0., 0., 0., 0.)
 
 lq = LensedQuasar(light, mass, quasar, fudge)
 
-print 'LensedQuasar params:'
+print('LensedQuasar params:')
 for nm,val in zip(lq.getParamNames(), lq.getParams()):
-	print '  ', nm, '=', val
+	print('  ', nm, '=', val)
 
 

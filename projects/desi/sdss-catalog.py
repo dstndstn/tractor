@@ -1,3 +1,4 @@
+from __future__ import print_function
 import fitsio
 
 from astrometry.util.util import *
@@ -37,7 +38,7 @@ if __name__ == '__main__':
         opt.bands = ['g','r','z']
 
     wcs = get_subtile_wcs(tile, opt.x, opt.y)
-    print 'WCS:', wcs
+    print('WCS:', wcs)
 
     # FIXME
     margin = 0.
@@ -57,7 +58,7 @@ if __name__ == '__main__':
             'devflux', 'expflux']
 
     objs = read_photoobjs_in_wcs(wcs, margin, sdss=sdss, cols=cols)
-    print 'Got', len(objs), 'photoObjs'
+    print('Got', len(objs), 'photoObjs')
 
     srcs = get_tractor_sources_dr9(
         None, None, None, objs=objs, sdss=sdss,
@@ -65,7 +66,7 @@ if __name__ == '__main__':
         nanomaggies=True, fixedComposites=True,
         useObjcType=True,
         ellipse=EllipseESoft.fromRAbPhi)
-    print 'Got', len(srcs), 'Tractor sources'
+    print('Got', len(srcs), 'Tractor sources')
 
     cat = Catalog(*srcs)
     N = cat.numberOfParams()
@@ -73,5 +74,5 @@ if __name__ == '__main__':
 
     T,hdr = prepare_fits_catalog(cat, var, None, None, opt.bands, None)
     T.writeto(outfn, header=hdr)
-    print 'Wrote to', outfn
+    print('Wrote to', outfn)
 

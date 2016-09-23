@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -7,9 +8,9 @@ from astrometry.util.file import *
 from astrometry.libkd.spherematch import *
 
 def plot_cmd(allmags, i2mags, band, catflags, classstar):
-	print 'i2 mags shape', i2mags.shape
-	print 'allmags shape', allmags.shape
-	print 'catflags shape', catflags.shape
+	print('i2 mags shape', i2mags.shape)
+	print('allmags shape', allmags.shape)
+	print('catflags shape', catflags.shape)
 
 	plt.figure(figsize=(6,6))
 	plt.clf()
@@ -80,7 +81,7 @@ def plot_cmd(allmags, i2mags, band, catflags, classstar):
 	plt.savefig('cmd-%s.pdf' % band)
 
 	I = np.flatnonzero((flag == 0) * (xx2 < -1))
-	print 'Not-flagged and c < -1:', I
+	print('Not-flagged and c < -1:', I)
 	return I
 
 
@@ -97,7 +98,7 @@ if __name__ == '__main__':
 	#S = sz / 3600.
 	#ra0 ,ra1  = RA-S/2.,  RA+S/2.
 	#dec0,dec1 = DEC-S/2., DEC+S/2.
-	print 'Read', len(T), 'sources'
+	print('Read', len(T), 'sources')
 	T.ra  = T.alpha_j2000
 	T.dec = T.delta_j2000
 	
@@ -107,8 +108,8 @@ if __name__ == '__main__':
 	dec0,dec1 = sdec.min(), sdec.max()
 
 	T = T[(T.ra >= ra0) * (T.ra <= ra1) * (T.dec >= dec0) * (T.dec <= dec1)]
-	print 'ra', ra0, ra1, 'dec', dec0, dec1
-	print 'Cut to', len(T), 'objects nearby.'
+	print('ra', ra0, ra1, 'dec', dec0, dec1)
+	print('Cut to', len(T), 'objects nearby.')
 
 
 	#print 'RA', sra.min(), sra.max()
@@ -116,14 +117,14 @@ if __name__ == '__main__':
 
 
 	I1,I2,D = match_radec(sra, sdec, T.ra, T.dec, 0.5/3600.)
-	print 'Matched', len(I1), 'of', len(cat)
-	print 'D', D
-	print len(np.unique(I1)), 'unique cat'
-	print len(np.unique(I2)), 'unique T'
+	print('Matched', len(I1), 'of', len(cat))
+	print('D', D)
+	print(len(np.unique(I1)), 'unique cat')
+	print(len(np.unique(I2)), 'unique T')
 	catflags = np.zeros(len(cat), int)
 	for i1,i2 in zip(I1,I2):
 		catflags[i1] |= T.flags[i2]
-	print 'Set', np.sum(catflags), 'catalog flags'
+	print('Set', np.sum(catflags), 'catalog flags')
 	classstar = np.zeros(len(cat))
 	for i1,i2 in zip(I1,I2):
 		classstar[i1] = T.class_star[i2]
@@ -144,10 +145,10 @@ if __name__ == '__main__':
 
 		
 
-	print 'allmags:', allmags.keys()
+	print('allmags:', allmags.keys())
 	for bb in allbands:
 		m = np.array(allmags[bb])
-		print 'Band', bb, 'shape', m.shape
+		print('Band', bb, 'shape', m.shape)
 		#allmags[bb] = np.array(allmags[bb])
 		if bb == 'i2':
 			continue
@@ -169,7 +170,7 @@ if __name__ == '__main__':
 	rr,dd = [],[]
 	xx,yy = [],[]
 	for i in outliers:
-		print 'Outlier source', cat[i]
+		print('Outlier source', cat[i])
 		rr.append(cat[i].getPosition().ra)
 		dd.append(cat[i].getPosition().dec)
 		x,y = coim.getWcs().positionToPixel(cat[i].getPosition())
@@ -230,8 +231,8 @@ def s1():
 		allmags.append(mags)
 
 	allmags = np.array(allmags)
-	print 'i2 mags shape', i2mags.shape
-	print 'allmags shape', allmags.shape
+	print('i2 mags shape', i2mags.shape)
+	print('allmags shape', allmags.shape)
 
 	plt.figure(figsize=(6,6))
 	plt.clf()
@@ -240,7 +241,7 @@ def s1():
 	xx,yy,xerr = [],[],[]
 	xx2,xerr2 = [],[]
 	for i2,rr in zip(i2mags, allmags.T):
-		print 'rr', rr
+		print('rr', rr)
 
 		# When the source is off the image, the optimizer doesn't change anything and
 		# we end up with r = i2
@@ -270,7 +271,7 @@ def s1():
 		xx2.append(medr - i2)
 		xerr2.append(iqr)
 
-	print 'Axis', plt.axis()
+	print('Axis', plt.axis())
 	plt.axis([-3, 3, 21, 15])
 	plt.xlabel('SDSS r - CFHT i (mag)')
 	plt.ylabel('CFHT i (mag)')

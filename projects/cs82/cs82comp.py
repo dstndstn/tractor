@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
@@ -120,8 +121,8 @@ if __name__ == '__main__':
              histtype='step', color='m')
 
     sstar = C.spread_model[(C.mag_auto < 22) * (C.class_star > 0.95)]
-    print 'sstar: mean:', np.mean(sstar)
-    print 'sstar: std:', np.std(sstar)
+    print('sstar: mean:', np.mean(sstar))
+    print('sstar: std:', np.std(sstar))
 
     plt.xlabel('spread_model')
     plt.xlim(-0.02, 0.04)
@@ -131,10 +132,10 @@ if __name__ == '__main__':
     colors = 'bgrmk'
 
     mfn = 'cs82-phot-%s.fits' % cs82field
-    print 'Looking for', mfn
+    print('Looking for', mfn)
     if os.path.exists(mfn):
         T = fits_table(mfn)
-        print 'Read', len(T), 'from', mfn
+        print('Read', len(T), 'from', mfn)
     else:
         T = None
         for band in bands:
@@ -145,12 +146,12 @@ if __name__ == '__main__':
                 T.add_columns_from(Ti)
         T.writeto(mfn)
 
-    print len(T), 'sources'
+    print(len(T), 'sources')
 
     T.spread_model = C.spread_model
 
     T.cut(T.phot_done > 0)
-    print len(T), 'with phot done'
+    print(len(T), 'with phot done')
 
     plt.clf()
     lp = []
@@ -332,7 +333,7 @@ if __name__ == '__main__':
             plt.axhline(x, color=(0,1,0), alpha=0.5)
         
     
-    print 'phot_done:', np.unique(T1.phot_done)
+    print('phot_done:', np.unique(T1.phot_done))
     # assert(np.all(T1.phot_done == T2.phot_done))
     # T1.cut(T1.phot_done)
     # T2.cut(T2.phot_done)
@@ -341,14 +342,14 @@ if __name__ == '__main__':
     T1.cut(I)
     T2.cut(I)
 
-    print len(T1), len(T2), 'with photometry done'
+    print(len(T1), len(T2), 'with photometry done')
 
-    print np.unique(T1.fit_ok_i.astype(np.uint8))
-    print np.unique(T1.fit_ok_i)
-    print sum(T1.fit_ok_i), 'with fit_ok'
-    print sum(T2.fit_ok_i), 'with fit_ok'
+    print(np.unique(T1.fit_ok_i.astype(np.uint8)))
+    print(np.unique(T1.fit_ok_i))
+    print(sum(T1.fit_ok_i), 'with fit_ok')
+    print(sum(T2.fit_ok_i), 'with fit_ok')
 
-    print 'RA,Dec bounds of sources with photometry done:', T1.ra.min(), T1.ra.max(), T1.dec.min(), T1.dec.max()
+    print('RA,Dec bounds of sources with photometry done:', T1.ra.min(), T1.ra.max(), T1.dec.min(), T1.dec.max())
 
     comp1(T1, T2, ps, r0,r1,d0,d1,raa,deca,rab,decb)
 
@@ -367,14 +368,14 @@ if __name__ == '__main__':
     wcs = Tan(ra0, dec0, W/2+1, H/2+1, pixscale, 0., 0., pixscale, W, H)
 
     r0,r1,d0,d1 = wcs.radec_bounds()
-    print 'RA,Dec bounds of coadd:', r0,r1,d0,d1
+    print('RA,Dec bounds of coadd:', r0,r1,d0,d1)
     
     # coadd of SDSS images
     T = fits_table('sdssfield-%s.fits' % cs82field)
     I = np.flatnonzero((T.ra1  >= r0) * (T.ra0  <= r1) *
                        (T.dec1 >= d0) * (T.dec0 <= d1))
     T.cut(I)
-    print 'Cut to', len(T), 'SDSS fields in range'
+    print('Cut to', len(T), 'SDSS fields in range')
                        
     sdss = DR9(basedir='data/unzip')
     sdss.saveUnzippedFiles('data/unzip')
@@ -386,7 +387,7 @@ if __name__ == '__main__':
     tims = []
     dgpsfs = []
     for i,(r,c,f) in enumerate(zip(T.run, T.camcol, T.field)):
-        print 'Reading', (i+1), 'of', len(T), ':', r,c,f,band
+        print('Reading', (i+1), 'of', len(T), ':', r,c,f,band)
         tim,inf = get_tractor_image_dr9(
             r, c, f, band, sdss=sdss,
             nanomaggies=True, zrange=[-2,5], roiradecbox=[r0,r1,d0,d1],
@@ -395,7 +396,7 @@ if __name__ == '__main__':
             continue
         dgpsfs.append(inf['dgpsf'])
         (tH,tW) = tim.shape
-        print 'Tim', tim.shape
+        print('Tim', tim.shape)
         tim.wcs.setConstantCd(tW/2., tH/2.)
         del tim.origInvvar
         del tim.starMask
@@ -407,17 +408,17 @@ if __name__ == '__main__':
             Yo,Xo,Yi,Xi,nil = resample_with_wcs(wcs, wcswrap, [], 3)
         except:
             import traceback
-            print 'Failed to resample:'
+            print('Failed to resample:')
             traceback.print_exc()
             continue
         coadd[Yo,Xo] += tim.getImage()[Yi,Xi]
         ncoadd[Yo,Xo] += 1
     coadd = coadd / np.maximum(1, ncoadd).astype(np.float32)
-    print len(tims), 'tims; ncoadd range %i %i; coadd range %g, %g' % (ncoadd.min(), ncoadd.max(), coadd.min(), coadd.max())
+    print(len(tims), 'tims; ncoadd range %i %i; coadd range %g, %g' % (ncoadd.min(), ncoadd.max(), coadd.min(), coadd.max()))
 
     ii = np.argsort([s1 for (a,s1,b,s2) in dgpsfs])
     ii = ii[len(ii)/2]
-    print 'Median PSF width:', dgpsfs[ii]
+    print('Median PSF width:', dgpsfs[ii])
     (a,s1, b,s2) = dgpsfs[ii]
     medpsf = NCircularGaussianPSF([s1, s2], [a, b])
     
@@ -443,12 +444,12 @@ if __name__ == '__main__':
                       'spheroid_aspect_world', 'spheroid_theta_world',
                       'alphamodel_j2000', 'deltamodel_j2000'] + extra_cols])
 
-    print 'Read', len(T), 'CS82 sources'
+    print('Read', len(T), 'CS82 sources')
     T.cut((T.ra >= r0) * (T.ra <= r1) * (T.dec >= d0) * (T.dec <= d1))
-    print 'Cut to', len(T), 'within RA,Dec box'
+    print('Cut to', len(T), 'within RA,Dec box')
     
     srcs,isrcs = get_cs82_sources(T, bands=['i'])
-    print 'Got', len(srcs), 'sources'
+    print('Got', len(srcs), 'sources')
     Ti = T[isrcs]
 
     tim = Image(data=np.zeros((H,W), np.float32),
@@ -474,7 +475,7 @@ if __name__ == '__main__':
     #                    T1.ra, T1.dec, 1./3600.)
     I,J,d = match_radec(Ti.ra, Ti.dec,
                         T1.ra, T1.dec, 1./3600.)
-    print 'CS82:', len(Ti), 'and matched', len(I)
+    print('CS82:', len(Ti), 'and matched', len(I))
     nm = T1.sdss_i_nanomaggies
     for i,j in zip(I,J):
         setattr(srcs[i].getBrightness(), band, nm[j])
@@ -488,7 +489,7 @@ if __name__ == '__main__':
 
     I,J,d = match_radec(Ti.ra, Ti.dec,
                         T2.ra, T2.dec, 1./3600.)
-    print 'CS82:', len(Ti), 'and matched', len(I)
+    print('CS82:', len(Ti), 'and matched', len(I))
     nm = T2.sdss_i_nanomaggies
     for i,j in zip(I,J):
         setattr(srcs[i].getBrightness(), band, nm[j])

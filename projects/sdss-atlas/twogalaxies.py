@@ -1,5 +1,6 @@
 # -*- mode: python; indent-tabs-mode: nil -*-
 # (this tells emacs to indent with spaces)
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 
@@ -36,7 +37,7 @@ def plotarea(ra, dec, radius, name, prefix, tims=None, rds=[]):
     from astrometry.util.util import Tan
     W,H = 512,512
     scale = (radius * 60. * 4) / float(W)
-    print 'SDSS jpeg scale', scale
+    print('SDSS jpeg scale', scale)
     imgfn = 'sdss-mosaic-%s.png' % prefix
     if not os.path.exists(imgfn):
         url = (('http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpeg.aspx?' +
@@ -64,7 +65,7 @@ def plotarea(ra, dec, radius, name, prefix, tims=None, rds=[]):
     plt.gca().add_artist(matplotlib.patches.Circle(xy=(x,y), radius=R, color='g',
                                                    lw=3, alpha=0.5, fc='none'))
     if tims is not None:
-        print 'Plotting outlines of', len(tims), 'images'
+        print('Plotting outlines of', len(tims), 'images')
         for tim in tims:
             H,W = tim.shape
             twcs = tim.getWcs()
@@ -72,11 +73,11 @@ def plotarea(ra, dec, radius, name, prefix, tims=None, rds=[]):
             for x,y in [(1,1),(W,1),(W,H),(1,H),(1,1)]:
                 rd = twcs.pixelToPosition(x,y)
                 temp,xx,yy = wcs.radec2pixelxy(rd.ra, rd.dec)
-                print 'x,y', x, y
+                print('x,y', x, y)
                 x1,y1 = twcs.positionToPixel(rd)
-                print '  x1,y1', x1,y1
-                print '  r,d', rd.ra, rd.dec,
-                print '  xx,yy', xx, yy
+                print('  x1,y1', x1,y1)
+                print('  r,d', rd.ra, rd.dec, end=' ')
+                print('  xx,yy', xx, yy)
                 px.append(xx)
                 py.append(yy)
             plt.plot(px, py, 'g-', lw=3, alpha=0.5)
@@ -94,7 +95,7 @@ def plotarea(ra, dec, radius, name, prefix, tims=None, rds=[]):
     if rds is not None:
         px,py = [],[]
         for ra,dec in rds:
-            print 'ra,dec', ra,dec
+            print('ra,dec', ra,dec)
             temp,xx,yy = wcs.radec2pixelxy(ra, dec)
             px.append(xx)
             py.append(yy)
@@ -103,7 +104,7 @@ def plotarea(ra, dec, radius, name, prefix, tims=None, rds=[]):
     plt.axis(ax)
     fn = '%s.png' % prefix
     plt.savefig(fn)
-    print 'saved', fn
+    print('saved', fn)
 
 def get_ims_and_srcs((r,c,f,rr,dd, bands, ra, dec, roipix, imkw, getim, getsrc)):
     tims = []
@@ -111,7 +112,7 @@ def get_ims_and_srcs((r,c,f,rr,dd, bands, ra, dec, roipix, imkw, getim, getsrc))
     for band in bands:
         tim,tinf = getim(r, c, f, band, roiradecsize=(ra,dec,roipix), **imkw)
         if tim is None:
-            print "Zero roi"
+            print("Zero roi")
             return None,None
         if roi is None:
             roi = tinf['roi']
@@ -143,26 +144,26 @@ def twogalaxies(name1,ra1,dec1,name2,ra2,dec2):
     dr9 = True
     dr8 = False
     noarcsinh = False
-    print name
+    print(name)
 
     prefix = '%s' % (name.replace(' ', '_'))
     prefix1 = '%s' % (name1.replace(' ', '_'))
     prefix2 = '%s' % (name2.replace(' ', '_'))
-    print 'Removal Radius', remradius
-    print 'Field Radius', fieldradius
-    print 'RA,Dec', ra, dec
+    print('Removal Radius', remradius)
+    print('Field Radius', fieldradius)
+    print('RA,Dec', ra, dec)
 
-    print os.getcwd()
+    print(os.getcwd())
 
     rcfs = radec_to_sdss_rcf(ra,dec,radius=math.hypot(fieldradius,13./2.),tablefn="dr9fields.fits")
-    print rcfs
+    print(rcfs)
     assert(len(rcfs)>0)
     assert(len(rcfs)<15)
 
     sras, sdecs, smags = tychoMatch(ra,dec,(fieldradius*1.5)/60.)
 
     for sra,sdec,smag in zip(sras,sdecs,smags):
-        print sra,sdec,smag
+        print(sra,sdec,smag)
 
     imkw = dict(psf='dg')
     if dr9:
@@ -181,7 +182,7 @@ def twogalaxies(name1,ra1,dec1,name2,ra2,dec2):
     bands=['u','g','r','i','z']
     bandname = 'r'
     flipBands = ['r']
-    print rcfs
+    print(rcfs)
 
     imsrcs = mp.map(get_ims_and_srcs, [(rcf + (bands, ra, dec, fieldradius*60./0.396, imkw, getim, getsrc))
                                        for rcf in rcfs])
@@ -215,11 +216,11 @@ def twogalaxies(name1,ra1,dec1,name2,ra2,dec2):
         sg.disable_galaxy_cache()
 
     zr = timgs[0].zr
-    print "zr is: ",zr
+    print("zr is: ",zr)
 
-    print bands
+    print(bands)
 
-    print "Number of images: ", len(timgs)
+    print("Number of images: ", len(timgs))
 #    for timg,band in zip(timgs,bands):
 #        data = timg.getImage()/np.sqrt(timg.getInvvar())
 #        plt.hist(data,bins=100)
@@ -231,7 +232,7 @@ def twogalaxies(name1,ra1,dec1,name2,ra2,dec2):
     
 
     for sra,sdec,smag in zip(sras,sdecs,smags):
-        print sra,sdec,smag
+        print(sra,sdec,smag)
 
         for img in tractor.getImages():
             wcs = img.getWcs()
@@ -248,7 +249,7 @@ def twogalaxies(name1,ra1,dec1,name2,ra2,dec2):
         wcs = timg.getWcs()
         xtr,ytr = wcs.positionToPixel(RaDecPos(ra,dec))
     
-        print xtr,ytr
+        print(xtr,ytr)
 
         xt = xtr 
         yt = ytr
@@ -267,8 +268,8 @@ def twogalaxies(name1,ra1,dec1,name2,ra2,dec2):
     newShape2 = sg.GalaxyShape((remradius*60.)/10.,1.,0.)
     newBright2 = ba.Mags(r=15.0,g=15.0,u=15.0,z=15.0,i=15.0,order=['u','g','r','i','z'])
     EG2 = st.ExpGalaxy(RaDecPos(ra2,dec2),newBright2,newShape2)
-    print EG
-    print EG2
+    print(EG)
+    print(EG2)
     tractor.addSource(EG)
     tractor.addSource(EG2)
 
@@ -294,8 +295,8 @@ def twogalaxies(name1,ra1,dec1,name2,ra2,dec2):
         tractor.clearCache()
         sg.get_galaxy_cache().clear()
         gc.collect()
-        print resource.getpagesize()
-        print resource.getrusage(resource.RUSAGE_SELF)[2]
+        print(resource.getpagesize())
+        print(resource.getrusage(resource.RUSAGE_SELF)[2])
         
 
     CGPos = EG.getPosition()
@@ -310,8 +311,8 @@ def twogalaxies(name1,ra1,dec1,name2,ra2,dec2):
     CGz = EGBright[4] + 0.75
     CGBright1 = ba.Mags(r=CGr,g=CGg,u=CGu,z=CGz,i=CGi,order=['u','g','r','i','z'])
     CGBright2 = ba.Mags(r=CGr,g=CGg,u=CGu,z=CGz,i=CGi,order=['u','g','r','i','z'])
-    print EGBright
-    print CGBright1
+    print(EGBright)
+    print(CGBright1)
 
     CG = st.CompositeGalaxy(CGPos,CGBright1,CGShape1,CGBright2,CGShape2)
 
@@ -336,8 +337,8 @@ def twogalaxies(name1,ra1,dec1,name2,ra2,dec2):
 
     tractor.catalog.freezeAllBut(CG)
     tractor.catalog.thawParams(CG2)
-    print resource.getpagesize()
-    print resource.getrusage(resource.RUSAGE_SELF)[2]
+    print(resource.getpagesize())
+    print(resource.getrusage(resource.RUSAGE_SELF)[2])
 
 
     for i in range(itune2):
@@ -346,8 +347,8 @@ def twogalaxies(name1,ra1,dec1,name2,ra2,dec2):
         saveAll('itune2-%d-' % (i+1)+prefix,tractor,**sa)
         tractor.clearCache()
         sg.get_galaxy_cache().clear()
-        print resource.getpagesize()
-        print resource.getrusage(resource.RUSAGE_SELF)[2]
+        print(resource.getpagesize())
+        print(resource.getrusage(resource.RUSAGE_SELF)[2])
 
 
 
@@ -360,14 +361,14 @@ def twogalaxies(name1,ra1,dec1,name2,ra2,dec2):
     sa.update(plotBands=True)
     saveAll('allBands-' + prefix,tractor,**sa)
 
-    print CG
-    print CG.getPosition()
-    print CGBright1
-    print CGBright2
-    print CGShape1
-    print CGShape2
-    print CGBright1+CGBright2
-    print CG.getBrightness()
+    print(CG)
+    print(CG.getPosition())
+    print(CGBright1)
+    print(CGBright2)
+    print(CGShape1)
+    print(CGShape2)
+    print(CGBright1+CGBright2)
+    print(CG.getBrightness())
 
     pfn = '%s.pickle' % prefix
     pickle_to_file([CG,CG2],pfn)
@@ -424,7 +425,7 @@ def makeflipbook(prefix,numImg,itune1=0,itune2=0,ntune=0):
     
     tex += r'\end{document}' + '\n'
     fn = 'flip-' + prefix + '.tex'
-    print 'Writing', fn
+    print('Writing', fn)
     open(fn, 'wb').write(tex)
     os.system("pdflatex '%s'" % fn)
 

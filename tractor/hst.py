@@ -1,4 +1,5 @@
 # Copyright 2011 Dustin Lang and David W. Hogg.  All rights reserved.
+from __future__ import print_function
 
 if __name__ == '__main__':
 	import matplotlib
@@ -29,9 +30,9 @@ def measure_sky_variance(img):
 	mad = abs(d.ravel())
 	I = np.argsort(mad)
 	mad = mad[I[len(I)/2]]
-	print 'median abs diff:', mad
+	print('median abs diff:', mad)
 	sigmasq = mad**2 * pi / 4.
-	print 'sigma', np.sqrt(sigmasq)
+	print('sigma', np.sqrt(sigmasq))
 	return sigmasq
 
 
@@ -55,7 +56,7 @@ def main():
 		skyvar = measure_sky_variance(img)
 		skymed = np.median(img.ravel())
 		skysig = np.sqrt(skyvar)
-		print 'Estimate sky value', skymed, 'and sigma', skysig
+		print('Estimate sky value', skymed, 'and sigma', skysig)
 		zrange = np.array([-3.,+10.]) * skysig + skymed
 		invvar = 1. / (err**2)
 		invvar[dq > 0] = 0
@@ -124,7 +125,7 @@ def main():
 		for i,x in enumerate(np.arange(17, 18.7, 0.1)):
 			p = psf.getPointSourcePatch(x, x)
 			img = p.getImage()
-			print 'x', x, '-> sum', img.sum()
+			print('x', x, '-> sum', img.sum())
 			plt.clf()
 			x0,y0 = p.getX0(),p.getY0()
 			h,w = img.shape
@@ -163,7 +164,7 @@ def main():
 	for i,step in enumerate(steps):
 
 		if step == 'plots':
-			print 'Making plots...'
+			print('Making plots...')
 			NS = len(tractor.getCatalog())
 
 			chis = tractor.getChiImages()
@@ -220,15 +221,15 @@ def main():
 			break
 
 		elif step == 'source':
-			print
-			print 'Before createSource, catalog is:',
+			print()
+			print('Before createSource, catalog is:', end=' ')
 			tractor.getCatalog().printLong()
-			print
+			print()
 			rtn = tractor.createSource()
-			print
-			print 'After  createSource, catalog is:',
+			print()
+			print('After  createSource, catalog is:', end=' ')
 			tractor.getCatalog().printLong()
-			print
+			print()
 
 			if False:
 				(sm,tryxy) = rtn[0]
@@ -249,7 +250,7 @@ def main():
 		elif step == 'psf2':
 			tractor.increaseAllPsfComplexity()
 
-		print 'Tractor cache has', len(tractor.cache), 'entries'
+		print('Tractor cache has', len(tractor.cache), 'entries')
 
 
 ploti = 0
@@ -258,7 +259,7 @@ def psfDerivCallback(tractor, imagei, img, psf, steps, mod0, derivs, baton):
 	(stepi,) = baton
 	for i,deriv in enumerate(derivs):
 		img = deriv.getImage()
-		print 'derivate bounds:', img.min(), img.max()
+		print('derivate bounds:', img.min(), img.max())
 		plt.clf()
 		plt.imshow(deriv.getImage(), interpolation='nearest', origin='lower',
 				   vmin=-1000, vmax=1000)

@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+from __future__ import print_function
 
 if __name__ == '__main__':
     import matplotlib
@@ -70,15 +71,15 @@ if __name__ == '__main__':
     Time.add_measurement(MemMeas)
 
 def read_wise_sources(wfn, r0,r1,d0,d1, extracols=[], allwise=False):
-    print 'looking for', wfn
+    print('looking for', wfn)
     if os.path.exists(wfn):
         WISE = fits_table(wfn)
-        print 'Read', len(WISE), 'WISE sources nearby'
+        print('Read', len(WISE), 'WISE sources nearby')
     else:
         cols = ['ra','dec'] + ['w%impro'%band for band in [1,2,3,4]]
         cols += extracols
         
-        print 'wise_catalog_radecbox:', r0,r1,d0,d1
+        print('wise_catalog_radecbox:', r0,r1,d0,d1)
         if r1 - r0 > 180:
             # assume wrap-around; glue together 0-r0 and r1-360
             Wa = wise_catalog_radecbox(0., r0, d0, d1, cols=cols)
@@ -90,7 +91,7 @@ def read_wise_sources(wfn, r0,r1,d0,d1, extracols=[], allwise=False):
             else:
                 WISE = wise_catalog_radecbox(r0, r1, d0, d1, cols=cols)
         WISE.writeto(wfn)
-        print 'Found', len(WISE), 'WISE sources nearby'
+        print('Found', len(WISE), 'WISE sources nearby')
     return WISE
 
 def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None, hdr=None):
@@ -103,21 +104,21 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None, hdr=
     bandnum = 'ugriz'.index(sband)
 
     tt0 = Time()
-    print
-    print 'Coadd tile', tile.coadd_id
+    print()
+    print('Coadd tile', tile.coadd_id)
 
     thisdir = get_unwise_tile_dir(tiledir, tile.coadd_id)
     fn = os.path.join(thisdir, 'unwise-%s-w%i-img-m.fits' % (tile.coadd_id, bands[0]))
     if os.path.exists(fn):
-        print 'Reading', fn
+        print('Reading', fn)
         wcs = Tan(fn)
     else:
-        print 'File', fn, 'does not exist; faking WCS'
+        print('File', fn, 'does not exist; faking WCS')
         from unwise_coadd import get_coadd_tile_wcs
         wcs = get_coadd_tile_wcs(tile.ra, tile.dec)
 
     r0,r1,d0,d1 = wcs.radec_bounds()
-    print 'RA,Dec bounds:', r0,r1,d0,d1
+    print('RA,Dec bounds:', r0,r1,d0,d1)
     H,W = wcs.get_height(), wcs.get_width()
 
     if T is None:
@@ -139,16 +140,16 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None, hdr=
                           ['DES_SNX3cat_000001.fits', 'DES_SNX3cat_000002.fits']]
                           )
         T.mag_disk = np.zeros(len(T), np.float32) + 99.
-        print 'Read total of', len(T), 'DES sources'
+        print('Read total of', len(T), 'DES sources')
         ok,T.x,T.y = wcs.radec2pixelxy(T.alphamodel_j2000, T.deltamodel_j2000)
         margin = int(60. * wcs.pixel_scale())
-        print 'Margin:', margin, 'pixels'
+        print('Margin:', margin, 'pixels')
         T.cut((T.x > -margin) * (T.x < (W+margin)) *
               (T.y > -margin) * (T.y < (H+margin)))
-        print 'Cut to', len(T), 'in bounds'
+        print('Cut to', len(T), 'in bounds')
         if opt.photoObjsOnly:
             return
-    print len(T), 'objects'
+    print(len(T), 'objects')
     if len(T) == 0:
         return
 
@@ -161,7 +162,7 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None, hdr=
     I = np.flatnonzero((T.x >= -margin) * (T.x < W+margin) *
                        (T.y >= -margin) * (T.y < H+margin))
     T.cut(I)
-    print 'Cut to margins: N objects:', len(T)
+    print('Cut to margins: N objects:', len(T))
     if len(T) == 0:
         return
 
@@ -169,9 +170,9 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None, hdr=
 
     classmap = {}
 
-    print 'Creating tractor sources...'
+    print('Creating tractor sources...')
     cat = get_se_modelfit_cat(T, bands=[wanyband])
-    print 'Created', len(T), 'sources'
+    print('Created', len(T), 'sources')
     assert(len(cat) == len(T))
 
     pixscale = wcs.pixel_scale()
@@ -186,7 +187,7 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None, hdr=
         elif isinstance(src, FixedCompositeGalaxy):
             sourcerad[i] = max(src.shapeExp.re * ExpGalaxy.nre,
                                src.shapeDev.re * DevGalaxy.nre) / pixscale
-    print 'sourcerad range:', min(sourcerad), max(sourcerad)
+    print('sourcerad range:', min(sourcerad), max(sourcerad))
 
     # Find WISE-only catalog sources
     wfn = os.path.join(tempoutdir, 'wise-sources-%s.fits' % (tile.coadd_id))
@@ -196,14 +197,14 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None, hdr=
         mag = WISE.get('w%impro' % band)
         nm = NanoMaggies.magToNanomaggies(mag)
         WISE.set('w%inm' % band, nm)
-        print 'Band', band, 'max WISE catalog flux:', max(nm)
-        print '  (min mag:', mag.min(), ')'
+        print('Band', band, 'max WISE catalog flux:', max(nm))
+        print('  (min mag:', mag.min(), ')')
 
     unmatched = np.ones(len(WISE), bool)
     I,J,d = match_radec(WISE.ra, WISE.dec, T.ra, T.dec, 4./3600.)
     unmatched[I] = False
     UW = WISE[unmatched]
-    print 'Got', len(UW), 'unmatched WISE sources'
+    print('Got', len(UW), 'unmatched WISE sources')
 
     if opt.savewise:
         fitwiseflux = {}
@@ -221,7 +222,7 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None, hdr=
         #wiseflux[band][J] += WISE.get('w%inm' % band)[I]
         lhs = wiseflux[band]
         rhs = WISE.get('w%inm' % band)[I]
-        print 'Band', band, 'max matched WISE flux:', max(rhs)
+        print('Band', band, 'max matched WISE flux:', max(rhs))
         for j,f in zip(J, rhs):
             lhs[j] += f
 
@@ -234,13 +235,13 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None, hdr=
     inbounds = np.flatnonzero((T.x >= -0.5) * (T.x < W-0.5) *
                               (T.y >= -0.5) * (T.y < H-0.5))
 
-    print 'Before looping over bands:', Time()-tt0
+    print('Before looping over bands:', Time()-tt0)
    
     for band in bands:
         tb0 = Time()
-        print
-        print 'Coadd tile', tile.coadd_id
-        print 'Band', band
+        print()
+        print('Coadd tile', tile.coadd_id)
+        print('Band', band)
         wband = 'w%i' % band
 
         imfn = os.path.join(thisdir, 'unwise-%s-w%i-img-m.fits'    % (tile.coadd_id, band))
@@ -248,20 +249,20 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None, hdr=
         ppfn = os.path.join(thisdir, 'unwise-%s-w%i-std-m.fits.gz'    % (tile.coadd_id, band))
         nifn = os.path.join(thisdir, 'unwise-%s-w%i-n-m.fits.gz'      % (tile.coadd_id, band))
 
-        print 'Reading', imfn
+        print('Reading', imfn)
         wcs = Tan(imfn)
         r0,r1,d0,d1 = wcs.radec_bounds()
-        print 'RA,Dec bounds:', r0,r1,d0,d1
+        print('RA,Dec bounds:', r0,r1,d0,d1)
         ra,dec = wcs.radec_center()
-        print 'Center:', ra,dec
+        print('Center:', ra,dec)
         img = fitsio.read(imfn)
-        print 'Reading', ivfn
+        print('Reading', ivfn)
         invvar = fitsio.read(ivfn)
-        print 'Reading', ppfn
+        print('Reading', ppfn)
         pp = fitsio.read(ppfn)
-        print 'Reading', nifn
+        print('Reading', nifn)
         nims = fitsio.read(nifn)
-        print 'Median # ims:', np.median(nims)
+        print('Median # ims:', np.median(nims))
 
         good = (nims > 0)
         invvar[np.logical_not(good)] = 0.
@@ -269,10 +270,10 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None, hdr=
         sig1 = 1./np.sqrt(np.median(invvar[good]))
         minsig = getattr(opt, 'minsig%i' % band)
         minsb = sig1 * minsig
-        print 'Sigma1:', sig1, 'minsig', minsig, 'minsb', minsb
+        print('Sigma1:', sig1, 'minsig', minsig, 'minsb', minsb)
 
         # Load the average PSF model (generated by wise_psf.py)
-        print 'Reading PSF from', opt.psffn
+        print('Reading PSF from', opt.psffn)
         P = fits_table(opt.psffn, hdu=band)
         psf = GaussianMixturePSF(P.amp, P.mean, P.var)
 
@@ -288,7 +289,7 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None, hdr=
 
         # Reset default flux based on min radius
         defaultflux = minsb / psfprofile[opt.minradius]
-        print 'Setting default flux', defaultflux
+        print('Setting default flux', defaultflux)
 
         # Set WISE source radii based on flux
         UW.rad = np.zeros(len(UW), int)
@@ -302,7 +303,7 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None, hdr=
         wf = wiseflux[band]
         I = np.flatnonzero(wf > defaultflux)
         wfi = wf[I]
-        print 'Initializing', len(I), 'fluxes based on catalog matches'
+        print('Initializing', len(I), 'fluxes based on catalog matches')
         for i,flux in zip(I, wf[I]):
             assert(np.isfinite(flux))
             cat[i].getBrightness().setBand(wanyband, flux)
@@ -412,21 +413,21 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None, hdr=
                 if jinbox[ji]:
                     uwcat.append((j, ptsrc))
                 
-        print 'WISE-only:', nomag, 'of', len(J), 'had invalid mags'
-        print 'Sources:', len(srci), 'in the box,', len(I)-len(srci), 'in the margins, and', len(J), 'WISE-only'
-        print 'Creating a Tractor with image', tim.shape, 'and', len(subcat), 'sources'
+        print('WISE-only:', nomag, 'of', len(J), 'had invalid mags')
+        print('Sources:', len(srci), 'in the box,', len(I)-len(srci), 'in the margins, and', len(J), 'WISE-only')
+        print('Creating a Tractor with image', tim.shape, 'and', len(subcat), 'sources')
         tractor = Tractor([tim], subcat)
         tractor.disable_cache()
 
-        print 'Running forced photometry...'
+        print('Running forced photometry...')
         t0 = Time()
         tractor.freezeParamsRecursive('*')
 
         if opt.sky:
             tractor.thawPathsTo('sky')
-            print 'Initial sky values:'
+            print('Initial sky values:')
             for tim in tractor.getImages():
-                print tim.getSky()
+                print(tim.getSky())
 
         tractor.thawPathsTo(wanyband)
 
@@ -438,7 +439,7 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None, hdr=
             variance=True, shared_params=False,
             use_ceres=opt.ceres, BW=opt.ceresblock, BH=opt.ceresblock,
             wantims=wantims, negfluxval=0.1*sig1)
-        print 'That took', Time()-t0
+        print('That took', Time()-t0)
 
         if wantims:
             ims0 = R.ims0
@@ -446,9 +447,9 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None, hdr=
         IV,fs = R.IV, R.fitstats
 
         if opt.sky:
-            print 'Fit sky values:'
+            print('Fit sky values:')
             for tim in tractor.getImages():
-                print tim.getSky()
+                print(tim.getSky())
 
         if opt.savewise:
             for (j,src) in uwcat:
@@ -582,7 +583,7 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None, hdr=
             plt.axis([cathi,lo,cathi,lo])
             ps.savefig()
 
-        print 'Tile', tile.coadd_id, 'band', wband, 'took', Time()-tb0
+        print('Tile', tile.coadd_id, 'band', wband, 'took', Time()-tb0)
 
     T.cut(inbounds)
 
@@ -594,15 +595,15 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None, hdr=
     T.pointsource = T.pointsource.astype(np.uint8)
 
     T.writeto(outfn, header=hdr)
-    print 'Wrote', outfn
+    print('Wrote', outfn)
 
     if savepickle:
         fn = opt.output % (tile.coadd_id)
         fn = fn.replace('.fits','.pickle')
         pickle_to_file((mods, cats, T, sourcerad), fn)
-        print 'Pickled', fn
+        print('Pickled', fn)
 
-    print 'Tile', tile.coadd_id, 'took', Time()-tt0
+    print('Tile', tile.coadd_id, 'took', Time()-tt0)
 
 def _write_output(T, fn, cols, dropcols, hdr):
     cols = ['has_wise_phot'] + [c for c in cols if not c in ['id']+dropcols]
@@ -613,10 +614,10 @@ def todo(A, opt, ps):
     for i in range(len(A)):
         outfn = opt.output % (A.coadd_id[i])
         #outfn = opt.unsplitoutput % (A.coadd_id[i])
-        print 'Looking for', outfn
+        print('Looking for', outfn)
         if not os.path.exists(outfn):
             need.append(i)
-    print ' '.join('%i' %i for i in need)
+    print(' '.join('%i' %i for i in need))
             
     # Collapse contiguous ranges
     strings = []
@@ -640,9 +641,9 @@ def todo(A, opt, ps):
             strings.append('%i' % start)
         else:
             strings.append('%i-%i' % (start, end))
-        print ','.join(strings)
+        print(','.join(strings))
     else:
-        print 'Done (party now)'
+        print('Done (party now)')
         
 def summary(A, opt, ps):
     plt.clf()
@@ -653,7 +654,7 @@ def summary(A, opt, ps):
         dr = dd / np.cos(np.deg2rad(d))
         outfn = opt.output % (A.coadd_id[i])
         rr,dd = [r-dr,r-dr,r+dr,r+dr,r-dr], [d-dd,d+dd,d+dd,d-dd,d-dd]
-        print 'Looking for', outfn
+        print('Looking for', outfn)
         if not os.path.exists(outfn):
             missing.append((i,rr,dd,r,d))
         plt.plot(rr, dd, 'k-')
@@ -664,7 +665,7 @@ def summary(A, opt, ps):
     plt.axis([118, 212, 44,61])
     ps.savefig()
 
-    print 'Missing tiles:', [m[0] for m in missing]
+    print('Missing tiles:', [m[0] for m in missing])
 
     rdfn = 'rd.fits'
     if not os.path.exists(rdfn):
@@ -673,14 +674,14 @@ def summary(A, opt, ps):
         TT = []
         for fn in fns:
             T = fits_table(fn, columns=['ra','dec'])
-            print len(T), 'from', fn
+            print(len(T), 'from', fn)
             TT.append(T)
         T = merge_tables(TT)
-        print 'Total of', len(T)
+        print('Total of', len(T))
         T.writeto(rdfn)
     else:
         T = fits_table(rdfn)
-        print 'Got', len(T), 'from', rdfn
+        print('Got', len(T), 'from', rdfn)
     
     plt.clf()
     loghist(T.ra, T.dec, 500, range=((118,212),(44,61)))
@@ -794,7 +795,7 @@ def main():
         for s in str(band):
             bb.append(int(s))
     opt.bands = bb
-    print 'Bands', opt.bands
+    print('Bands', opt.bands)
 
     lvl = logging.INFO
     if opt.verbose:
@@ -804,14 +805,14 @@ def main():
     #if len(opt.tile) == 0:
     # sequels-atlas.fits: written by wise-coadd.py
     fn = '%s-atlas.fits' % opt.dataset
-    print 'Reading', fn
+    print('Reading', fn)
     T = fits_table(fn)
 
     try:
         version = get_svn_version()
     except:
         version = dict(Revision=-1, URL='')
-    print 'SVN version info:', version
+    print('SVN version info:', version)
 
     hdr = fitsio.FITSHDR()
     hdr.add_record(dict(name='SEQ_VER', value=version['Revision'],
@@ -884,7 +885,7 @@ def main():
         for t in opt.tile:
             I = np.flatnonzero(T.coadd_id == t)
             if len(I) == 0:
-                print 'Failed to find tile id', t, 'in dataset', opt.dataset
+                print('Failed to find tile id', t, 'in dataset', opt.dataset)
                 return -1
             assert(len(I) == 1)
             tiles.append(I[0])
@@ -893,8 +894,8 @@ def main():
         if '-' in a:
             aa = a.split('-')
             if len(aa) != 2:
-                print 'With arg containing a dash, expect two parts'
-                print aa
+                print('With arg containing a dash, expect two parts')
+                print(aa)
                 sys.exit(-1)
             start = int(aa[0])
             end = int(aa[1])
@@ -911,8 +912,8 @@ def main():
             plot = ps
         else:
             plot = None
-        print
-        print 'Tile index', i, 'coadd', T.coadd_id[i]
+        print()
+        print('Tile index', i, 'coadd', T.coadd_id[i])
 
         if opt.wiseOnly:
             # Find WISE-only catalog sources
@@ -921,10 +922,10 @@ def main():
             bands = opt.bands
             fn = os.path.join(thisdir, 'unwise-%s-w%i-img-m.fits' %
                               (tile.coadd_id, bands[0]))
-            print 'Reading', fn
+            print('Reading', fn)
             wcs = Tan(fn)
             r0,r1,d0,d1 = wcs.radec_bounds()
-            print 'RA,Dec bounds:', r0,r1,d0,d1
+            print('RA,Dec bounds:', r0,r1,d0,d1)
             wfn = os.path.join(tempoutdir, 'wise-sources-%s.fits' % (tile.coadd_id))
             WISE = read_wise_sources(wfn, r0,r1,d0,d1, allwise=True)
             continue

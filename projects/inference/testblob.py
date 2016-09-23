@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -34,15 +35,15 @@ if __name__ == '__main__':
                                    sdss=sdss,
                                    radecrad=(ra, dec, radius*np.sqrt(2.)),
                                    nanomaggies=True)
-    print 'Got sources:'
+    print('Got sources:')
     for src in srcs:
-        print '  ', src
+        print('  ', src)
 
     fn = sdss.retrieve('photoField', run, camcol, field)
-    print 'Retrieved', fn
+    print('Retrieved', fn)
     F = fits_table(fn)
     F.cut((F.run == run) * (F.camcol == camcol) * (F.field == field))
-    print len(F), 'fields'
+    print(len(F), 'fields')
     assert(len(F) == 1)
     F = F[0]
 
@@ -55,7 +56,7 @@ if __name__ == '__main__':
         tim,tinfo = get_tractor_image_dr9(run, camcol, field, band, sdss=sdss,
                                           roiradecsize=(ra, dec, pixradius),
                                           nanomaggies=True)
-        print 'Got tim:', tim
+        print('Got tim:', tim)
         frame = sdss.readFrame(run, camcol, field, band)
 
         x,y = tim.getWcs().positionToPixel(RaDecPos(ra, dec))
@@ -81,9 +82,9 @@ if __name__ == '__main__':
             srcs = Catalog(*[srcs[i] for i in keep])
 
 
-    print 'Cut sources:'
+    print('Cut sources:')
     for src in srcs:
-        print '  ', src
+        print('  ', src)
 
     # Write out the sources
     T = fits_table()
@@ -116,7 +117,7 @@ if __name__ == '__main__':
             plt.savefig('tim-%s.png' % band)
 
         cd = tim.getWcs().cdAtPixel((x0+x1)/2., (y0+y1)/2.)
-        print 'CD at center:', cd
+        print('CD at center:', cd)
         crpix1,crpix2 = tim.getWcs().positionToPixel(RaDecPos(ra, dec))
         crpix1 += 1
         crpix2 += 1

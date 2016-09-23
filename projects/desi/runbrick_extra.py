@@ -1,3 +1,4 @@
+from __future__ import print_function
 # class BlobTractor(Tractor):
 #     def __init__(self, *args, **kwargs):
 #         super(BlobTractor, self).__init__(*args, **kwargs)
@@ -91,15 +92,15 @@ def check_touching(decals, targetwcs, bands, brick, pixscale, ps):
 
     T3 = T2[ccds_touching_wcs(targetwcs, T2, polygons=False)]
     T4 = T2[ccds_touching_wcs(targetwcs, T2)]
-    print len(T3), 'on RA,Dec box'
-    print len(T4), 'polygon'
+    print(len(T3), 'on RA,Dec box')
+    print(len(T4), 'polygon')
     ccmap = dict(r='r', g='g', z='m')
     for band in bands:
 
         plt.clf()
 
         TT2 = T3[T3.filter == band]
-        print len(TT2), 'in', band, 'band'
+        print(len(TT2), 'in', band, 'band')
         plt.plot(TT2.ra, TT2.dec, 'o', color=ccmap[band], alpha=0.5)
 
         for t in TT2:
@@ -113,7 +114,7 @@ def check_touching(decals, targetwcs, bands, brick, pixscale, ps):
             plt.plot(r, d, '-', color=ccmap[band], alpha=0.3, lw=2)
 
         TT2 = T4[T4.filter == band]
-        print len(TT2), 'in', band, 'band; polygon'
+        print(len(TT2), 'in', band, 'band; polygon')
         plt.plot(TT2.ra, TT2.dec, 'x', color=ccmap[band], alpha=0.5, ms=15)
 
         for t in TT2:
@@ -141,11 +142,11 @@ def check_photometric_calib(ims, cat, ps):
         cat = fits_table(im.morphfn, hdu=2, columns=[
             'mag_psf','x_image', 'y_image', 'mag_disk', 'mag_spheroid', 'flags',
             'flux_psf' ])
-        print 'Read', len(cat), 'from', im.morphfn
+        print('Read', len(cat), 'from', im.morphfn)
         if len(cat) == 0:
             continue
         cat.cut(cat.flags == 0)
-        print '  Cut to', len(cat), 'with no flags set'
+        print('  Cut to', len(cat), 'with no flags set')
         if len(cat) == 0:
             continue
         wcs = Sip(im.wcsfn)
@@ -160,14 +161,14 @@ def check_photometric_calib(ims, cat, ps):
         assert(len(I) == 1)
         I = I[0]
         magzp = ZP.zpt[I]
-        print 'magzp', magzp
+        print('magzp', magzp)
         exptime = ZP.exptime[I]
         magzp += 2.5 * np.log10(exptime)
-        print 'magzp', magzp
+        print('magzp', magzp)
 
         primhdr = im.read_image_primary_header()
         magzp0  = primhdr['MAGZERO']
-        print 'header magzp:', magzp0
+        print('header magzp:', magzp0)
 
         I,J,d = match_radec(cat.ra, cat.dec, sdss.ra, sdss.dec, 1./3600.)
 
@@ -219,7 +220,7 @@ def get_se_sources(ims, catband, targetwcs, W, H):
         
     # Select SE catalogs to read
     catims = [im for im in ims if im.band == catband]
-    print 'Reference catalog files:', catims
+    print('Reference catalog files:', catims)
     # ... and read 'em
     cats = []
     extra_cols = []
@@ -233,9 +234,9 @@ def get_se_sources(ims, catband, targetwcs, W, H):
                       'disk_theta_world', 'spheroid_reff_world',
                       'spheroid_aspect_world', 'spheroid_theta_world',
                       'alphamodel_j2000', 'deltamodel_j2000'] + extra_cols])
-        print 'Read', len(cat), 'from', im.morphfn
+        print('Read', len(cat), 'from', im.morphfn)
         cat.cut(cat.flags == 0)
-        print '  Cut to', len(cat), 'with no flags set'
+        print('  Cut to', len(cat), 'with no flags set')
         wcs = Sip(im.wcsfn)
         cat.ra,cat.dec = wcs.pixelxy2radec(cat.x_image, cat.y_image)
         cats.append(cat)
@@ -273,7 +274,7 @@ def get_se_sources(ims, catband, targetwcs, W, H):
     del cats
     # Create Tractor sources
     cat,isrcs = get_se_modelfit_cat(merged, maglim=90, bands=bands)
-    print 'Tractor sources:', cat
+    print('Tractor sources:', cat)
     T = merged[isrcs]
     return cat, T
 
@@ -295,7 +296,7 @@ def stage101(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
         cat.freezeAllParams()
         cat.thawParam(srci)
                     
-        print 'Fitting:'
+        print('Fitting:')
         tractor.printThawedParams()
         for itim,tim in enumerate(tims):
             ox0,oy0 = orig_wcsxy0[itim]
@@ -306,7 +307,7 @@ def stage101(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
 
         for step in range(10):
             dlnp,X,alpha = tractor.optimize(priors=False, shared_params=False)
-            print 'dlnp:', dlnp
+            print('dlnp:', dlnp)
             if dlnp < 0.1:
                 break
         
@@ -322,7 +323,7 @@ def stage101(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
             tim.psf = subpsf
         for step in range(10):
             dlnp,X,alpha = tractor.optimize(priors=False, shared_params=False)
-            print 'dlnp:', dlnp
+            print('dlnp:', dlnp)
             if dlnp < 0.1:
                 break
         
@@ -436,10 +437,10 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
 
     for i,b in enumerate(bands):
         ii = np.argsort(-fluxes[:,i])
-        print
-        print 'Brightest in band', b
+        print()
+        print('Brightest in band', b)
         for j in ii[:10]:
-            print j, cat[j].getBrightness()
+            print(j, cat[j].getBrightness())
 
 
     # HACK -- define "bright" limits
@@ -454,7 +455,7 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
                 ibright.append(i)
     ibright = np.unique(ibright)
 
-    print 'Bright sources:', ibright
+    print('Bright sources:', ibright)
 
     bcat = []
     for i,src in enumerate(cat):
@@ -477,13 +478,13 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
     for iblob,(bslc,Isrcs) in enumerate(zip(blobslices, blobsrcs)):
         if not len(set(ibright).intersection(set(Isrcs))):
             continue
-        print 'Re-fitting blob', iblob, 'with', len(Isrcs), 'sources'
+        print('Re-fitting blob', iblob, 'with', len(Isrcs), 'sources')
 
         bcat.freezeAllParams()
-        print 'Fitting:'
+        print('Fitting:')
         for i in Isrcs:
             bcat.thawParams(i)
-            print bcat[i]
+            print(bcat[i])
             
         # blob bbox in target coords
         sy,sx = bslc
@@ -556,7 +557,7 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
 
         subtr = Tractor(subtims, bcat)
         subtr.freezeParam('images')
-        print 'Optimizing:', subtr
+        print('Optimizing:', subtr)
         subtr.printThawedParams()
 
         if plots:
@@ -565,24 +566,24 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
 
             # before-n-after plots
             mod0 = subtr.getModelImages()
-        print 'Sub-image initial lnlikelihood:', subtr.getLogLikelihood()
+        print('Sub-image initial lnlikelihood:', subtr.getLogLikelihood())
 
         for i in Isrcs:
-            print bcat[i]
+            print(bcat[i])
 
         for step in range(10):
             dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
                                           alphas=alphas)
-            print 'dlnp:', dlnp
+            print('dlnp:', dlnp)
             if dlnp < 0.1:
                 break
 
         if plots:
             mod1 = subtr.getModelImages()
-        print 'Sub-image first fit lnlikelihood:', subtr.getLogLikelihood()
+        print('Sub-image first fit lnlikelihood:', subtr.getLogLikelihood())
 
         for i in Isrcs:
-            print bcat[i]
+            print(bcat[i])
 
         # Forced-photometer bands individually
         for band in bands:
@@ -594,8 +595,8 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
             for tim in subtims:
                 if tim.band == band:
                     bandtims.append(tim)
-            print
-            print 'Fitting', band, 'band:'
+            print()
+            print('Fitting', band, 'band:')
             btractor = Tractor(bandtims, bcat)
             btractor.freezeParam('images')
             btractor.printThawedParams()
@@ -603,9 +604,9 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
             X = btractor.optimize_forced_photometry(shared_params=False, use_ceres=True,
                                                     BW=B, BH=B, wantims=False)
         bcat.thawAllRecursive()
-        print 'Sub-image forced-phot lnlikelihood:', subtr.getLogLikelihood()
+        print('Sub-image forced-phot lnlikelihood:', subtr.getLogLikelihood())
         for i in Isrcs:
-            print bcat[i]
+            print(bcat[i])
 
         if plots:
             mod2 = subtr.getModelImages()
@@ -653,9 +654,9 @@ def stage103(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
 
     cat = tractor.catalog = bcat
 
-    print 'Sources:'
+    print('Sources:')
     for i,src in enumerate(cat):
-        print '  ', i, src
+        print('  ', i, src)
 
     stage102(tractor=tractor, tims=tims, H=H, W=W, bands=bands,
              rgbim=rgbim, cat=cat, ps=ps, coimgs=coimgs, con=con,

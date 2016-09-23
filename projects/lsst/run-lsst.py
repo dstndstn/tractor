@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 import math
 import sys
@@ -16,26 +17,26 @@ def getFakePsf(pixscale):
 	#fwhmarcsec = 0.7 #1.0 #0.5
 	fwhmarcsec = 1.0
 	fwhm = fwhmarcsec / pixscale
-	print 'fwhm', fwhm
+	print('fwhm', fwhm)
 	psfsize = 25
 	model = 'DoubleGaussian'
 	sig = fwhm/(2.*math.sqrt(2.*math.log(2.)))
-	print 'sigma', sig
+	print('sigma', sig)
 	psf = afwDet.createPsf(model, psfsize, psfsize, sig, 0., 0.)
-	print 'psf', psf
+	print('psf', psf)
 	return psf
 
 def cr(infn, crfn, maskfn):
 	exposure = afwImage.ExposureF(infn) #'850994p-21.fits'
-	print 'exposure', exposure
-	print 'w,h', exposure.getWidth(), exposure.getHeight()
+	print('exposure', exposure)
+	print('w,h', exposure.getWidth(), exposure.getHeight())
 	W,H = exposure.getWidth(), exposure.getHeight()
 
 	#var = exposure.getMaskedImage().getVariance()
 	#print 'Variance', var.get(0,0)
 
 	wcs = exposure.getWcs()
-	print 'wcs', wcs
+	print('wcs', wcs)
 	pixscale = wcs.pixelScale().asArcseconds()
 	psf = getFakePsf(pixscale)
 
@@ -45,17 +46,17 @@ def cr(infn, crfn, maskfn):
 	mask.clearMaskPlane(crBit)
 	mi = exposure.getMaskedImage()
 	bg = afwMath.makeStatistics(mi, afwMath.MEDIAN).getValue()
-	print 'bg', bg
+	print('bg', bg)
 
 	varval = afwMath.makeStatistics(mi, afwMath.VARIANCE).getValue()
-	print 'variance', varval, 'std', math.sqrt(varval)
+	print('variance', varval, 'std', math.sqrt(varval))
 	varval = afwMath.makeStatistics(mi, afwMath.VARIANCECLIP).getValue()
-	print 'clipped variance', varval, 'std', math.sqrt(varval)
+	print('clipped variance', varval, 'std', math.sqrt(varval))
 	var = exposure.getMaskedImage().getVariance()
 	var.set(varval)
 
 	var = exposure.getMaskedImage().getVariance()
-	print 'Variance:', var.get(0,0)
+	print('Variance:', var.get(0,0))
 
 	keepCRs = False
 	policy = pexPolicy.Policy()
@@ -76,9 +77,9 @@ def cr(infn, crfn, maskfn):
 	#psfimg = psf.computeImage(afwGeom.Point2D(W/2., H/2.))
 	#psfimg.writeFits('psf.fits')
 
-	print 'Finding cosmics...'
+	print('Finding cosmics...')
 	crs = measAlg.findCosmicRays(mi, psf, bg, policy, keepCRs)
-	print 'got', len(crs), 'cosmic rays',
+	print('got', len(crs), 'cosmic rays', end=' ')
 
 	mask = mi.getMask()
 	crBit = mask.getPlaneBitMask("CR")
@@ -112,11 +113,11 @@ if __name__ == '__main__':
 	#print 'Reading', crfn
 
 	exposure = afwImage.ExposureF(crfn)
-	print 'Read', exposure
+	print('Read', exposure)
 	W,H = exposure.getWidth(), exposure.getHeight()
 
 	var = exposure.getMaskedImage().getVariance()
-	print 'Variance:', var.get(0,0)
+	print('Variance:', var.get(0,0))
 
 	wcs = exposure.getWcs()
 	pixscale = wcs.pixelScale().asArcseconds()
@@ -124,48 +125,48 @@ if __name__ == '__main__':
 
 	if opt.ra is not None and opt.dec is not None:
 		x,y = wcs.skyToPixel(opt.ra * afwGeom.degrees, opt.dec * afwGeom.degrees)
-		print 'Instantiating PSF at x,y', x,y
+		print('Instantiating PSF at x,y', x,y)
 	else:
 		x,y = W/2, H/2
 
 	mi = exposure.getMaskedImage()
 	bg = afwMath.makeStatistics(mi, afwMath.MEDIAN).getValue()
-	print 'bg', bg
+	print('bg', bg)
 
-	print 'Before subtracting bg:', mi.getImage().get(W/2,H/2)
+	print('Before subtracting bg:', mi.getImage().get(W/2,H/2))
 	img = mi.getImage()
 	img -= bg
-	print 'After subtracting bg:', mi.getImage().get(W/2,H/2)
+	print('After subtracting bg:', mi.getImage().get(W/2,H/2))
 
 	# phot.py
 	#footprintSet = self.detect(exposure, psf)
 	detconf = muDetection.DetectionConfig()
 	detconf.thresholdValue = 50.
-	print 'Detection config:', detconf
+	print('Detection config:', detconf)
 	posSources, negSources = muDetection.detectSources(exposure, psf, detconf)
 	numPos = len(posSources.getFootprints()) if posSources is not None else 0
 	numNeg = len(negSources.getFootprints()) if negSources is not None else 0
-	print 'Detected', numPos, 'pos and', numNeg, 'neg'
+	print('Detected', numPos, 'pos and', numNeg, 'neg')
 	footprintSet = posSources
 	del negSources
 
 	for fp in footprintSet.getFootprints():
-		print 'footprint', fp
-		print 'npix', fp.getNpix()
+		print('footprint', fp)
+		print('npix', fp.getNpix())
 
 	# phot.py
 	bgconf = muDetection.BackgroundConfig()
-	print 'Background config:', bgconf
+	print('Background config:', bgconf)
 	subtract = True
 	bg, subtracted = muDetection.estimateBackground(exposure, bgconf, subtract=subtract)
-	print 'bg', bg
+	print('bg', bg)
 	exposure = subtracted
 
 	# phot.py
 	#sources = self.measure(exposure, footprintSet, psf, apcorr=apcorr, wcs=wcs)
 	footprints = []
 	num = len(footprintSet.getFootprints())
-	print 'Measuring', num, 'sources'
+	print('Measuring', num, 'sources')
 	footprints.append([footprintSet.getFootprints(), False])
 	measconf = measAlg.MeasureSourcesConfig()
 	sources = muMeasurement.sourceMeasurement(exposure, psf, footprints, measconf)
@@ -173,7 +174,7 @@ if __name__ == '__main__':
 
 	# calibrate.py
 	#psf, cellSet = self.psf(exposure, sources)
-	print 'Finding PSF...'
+	print('Finding PSF...')
 
 	selName = 'secondMomentStarSelector'
 	selPolicy = pexPolicy.Policy()
@@ -220,7 +221,7 @@ if __name__ == '__main__':
 			src.setFlagForDetection(src.getFlagForDetection() | measAlg.Flags.PSFSTAR)
 	exposure.setPsf(psf)
 
-	print 'Got PSF', psf
+	print('Got PSF', psf)
 
 	# Target cluster
 	#x,y = 726., 4355.

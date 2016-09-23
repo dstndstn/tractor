@@ -1,3 +1,4 @@
+from __future__ import print_function
 import sys
 
 from common import *
@@ -39,17 +40,17 @@ if __name__ == '__main__':
     T.shapeexp_ivar = np.vstack((T.shapeexp_r_ivar, T.shapeexp_e1_ivar,
                                  T.shapeexp_e2_ivar)).T
     cat,invvars = read_fits_catalog(T, invvars=True)
-    print 'Got cat:', cat
+    print('Got cat:', cat)
 
     T = exposure_metadata([filename], hdus=[hdu])
-    print 'Metadata:'
+    print('Metadata:')
     T.about()
 
     decals = Decals()
     im = DecamImage(decals, T[0])
     tim = im.get_tractor_image(slc=zoomslice, nanomaggies=opt.nmgy,
                                subsky=opt.no_sky, const2psf=True)
-    print 'Got tim:', tim
+    print('Got tim:', tim)
 
     #if opt.nmgy:
     #    tim.photocal = 
@@ -59,12 +60,12 @@ if __name__ == '__main__':
     # tim.psfex.fitSavedData(*tim.psfex.splinedata)
     # tim.psf = CachingPsfEx.fromPsfEx(tim.psfex)
 
-    print 'Rendering model image...'
+    print('Rendering model image...')
     tr = Tractor([tim], cat)
     mod = tr.getModelImage(0)
-    print 'mod range', mod.min(), mod.max()
+    print('mod range', mod.min(), mod.max())
 
-    print 'Creating FITS header...'
+    print('Creating FITS header...')
     hdr = tim.getFitsHeader()
     tim.getStandardFitsHeader(header=hdr)
 
@@ -89,5 +90,5 @@ if __name__ == '__main__':
     fits.close()
 
     #fitsio.write(outfn, mod, header=hdr, clobber=True)
-    print 'Wrote model to', outfn
+    print('Wrote model to', outfn)
     

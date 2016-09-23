@@ -1,6 +1,6 @@
 # Copyright 2011 David W. Hogg (NYU) and Phillip J. Marshall (Oxford).
 # All rights reserved.
-
+from __future__ import print_function
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
@@ -110,7 +110,7 @@ class mixture_of_gaussians():
         def chivec(pars):
             self.set_parameters_from_pars(pars)
             c = self.chi(data).flatten()
-            print np.sum(c*c)
+            print(np.sum(c*c))
             return c
         firstpars = self.pars()
         bestpars, foo = op.leastsq(chivec, firstpars, maxfev=1000000, ftol=1.e-7)
@@ -121,7 +121,7 @@ class mixture_of_gaussians():
         def cost(pars):
             self.set_parameters_from_pars(pars)
             c = self.chisq(data)
-            print c
+            print(c)
             return c
         firstpars = self.pars()
         op.fmin(cost, firstpars, maxfun=np.Inf, maxiter=np.Inf, ftol=1.e-5)

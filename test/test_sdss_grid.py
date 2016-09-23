@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
 	import matplotlib
 	matplotlib.use('Agg')
@@ -125,7 +126,7 @@ def main():
 	parser.add_option('-v', '--verbose', dest='verbose', action='count',
 					  default=0, help='Make more verbose')
 	opt,args = parser.parse_args()
-	print 'Opt.verbose = ', opt.verbose
+	print('Opt.verbose = ', opt.verbose)
 	if opt.verbose == 0:
 		lvl = logging.INFO
 	else: # opt.verbose == 1:
@@ -135,20 +136,20 @@ def main():
 
 	set_fp_err()
 
-	print
-	print 'makeTruth...'
-	print
+	print()
+	print('makeTruth...')
+	print()
 	imgs = makeTruth()
-	print
-	print 'done makeTruth.'
-	print
+	print()
+	print('done makeTruth.')
+	print()
 	tractor = SDSSTractor(imgs)
 
 	xyfn = 'grid0n.xy'
 	if not os.path.exists(xyfn):
-		print 'Running image2xy...'
+		print('Running image2xy...')
 		cmd = 'image2xy %s -o %s' % (xyfn.replace('.xy', '.fits'), xyfn)
-		print 'Command:', cmd
+		print('Command:', cmd)
 		os.system(cmd)
 	assert(os.path.exists(xyfn))
 	sxy = fits_table(xyfn)
@@ -201,16 +202,16 @@ def main():
 			fn = 'grid%02i-%in.png' % (step, i)
 			plt.colorbar()
 			plt.savefig(fn)
-			print 'saved', fn
+			print('saved', fn)
 
 		#if step == 0:
 		#	tractor.changeSourceTypes()
 		#else:
-		print
-		print 'Step', step
-		print
+		print()
+		print('Step', step)
+		print()
 		for src in tractor.getCatalog():
-			print ' ', src
+			print(' ', src)
 		tractor.optimizeCatalogAtFixedComplexityStep()
 
 
@@ -219,7 +220,7 @@ def main():
 	(images, simplexys, rois, zrange, nziv, footradecs
 	 ) = prepareTractor(False, False, rcfcut=[0])
 
-	print 'Creating tractor...'
+	print('Creating tractor...')
 	tractor = SDSSTractor(images, debugnew=False, debugchange=True)
 	opt,args = parser.parse_args()
 
@@ -255,14 +256,14 @@ def main():
 			#plt.title('inv err')
 			fn = fnpat % i
 			plt.savefig(fn)
-			print 'wrote', fn
+			print('wrote', fn)
 
 	makePlots(tractor, 'opt-s00-%02i.png', #'pre-%02i.png',
 			  title2='re %.1f, ab %.2f, phi %.1f' % (src.re, src.ab, src.phi))
 
 	for ostep in range(10):
-		print
-		print 'Optimizing...'
+		print()
+		print('Optimizing...')
 		#alphas = [1., 0.5, 0.25, 0.1, 0.01]
 		alphas=None
 		ppre = src.getParams()
@@ -273,12 +274,12 @@ def main():
 				  title1='dlnp = %.1f' % dlnp,
 				  title2='re %.1f, ab %.2f, phi %.1f' % (src.re, src.ab, src.phi))
 
-		print
+		print()
 		src.setParams(ppre)
-		print 'Pre :', src
+		print('Pre :', src)
 
 		src.setParams(ppost)
-		print 'Post:', src
+		print('Post:', src)
 
 
 if __name__ == '__main__':

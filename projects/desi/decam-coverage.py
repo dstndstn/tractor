@@ -1,3 +1,4 @@
+from __future__ import print_function
 '''
 SELECT reference, dtpropid, surveyid, release_date, start_date, date_obs, dtpi, ra, dec, telescope, instrument, filter, exposure, obstype, obsmode, proctype, prodtype, seeing, depth, dtacqnam, reference 
 AS archive_file, filesize 
@@ -71,12 +72,12 @@ if True:
     for dirpath,dirs,files in os.walk('headers-d2f3', followlinks=True):
         for fn in files:
             path = os.path.join(dirpath, fn)
-            print 'Path', path
+            print('Path', path)
             try:
                 hdr = fitsio.read_header(path)
                 filt = hdr['FILTER']
                 filt = filt.split()[0]
-                print 'Filter', filt
+                print('Filter', filt)
 
                 detpos = hdr['DETPOS']
                 
@@ -84,7 +85,7 @@ if True:
                 pth = os.path.dirname(path)
                 for i in range(4):
                     nm = os.path.basename(pth)
-                    print 'nm', nm
+                    print('nm', nm)
                     pth = os.path.dirname(pth)
                     if len(nm) == 3 and nm[0] == 'C':
                         name = nm
@@ -104,13 +105,13 @@ if True:
             if not '-img-m.fits' in fn:
                 continue
             path = os.path.join(dirpath, fn)
-            print 'Path', path
+            print('Path', path)
             if 'w1' in fn:
                 filt = 'W1'
             elif 'w2' in fn:
                 filt = 'W2'
             else:
-                print '??', fn
+                print('??', fn)
                 continue
             if not filt in wcsfns:
                 wcsfns[filt] = []
@@ -186,7 +187,7 @@ if True:
             plot.plot_grid(grid, grid, gridlab, gridlab)
             fn = ps.getnext()
             plot.write(fn)
-            print 'Wrote', fn
+            print('Wrote', fn)
 
     sys.exit(0)
 
@@ -200,10 +201,10 @@ if False:
     T.dec = np.array([float(s) for s in T.dec])
     T.cut((T.ra > 148) * (T.ra < 152) * (T.dec > 0) * (T.dec < 4))
     T.about()
-    print len(T), 'in range'
-    print T.filename
-    print T.ra
-    print T.dec
+    print(len(T), 'in range')
+    print(T.filename)
+    print(T.ra)
+    print(T.dec)
     
     plt.clf()
     for fn in T.filename:
@@ -237,12 +238,12 @@ if not os.path.exists(decfn):
 else:
     T = fits_table(decfn)
 
-print len(T), 'DECam exposures'
+print(len(T), 'DECam exposures')
 
 filts = np.array([s.split()[0] for s in T.filter])
 T.filter = filts
 ufilts = np.unique(T.filter)
-print 'Unique filters:', ufilts
+print('Unique filters:', ufilts)
 
 plt.clf()
 plt.plot(T.ra, T.dec, 'b.')
@@ -296,21 +297,21 @@ for f in ufilts:
 
 for name,ra,dec in deeps:
     I = np.flatnonzero(degrees_between(ra, dec, T.ra, T.dec) < 1.)
-    print len(I), 'near', name
+    print(len(I), 'near', name)
     Ti = T[I]
 
     for f in ufilts:
         I = np.flatnonzero(Ti.filter == f)
 
-        print 'Filter', f
-        print 'PI', [s.strip() for s in Ti.dtpi[I]]
-        print 'Exposure', Ti.exposure[I]
-        print 'Seeing', Ti.seeing[I]
+        print('Filter', f)
+        print('PI', [s.strip() for s in Ti.dtpi[I]])
+        print('Exposure', Ti.exposure[I])
+        print('Seeing', Ti.seeing[I])
         #print 'Obstype', Ti.obstype[I]
         #print 'Obsmode', Ti.obsmode[I]
         #print 'Proctype', Ti.proctype[I]
         #print 'Prodtype', Ti.prodtype[I]
-        print 'Archive_file', [s.strip() for s in Ti.archive_file[I]]
+        print('Archive_file', [s.strip() for s in Ti.archive_file[I]])
 
         plt.clf()
         loghist(Ti.ra[I], Ti.dec[I], 200,

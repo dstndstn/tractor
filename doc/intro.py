@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 
@@ -8,14 +9,14 @@ if True:
     wcs = NullWCS()
     counts = photocal.brightnessToCounts(source.getBrightness())
     x,y = wcs.positionToPixel(source.getPosition())
-    print 'source', source
-    print 'counts', counts, 'x,y', x,y
-    print
-    print 'source', source
-    print 'photocal', photocal
-    print 'wcs', wcs
-    print 'counts', counts
-    print 'x,y', x,y
+    print('source', source)
+    print('counts', counts, 'x,y', x,y)
+    print()
+    print('source', source)
+    print('photocal', photocal)
+    print('wcs', wcs)
+    print('counts', counts)
+    print('x,y', x,y)
 
 if True:
     from tractor import *
@@ -26,64 +27,64 @@ if True:
     counts = photocal.brightnessToCounts(source.getBrightness())
     x,y = wcs.positionToPixel(source.getPosition())
 
-    print 'source', source
-    print 'counts', counts, 'x,y', x,y
+    print('source', source)
+    print('counts', counts, 'x,y', x,y)
 
-    print 'source', source
-    print 'photocal', photocal
-    print 'wcs', wcs
-    print 'counts', counts
-    print 'x,y', x,y
+    print('source', source)
+    print('photocal', photocal)
+    print('wcs', wcs)
+    print('counts', counts)
+    print('x,y', x,y)
     
 if True:
     from tractor import *
     pos = RaDecPos(42.3, 9.7)
-    print 'Pos:', pos
-    print 'Params:', pos.getParams()
-    print 'Param names:', pos.getParamNames()
-    print 'Step sizes:', pos.getStepSizes()
+    print('Pos:', pos)
+    print('Params:', pos.getParams())
+    print('Param names:', pos.getParamNames())
+    print('Step sizes:', pos.getStepSizes())
     pos.setParams([42.7, 9.3])
-    print 'After setParams:', pos
+    print('After setParams:', pos)
     pos.setParam(1, 10.0)
-    print 'After setParam:', pos
+    print('After setParam:', pos)
 
 if True:
     from tractor import *
     source = PointSource(RaDecPos(42.3, 9.7), Mags(r=99.9))
-    print source
-    print source.pos
-    print source.brightness
-    print source.pos.ra
-    print source.brightness.r
-    print source.getParams()
-    print zip(source.getParamNames(), source.getParams())
+    print(source)
+    print(source.pos)
+    print(source.brightness)
+    print(source.pos.ra)
+    print(source.brightness.r)
+    print(source.getParams())
+    print(zip(source.getParamNames(), source.getParams()))
 
 
 from tractor import *
 cat = Catalog(PointSource(RaDecPos(42.3, 9.7), Mags(r=99.9)))
-print cat
-print zip(cat.getParamNames(), cat.getParams())
+print(cat)
+print(zip(cat.getParamNames(), cat.getParams()))
 cat[0].freezeParam('pos')
-print zip(cat.getParamNames(), cat.getParams())
+print(zip(cat.getParamNames(), cat.getParams()))
 #cat[0].freezeParam('brightness')
 cat[0].pos.freezeParam('ra')
 cat[0].thawParam('pos')
-print zip(cat.getParamNames(), cat.getParams())
+print(zip(cat.getParamNames(), cat.getParams()))
 
 cat.thawAllRecursive()
-print zip(cat.getParamNames(), cat.getParams())
+print(zip(cat.getParamNames(), cat.getParams()))
 cat.freezeAllRecursive()
 cat.thawPathsTo('r')
-print zip(cat.getParamNames(), cat.getParams())
-print 'Thawed(self)   Thawed(parent)   Param'
+print(zip(cat.getParamNames(), cat.getParams()))
+print('Thawed(self)   Thawed(parent)   Param')
 for param, tself, tparent in cat.getParamStateRecursive():
-    print '   %5s      %5s           ' % (tself, tparent), param
+    print('   %5s      %5s           ' % (tself, tparent), param)
 
 cat[0].thawParam('pos')
 #print zip(cat.getParamNames(), cat.getParams())
 cat.printThawedParams()
 cat[0].pos.thawAllParams()
-print zip(cat.getParamNames(), cat.getParams())
+print(zip(cat.getParamNames(), cat.getParams()))
 cat.printThawedParams()
 
 
@@ -152,7 +153,7 @@ if False:
     # Take several linearized least squares steps
     for i in range(10):
         dlnp,X,alpha = tractor.optimize()
-        print 'dlnp', dlnp
+        print('dlnp', dlnp)
         if dlnp < 1e-3:
             break
 
@@ -311,7 +312,7 @@ if True:
     # Take several linearized least squares steps
     for i in range(10):
         dlnp,X,alpha = tractor.optimize()
-        print 'dlnp', dlnp
+        print('dlnp', dlnp)
         if dlnp < 1e-3:
             break
 

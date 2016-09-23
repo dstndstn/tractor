@@ -1,4 +1,5 @@
 #testing large_galaxies.fits (the objects from rc3 catalog)
+from __future__ import print_function
 from astrometry.util.file import *
 from astrometry.util.starutil_numpy import *
 import numpy as np
@@ -22,7 +23,7 @@ if __name__ == '__main__':
     mags=data2.field('CG_TOTMAGS')
     extinction=data2.field('CG_EXTINCTION')
     name=data2.field('RC3_NAME')
-    print len(name)
+    print(len(name))
     assert(False)
     ra=data2.field('RC3_RA')
     ra2=data2.field('CG_RA')
@@ -45,7 +46,7 @@ if __name__ == '__main__':
     ug_corrected=corrected_u-corrected_g
     iz_corrected=corrected_i-corrected_z
 
-    print half_light
+    print(half_light)
     assert(False)
 
     def mu_50(i,r):
@@ -70,9 +71,9 @@ if __name__ == '__main__':
         a=[t for t in xrange(len(f)) if f[t] < quantile(f,0.25)]
         sample00=sorted(g[a])
         #print sample00, len(sample00)
-        print quantile(sample00,0.25)
-        print quantile(sample00,0.5)
-        print quantile(sample00,0.75)
+        print(quantile(sample00,0.25))
+        print(quantile(sample00,0.5))
+        print(quantile(sample00,0.75))
         plt.axhline(y=quantile(sample00,0.25),xmin=0,xmax=(quantile(f,0.25)-x1)/(x2-x1),color='black',alpha=0.5)
         plt.axhline(y=quantile(sample00,0.5),xmin=0,xmax=(quantile(f,0.25)-x1)/(x2-x1),color='black',alpha=0.5)
         plt.axhline(y=quantile(sample00,0.75),xmin=0,xmax=(quantile(f,0.25)-x1)/(x2-x1),color='black',alpha=0.5)
@@ -80,28 +81,28 @@ if __name__ == '__main__':
         b=[t for t in xrange(len(f)) if quantile(f,0.25) < f[t] < quantile(f,0.5)]
         sample1=sorted(g[b])
 
-        print len(sample1)
-        print quantile(sample1,0.25)
-        print quantile(sample1,0.5)
-        print quantile(sample1,.75)
+        print(len(sample1))
+        print(quantile(sample1,0.25))
+        print(quantile(sample1,0.5))
+        print(quantile(sample1,.75))
         plt.axhline(y=quantile(sample1,0.25),xmin=(quantile(f,0.25)-x1)/(x2-x1),xmax=(quantile(f,0.5)-x1)/(x2-x1),color='black',alpha=0.5)
         plt.axhline(y=quantile(sample1,0.5),xmin=(quantile(f,0.25)-x1)/(x2-x1),xmax=(quantile(f,0.5)-x1)/(x2-x1),color='black',alpha=0.5)
         plt.axhline(y=quantile(sample1,0.75),xmin=(quantile(f,0.25)-x1)/(x2-x1),xmax=(quantile(f,0.5)-x1)/(x2-x1),color='black',alpha=0.5)        
 
         c=[t for t in xrange(len(f)) if quantile(f,0.5) < f[t] < quantile(f,0.75)]
         sample2=sorted(g[c])
-        print quantile(sample2,0.25)
-        print quantile(sample2,0.5)
-        print quantile(sample2,0.75)
+        print(quantile(sample2,0.25))
+        print(quantile(sample2,0.5))
+        print(quantile(sample2,0.75))
         plt.axhline(y=quantile(sample2,0.25),xmin=(quantile(f,0.5)-x1)/(x2-x1),xmax=(quantile(f,0.75)-x1)/(x2-x1),color='black',alpha=0.5)
         plt.axhline(y=quantile(sample2,0.5),xmin=(quantile(f,0.5)-x1)/(x2-x1),xmax=(quantile(f,0.75)-x1)/(x2-x1),color='black',alpha=0.5)
         plt.axhline(y=quantile(sample2,0.75),xmin=(quantile(f,0.5)-x1)/(x2-x1),xmax=(quantile(f,0.75)-x1)/(x2-x1),color='black',alpha=0.5)        
         
         d=[t for t in xrange(len(f)) if f[t] > quantile(f,0.75)]
         sample3=sorted(g[d])
-        print quantile(sample3,0.25)
-        print quantile(sample3,0.5)
-        print quantile(sample3,0.75)
+        print(quantile(sample3,0.25))
+        print(quantile(sample3,0.5))
+        print(quantile(sample3,0.75))
         plt.axhline(y=quantile(sample3,0.25),xmin=(quantile(f,0.75)-x1)/(x2-x1),xmax=1,color='black',alpha=0.5)
         plt.axhline(y=quantile(sample3,0.5),xmin=(quantile(f,0.75)-x1)/(x2-x1),xmax=1,color='black',alpha=0.5)
         plt.axhline(y=quantile(sample3,0.75),xmin=(quantile(f,0.75)-x1)/(x2-x1),xmax=1,color='black',alpha=0.5)        
@@ -111,10 +112,10 @@ if __name__ == '__main__':
     galaxies=np.array([True for x in ra])
     mice=np.where(name=='NGC 4676A')
     # galaxies[radius]=False
-    print gr_corrected[mice],gi_corrected[mice]
+    print(gr_corrected[mice],gi_corrected[mice])
     mice2=np.where(name=='NGC 4676B')
     # galaxies[radius]=False
-    print gr_corrected[mice2],gi_corrected[mice2]
+    print(gr_corrected[mice2],gi_corrected[mice2])
     #assert(False)
     # plt.annotate('PGC 70104',xy=(0.2,-0.00762749),xytext=(0.4,0.0),arrowprops=dict(facecolor='black'))
     # plt.annotate('UGC 11861',xy=(1.119,.6218),xytext=(0.7,.6218),arrowprops=dict(facecolor='black'))
@@ -334,13 +335,13 @@ iz1=[float(i) for i in iz_corrected]
 iz2=[float(i) for i in nsa_iz_corrected]
 iz1+=iz2
 
-print len(gi1),len(r1),len(i1),len(ug1),len(iz1), len(sb)
+print(len(gi1),len(r1),len(i1),len(ug1),len(iz1), len(sb))
 
 
 plt.figure(4)
 pdf4=PdfPages('corner_all.pdf')
 cornerdata=np.array((c1,sb,gr_corrected,gi1,r1),dtype=float) 
-print len(cornerdata)
+print(len(cornerdata))
 triangle.corner(cornerdata,labels=[r"$C_i$",r"$\mu_{50,i}$",r"$g-r$",r"$g-i$",r"$R_{50,i}$"], extents=[(2,5),(17,23),(0.2,0.9),(0.3,1.4),(0,100)], bins=80)
 pdf4.savefig()
 

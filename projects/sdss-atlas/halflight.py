@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
@@ -26,8 +27,8 @@ def halflight(name,makePlots=False,direc='RC3_Output'):
     ra,dec = CG.getPosition()
     maxradius=max(CG.shapeExp.re,CG.shapeDev.re)
     assert(maxradius<500.)
-    print "Working on %s" % name
-    print CG
+    print("Working on %s" % name)
+    print(CG)
 
     #First step is to make an image, which needs:
     # data, invvar, psf, wcs, sky, photocal, name, zr
@@ -84,10 +85,10 @@ def halflight(name,makePlots=False,direc='RC3_Output'):
         r90s.append(r90)
         concs.append(conc)
         if r50<min(devr50,expr50) or r50>max(devr50,expr50):
-            print "R50 is not in between DeV and exp radii for %s" %name
+            print("R50 is not in between DeV and exp radii for %s" %name)
         if 1./conc > .46 or 1./conc <.29:
-            print "C=%.2f is a strange concentration for %s" % (conc,name)
-        print name, bandname, r50, r90, conc
+            print("C=%.2f is a strange concentration for %s" % (conc,name))
+        print(name, bandname, r50, r90, conc)
         if makePlots:
             plt.clf()
             plt.axhline(0,color='k',alpha=0.25)

@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
@@ -52,7 +53,7 @@ def main():
 
     zr = np.array([-5.,+5.]) * info['skysig']
 
-    print bands
+    print(bands)
 
     ra,dec = 152.041958,53.083472
 
@@ -65,7 +66,7 @@ def main():
 
     xtr,ytr = wcs.positionToPixel(RaDecPos(ra,dec))
     
-    print xtr,ytr
+    print(xtr,ytr)
     bright = None
     lowbright = 1000
 
@@ -84,8 +85,8 @@ def main():
                     lowBrightD = brightD
                     lowShapeE = src.shapeExp
                     lowShapeD = src.shapeDev
-            print "Removed:", src
-            print xs,ys
+            print("Removed:", src)
+            print(xs,ys)
             tractor.removeSource(src)
 
     saveBands('removed-'+prefix, tractor,zr,flipBands,debug=True)
@@ -98,7 +99,7 @@ def main():
 #   print shape2
 
     CG = st.CompositeGalaxy(RaDecPos(ra,dec),lowBrightE,lowShapeE,lowBrightD,lowShapeD)
-    print CG
+    print(CG)
     tractor.addSource(CG)
 
 
@@ -159,7 +160,7 @@ def makeflipbook(prefix,bands,itune=0,ntune=0):
     
     tex += r'\end{document}' + '\n'
     fn = 'flip-' + prefix + '.tex'
-    print 'Writing', fn
+    print('Writing', fn)
     open(fn, 'wb').write(tex)
     os.system("pdflatex '%s'" % fn)
 

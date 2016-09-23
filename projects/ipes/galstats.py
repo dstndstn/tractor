@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 import sys
 from math import ceil
@@ -87,17 +88,17 @@ def plots1():
 	plt.savefig('rad-mag.png')
 
 	T2 = T[(T.expmag_r > 21) * (T.expmag_r < 22)]
-	print len(T2), 'in mag 21-22 range'
+	print(len(T2), 'in mag 21-22 range')
 	T2 = T2[(T2.exprad_r >= 0.4) * (T2.exprad_r <= 0.55)]
-	print len(T2), 'in radius 0.4-0.55 range'
+	print(len(T2), 'in radius 0.4-0.55 range')
 
 	#for cc in np.unique(T2.camcol):
 	#	n = sum(T2.camcol == cc)
 	#	print n, 'in camcol', cc
 
 	T2 = T2[T2.camcol == 2]
-	print len(T2), 'in camcol 2'
-	print 'Fields:', min(T2.field), max(T2.field)
+	print(len(T2), 'in camcol 2')
+	print('Fields:', min(T2.field), max(T2.field))
 	T2.about()
 	plt.clf()
 	H,xe,ye = np.histogram2d(T2.exprad_r, T2.expmag_r, 200, range=((0.4,0.55),(21,22)))
@@ -107,7 +108,7 @@ def plots1():
 
 	plt.clf()
 	n,b,p = plt.hist(T2.exprad_r, 100, range=(0.4, 0.55))
-	print sum(n), 'counts plotted'
+	print(sum(n), 'counts plotted')
 	plt.xlim(0.4, 0.55)
 	plt.title('Run 3818, Camcol 2: total %i' % sum(n))
 	plt.xlabel('exp r_e (arcsec)')
@@ -120,7 +121,7 @@ def plots1():
 	plt.savefig('rad4.png')
 
 	T2 = T2[(T2.field >= 100) * (T2.field < 200)]
-	print len(T2), 'in fields [100, 200)'
+	print(len(T2), 'in fields [100, 200)')
 
 	plt.clf()
 	n,b,p = plt.hist(T2.exprad_r, 100, range=(0.4, 0.55))
@@ -133,9 +134,9 @@ def plots1():
 def plots2(rlo=1.3, rhi=1.5, fn='exp3818i_dstn.fit',
 		   maxmag=20):
 	T = fits_table(fn)
-	print 'Read', len(T)
+	print('Read', len(T))
 	T.cut(T.fracdev_i == 0)
-	print 'Cut to', len(T), 'pure-exp'
+	print('Cut to', len(T), 'pure-exp')
 
 	plt.clf()
 	H,xe,ye = np.histogram2d(T.exprad_i, T.expmag_i, 200, range=((0.1,10),(15,22)))
@@ -159,9 +160,9 @@ def plots2(rlo=1.3, rhi=1.5, fn='exp3818i_dstn.fit',
 	plt.savefig('radi2.png')
 
 	T2 = T[(T.exprad_i >= rlo) * (T.exprad_i <= rhi)]
-	print len(T2), 'in radius range'
+	print(len(T2), 'in radius range')
 	T2 = T2[T2.expmag_i < maxmag]
-	print len(T2), 'in mag range'
+	print(len(T2), 'in mag range')
 
 	T2.band = np.array(['i']*len(T2))
 
@@ -198,7 +199,7 @@ def plots2(rlo=1.3, rhi=1.5, fn='exp3818i_dstn.fit',
 def stage00():
 	#T = fits_table('exp3818b.fits')
 	T = fits_table('exp3818c.fits')
-	print len(T), 'galaxies'
+	print(len(T), 'galaxies')
 
 	sdss = DR7()
 	dn = 'paper0-data'
@@ -217,8 +218,8 @@ def stage00():
 			band = T.band[i]
 		else:
 			band = 'r'
-		print
-		print 'Galaxy', (i+1), 'of', len(T)
+		print()
+		print('Galaxy', (i+1), 'of', len(T))
 		im,info = get_tractor_image(run, camcol, field, band, sdssobj=sdss, useMags=True,
 									roiradecsize=(ra,dec,sz))
 		sky,skysig = info['sky'],info['skysig']
@@ -240,8 +241,8 @@ def stage00():
 def stage01(tractor=None, T=None):
 	# typo
 	tractors = tractor
-	print 'Tractors:', len(tractors)
-	print 'targets:', len(T)
+	print('Tractors:', len(tractors))
+	print('targets:', len(T))
 	allsrcs = []
 	srcs = []
 	keepi = []
@@ -252,25 +253,25 @@ def stage01(tractor=None, T=None):
 		if len(cat) == 0:
 			continue
 		if len(cat) > 1:
-			print len(cat), 'exps:'
+			print(len(cat), 'exps:')
 			for src in cat:
-				print '  ', src
+				print('  ', src)
 			dists = [arcsec_between(T.ra[i], T.dec[i], src.pos.ra, src.pos.dec)
 					 for src in cat]
-			print 'Distances from target:', dists
+			print('Distances from target:', dists)
 			I = np.argmin(dists)
-			print 'Keeping:', cat[I]
+			print('Keeping:', cat[I])
 			cat = [cat[I]]
 			
 		srcs.extend(cat)
 		keepi.append(i)
 	keepi = np.array(keepi)
 	T = T[keepi]
-	print 'all sources:', len(allsrcs)
+	print('all sources:', len(allsrcs))
 	types = [type(src) for src in allsrcs]
-	print 'Source types:', np.unique(types)
+	print('Source types:', np.unique(types))
 
-	print 'keeping', len(srcs), 'exp galaxies'
+	print('keeping', len(srcs), 'exp galaxies')
 
 	rads = [src.shape.re for src in srcs]
 	plt.clf()
@@ -300,7 +301,7 @@ def stage01(tractor=None, T=None):
 	dr8 = DR8(basedir=dn)
 
 	t = T[0]
-	print t
+	print(t)
 	t.about()
 	s8 = get_tractor_sources_dr8(t.run, t.camcol, t.field, t.band, sdss=dr8)
 	i8 = get_tractor_image_dr8(t.run, t.camcol, t.field, t.band, sdss=dr8)
@@ -320,36 +321,36 @@ def stage01(tractor=None, T=None):
 
 	for t in T[:100]:
 		fn = sdss.getPath('tsObj', t.run, t.camcol, t.field, t.band)
-		print fn
+		print(fn)
 		ts = fits_table(fn)
 		ts.index = np.arange(len(ts))
 		tsid = ts.id
-		print '  ', len(ts)
+		print('  ', len(ts))
 		B = 3
 		#ts.cut(ts.fracdev[:,B] == 0)
 		ts.cut(ts.fracpsf[:,B] == 0)
 		ts.cut(ts.prob_psf[:,B] == 0)
-		print '  exp -> ', len(ts)
+		print('  exp -> ', len(ts))
 		m = ts.counts_exp[:,B]
 		# it's actually a mag, not counts
 		ts.cut(m < 20.2)
-		print '  mag -> ', len(ts)
+		print('  mag -> ', len(ts))
 		r = ts.r_exp[:,B]
 		allI = ts.index
 		alltrads.append(r)
 		ts.cut((r >= 0.4) * (r <= 0.55))
-		print '  rad -> ', len(ts)
+		print('  rad -> ', len(ts))
 		r = ts.r_exp[:,B]
 		r = np.array(r)
 		r.sort()
-		print r
+		print(r)
 		trads.append(r)
 
 		sdss.retrieve('fpObjc', t.run, t.camcol, t.field, t.band)
 		fn = sdss.getPath('fpObjc', t.run, t.camcol, t.field, t.band)
-		print fn
+		print(fn)
 		fp = fits_table(fn)
-		print '  ', len(fp)
+		print('  ', len(fp))
 		#fp.about()
 		fpid = fp.id
 		assert(all(fpid == tsid))
@@ -362,13 +363,13 @@ def stage01(tractor=None, T=None):
 
 
 		fn = dr8.retrieve('fpObjc', t.run, t.camcol, t.field, t.band)
-		print fn
+		print(fn)
 		fp = fits_table(fn)
-		print 'fpObjc:', fp
+		print('fpObjc:', fp)
 		if fp is None:
-			print 'Warning:', fn, 'is None: maybe has 0 rows?'
+			print('Warning:', fn, 'is None: maybe has 0 rows?')
 			continue
-		print '  ', len(fp)
+		print('  ', len(fp))
 		#fpid = fp.id
 		#assert(all(fpid == tsid))
 		#fp1 = fp[ts.index]
@@ -379,27 +380,27 @@ def stage01(tractor=None, T=None):
 
 		fp.cut(fp.fracpsf[:,B] == 0)
 		fp.cut(fp.prob_psf[:,B] == 0)
-		print '  exp -> ', len(fp)
+		print('  exp -> ', len(fp))
 		c= fp.counts_exp[:,B]
 		fp.cut(c > 10)
-		print '  mag -> ', len(fp)
+		print('  mag -> ', len(fp))
 		r = fp.r_exp[:,B]
 		allfrads8.append(r)
 
 		fn = dr8.retrieve('photoObj', t.run, t.camcol, t.field)#, t.band)
-		print fn
+		print(fn)
 		fp = fits_table(fn)
-		print 'photoObj', fp
+		print('photoObj', fp)
 		if fp is None:
-			print 'Warning:', fn, 'is None: maybe has 0 rows?'
+			print('Warning:', fn, 'is None: maybe has 0 rows?')
 			continue
-		print '  ', len(fp)
+		print('  ', len(fp))
 		fp.cut(fp.fracdev[:,B] == 0)
 		fp.cut(fp.prob_psf[:,B] == 0)
-		print '  exp -> ', len(fp)
+		print('  exp -> ', len(fp))
 		c = fp.expmag[:,B]
 		fp.cut(c < 20.2)
-		print '  mag -> ', len(fp)
+		print('  mag -> ', len(fp))
 		r = fp.theta_exp[:,B]
 		allprads8.append(r)
 
@@ -474,13 +475,13 @@ def stage01(tractor=None, T=None):
 
 
 def runstage(stage, force=[], threads=1):
-	print 'Runstage', stage
+	print('Runstage', stage)
 	pfn = 'gs-%02i.pickle' % stage
 	if os.path.exists(pfn):
 		if stage in force:
-			print 'Ignoring pickle', pfn, 'and forcing stage', stage
+			print('Ignoring pickle', pfn, 'and forcing stage', stage)
 		else:
-			print 'Reading pickle', pfn
+			print('Reading pickle', pfn)
 			R = unpickle_from_file(pfn)
 			return R
 	if stage > 0:
@@ -488,14 +489,14 @@ def runstage(stage, force=[], threads=1):
 		P = runstage(stage-1)
 	else:
 		P = {}
-	print 'Running stage', stage
+	print('Running stage', stage)
 	F = eval('stage%02i' % stage)
 
 	R = F(**P)
 
-	print 'Saving pickle', pfn
+	print('Saving pickle', pfn)
 	pickle_to_file(R, pfn)
-	print 'Saved', pfn
+	print('Saved', pfn)
 	return R
 
 def main():
@@ -532,20 +533,20 @@ def big():
 	plt.savefig('erad2.png')
 
 	Ti = T[((T.exprad_i > 1.7) * (T.exprad_i < 1.8))]
-	print len(Ti), 'in cut on exprad_i'
-	print 'Runs:', np.unique(Ti.run)
+	print(len(Ti), 'in cut on exprad_i')
+	print('Runs:', np.unique(Ti.run))
 	for r,d in zip(Ti.ra, Ti.dec):
-		print r,d
+		print(r,d)
 
 	plt.clf()
 	plt.hist(T.exprad_i, 100, range=(2.1, 2.3))
 	plt.savefig('erad3.png')
 
 	Ti = T[((T.exprad_i > 2.1) * (T.exprad_i < 2.3))]
-	print len(Ti), 'in cut on exprad_i'
-	print 'Runs:', np.unique(Ti.run)
+	print(len(Ti), 'in cut on exprad_i')
+	print('Runs:', np.unique(Ti.run))
 	for r,d in zip(Ti.ra, Ti.dec):
-		print 'http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpeg.aspx?ra=%g&dec=%g&scale=0.1&width=512&height=512&opt=&query=' % (r,d)
+		print('http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpeg.aspx?ra=%g&dec=%g&scale=0.1&width=512&height=512&opt=&query=' % (r,d))
 
 	Ti = T[T.exprad_i > 3.]
 	plt.clf()
@@ -560,24 +561,24 @@ def big():
 
 	Ti = T[(T.exprad_i > 3.2) * (T.exprad_i < 3.5)]
 
-	print len(Ti), 'in cut on exprad_i'
-	print 'Runs:', np.unique(Ti.run)
+	print(len(Ti), 'in cut on exprad_i')
+	print('Runs:', np.unique(Ti.run))
 	I = np.argsort(-Ti.expmag_i)
 	Tj = Ti[I]
 	for r,d,mag in zip(Tj.ra, Tj.dec, Tj.expmag_i):
-		print 'mag', mag
-		print 'http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpeg.aspx?ra=%g&dec=%g&scale=0.1&width=512&height=512&opt=&query=' % (r,d)
+		print('mag', mag)
+		print('http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpeg.aspx?ra=%g&dec=%g&scale=0.1&width=512&height=512&opt=&query=' % (r,d))
 
 
 	Ti = T[(T.exprad_i > 4.1) * (T.exprad_i < 4.4)]
 
-	print len(Ti), 'in cut on exprad_i'
-	print 'Runs:', np.unique(Ti.run)
+	print(len(Ti), 'in cut on exprad_i')
+	print('Runs:', np.unique(Ti.run))
 	I = np.argsort(-Ti.expmag_i)
 	Tj = Ti[I]
 	for r,d,mag in zip(Tj.ra, Tj.dec, Tj.expmag_i):
-		print 'mag', mag
-		print 'http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpeg.aspx?ra=%g&dec=%g&scale=0.1&width=512&height=512&opt=&query=' % (r,d)
+		print('mag', mag)
+		print('http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpeg.aspx?ra=%g&dec=%g&scale=0.1&width=512&height=512&opt=&query=' % (r,d))
 
 
 
@@ -601,14 +602,14 @@ def big():
 	plt.savefig('erad7.png')
 
 	Ti = Ti[Ti.expmag_i < 19]
-	print 'Runs:', np.unique(Ti.run)
+	print('Runs:', np.unique(Ti.run))
 	I = np.argsort(-Ti.expmag_i)
 	Tj = Ti[I]
 	urls = []
 	for r,d,mag in zip(Tj.ra, Tj.dec, Tj.expmag_i):
-		print '  mag', mag,
+		print('  mag', mag, end=' ')
 		url = 'http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpeg.aspx?ra=%g&dec=%g&scale=0.198&width=128&height=128&opt=&query=' % (r,d)
-		print '  ', url
+		print('  ', url)
 		urls.append(url)
 
 	html = '<html><body>' + '\n'.join(['<img src="%s" />' % url for url in urls]) + '</body></html>'
@@ -650,14 +651,14 @@ def big():
 	plt.savefig('drad7.png')
 
 	Ti = Ti[Ti.devmag_i < 18]
-	print 'Runs:', np.unique(Ti.run)
+	print('Runs:', np.unique(Ti.run))
 	I = np.argsort(-Ti.devmag_i)
 	Tj = Ti[I]
 	urls = []
 	for r,d,mag in zip(Tj.ra, Tj.dec, Tj.devmag_i):
-		print '  mag', mag,
+		print('  mag', mag, end=' ')
 		url = 'http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpeg.aspx?ra=%g&dec=%g&scale=0.198&width=128&height=128&opt=&query=' % (r,d)
-		print '  ', url
+		print('  ', url)
 		urls.append(url)
 
 	html = '<html><body>' + '\n'.join(['<img src="%s" />' % url for url in urls]) + '</body></html>'
@@ -729,7 +730,7 @@ if __name__ == '__main__':
 
 	maglim = 25
 	I = np.flatnonzero(T.chi2_psf > T.chi2_model)
-	print len(I), 'galaxies'
+	print(len(I), 'galaxies')
 	T.cut(I)
 	faint = (T.mag_disk > maglim) * (T.mag_spheroid > maglim)
 	T.cut(np.logical_not(faint))

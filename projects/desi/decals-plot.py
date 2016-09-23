@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -27,10 +28,10 @@ solve-field --config /data/INDEXES/sdss-astrometry-index/r2/cfg -v -D . --ra 244
 
 def plot_coadd(coadd, cowt, tt, ps, mnmx=None):
     if sum(cowt > 0) == 0:
-        print 'Zero pixels with weight > 0 for', tt
+        print('Zero pixels with weight > 0 for', tt)
         return
     
-    print 'Max weight:', np.max(cowt)
+    print('Max weight:', np.max(cowt))
     co = coadd / np.maximum(1e-16, cowt)
     plt.clf()
     if mnmx is None:
@@ -82,7 +83,7 @@ if __name__ == '__main__':
     sz = 0.25
     T.cut(np.abs(T.dec - dec) < sz)
     T.cut(degrees_between(T.ra, T.dec, ra, dec) < sz)
-    print len(T), 'CCDs nearby'
+    print(len(T), 'CCDs nearby')
 
     # ranges = {'g': (96.2022476196, 207.536163788),
     #           'r': (272.476150513, 592.256534424),
@@ -95,8 +96,8 @@ if __name__ == '__main__':
     
     for band in 'grz':
         TT = T[T.filter == band]
-        print len(TT), 'in', band, 'band'
-        print 'filenames,hdus:', zip(TT.filename, TT.hdu)
+        print(len(TT), 'in', band, 'band')
+        print('filenames,hdus:', zip(TT.filename, TT.hdu))
 
         coimg = np.zeros((H,W), np.float32)
         cowt  = np.zeros((H,W), np.float32)
@@ -110,22 +111,22 @@ if __name__ == '__main__':
         lastfn = None
         
         for fn,hdu in zip(TT.filename, TT.hdu):
-            print
+            print()
             imgfn = fn
-            print 'Image file', fn, 'hdu', hdu
+            print('Image file', fn, 'hdu', hdu)
             #img = fitsio.FITS(fn)[hdu].read()
             img,imghdr = fitsio.read(fn, ext=hdu, header=True)
 
             sky = imghdr['SKYBRITE']
-            print 'SKYBRITE:', sky
+            print('SKYBRITE:', sky)
             medsky = np.median(img)
-            print 'Image median:', medsky
+            print('Image median:', medsky)
             #img -= sky
             img -= medsky
-            print 'Image median:', np.median(img)
+            print('Image median:', np.median(img))
 
             dqfn = fn.replace('_ooi_', '_ood_')
-            print 'DQ', dqfn
+            print('DQ', dqfn)
 
             wcsfn = imgfn
             wcsfn = wcsfn.replace('/project/projectdirs/cosmo/data/staging/decam',
@@ -146,26 +147,26 @@ if __name__ == '__main__':
                     except:
                         pass
 
-            print 'WCS filename', wcsfn
-            print 'Corr', corrfn
-            print 'SExtractor', sefn
+            print('WCS filename', wcsfn)
+            print('Corr', corrfn)
+            print('SExtractor', sefn)
 
             if not os.path.exists(wcsfn):
                 #
                 cmd = 'rm -f 1.fits flags.fits'
-                print cmd
+                print(cmd)
                 if os.system(cmd):
                     sys.exit(-1)
 
                 tmpimfn = '1.fits'
                 cmd = 'funpack -E %i -O %s %s' % (hdu, tmpimfn, imgfn)
-                print cmd
+                print(cmd)
                 if os.system(cmd):
                     sys.exit(-1)
 
                 tmpmaskfn = 'flags.fits'
                 cmd = 'funpack -E %i -O %s %s' % (hdu, tmpmaskfn, dqfn)
-                print cmd
+                print(cmd)
                 if os.system(cmd):
                     sys.exit(-1)
 
@@ -183,7 +184,7 @@ if __name__ == '__main__':
                        + '-L 0.25 -H 0.29 -u app '
                        + '--no-remove-lines --uniformize 0 --no-fits2fits '
                        + tmpimfn)
-                print cmd
+                print(cmd)
                 if os.system(cmd):
                     sys.exit(-1)
 
@@ -197,14 +198,14 @@ if __name__ == '__main__':
             #print sum(dq == 0), 'have value 0'
             
             wtfn = imgfn.replace('_ooi_', '_oow_')
-            print 'Weight', wtfn
+            print('Weight', wtfn)
             wt = fitsio.FITS(wtfn)[hdu].read()
             #print 'WT', wt.shape, wt.dtype
             
             if False:
                 # Nugent's bad pixel masks
                 bpfn = fn.replace('.fits', '.bpm.fits')
-                print 'Bad pixel mask', bpfn
+                print('Bad pixel mask', bpfn)
                 mask = fitsio.read(bpfn)
                 mask = (mask == 0)
             
@@ -215,14 +216,14 @@ if __name__ == '__main__':
                 else:
                     lims = [img]
                 Yo,Xo,Yi,Xi,rims = resample_with_wcs(targetwcs, wcs, lims, L)
-                print 'Resampled', len(Yo), 'pixels'
+                print('Resampled', len(Yo), 'pixels')
             except OverlapError:
-                print 'No overlap'
+                print('No overlap')
                 continue
 
-            print
-            print 'Filename     ', imgfn
-            print 'Last filename', lastfn
+            print()
+            print('Filename     ', imgfn)
+            print('Last filename', lastfn)
 
             clear = False
             if lastfn != imgfn or lastband != band:
@@ -230,11 +231,11 @@ if __name__ == '__main__':
             if lastfn is None:
                 pass
             elif lastfn != imgfn or lastband != band:
-                print 'Starting new file -- plotting last file'
+                print('Starting new file -- plotting last file')
                 tt = '%s band, file %s' % (lastband, os.path.basename(lastfn).replace('.fits.fz',''))
                 plot_coadd(resam, rewt, tt, ps, mnmx=ranges.get(lastband,None))
             if clear:
-                print 'Clearing resams'
+                print('Clearing resams')
                 resam[:,:,] = 0.
                 rewt [:,:,] = 0.
                 lastfn = imgfn
@@ -266,9 +267,9 @@ if __name__ == '__main__':
 
         mn,mx = [np.percentile(coadd[cowt > 0], p) for p in [25,99.5]]
 
-        print 'Band', band
-        print 'min', mn
-        print 'max', mx
+        print('Band', band)
+        print('min', mn)
+        print('max', mx)
 
         tt = '%s band stack' % band
         plot_coadd(coimg, cowt, tt, ps, mnmx=(mn,mx))

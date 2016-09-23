@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
 	import matplotlib
 	matplotlib.use('Agg')
@@ -21,11 +22,11 @@ def save(idstr, tractor, zr):
 	mod = tractor.getModelImages()[0]
 
 	synthfn = 'synth-%s.fits' % idstr
-	print 'Writing synthetic image to', synthfn
+	print('Writing synthetic image to', synthfn)
 	pyfits.writeto(synthfn, mod, clobber=True)
 
 	pfn = 'tractor-%s.pickle' % idstr
-	print 'Saving state to', pfn
+	print('Saving state to', pfn)
 	pickle_to_file(tractor, pfn)
 
 	timg = tractor.getImage(0)
@@ -35,7 +36,7 @@ def save(idstr, tractor, zr):
 
 	def savepng(pre, img, title=None, **kwargs):
 		fn = '%s-%s.png' % (pre, idstr)
-		print 'Saving', fn
+		print('Saving', fn)
 		plt.clf()
 		plt.imshow(img, **kwargs)
 		if title is not None:
@@ -90,7 +91,7 @@ def makeflipbook(ntune, prefix):
 			   (prefix, 'tune-%d-' % (ntune) + prefix)*3))
 	tex += r'\end{document}' + '\n'
 	fn = 'flip-' + prefix + '.tex'
-	print 'Writing', fn
+	print('Writing', fn)
 	open(fn, 'wb').write(tex)
 	os.system("pdflatex '%s'" % fn)
 
@@ -121,7 +122,7 @@ if __name__ == '__main__':
 	wcs = timg.getWcs()
 	for source in sources:
 		x,y = wcs.positionToPixel(source, source.getPosition())
-		print '  (%.2f, %.2f):' % (x+x0,y+y0), source
+		print('  (%.2f, %.2f):' % (x+x0,y+y0), source)
 
 	tractor = st.SDSSTractor([timg])
 	tractor.addSources(sources)
@@ -142,7 +143,7 @@ if __name__ == '__main__':
 			mini = i
 	gal = sources[mini]
 	galorig = gal.copy()
-	print 'Closest source:', gal
+	print('Closest source:', gal)
 
 	# optimize original SDSS source (at fixed complexity)
 	nsteps = 200
@@ -191,9 +192,9 @@ if __name__ == '__main__':
 			ns2 = ons2.copy()
 			tractor.addSource(ns1)
 			tractor.addSource(ns2)
-			print 'Created sources:'
-			print ' ', ns1
-			print ' ', ns2
+			print('Created sources:')
+			print(' ', ns1)
+			print(' ', ns2)
 			# pin source positions
 			ns1.pinParam('pos')
 			ns2.pinParam('pos')
@@ -211,10 +212,10 @@ if __name__ == '__main__':
 			lnls[i, j] = tractor.getLogLikelihood()
 			# make some freaky plots
 			prefix = '%s-%d-%d' % (sdssprefix, i, j)
-			print 'Optimized sources:'
-			print ' ', ns1
-			print ' ', ns2
-			print prefix, lnls[i, j]
+			print('Optimized sources:')
+			print(' ', ns1)
+			print(' ', ns2)
+			print(prefix, lnls[i, j])
 			save(prefix, tractor, zr)
 			# remove sources again
 			tractor.removeSource(ns1)
@@ -223,23 +224,23 @@ if __name__ == '__main__':
 			optsrcs.append((prefix, i,j,ns1.copy(),ns2.copy(),lnls[i,j]))
 
 	# output
-	print
-	print sdssprefix
-	print 'original ln likelihood:', lnlorig
-	print '  ', galorig
-	print
-	print sdssprefix
-	print 'optimized (at original SDSS complexity) ln likelihood:', lnlopt
-	print '  ', galopt
+	print()
+	print(sdssprefix)
+	print('original ln likelihood:', lnlorig)
+	print('  ', galorig)
+	print()
+	print(sdssprefix)
+	print('optimized (at original SDSS complexity) ln likelihood:', lnlopt)
+	print('  ', galopt)
 
 	for prefix,i,j,ns1,ns2,lnl in optsrcs:
-		print
-		print prefix
-		print i,j, 'new ln likelihood:', lnl
-		print '  ', ns1
-		print '  ', ns2
+		print()
+		print(prefix)
+		print(i,j, 'new ln likelihood:', lnl)
+		print('  ', ns1)
+		print('  ', ns2)
 
-	print
+	print()
 	# ------------------------------------------------------------------
 	# die
 	# ------------------------------------------------------------------
@@ -248,12 +249,12 @@ if __name__ == '__main__':
 	ntune = 10
 	for i in range(ntune):
 		tractor.optimizeCatalogLoop(nsteps=1)
-		print 'Optimization step', i, 'lnl', tractor.getLogLikelihood()
+		print('Optimization step', i, 'lnl', tractor.getLogLikelihood())
 		save('tune-%d-' % (i+1) + prefix, tractor, zr)
 	
 	makeflipbook(ntune, prefix)
-	print
-	print 'Created flip-book flip-%s.pdf' % prefix
+	print()
+	print('Created flip-book flip-%s.pdf' % prefix)
 
 	lnl1 = tractor.getLogLikelihood()
 
@@ -267,17 +268,17 @@ if __name__ == '__main__':
 	sc = st.SdssPhotoCal.scale
 	pg = PinnedDevGalaxy(rdgal, gal.flux, gal.shape)
 	ps = PinnedPointSource(rdstar, st.SdssFlux(10000. / sc))
-	print 'gal flux', gal.flux
-	print 'gal shape', gal.shape
-	print 'Adding pinned galaxy', pg
-	print 'Adding pinned star', ps
+	print('gal flux', gal.flux)
+	print('gal shape', gal.shape)
+	print('Adding pinned galaxy', pg)
+	print('Adding pinned star', ps)
 
-	print 'number of gal params', gal.numberOfParams()
-	print gal.getParams()
-	print 'number of pinned gal params', pg.numberOfParams()
-	print pg.getParams()
-	print 'number of pinned star params', ps.numberOfParams()
-	print ps.getParams()
+	print('number of gal params', gal.numberOfParams())
+	print(gal.getParams())
+	print('number of pinned gal params', pg.numberOfParams())
+	print(pg.getParams())
+	print('number of pinned star params', ps.numberOfParams())
+	print(ps.getParams())
 
 	tractor.addSource(pg)
 	tractor.addSource(ps)
@@ -295,10 +296,10 @@ if __name__ == '__main__':
 		save('tune-%d-' % (i+1) + prefix, tractor, zr)
 	lnl3 = tractor.getLogLikelihood()
 
-	print 'Final sources (gal + ps) A:'
+	print('Final sources (gal + ps) A:')
 	for source in sources:
 		x,y = wcs.positionToPixel(source, source.getPosition())
-		print '  (%.2f, %.2f):' % (x+x0,y+y0), source
+		print('  (%.2f, %.2f):' % (x+x0,y+y0), source)
 
 	# Now optimize everything...
 	for i in range(ntune, ntune*2):
@@ -306,14 +307,14 @@ if __name__ == '__main__':
 		save('tune-%d-' % (i+1) + prefix, tractor, zr)
 	lnl3b = tractor.getLogLikelihood()
 
-	print 'Final sources (gal + ps) B:'
+	print('Final sources (gal + ps) B:')
 	for source in sources:
 		x,y = wcs.positionToPixel(source, source.getPosition())
-		print '  (%.2f, %.2f):' % (x+x0,y+y0), source
+		print('  (%.2f, %.2f):' % (x+x0,y+y0), source)
 
 	makeflipbook(ntune*2, prefix)
-	print
-	print 'Created flip-book flip-%s.pdf' % prefix
+	print()
+	print('Created flip-book flip-%s.pdf' % prefix)
 	
 	prefix = 'starstar-%06i-%s%i-%04i' % (run, bandname, camcol, field)
 	ps2 = PinnedPointSource(rdgal, gal.flux)
@@ -331,30 +332,30 @@ if __name__ == '__main__':
 		save('tune-%d-' % (i+1) + prefix, tractor, zr)
 	lnl5 = tractor.getLogLikelihood()
 
-	print 'Final sources (2 x ps) A:'
+	print('Final sources (2 x ps) A:')
 	for source in sources:
 		x,y = wcs.positionToPixel(source, source.getPosition())
-		print '  (%.2f, %.2f):' % (x+x0,y+y0), source
+		print('  (%.2f, %.2f):' % (x+x0,y+y0), source)
 
 	for i in range(ntune, ntune*2):
 		tractor.optimizeCatalogAtFixedComplexityStep()
 		save('tune-%d-' % (i+1) + prefix, tractor, zr)
 	lnl5b = tractor.getLogLikelihood()
 
-	print 'Final sources (2 x ps) B:'
+	print('Final sources (2 x ps) B:')
 	for source in sources:
 		x,y = wcs.positionToPixel(source, source.getPosition())
-		print '  (%.2f, %.2f):' % (x+x0,y+y0), source
+		print('  (%.2f, %.2f):' % (x+x0,y+y0), source)
 
 	makeflipbook(ntune*2, prefix)
-	print
-	print 'Created flip-book flip-%s.pdf' % prefix
+	print()
+	print('Created flip-book flip-%s.pdf' % prefix)
 
-	print 'Initial:', lnl0
-	print 'Tuned:', lnl1
-	print 'Pinned sources (gal + ps):', lnl2
-	print 'Tuned:', lnl3
-	print 'Tuned all:', lnl3b
-	print 'Pinned sources (2 x ps):', lnl4
-	print 'Tuned:', lnl5
-	print 'Tuned all:', lnl5b
+	print('Initial:', lnl0)
+	print('Tuned:', lnl1)
+	print('Pinned sources (gal + ps):', lnl2)
+	print('Tuned:', lnl3)
+	print('Tuned all:', lnl3b)
+	print('Pinned sources (2 x ps):', lnl4)
+	print('Tuned:', lnl5)
+	print('Tuned all:', lnl5b)

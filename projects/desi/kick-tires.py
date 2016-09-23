@@ -1,3 +1,4 @@
+from __future__ import print_function
 import sys
 import os
 import matplotlib
@@ -119,19 +120,19 @@ def forced_phot():
     FF = []
     for fn,expnum,extname,band in ff:
         F = fits_table(fn)
-        print len(F), 'from', fn
+        print(len(F), 'from', fn)
         F.expnum  = np.array([expnum ] * len(F))
         F.extname = np.array([extname] * len(F))
         FF.append(F)
     F = merge_tables(FF)
     bricks = np.unique(F.brickname)
-    print 'Bricks:', bricks
+    print('Bricks:', bricks)
     T = merge_tables([fits_table(os.path.join('dr1','tractor',b[:3],
                                               'tractor-%s.fits' % b))
                                               for b in bricks])
-    print 'Total of', len(T), 'sources'
+    print('Total of', len(T), 'sources')
     T.cut(T.brick_primary == 1)
-    print 'Cut to', len(T), 'brick_primary'
+    print('Cut to', len(T), 'brick_primary')
 
     Tall = T.copy()
 
@@ -182,8 +183,8 @@ def forced_phot():
     T.srcid = (T.brickid.astype(np.int64) << 32 | T.objid)
 
     F.srcid = (F.brickid.astype(np.int64) << 32 | F.objid)
-    print 'Total of', len(F), 'forced'
-    print len(np.unique(F.srcid)), 'unique source in forced'
+    print('Total of', len(F), 'forced')
+    print(len(np.unique(F.srcid)), 'unique source in forced')
 
     tmap = dict([(s,i) for i,s in enumerate(T.srcid)])
 
@@ -222,18 +223,18 @@ def forced_phot():
     # Cut to sources with forced phot
     T.cut(np.flatnonzero(reduce(np.logical_or, [
         np.any(T.get('forced_%s'%band) > 0, axis=1) for band in bands])))
-    print 'Cut to', len(T), 'sources with forced phot'
+    print('Cut to', len(T), 'sources with forced phot')
 
     flux = T.decam_flux[:,1]
     forced = T.forced_g
     rms = T.forced_rms_g
     N = T.forced_n_g
     I = np.flatnonzero((N > 1) * (flux > 1e3))
-    print len(I), 'with flux > 10^3'
+    print(len(I), 'with flux > 10^3')
     #print 'flux', flux[I]
     #print 'forced'
     for f,ff,r,n in zip(flux[I], forced[I,:], rms[I], N[I]):
-        print 'flux', f, 'n', n, 'forced RMS', r, 'forced', ff
+        print('flux', f, 'n', n, 'forced RMS', r, 'forced', ff)
 
     # Compute some summary stats
     # allbands = 'ugrizY'
@@ -316,7 +317,7 @@ def forced_phot():
         #plt.axhline(1., color='r')
         #plt.axhline(0., color='k', alpha=0.25)
         I = np.flatnonzero(N > 1)
-        print len(I), 'of', len(rms), 'have >1 exposure'
+        print(len(I), 'of', len(rms), 'have >1 exposure')
         plt.plot(flux[I], rms[I], 'b.', alpha=0.25)
         #plt.ylim(lo-0.1, hi+0.1)
         plt.xlim(1e-2, 1e5)
@@ -347,7 +348,7 @@ def forced_phot():
     dhi = Tall.dec.max()
 
     if rhi - rlo > 180:
-        print 'No RA wrap-around support'
+        print('No RA wrap-around support')
         sys.exit(0)
 
     dec = (dlo + dhi) / 2.
@@ -359,12 +360,12 @@ def forced_phot():
     W = dra  * np.cos(np.deg2rad(dec)) * 3600. / pixscale
     H = int(np.ceil(H))
     W = int(np.ceil(W))
-    print 'Target image shape', (H,W)
+    print('Target image shape', (H,W))
     targetwcs = Tan(ra, dec, W/2.+0.5, H/2.+0.5,
                     -pixscale/3600., 0., 0., pixscale/3600.,
                     float(W), float(H))
     img = np.zeros((H,W,3), np.uint8)
-    print 'img', img.shape
+    print('img', img.shape)
     decals = Decals()
     for brickname in bricks:
         brick = decals.get_brick_by_name(brickname)
@@ -376,7 +377,7 @@ def forced_phot():
             continue
         brickimg = plt.imread(os.path.join('dr1', 'coadd', brickname[:3],
                                            brickname, 'decals-%s-image.jpg' % brickname))
-        print 'brick image', brickimg.shape, brickimg.dtype
+        print('brick image', brickimg.shape, brickimg.dtype)
         brickimg = brickimg[::-1,:,:]
         img[Yo,Xo,:] = brickimg[Yi,Xi,:]
 
@@ -388,7 +389,7 @@ def forced_phot():
     Tall.bx = x - 1
     Tall.by = y - 1
 
-    print 'Tall:', len(Tall), 'sources'
+    print('Tall:', len(Tall), 'sources')
 
     # plt.clf()
     # dimshow(img)
@@ -442,18 +443,18 @@ def galaxies():
 
     T = fits_table(os.path.join('dr1', 'tractor', brick[:3],
                                 'tractor-%s.fits' % brick))
-    print len(T), 'catalog sources'
-    print np.unique(T.brick_primary)
+    print(len(T), 'catalog sources')
+    print(np.unique(T.brick_primary))
     T.cut(T.brick_primary)
-    print len(T), 'primary'
+    print(len(T), 'primary')
 
-    print 'Out of bounds:', np.unique(T.out_of_bounds)
-    print 'Left blob:', np.unique(T.left_blob)
+    print('Out of bounds:', np.unique(T.out_of_bounds))
+    print('Left blob:', np.unique(T.left_blob))
     
     img = plt.imread(os.path.join('dr1', 'coadd', brick[:3], brick,
                                   'decals-%s-image.jpg' % brick))
     img = img[::-1,:,:]
-    print 'Image:', img.shape
+    print('Image:', img.shape)
 
     if False:
         resid = plt.imread(os.path.join('dr1', 'coadd', brick[:3], brick,
@@ -482,13 +483,13 @@ def galaxies():
 
     cut = np.logical_or(E.shapeexp_e1_err > 1., E.shapeexp_e2_err > 1.)
     I = np.flatnonzero(cut)
-    print len(I), 'EXP with large ellipticity error'
+    print(len(I), 'EXP with large ellipticity error')
     cutobjs.append((E[I], 'EXP ellipticity error > 1'))
 
     E.cut(np.logical_not(cut))
     
     I = np.flatnonzero(np.logical_or(D.shapedev_e1_err > 1., D.shapedev_e2_err > 1.))
-    print len(I), 'DEV with large ellipticity error'
+    print(len(I), 'DEV with large ellipticity error')
     cutobjs.append((D[I], 'DEV ellipticity error > 1'))
 
     I = np.flatnonzero(np.logical_or(np.abs(E.shapeexp_e1) > 0.5,
@@ -617,7 +618,7 @@ def galaxies():
 
     for objs,desc in cutobjs:
         if len(objs) == 0:
-            print 'No objects in cut', desc
+            print('No objects in cut', desc)
             continue
 
         rows,cols = 4,6
@@ -658,8 +659,8 @@ def galaxies():
     sys.exit(0)
 
     
-    print 'RA', T.ra.min(), T.ra.max()
-    print 'Dec', T.dec.min(), T.dec.max()
+    print('RA', T.ra.min(), T.ra.max())
+    print('Dec', T.dec.min(), T.dec.max())
 
     # Uhh, how does *this* happen?!  Fitting gone wild I guess
     # T.cut((T.ra > 0) * (T.ra < 360) * (T.dec > -90) * (T.dec < 90))

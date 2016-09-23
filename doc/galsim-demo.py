@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 
@@ -20,11 +21,11 @@ if True:
     tims = []
     for band in bands:
         fn = os.path.join(mydir, 'galsim', 'output', 'demo12b_%s.fits' % band)
-        print 'Band', band, 'Reading', fn
+        print('Band', band, 'Reading', fn)
         cube,hdr = fitsio.read(fn, header=True)
-        print 'Read', cube.shape
+        print('Read', cube.shape)
         pixscale = hdr['GS_SCALE']
-        print 'Pixel scale:', pixscale, 'arcsec/pix'
+        print('Pixel scale:', pixscale, 'arcsec/pix')
         nims,h,w = cube.shape
         assert(nims == nepochs)
         for i in range(nims):
@@ -73,15 +74,15 @@ if True:
     # Freeze all image calibration parameters
     tractor.freezeParam('images')
 
-    print 'Thawed params:'
+    print('Thawed params:')
     tractor.printThawedParams()
-    print
+    print()
 
     
     # Take several linearized least squares steps
     for i in range(20):
         dlnp,X,alpha = tractor.optimize(shared_params=False)
-        print 'dlnp', dlnp
+        print('dlnp', dlnp)
         if dlnp < 1e-3:
             break
 
