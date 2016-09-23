@@ -70,7 +70,7 @@ script:
 #    - python examples/tractor-sdss-synth.py
 
 after_success:
-    - coveralls debug
+    #- coveralls debug
     - coveralls
 
 addons:
