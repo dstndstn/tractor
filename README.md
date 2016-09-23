@@ -2,6 +2,10 @@
 
 Probabilistic astronomical source detection & measurement
 
+[![Build Status](https://travis-ci.org/dstndstn/tractor.svg?branch=master)](https://travis-ci.org/dstndstn/tractor)
+[![Docs](https://readthedocs.org/projects/thetractor/badge/?version=latest)](http://thetractor.readthedocs.org/en/latest/)
+[![Coverage](https://coveralls.io/repos/github/dstndstn/tractor/badge.svg?branch=master)](https://coveralls.io/github/dstndstn/tractor)
+
 ## authors & license
 
 Copyright 2011-2016 Dustin Lang (University of Toronto) & David W. Hogg (NYU)
