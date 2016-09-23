@@ -205,7 +205,7 @@ def main():
                       help='Use L-BFGS-B optimization method')
     parser.add_option('--scale', dest='scale', type=int, help='Scale images down by this factor')
     parser.add_option('--unzip', dest='unzip', help='Save unzipped frame files in this directory')
-    parser.add_option('--no-flipbook', dest='flipbook', default=True
+    parser.add_option('--no-flipbook', dest='flipbook', default=True,
                       action='store_false', help='Do not write PDF flip-book of plots')
     opt,args = parser.parse_args()
 
