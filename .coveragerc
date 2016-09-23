@@ -1,0 +1,23 @@
+# .coveragerc to control coverage.py
+# see https://coverage.readthedocs.org/en/coverage-4.0.3/config.html
+
+# coverage erase
+# coverage run legacypipe/runbrick.py -b 2447p120 --zoom 1020 1070 2775 2815 --no-wise --force-all --survey-dir test/testcase3/ --outdir out-testcase3
+# coverage report
+# coverage html
+# open coverage_html_report/index.html
+
+[run]
+branch = True
+
+include = tractor/*
+omit = /usr/local/pipped/lib/python/*
+
+[report]
+
+# exclude_lines =
+#    pragma: no cover
+#    def __repr__
+
+[html]
+directory = coverage_html_report
