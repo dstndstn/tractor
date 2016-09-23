@@ -169,7 +169,7 @@ class PointSource(MultiParams, SingleProfileSource):
 
                 # Convert x,y derivatives to Position derivatives
 
-                print('Computing ptsrc deriv via patchdx,patchdy')
+                #print('Computing ptsrc deriv via patchdx,patchdy')
 
                 px,py = wcs.positionToPixel(pos, self)
                 cd = wcs.cdAtPixel(px, py)
@@ -187,7 +187,7 @@ class PointSource(MultiParams, SingleProfileSource):
                 psteps = pos.getStepSizes(img)
                 pvals = pos.getParams()
 
-                print('Computing ptsrc deriv via stepping params by', psteps)
+                #print('Computing ptsrc deriv via stepping params by', psteps)
 
                 for i,pstep in enumerate(psteps):
                     oldval = pos.setParam(i, pvals[i] + pstep)

@@ -324,8 +324,10 @@ bool ImageCostFunction::_Evaluate(double const* const* parameters,
         int iparam = PyInt_AsLong(PyTuple_GetItem(deriv, 0));
 
         double* J = jacobians[iparam];
-        if (!J)
+        if (!J) {
+            printf("Jacobian for parameter %i was not required.\n", iparam);
             continue;
+        }
 
         int x0 = PyInt_AsLong(PyTuple_GetItem(deriv, 1));
         int y0 = PyInt_AsLong(PyTuple_GetItem(deriv, 2));

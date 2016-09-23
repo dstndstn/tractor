@@ -63,6 +63,7 @@ script:
     - make
     - make doc
     - python test/test_tractor.py
+    - python examples/tractor-sdss-synth.py
 
 addons:
   apt:

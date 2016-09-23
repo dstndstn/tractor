@@ -366,9 +366,11 @@ class CeresTractorAdapter(object):
         self.scale = scales
 
     def getImage(self, i):
+        print('CeresTractorAdapter: getImage(%i)' % i)
         return self.tractor.getImage(i)
 
     def getChiImage(self, i):
+        print('CeresTractorAdapter: getChiImage(%i)' % i)
         return self.tractor.getChiImage(i)
 
     def _getOneImageDerivs(self, i):
@@ -378,4 +380,5 @@ class CeresTractorAdapter(object):
         return derivs
 
     def setParams(self, p):
+        print('CeresTractorAdapter: setParams:', self.offset + self.scale * p)
         return self.tractor.setParams(self.offset + self.scale * p)

@@ -372,7 +372,6 @@ def main():
 
                 for j,band in enumerate(bands):
                     save('tune-%d-%d-%s-' % (count+1,i+1,band) + prefix, tractor, imgi=j, **sa)
-                tractor.clearCache()
 
                 lnp1 = tractor.getLogProb()
                 print 'After optimization: lnprob', lnp1
