@@ -227,7 +227,8 @@ def main():
         opt.band = 'r'
         opt.curl = True
         tune.extend([('i',[1,1]), ('n',1)])
-        opt.roi = [100,600,100,600]
+        if opt.roi is None:
+            opt.roi = [100,600,100,600]
         print()
         print('Demo mode: grabbing Run/Camcol/Field/Band %i/%i/%i/%s' % (run, camcol, field, opt.band))
         print('Using SDSS DR9 data')
