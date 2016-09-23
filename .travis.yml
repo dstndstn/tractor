@@ -70,8 +70,8 @@ script:
 #    - python examples/tractor-sdss-synth.py
 
 after_success:
-    - (cd py && coveralls debug)
-    - (cd py && coveralls)
+    - coveralls debug
+    - coveralls
 
 addons:
   apt:
