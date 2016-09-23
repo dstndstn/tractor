@@ -205,6 +205,8 @@ def main():
                       help='Use L-BFGS-B optimization method')
     parser.add_option('--scale', dest='scale', type=int, help='Scale images down by this factor')
     parser.add_option('--unzip', dest='unzip', help='Save unzipped frame files in this directory')
+    parser.add_option('--no-flipbook', dest='flipbook', default=True
+                      action='store_false', help='Do not write PDF flip-book of plots')
     opt,args = parser.parse_args()
 
     if opt.verbose == 0:
@@ -379,10 +381,11 @@ def main():
                 print('After optimization: lnprob', lnp1)
                 print('  delta-lnprob:', lnp1 - lnp0)
 
-    makeflipbook(opt, prefix,tune,len(tractor.getCatalog()),bands)
-    print()
-    print('Created flip-book flip-%s.pdf' % prefix)
-
+    if opt.flipbook:
+        makeflipbook(opt, prefix,tune,len(tractor.getCatalog()),bands)
+        print()
+        print('Created flip-book flip-%s.pdf' % prefix)
+    print('Done')
 
 
 def makeflipbook(opt, prefix,tune,numSrcs,bands):
