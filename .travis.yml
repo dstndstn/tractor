@@ -66,9 +66,10 @@ script:
     - pwd
     - make
     - make doc
+    - coverage erase
     - coverage run test/test_psfex.py
-    - coverage run test/test_tractor.py
-    - coverage run examples/tractor-sdss-synth.py --roi 100 200 100 200 --no-flipbook
+    - coverage run -a test/test_tractor.py
+    - coverage run -a examples/tractor-sdss-synth.py --roi 100 200 100 200 --no-flipbook
 
 after_success:
     #- coveralls debug
