@@ -16,6 +16,7 @@ sudo: false
 # (currently Travis-CI uses 12.x precise)
 
 install:
+   - pip install --user numpy==1.11.0
    - pip install --user numpydoc
    - pip install --user pyfits
    - pip install --user coveralls
@@ -80,7 +81,6 @@ addons:
     - wcslib-dev
     - libcfitsio3
     - libcfitsio3-dev
-    - python-numpy
     - swig
     - gsl-bin
     - libgsl0-dev
@@ -90,6 +90,7 @@ addons:
     - python-matplotlib
     - python-tk
 
+#    - python-numpy
 #    - python-mock
 #    - python-pyfits
 #    - python-numpydoc

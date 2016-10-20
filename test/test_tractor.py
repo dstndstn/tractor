@@ -8,7 +8,6 @@ import unittest
 from tractor import *
 from tractor.sdss import *
 from tractor.galaxy import *
-from tractor.ceres_optimizer import CeresOptimizer
 
 class TractorTest(unittest.TestCase):
     def test_expgal(self):

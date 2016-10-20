@@ -60,13 +60,23 @@ class PsfExTest(unittest.TestCase):
         print('cx,cy', cx,cy)
         print('shape', shape)
         print('v, w', v,w)
+
+        if ps is not None:
+            import pylab as plt
+            from astrometry.util.plotutils import dimshow
+            plt.clf()
+            plt.subplot(1,2,1)
+            dimshow(F.real)
+            plt.subplot(1,2,2)
+            dimshow(F.imag)
+            ps.savefig()
+            
         
     def test_psfex(self):
 
         if ps is not None:
             from astrometry.util.plotutils import dimshow
             import pylab as plt
-
     
         H,W = 100,100
         cx,cy = W/2., H/2.
