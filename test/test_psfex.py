@@ -6,26 +6,72 @@ import unittest
 
 from tractor import *
 from tractor.galaxy import ExpGalaxy, disable_galaxy_cache
-from tractor.psfex import PixelizedPsfEx
+from tractor.psfex import PixelizedPsfEx, PsfExModel
 
 ps = None
 
 class PsfExTest(unittest.TestCase):
 
+    def setUp(self):
+        fn = os.path.join(os.path.dirname(__file__),
+                          'psfex-decam-00392360-S31.fits')
+        self.psf = PixelizedPsfEx(fn)
+    
+    def test_shifted(self):
+        # Test that the PsfEx model varies spatially
+        # Test that the PixelizedPsfEx.getShifted() method works
+        #  (shifted model's model at 0.,0. equals the original at dx,dy)
+        dx,dy = 50., 100.
+
+        psfim0 = self.psf.getImage(0., 0.)
+        psfim = self.psf.getImage(dx, dy)
+
+        # spatial variation
+        rms = np.sqrt(np.mean((psfim0 - psfim)**2))
+        self.assertTrue((rms > 0) * (rms < 1e-4))
+
+        # getShifted()
+        subpsf = self.psf.getShifted(dx, dy)
+        subim = subpsf.getImage(0., 0.)
+        rms = np.sqrt(np.mean((subim - psfim)**2))
+        self.assertEqual(rms, 0.)
+
+    def test_io(self):
+        # Write PsfExModel to disk, then read and check consistency.
+        import tempfile
+        f,tmpfn = tempfile.mkstemp(suffix='.fits')
+        os.close(f)
+        self.psf.psfex.writeto(tmpfn)
+        print('Wrote', tmpfn)
+
+        # Read
+        mod = PsfExModel(fn=tmpfn)
+        psf = PixelizedPsfEx(None, psfex=mod)
+
+        orig_im = self.psf.getImage(0., 0.)
+        im = psf.getImage(0., 0.)
+        self.assertEqual(np.max(np.abs(orig_im - im)), 0.)
+
+        os.unlink(tmpfn)
+        
+    def test_fourier(self):
+        F,(cx,cy),shape,(v,w) = self.psf.getFourierTransform(100., 100., 32)
+        print('F', F)
+        print('cx,cy', cx,cy)
+        print('shape', shape)
+        print('v, w', v,w)
+        
     def test_psfex(self):
 
         if ps is not None:
             from astrometry.util.plotutils import dimshow
             import pylab as plt
 
-        fn = os.path.join(os.path.dirname(__file__),
-                          'psfex-decam-00392360-S31.fits')
-        psf = PixelizedPsfEx(fn)
     
         H,W = 100,100
         cx,cy = W/2., H/2.
     
-        pixpsf = psf.constantPsfAt(cx, cy)
+        pixpsf = self.psf.constantPsfAt(cx, cy)
 
         ph,pw = pixpsf.shape
         xx,yy = np.meshgrid(np.arange(pw), np.arange(ph))
@@ -54,7 +100,7 @@ class PsfExTest(unittest.TestCase):
         self.assertTrue(np.all(np.abs(np.array(gpsf.getParams()) - pp) < 0.1))
         
         tim = Image(data=np.zeros((H,W)), invvar=np.ones((H,W)),
-                    psf=psf)
+                    psf=self.psf)
     
         xx,yy = np.meshgrid(np.arange(W), np.arange(H))
     
@@ -66,7 +112,7 @@ class PsfExTest(unittest.TestCase):
     
         disable_galaxy_cache()
         
-        tim.psf = psf
+        tim.psf = self.psf
         mod = tr1.getModelImage(0)
         mod1 = mod
     
@@ -115,7 +161,7 @@ class PsfExTest(unittest.TestCase):
         # range ~ -0.15 to +0.25
         self.assertTrue(np.all(np.abs(mod1 - mod2) < 0.25))
         
-        tim.psf = psf
+        tim.psf = self.psf
         mod = tr2.getModelImage(0)
         mod1 = mod
 
@@ -133,9 +179,8 @@ class PsfExTest(unittest.TestCase):
             plt.title('Gal model, PsfEx')
             ps.savefig()
     
-        tim.psf = pixpsf
-        mod = tr2.getModelImage(0)
-    
+        # tim.psf = pixpsf
+        # mod = tr2.getModelImage(0)
         # plt.clf()
         # dimshow(mod)
         # plt.title('Gal model, pixpsf')
@@ -144,6 +189,8 @@ class PsfExTest(unittest.TestCase):
         tim.psf = gpsf
         mod = tr2.getModelImage(0)
         mod2 = mod
+        # range ~ -0.1 to +0.2
+        self.assertTrue(np.all(np.abs(mod1 - mod2) < 0.2))
     
         if ps is not None:
             plt.clf()
@@ -157,16 +204,7 @@ class PsfExTest(unittest.TestCase):
             plt.colorbar()
             ps.savefig()
 
-        # range ~ -0.1 to +0.2
-        self.assertTrue(np.all(np.abs(mod1 - mod2) < 0.2))
-        
-
 if __name__ == '__main__':
-    # import argparse
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument('--plots', action='store_true', help='Create plots?')
-    # opt = parser.parse_args()
-    #if opt.plots:
     import sys
     if '--plots' in sys.argv:
         sys.argv.remove('--plots')
