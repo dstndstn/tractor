@@ -18,9 +18,6 @@ sudo: false
 install:
    - pip install --user numpy==1.11.0
    - pip install --user numpydoc
-   # - pip install --user pyfits
-   # For sdss.common
-   - pip install --user astropy
    - pip install --user coveralls
    - pip install --user fitsio
    - ls ~/.local
@@ -43,7 +40,6 @@ before_script:
     - echo $HOME
     - ls $HOME
     - ls $HOME/astrometry.net
-    # - set
     - if [ ! -d "$HOME/astrometry.net" ]; then (cd $HOME; git clone https://github.com/dstndstn/astrometry.net.git; cd astrometry.net; ln -sf /usr/include netpbm; make && make py); fi
     - (cd $HOME/astrometry.net && git pull && make && make py) || (rm -Rf $HOME/astrometry.net && cd $HOME && git clone https://github.com/dstndstn/astrometry.net.git && cd astrometry.net && make && make py)
     - ln -s $HOME/astrometry.net astrometry
@@ -96,7 +92,6 @@ addons:
 
 #    - python-numpy
 #    - python-mock
-#    - python-pyfits
 #    - python-numpydoc
 
 cache:
