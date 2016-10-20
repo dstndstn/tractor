@@ -18,7 +18,7 @@ sudo: false
 install:
    - pip install --user numpy==1.11.0
    - pip install --user numpydoc
-   - pip install --user pyfits
+   # - pip install --user pyfits
    - pip install --user coveralls
    - pip install --user fitsio
    - ls ~/.local
