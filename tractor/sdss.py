@@ -162,13 +162,18 @@ def _check_sdss_files(sdss, run, camcol, field, bandname, filetypes,
         exists = os.path.exists(fn)
         retrieveKwargs = {}
         if exists and tryopen:
-            import pyfits
             # This doesn't catch *all* types of errors you can imagine...
+            cmd = 'fitsverify -q %s' % fn
             try:
-                T = pyfits.open(fn)
+                print('Running:', cmd)
+                rtn = os.system(cmd)
+                print('rtn:', rtn)
+                if rtn != 0:
+                    exists = False
             except:
-                print('Failed to open file', fn, 'as FITS file: maybe corrupt.')
+                print('Failed to fitsverify', fn, ': maybe corrupt.')
                 exists = False
+            if not exists:
                 retrieveKwargs.update(skipExisting=False)
                 
         if (not exists) and retrieve:
