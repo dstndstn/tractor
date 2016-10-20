@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
@@ -22,8 +23,8 @@ for galaxy in files:
     colors.append(CG.getBrightness()[1]-CG.getBrightness()[3])
     concs.append(conc[3])
 
-print colors
-print concs
+print(colors)
+print(concs)
 
 plt.plot(colors,concs, 'r+')
 plt.savefig("colorvconci.png")

@@ -1,3 +1,4 @@
+from __future__ import print_function
 
 radecroi = (334.3, 334.4, 0.3, 0.4)
 
@@ -59,13 +60,13 @@ def get_cfht_catalog(mags=['i'], maglim = 27., returnTable=False):
     from tractor.galaxy import DevGalaxy, ExpGalaxy, CompositeGalaxy, GalaxyShape
 
     T = fits_table('/project/projectdirs/bigboss/data/cs82/W4p1m1_i.V2.7A.swarp.cut.deVexp.fit', hdunum=2)
-    print 'Read', len(T), 'sources'
+    print('Read', len(T), 'sources')
     # Cut to ROI
     (ra0,ra1, dec0,dec1) = radecroi
     T.ra  = T.alpha_j2000
     T.dec = T.delta_j2000
     T = T[(T.ra > ra0) * (T.ra < ra1) * (T.dec > dec0) * (T.dec < dec1)]
-    print 'Cut to', len(T), 'objects in ROI.'
+    print('Cut to', len(T), 'objects in ROI.')
     
     srcs = Catalog()
     keepi = []

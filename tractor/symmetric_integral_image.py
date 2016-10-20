@@ -1,4 +1,5 @@
 # Copyright 2011 Dustin Lang.  All rights reserved.
+from __future__ import print_function
 
 from numpy import *
 from integral_image import intimg_rect
@@ -170,7 +171,7 @@ class testsymmintimg(unittest.TestCase):
 							  (5,6,-1,0)]:
 			R0 = intimg_rect(intimg, x0, x1, y0, y1)
 			R1 = symm_intimg_rect(symmimg, x0, x1, y0, y1, 5)
-			print round(R0,5), round(R1,5), round(R0,5) == round(R1,5)
+			print(round(R0,5), round(R1,5), round(R0,5) == round(R1,5))
 			self.assertAlmostEqual(R1, R0, 8)
 
 if __name__ == '__main__':

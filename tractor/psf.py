@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 from astrometry.util.miscutils import lanczos_filter
 
@@ -281,11 +282,11 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
         params = []
         for i in range(100):
             k = prefix + 'P%i' % i
-            print 'Key', k
+            print('Key', k)
             if not k in hdr:
                 break
             params.append(hdr.get(k))
-        print 'PSF Params:', params
+        print('PSF Params:', params)
         if len(params) == 0 or (len(params) % 6 != 0):
             raise RuntimeError('Failed to create %s from FITS header: expected '
                                'factor of 6 parameters, got %i' % 
@@ -484,14 +485,14 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
             tim.modelMinval = approx
             for step in range(20):
                 dlnp,X,alpha = tr.optimize(shared_params=False)
-                print 'dlnp', dlnp
+                print('dlnp', dlnp)
                 if dlnp < 1e-6:
                     break
             return tpsf
                 
         elif v2:
             from emfit import em_fit_2d_reg2
-            print 'stamp sum:', np.sum(stamp)
+            print('stamp sum:', np.sum(stamp))
             #stamp *= 1000.
             ok,skyamp = em_fit_2d_reg2(stamp, xm, ym, w, mu, var, alpha,
                                        emsteps, approx)

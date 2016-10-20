@@ -42,6 +42,7 @@
 
 # -*- mode: python; indent-tabs-mode: nil -*-
 # (this tells emacs to indent with spaces)
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 
@@ -90,7 +91,7 @@ def main():
         #         print len(rcfs)
         # except:
         #     print "NOT FOUND: NGC: %d" % ngc
-        print "Galaxy: NGC-%d" % ngc
+        print("Galaxy: NGC-%d" % ngc)
         os.system("python -u ngc.py %d --threads 4 --itune1 6 --itune2 6 1>%d.log 2>%d_err.log" % (ngc, ngc, ngc))
    #    os.system('cp flip-ngc%d.pdf messier' % ngc)
    #    os.system('cp ngc-%d.png messier' % ngc)

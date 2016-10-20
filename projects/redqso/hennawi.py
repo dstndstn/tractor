@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+from __future__ import print_function
 
 if __name__ == '__main__':
     import matplotlib
@@ -26,20 +27,20 @@ import fitsio
 
 def h2():
     T = fits_table('qso_BOSS_SDSS_MYERS_v5_6_0.fits')
-    print 'Read', len(T), 'targets'
+    print('Read', len(T), 'targets')
     # Match to SEQUELS region.
     T.cut((T.ra > 118) * (T.ra < 212) * (T.dec > 44) * (T.dec < 61))
-    print 'Cut to', len(T)
+    print('Cut to', len(T))
 
     kd1 = tree_build_radec(T.ra, T.dec)
 
     fns = glob(os.path.join('sequels-phot', 'phot-*.fits'))
     fns.sort()
-    print 'Found', len(fns), 'SEQUELS photometry output files'
+    print('Found', len(fns), 'SEQUELS photometry output files')
 
     TT = []
     for fn in fns:
-        print 'Reading', fn
+        print('Reading', fn)
         P = fits_table(fn, columns=['ra','dec','treated_as_pointsource',
                                     'x','y','coadd_id',
                                     'w1_nanomaggies','w1_nanomaggies_ivar',
@@ -49,12 +50,12 @@ def h2():
                                     'w2_mag','w2_mag_err','w2_prochi2','w2_pronpix',
                                     'w2_profracflux', 'w2_proflux', 'w2_npix',
                                     ])
-        print 'Got', len(P)
+        print('Got', len(P))
         kd2 = tree_build_radec(P.ra, P.dec)
 
         r = deg2dist(1. / 3600.)
         I,J,d = trees_match(kd1, kd2, r, nearest=True)
-        print 'Matched', len(I)
+        print('Matched', len(I))
         tree_free(kd2)
 
         P.cut(J)
@@ -101,7 +102,7 @@ def h3():
             RRDD.append((r0,r1,d0,d1))
 
     for r0,r1,d0,d1 in RRDD:
-        print 'Reading photoObjs...'
+        print('Reading photoObjs...')
         fn = os.path.join(dirname, 'h3-sdss-r%.0f-d%.0f.fits' % (r0, d0))
         if not os.path.exists(fn):
             cols = ['objid', 'ra', 'dec', 'objc_type',
@@ -112,40 +113,40 @@ def h3():
                     'resolve_status', 'nchild', 'flags', 'objc_flags',
                     'run','camcol','field','id']
             SDSS = read_photoobjs(r0, r1, d0, d1, 0.01, cols=cols)
-            print 'Got', len(SDSS)
+            print('Got', len(SDSS))
             SDSS.writeto(fn)
         else:
-            print 'Reading', fn
+            print('Reading', fn)
             SDSS = fits_table(fn)
-            print 'Got', len(SDSS)
+            print('Got', len(SDSS))
     
         wfn = os.path.join(dirname, 'h3-wise-r%.0f-d%.0f.fits' % (r0,d0))
-        print 'looking for', wfn
+        print('looking for', wfn)
         if os.path.exists(wfn):
             WISE = fits_table(wfn)
-            print 'Read', len(WISE), 'WISE sources nearby'
+            print('Read', len(WISE), 'WISE sources nearby')
         else:
             cols = (['ra','dec','cntr'] + ['w%impro'%band for band in [1,2,3,4]] +
                     ['w%isigmpro'%band for band in [1,2,3,4]] +
                     ['w%isnr'%band for band in [1,2,3,4]])
             WISE = wise_catalog_radecbox(r0, r1, d0, d1, cols=cols)
             WISE.writeto(wfn)
-            print 'Found', len(WISE), 'WISE sources nearby'
+            print('Found', len(WISE), 'WISE sources nearby')
     
         WISE.cut(WISE.w4snr >= 5)
-        print 'Cut to', len(WISE), 'on W4snr'
+        print('Cut to', len(WISE), 'on W4snr')
         WISE.cut((WISE.w1snr >= 5) * (WISE.w2snr >= 5))
-        print 'Cut to', len(WISE), 'on W[12]snr'
+        print('Cut to', len(WISE), 'on W[12]snr')
         
         I,J,d = match_radec(WISE.ra, WISE.dec, SDSS.ra, SDSS.dec, 1./3600., nearest=True)
-        print 'Matched', len(I)
+        print('Matched', len(I))
     
         WISE.match_dist = np.zeros(len(WISE))
         WISE.match_dist[I] = d
         WISE.matched = np.zeros(len(WISE), bool)
         WISE.matched[I] = True
         for c in SDSS.get_columns():
-            print 'SDSS column', c
+            print('SDSS column', c)
             S = SDSS.get(c)
             sh = (len(WISE),)
             if len(S.shape) > 1:
@@ -156,7 +157,7 @@ def h3():
     
         fn = os.path.join(dirname, 'h3-merged-r%.0f-d%.0f.fits' % (r0,d0))
         WISE.writeto(fn)
-        print 'Wrote', fn
+        print('Wrote', fn)
 
 
 
@@ -168,15 +169,15 @@ def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T, ps,
     r = np.hypot(dhi - dlo, (rhi - rlo) * np.cos(np.deg2rad(dec))) / 2.
     RCF = radec_to_sdss_rcf((r0+r1)/2., (d0+d1)/2.,
                             tablefn='window_flist.fits')
-    print 'Run,Camcol,Fields:', RCF
+    print('Run,Camcol,Fields:', RCF)
 
     SS = []
 
     btims = {}
     for run,camcol,field,r,d in RCF:
-        print 'RCF', run, camcol, field
+        print('RCF', run, camcol, field)
         rr = sdss.get_rerun(run, field=field)
-        print 'Rerun', rr
+        print('Rerun', rr)
         if rr in [None, '157']:
             continue
 
@@ -196,7 +197,7 @@ def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T, ps,
                                             invvarAtCenterImage=True,
                                             nanomaggies=True,
                                             psf='dg')
-            print 'Got tim', tim
+            print('Got tim', tim)
             if tim is None:
                 continue
             #print 'shape:', tim.shape
@@ -206,7 +207,7 @@ def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T, ps,
             # HACK -- remove images entirely in 128-pix overlap region
             x0,x1,y0,y1 = inf['roi']
             if y0 > 1361:
-                print 'Skipping image in overlap region'
+                print('Skipping image in overlap region')
                 continue
 
             # Mask pixels outside ROI
@@ -244,32 +245,32 @@ def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T, ps,
     for srcs,S in SS:
         ss.extend(srcs)
     SS = ss
-    print 'Got total of', len(SS), 'SDSS sources'
+    print('Got total of', len(SS), 'SDSS sources')
     if len(SS):
         # Remove duplicates
         I,J,d = match_radec(Tsdss.ra, Tsdss.dec, Tsdss.ra, Tsdss.dec,
                             1./3600., notself=True)
         keep = np.ones(len(Tsdss), bool)
         keep[np.maximum(I,J)] = False
-        print 'Keeping', sum(keep), 'non-dup SDSS sources'
+        print('Keeping', sum(keep), 'non-dup SDSS sources')
         Tsdss.cut(keep)
 
         # Remove matches with the target list
         I,J,d = match_radec(Tsdss.ra, Tsdss.dec, T.ra, T.dec, 1./3600.)
-        print len(I), 'SDSS sources matched with targets'
+        print(len(I), 'SDSS sources matched with targets')
         keep = np.ones(len(Tsdss), bool)
         keep[I] = False
         sdssmatch = Tsdss[I]
         Tsdss.cut(keep)
-        print 'Kept', len(Tsdss), 'SDSS sources'
+        print('Kept', len(Tsdss), 'SDSS sources')
 
         # source objects
         sdssobjs = [SS[i] for i in Tsdss.index]
 
         # Record SDSS catalog mags
-        print 'Matched sources:'
+        print('Matched sources:')
         for j in J:
-            print '  ', SS[Tsdss.index[j]]
+            print('  ', SS[Tsdss.index[j]])
     
         for band in bands:
             iband = band_index(band)
@@ -298,9 +299,9 @@ def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T, ps,
     else:
         sdssobjs = []
 
-    print 'Total of', len(cat), 'sources'
+    print('Total of', len(cat), 'sources')
     for src in cat:
-        print '  ', src
+        print('  ', src)
     
 
     for band in bands:
@@ -388,11 +389,11 @@ def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T, ps,
                     optworked = True
                 except:
                     import traceback
-                    print 'WARNING: optimize_forced_photometry failed:'
+                    print('WARNING: optimize_forced_photometry failed:')
                     traceback.print_exc()
-                    print
+                    print()
                     
-            print 'Forced phot took', Time()-t0
+            print('Forced phot took', Time()-t0)
 
             IV = R.IV
             fitstats = R.fitstats
@@ -481,7 +482,7 @@ def redqsos():
         #chunk = 100
         chunk = 50
         T = T[arr * chunk: (arr+1) * chunk]
-        print 'Cut to chunk', (arr * chunk)
+        print('Cut to chunk', (arr * chunk))
         tag = '-%03i' % arr
     
     sdss = DR9()
@@ -500,7 +501,7 @@ def redqsos():
     T.done = np.zeros(len(T), np.uint8)
 
     version = get_svn_version()
-    print 'SVN version info:', version
+    print('SVN version info:', version)
 
     hdr = fitsio.FITSHDR()
     hdr.add_record(dict(name='PHOT_VER', value=version['Revision'],
@@ -510,9 +511,9 @@ def redqsos():
                         comment='forced phot run time'))
 
     for i,(ra,dec) in enumerate(zip(T.ra, T.dec)):
-        print
-        print i
-        print 'RA,Dec', ra, dec
+        print()
+        print(i)
+        print('RA,Dec', ra, dec)
         r0,r1 = ra,ra
         d0,d1 = dec,dec
 
@@ -542,7 +543,7 @@ def redqsos():
             if not key in newcols:
                 newcols[key] = np.zeros(len(T), val.dtype)
                 T.set(key, newcols[key])
-            print 'set', key, i, '=', val[0]
+            print('set', key, i, '=', val[0])
             newcols[key][i] = val[0]
         T.done[i] = 1
 
@@ -550,7 +551,7 @@ def redqsos():
         if False:
             fn = 'wisew4phot-interim%s.fits' % tag
             T.writeto(fn, header=hdr)
-            print 'Wrote', fn
+            print('Wrote', fn)
             
     T.writeto('wisew4phot%s.fits' % tag, header=hdr)
 
@@ -579,7 +580,7 @@ if __name__ == '__main__':
     for i in range(132):
         fn = 'wisew4phot-%03i.fits' % i
         T = fits_table(fn)
-        print 'read', len(T), 'from', fn
+        print('read', len(T), 'from', fn)
         #T.about()
         TT.append(T)
         newcols = set(T.get_columns()) - allcols
@@ -591,10 +592,10 @@ if __name__ == '__main__':
         diff = allcols - set(T.get_columns())
         if len(diff) == 0:
             continue
-        print
-        print 'File', i
+        print()
+        print('File', i)
         for c in diff:
-            print 'Set', c, 'to all zero'
+            print('Set', c, 'to all zero')
             T.set(c, np.zeros(len(T), coltypes[c]))
 
     T = merge_tables(TT)
@@ -647,8 +648,8 @@ if __name__ == '__main__':
 
     r0,r1 = T.ra.min(),  T.ra.max()
     d0,d1 = T.dec.min(), T.dec.max()
-    print 'RA range', r0,r1
-    print 'Dec range', d0,d1
+    print('RA range', r0,r1)
+    print('Dec range', d0,d1)
 
     margin = 0.003
     dr = margin / np.cos(np.deg2rad((d0+d1)/2.))
@@ -699,9 +700,9 @@ if __name__ == '__main__':
             #runtostage(700, opt, mp, rlo,rhi,dlo,dhi)
         except:
             import traceback
-            print
+            print()
             traceback.print_exc()
-            print
+            print()
             pass
 
     alltims = []
@@ -736,8 +737,8 @@ if __name__ == '__main__':
         pfn = 'hennawi-w%i-stage106.pickle' % band
         X = unpickle_from_file(pfn)
         R = X['R']
-        print 'R', len(R)
-        print 'T', len(T)
+        print('R', len(R))
+        print('T', len(T))
         assert(sum(R.sdss) == len(T))
         R.cut(R.sdss > 0)
         assert(len(R) == len(T))
@@ -751,4 +752,4 @@ if __name__ == '__main__':
         T.set('w%i_mag' % band, mag)
         T.set('w%i_mag_err' % band, dmag)
     T.writeto(resfn)
-    print 'Wrote', resfn
+    print('Wrote', resfn)

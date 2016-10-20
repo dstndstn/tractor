@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == "__main__":
     import matplotlib
     matplotlib.use('Agg')
@@ -27,23 +28,23 @@ def main():
             name = entry['PGC_NAME']
         if entry['DEC'] < -1.:
             continue
-        print (10**entry['LOG_D25'])/10.
+        print((10**entry['LOG_D25'])/10.)
         fn = 'RC3_Output/%s.pickle' % (name.replace(' ', '_'))
-        print fn
+        print(fn)
         if os.path.exists(fn):
-            print '%s has run successfully already' %name
+            print('%s has run successfully already' %name)
         else:
-            print 'run %s through tractor' %name
+            print('run %s through tractor' %name)
             entries.append('%s' %name)
     things=[str(x) for x in entries]
-    print len(things)
+    print(len(things))
     things.reverse()
     for entry in things:
-        print entry
+        print(entry)
         newentry=entry.replace(' ', '_')
-        print newentry
+        print(newentry)
         try:
-            print 'running tractor for %s' %entry
+            print('running tractor for %s' %entry)
             generalRC3(entry,itune1=6,itune2=6,nocache=True)
             os.system('cp flip-%s.pdf RC3_Output' % newentry)
             os.system('cp %s.png RC3_Output' % newentry)
@@ -52,12 +53,12 @@ def main():
             add_to_table(newentry)
 
         except AssertionError:
-            print traceback.print_exc()
-            print "Tractor failed on entry: %s" % newentry
+            print(traceback.print_exc())
+            print("Tractor failed on entry: %s" % newentry)
             continue
         except MemoryError:
-            print traceback.print_exc()
-            print "Tractor failed on entry: %s" % newentry
+            print(traceback.print_exc())
+            print("Tractor failed on entry: %s" % newentry)
             continue
             
 #3053 galaxies

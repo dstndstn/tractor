@@ -1,3 +1,4 @@
+from __future__ import print_function
 import sys
 import matplotlib
 matplotlib.use('Agg')
@@ -23,10 +24,10 @@ def test_mixture_profiles(ps):
     vx,vy = 4., 16.
     vxy = 2.
     mp = MixtureOfGaussians(1., [cx, cy], np.array([[[vx,vxy],[vxy,vy]]]))
-    print mp
+    print(mp)
 
     grid = mp.evaluate_grid_dstn(0, W, 0, H, 0., 0.)
-    print grid
+    print(grid)
     grid = grid.patch
     
     plt.clf()
@@ -105,7 +106,7 @@ def test_fft(ps):
                               4., 4., 0., 6., 6., 0., 8., 8., 0.)
     gpsf.radius = 15
     psfimg = gpsf.getPointSourcePatch(0., 0., radius=15)
-    print 'PSF image size', psfimg.shape
+    print('PSF image size', psfimg.shape)
     pixpsf = PixelizedPSF(psfimg.patch)
 
     data=np.zeros((H,W), np.float32)
@@ -146,7 +147,7 @@ def test_galaxy_grid(ps, args):
     #                          4., 4., 0., 6., 6., 0., 8., 8., 0.)
     gpsf.radius = 15
     psfimg = gpsf.getPointSourcePatch(0., 0., radius=15)
-    print 'PSF image size', psfimg.shape
+    print('PSF image size', psfimg.shape)
     pixpsf = PixelizedPSF(psfimg.patch)
 
     data=np.zeros((H,W), np.float32)
@@ -187,7 +188,7 @@ def test_galaxy_grid(ps, args):
             mod = tr.getModelImage(0)
 
         t1 = Time()
-        print t1 - t0
+        print(t1 - t0)
         return
 
     # ugal = ExpGalaxy(PixPos(x,y), Flux(100.),
@@ -220,8 +221,8 @@ def test_galaxy_grid(ps, args):
     t1 = Time()
     tgauss = t1 - t0
 
-    print 'Gaussian convolution:', tgauss
-    print 'FFT      convolution:', tfft
+    print('Gaussian convolution:', tgauss)
+    print('FFT      convolution:', tfft)
 
     mx = gmod.max()
     ima = dict(vmin=-0.01*mx, vmax=0.95*mx)
@@ -259,9 +260,9 @@ def test_galaxy_grid(ps, args):
     t1 = Time()
     tgauss = t1 - t0
 
-    print 'With modelMasks:'
-    print 'Gaussian convolution:', tgauss
-    print 'FFT      convolution:', tfft
+    print('With modelMasks:')
+    print('Gaussian convolution:', tgauss)
+    print('FFT      convolution:', tfft)
 
     plt.clf()
     dimshow(gmod, **ima)
@@ -291,7 +292,7 @@ def test_model_masks(ps):
     gpsf = NCircularGaussianPSF([2.], [1.])
     gpsf.radius = halfsize
     psfimg = gpsf.getPointSourcePatch(0., 0., radius=15)
-    print 'PSF image size', psfimg.shape
+    print('PSF image size', psfimg.shape)
     pixpsf = PixelizedPSF(psfimg.patch)
     #psf = GaussianMixturePSF([1.], [0., 0.], 2.*np.array([[[1.,0.],[0.,1.]],]))
     #psf.radius = 15
@@ -306,8 +307,8 @@ def test_model_masks(ps):
     img.psf = pixpsf
     mod_fft = gal.getModelPatch(img)
     
-    print 'MoG model:', mod_mog.shape, mod_mog.patch.min(), mod_mog.patch.max()
-    print 'FFT model:', mod_fft.shape, mod_fft.patch.min(), mod_fft.patch.max()
+    print('MoG model:', mod_mog.shape, mod_mog.patch.min(), mod_mog.patch.max())
+    print('FFT model:', mod_fft.shape, mod_fft.patch.min(), mod_fft.patch.max())
     
     dfrac = 0.01
     
@@ -367,15 +368,15 @@ def test_model_masks(ps):
     mask10 = Patch(5,17, np.ones((40,40), bool))
     mask11 = Patch(15,7, np.ones((40,40), bool))
 
-    print
-    print 'DIY modelMask'
+    print()
+    print('DIY modelMask')
     
     for mask in [mask7, mask8, mask9, mask10,mask11]: #mask1, mask2, mask3, mask4, mask5, mask6, mask7]:
         #for mx in range(-15,30,2):
         mask = Patch(mx, 7, np.ones((33,33), bool))
     
-        print
-        print 'MoG:'
+        print()
+        print('MoG:')
     
         img.psf = gpsf
         mod_mog = gal.getModelPatch(img, modelMask=mask)
@@ -383,8 +384,8 @@ def test_model_masks(ps):
         assert(mod_mog.y0 == mask.y0)
         assert(mod_mog.shape == mask.shape)
     
-        print
-        print 'FFT:'
+        print()
+        print('FFT:')
     
         # pad,cx,cy = pixpsf._padInImage(*mask5.shape)
         # print 'Padded PSF image:', pad.shape, 'center', cx,cy
@@ -416,10 +417,10 @@ def test_model_masks(ps):
         ps.savefig()
     
         
-    print
-    print 'setModelMasks'
-    print
-    print 'MoG:'
+    print()
+    print('setModelMasks')
+    print()
+    print('MoG:')
     
     modmask = [{gal: mask}]
     tr.setModelMasks(modmask)
@@ -427,8 +428,8 @@ def test_model_masks(ps):
     img.psf = gpsf
     mod_mog = tr.getModelImage(0)
     
-    print
-    print 'FFT:'
+    print()
+    print('FFT:')
     
     img.psf = pixpsf
     mod_fft = tr.getModelImage(0)
@@ -470,7 +471,7 @@ def OLD_STUFF():
     amix = gal._getAffineProfile(img, mux, muy)
     Fsum = amix.getFourierTransform(w, v)
     #print 'Fsum:', Fsum
-    print type(Fsum)
+    print(type(Fsum))
     
     plt.clf()
     plt.subplot(1,2,1)
@@ -496,7 +497,7 @@ def OLD_STUFF():
     dimshow(tinyp.patch)
     plt.savefig('tiny.png')
     
-    print 'tinyp shape', tinyp.shape
+    print('tinyp shape', tinyp.shape)
     tpsf = PixelizedPSF(tinyp.patch)
     Ftiny,nil,nil = tpsf.getFourierTransform(25)
     
@@ -537,8 +538,8 @@ def test_psfex(ps):
     im /= np.sum(im)
 
     cenx,ceny = np.sum(im * xx), np.sum(im * yy)
-    print 'Pixpsf centroid:', cenx,ceny
-    print 'shape:', ph,pw
+    print('Pixpsf centroid:', cenx,ceny)
+    print('shape:', ph,pw)
     
     dx,dy = cenx - pw/2, ceny - ph/2
 
@@ -569,7 +570,7 @@ def test_psfex(ps):
     im = mod.copy()
     im /= im.sum()
     cenx,ceny = np.sum(im * xx), np.sum(im * yy)
-    print 'Star model + PsfEx centroid', cenx, ceny
+    print('Star model + PsfEx centroid', cenx, ceny)
     
     
     plt.clf()
@@ -600,7 +601,7 @@ def test_psfex(ps):
     im = mod.copy()
     im /= im.sum()
     cenx,ceny = np.sum(im * xx), np.sum(im * yy)
-    print 'Gal model + PsfEx centroid', cenx, ceny
+    print('Gal model + PsfEx centroid', cenx, ceny)
     
     plt.clf()
     dimshow(mod)

@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -25,33 +26,33 @@ if __name__ == '__main__':
 
     fn = os.path.join(D.decals_dir, 'images', ccd.cpimage.strip())
     if not os.path.exists(fn):
-        print 'Does not exist:', fn
+        print('Does not exist:', fn)
         fn = fn.replace('.fits.fz', '.fits')
     #img = fitsio.read(fn, ext=ccd.cpimage_hdu)
     #print 'img', img.shape
 
     im = DecamImage(D, ccd)
     tim = im.get_tractor_image()
-    print 'Tim', tim.shape
+    print('Tim', tim.shape)
 
     calname = ccd.calname.strip()
-    print 'cal', calname
+    print('cal', calname)
     
     wcsfn = os.path.join(D.decals_dir, 'calib', 'decam', 'astrom', calname + '.wcs.fits')
-    print 'Trying', wcsfn
+    print('Trying', wcsfn)
     wcs = Sip(wcsfn)
-    print 'Got', wcs
+    print('Got', wcs)
 
     xyfn = os.path.join(D.decals_dir, 'calib', 'decam', 'sextractor', calname + '.fits')
-    print 'Trying', xyfn
+    print('Trying', xyfn)
     xy = fits_table(xyfn, hdu=2)
-    print 'Read', len(xy), 'sources'
+    print('Read', len(xy), 'sources')
 
     ra,dec = wcs.radec_center()
     rdfn = 'rd.fits'
     cmd = ('query-starkd -o %s -r %f -d %f -R 0.2 /project/projectdirs/desi/users/dstn/ps1-astrometry-index/index-ps1-hp17-2.fits' %
            (rdfn, ra, dec))
-    print cmd
+    print(cmd)
     rtn = os.system(cmd)
     assert(rtn == 0)
 
@@ -61,7 +62,7 @@ if __name__ == '__main__':
     srdfn = 'srd.fits'
     cmd = ('query-starkd -o %s -r %f -d %f -R 0.2 /project/projectdirs/desi/users/dstn/sdss-astrometry-index/r2/index-sdss2-r-hp17-2.fits' %
            (srdfn, ra, dec))
-    print cmd
+    print(cmd)
     rtn = os.system(cmd)
     assert(rtn == 0)
 
@@ -72,7 +73,7 @@ if __name__ == '__main__':
     wfn = 'pvsip.wcs'
     cmd = ('~/astrometry/blind/wcs-pv2sip -e %i -W %i -H %i -X %i -Y %i %s %s' %
            (ccd.cpimage_hdu, W, H, W, H, fn, wfn))
-    print cmd
+    print(cmd)
     rtn = os.system(cmd)
     assert(rtn == 0)
 

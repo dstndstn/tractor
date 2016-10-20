@@ -1,3 +1,4 @@
+from __future__ import print_function
 #from tractor.rc3 import *
 from astrometry.util.file import *
 from astrometry.util.starutil_numpy import *
@@ -62,7 +63,7 @@ concentration[:,3]=[0 if math.isnan(x) else x for x in concentration[:,3]]
 concentration[:,3]=[0 if math.isinf(x) else x for x in concentration[:,3]]
 mags[:,3]=[0 if math.isinf(x) else x for x in mags[:,3]]
 mags[:,3]=[0 if math.isnan(x) else x for x in mags[:,3]]
-print max(half_light[:,3])
+print(max(half_light[:,3]))
 
 plt.figure(1,figsize=(6,6))
 plt.plot(ra2,dec2,'k.',alpha=0.5)
@@ -97,10 +98,10 @@ os.system('cp all_r90_i.pdf public_html/paper')
 os.system('cp all_r90_i.pdf ~/SloanAtlas/paper')
 
 plt.figure(4)
-print len(gr_corrected), len(ri_corrected)
+print(len(gr_corrected), len(ri_corrected))
 cornerdata=np.array([gr_corrected,ri_corrected,sb,concentration[:,3]],dtype=float)
 cornerdata = cornerdata.T
-print cornerdata.shape
+print(cornerdata.shape)
 triangle.corner(cornerdata, labels=[r'$g-r$',r'$r-i$',r'$\mu_{50,i}(mag\;arcsec^{-2})$',r'$R_{90,i}/R_{50,i}$'],extents=[(0.3,0.8),(0,0.5),(17,25),(2,5)],bins=60, scale_hist=True, quantiles=[0.25,0.5,0.75])
 plt.savefig('all_triangle.pdf')
 os.system('cp all_triangle.pdf public_html/paper')

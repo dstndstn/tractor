@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 import pyfits as pyf
 import os
@@ -62,15 +63,15 @@ tbhdulist=pyf.HDUList([hdu,tbhdu])
 data=pyf.open('rc3_combine.fits')
 data2=data[1].data
 name=data2.field('NAME')
-print len(name)
+print(len(name))
 cols=data[1].columns
-print cols.names
+print(cols.names)
 
 #NSA new table
 data=pyf.open('nsa_galaxies.fits')
 data2=data[1].data
 cols=data[1].columns
-print cols.names
+print(cols.names)
 
 n=np.arange(100)
 hdu=pyf.PrimaryHDU(n)
@@ -125,9 +126,9 @@ data=pyf.open('nsa_combine.fits')
 #print data[1]
 data2=data[1].data
 name=data2.field('CG_RA')
-print len(name)
+print(len(name))
 cols=data[1].columns
-print cols.names
+print(cols.names)
 
 #combine rc3_combine.fits and nsa_combine.fits
 #os.system('tabmerge nsa_combine.fits rc3_combine.fits')
@@ -135,9 +136,9 @@ t1=pyf.open('rc3_combine.fits')
 t2=pyf.open('nsa_combine.fits')
 nrows1=t1[1].data.shape[0]
 nrows2=t2[1].data.shape[0]
-print nrows1,nrows2
+print(nrows1,nrows2)
 nrows=nrows1+nrows2
-print nrows
+print(nrows)
 hdu=pyf.new_table(t1[1].columns,nrows=nrows)
 for name in t1[1].columns.names:
     hdu.data.field(name)[nrows1:]=t2[1].data.field(name)
@@ -161,7 +162,7 @@ t=pyf.open('all_galaxies.fits')
 tbdata=t[1].data
 mask=tbdata.field('CG_R50S')[:,3] > 30.0
 newtbdata=tbdata[mask]
-print newtbdata[0]
+print(newtbdata[0])
 #hdu=pyf.BinTableHDU(newtbdata)
 #hdu.writeto('all_galaxies3.fits') ###this is the table that has all galaxies thus far with r50i > 30---> there are 563 
 
@@ -169,7 +170,7 @@ print newtbdata[0]
 #sort table all_galaxies2.fits by r50i size
 data=pyf.open('all_galaxies2.fits')
 a=data[1].data.field('CG_R50S')[:,3]
-print a, len(a)
+print(a, len(a))
 sortsize=np.argsort(a)
 data=data[1].data[sortsize]
 #hdu=pyf.BinTableHDU(data)
@@ -177,8 +178,8 @@ data=data[1].data[sortsize]
 
 data=pyf.open('sdss_atlas.fits') #final catalog of 563 with r50i >30
 data2=data[1].data
-print data2[0]
+print(data2[0])
 size=data2.field('CG_R50S')
-print len(size)
+print(len(size))
 cols=data[1].columns
-print cols.names
+print(cols.names)

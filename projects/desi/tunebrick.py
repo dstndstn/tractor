@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
@@ -24,10 +25,10 @@ def stage_cat(brickid=None, target_extent=None,
     catfn = catpattern % brickid
     T = fits_table(catfn)
     cat,invvars = read_fits_catalog(T, invvars=True)
-    print 'Got catalog:', len(cat), 'sources'
+    print('Got catalog:', len(cat), 'sources')
 
     #invvars = np.array(invvars)
-    print 'Invvars:', invvars
+    print('Invvars:', invvars)
 
     assert(len(Catalog(*cat).getParams()) == len(invvars))
     assert(len(cat) == len(T))
@@ -36,7 +37,7 @@ def stage_cat(brickid=None, target_extent=None,
     if target_extent is not None:
         #x0,x1,y0,y1 = target_extent
         W,H = int(targetwcs.get_width()), int(targetwcs.get_height())
-        print 'W,H', W,H
+        print('W,H', W,H)
         x0,x1,y0,y1 = 1,W, 1,H
         r,d = targetwcs.pixelxy2radec(np.array([x0,x0,x1,x1]),np.array([y0,y1,y1,y0]))
         r0,r1 = r.min(),r.max()
@@ -59,12 +60,12 @@ def stage_cat(brickid=None, target_extent=None,
         cat = keepcat
         Tcat.cut(np.array(ikeep))
         invvars = np.array(keepivs)
-        print 'Keeping', len(cat), 'sources within range'
+        print('Keeping', len(cat), 'sources within range')
         
     assert(Catalog(*cat).numberOfParams() == len(invvars))
 
-    print len(tims), 'tims'
-    print 'Sizes:', [tim.shape for tim in tims]
+    print(len(tims), 'tims')
+    print('Sizes:', [tim.shape for tim in tims])
 
     for tim in tims:
         from tractor.psfex import CachingPsfEx
@@ -79,7 +80,7 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
                bands=None, invvars=None, brickid=None,
                Tcat=None, version_header=None, ps=None, **kwargs):
     tstage = t0 = Time()
-    print 'kwargs:', kwargs.keys()
+    print('kwargs:', kwargs.keys())
 
     #print 'invvars:', invvars
 
@@ -129,7 +130,7 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
     plt.axis(ax)
     ps.savefig()
 
-    print 'Plots:', Time()-t0
+    print('Plots:', Time()-t0)
 
     # print 'Catalog:'
     # for src in cat:
@@ -147,7 +148,7 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
         iv = iterinvvars[:N]
         iterinvvars = iterinvvars[N:]
         if not np.all(np.isfinite(src.getParams())):
-            print 'Dropping source:', src
+            print('Dropping source:', src)
             continue
         keepcat.append(src)
         keepinvvars.extend(iv)
@@ -158,14 +159,14 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
     cat = keepcat
     Tcat.cut(np.array(ikeep))
     invvars = keepinvvars
-    print len(cat), 'sources with finite params'
+    print(len(cat), 'sources with finite params')
     assert(Catalog(*cat).numberOfParams() == len(invvars))
     assert(len(iterinvvars) == 0)
 
-    print 'Rendering model images...'
+    print('Rendering model images...')
     t0 = Time()
     mods = _map(_get_mod, [(tim, cat) for tim in tims])
-    print 'Getting model images:', Time()-t0
+    print('Getting model images:', Time()-t0)
 
     wcsW = targetwcs.get_width()
     wcsH = targetwcs.get_height()
@@ -184,7 +185,7 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
             comod[Yo,Xo] += mod[Yi,Xi]
         comod  /= np.maximum(cons[iband], 1)
         comods.append(comod)
-    print 'Creating model coadd:', Time()-t0
+    print('Creating model coadd:', Time()-t0)
 
     plt.clf()
     dimshow(get_rgb(comods, bands))
@@ -202,11 +203,11 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
         N = src.numberOfParams()
 
         gc = get_galaxy_cache()
-        print 'Galaxy cache:', gc
+        print('Galaxy cache:', gc)
         if gc is not None:
             gc.clear()
 
-        print 'Checking source', isrc, 'of', len(cat), ':', src
+        print('Checking source', isrc, 'of', len(cat), ':', src)
         #print 'N params:', N
         #print 'iterinvvars:', len(iterinvvars)
 
@@ -221,7 +222,7 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
             if f == 0.:
                 oldsrc = src
                 src = ExpGalaxy(oldsrc.pos, oldsrc.brightness, oldsrc.shapeExp)
-                print 'Converted comp to exp'
+                print('Converted comp to exp')
                 #print '   ', oldsrc
                 #print ' ->', src
                 # pull out the invvar elements!
@@ -232,9 +233,9 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
             elif f == 1.:
                 oldsrc = src
                 src = DevGalaxy(oldsrc.pos, oldsrc.brightness, oldsrc.shapeDev)
-                print 'Converted comp to dev'
+                print('Converted comp to dev')
                 ##print '   ', oldsrc
-                print ' ->', src
+                print(' ->', src)
                 pp = src.getParams()
                 oldsrc.setParams(oldiv)
                 newiv = oldsrc.pos.getParams() + oldsrc.brightness.getParams() + oldsrc.shapeDev.getParams()
@@ -246,8 +247,8 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
             if src.getBrightness().getMag('r') < 12.5:
                 oldsrc = src
                 src = PointSource(oldsrc.pos, oldsrc.brightness)
-                print 'Bright star: replacing', oldsrc
-                print 'With', src
+                print('Bright star: replacing', oldsrc)
+                print('With', src)
                 # Not QUITE right.
                 #oldsrc.setParams(oldiv)
                 #newiv = oldsrc.pos.getParams() + oldsrc.brightness.getParams()
@@ -269,9 +270,9 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
             # that of the parent!
             H,W = tim.shape
             if patch.x0 < 0 or patch.y0 < 0 or patch.x1 > W or patch.y1 > H:
-                print 'Warning: Patch extends outside tim bounds:'
-                print 'patch extent:', patch.getExtent()
-                print 'image size:', W, 'x', H
+                print('Warning: Patch extends outside tim bounds:')
+                print('patch extent:', patch.getExtent())
+                print('image size:', W, 'x', H)
             patch.clipTo(W,H)
             ph,pw = patch.shape
             if pw*ph == 0:
@@ -290,8 +291,8 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
             chisq0 = np.sum(((simg - mod[slc]) * sie)**2)
             chisq1 = np.sum(((simg - (mod[slc] - patch.patch)) * sie)**2)
             sdlnp += -0.5 * (chisq1 - chisq0)
-        print 'Removing source: dlnp =', sdlnp
-        print 'Testing source removal:', Time()-tsrc
+        print('Removing source: dlnp =', sdlnp)
+        print('Testing source removal:', Time()-tsrc)
     
         if sdlnp > 0:
             #print 'Removing source!'
@@ -359,7 +360,7 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
             #print 'Trying source change:'
             #print 'from', src
             #print '  to', newsrc
-            print 'Trying source change to', type(newsrc).__name__, ': dlnp =', dlnp
+            print('Trying source change to', type(newsrc).__name__, ': dlnp =', dlnp)
 
             if dlnp >= bestdlnp:
                 bestnew = newsrc
@@ -367,8 +368,8 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
                 bestdpatches = dpatches
 
         if bestnew is not None:
-            print 'Found model improvement!  Switching to',
-            print bestnew
+            print('Found model improvement!  Switching to', end=' ')
+            print(bestnew)
             for itim,dpatch in bestdpatches:
                 dpatch.addTo(mods[itim])
             src = bestnew
@@ -403,7 +404,7 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
     Tcat.cut(np.array(ikeep))
 
     gc = get_galaxy_cache()
-    print 'Galaxy cache:', gc
+    print('Galaxy cache:', gc)
     if gc is not None:
         gc.clear()
 
@@ -412,7 +413,7 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
     assert(Catalog(*keepcat).numberOfParams() == len(keepinvvars))
     invvars = keepinvvars
     assert(len(cat) == len(Tcat))
-    print 'Model selection:', Time()-t0
+    print('Model selection:', Time()-t0)
 
     t0 = Time()
     # WCS header for these images
@@ -449,27 +450,27 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
         fn = 'tunebrick/coadd/chi2-%06i-%s.fits' % (brickid, band)
         fitsio.write(fn, cochi2, **fwa)
         del cochi2
-        print 'Wrote', fn
+        print('Wrote', fn)
 
         fn = 'tunebrick/coadd/image-%06i-%s.fits' % (brickid, band)
         fitsio.write(fn, coimgs[iband], **fwa)
-        print 'Wrote', fn
+        print('Wrote', fn)
         fitsio.write(fn, coiv, clobber=False)
-        print 'Appended ivar to', fn
+        print('Appended ivar to', fn)
         del coiv
 
         fn = 'tunebrick/coadd/depth-%06i-%s.fits' % (brickid, band)
         fitsio.write(fn, detiv, **fwa)
-        print 'Wrote', fn
+        print('Wrote', fn)
         del detiv
 
         fn = 'tunebrick/coadd/model-%06i-%s.fits' % (brickid, band)
         fitsio.write(fn, comods[iband], **fwa)
-        print 'Wrote', fn
+        print('Wrote', fn)
 
         fn = 'tunebrick/coadd/nexp-b%06i-%s.fits' % (brickid, band)
         fitsio.write(fn, cons[iband], **fwa)
-        print 'Wrote', fn
+        print('Wrote', fn)
 
     plt.clf()
     rgb = get_rgb(comods, bands)
@@ -500,9 +501,9 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
     os.unlink(tmpfn)
 
     assert(len(cat) == len(Tcat))
-    print 'Coadd FITS files and plots:', Time()-t0
+    print('Coadd FITS files and plots:', Time()-t0)
 
-    print 'Whole stage:', Time()-tstage
+    print('Whole stage:', Time()-tstage)
 
     return dict(cat=cat, Tcat=Tcat, invvars=invvars)
 
@@ -532,11 +533,11 @@ def stage_writecat2(cat=None, Tcat=None, invvars=None, version_header=None,
         TT.set(k, Tcat.get(k))
     TT._length = len(Tcat)
 
-    print 'TT:', len(TT)
-    print 'cat:', len(cat)
+    print('TT:', len(TT))
+    print('cat:', len(cat))
 
-    print 'params:', Catalog(*cat).numberOfParams()
-    print 'invvars:', len(invvars), invvars
+    print('params:', Catalog(*cat).numberOfParams())
+    print('invvars:', len(invvars), invvars)
 
     ## FIXME -- we don't update these fit-stats
     fs = None
@@ -584,8 +585,8 @@ def stage_writecat2(cat=None, Tcat=None, invvars=None, version_header=None,
         'sdss_cmodelflux_ivar sdss_ra sdss_dec sdss_modelflux sdss_modelflux_ivar ' +
         'sdss_psfflux sdss_psfflux_ivar sdss_flags sdss_objc_flags sdss_objc_type ' +
         'sdss_extinction').split(' '))
-    print 'Wrote', fn
-    print 'Writing catalog:', Time()-t0
+    print('Wrote', fn)
+    print('Writing catalog:', Time()-t0)
 
 def stage_recoadd(tims=None, bands=None, targetwcs=None, ps=None, brickid=None,
                   basedir=None, ccds=None,
@@ -598,7 +599,7 @@ def stage_recoadd(tims=None, bands=None, targetwcs=None, ps=None, brickid=None,
 
     fn = os.path.join(basedir, 'ccds-%06i.fits' % brickid)
     ccds.writeto(fn)
-    print 'Wrote', fn
+    print('Wrote', fn)
     
     W = targetwcs.get_width()
     H = targetwcs.get_height()
@@ -616,7 +617,7 @@ def stage_recoadd(tims=None, bands=None, targetwcs=None, ps=None, brickid=None,
         for tim in tims:
             if tim.band != band:
                 continue
-            print 'Coadding', tim.name
+            print('Coadding', tim.name)
             R = tim_get_resamp(tim, targetwcs)
             if R is None:
                 continue
@@ -653,7 +654,7 @@ def stage_recoadd(tims=None, bands=None, targetwcs=None, ps=None, brickid=None,
     for band,cow in zip(bands, cowimgs):
         fn = os.path.join(basedir, 'coadd', 'image2-%06i-%s.fits' % (brickid,band))
         fitsio.write(fn, cow, **fwa)
-        print 'Wrote', fn
+        print('Wrote', fn)
 
     return dict(coimgs=cowimgs, tims=None)
 
@@ -668,7 +669,7 @@ def stage_rergb(coimgs=None, bands=None, basedir=None, brickid=None,
     dimshow(rgb)
     fn = os.path.join(basedir, 'coadd', 'image2-%06i.png' % brickid)
     plt.savefig(fn)
-    print 'Saved', fn
+    print('Saved', fn)
 
     tmpfn = create_temp(suffix='.png')
     plt.imsave(tmpfn, rgb)
@@ -677,7 +678,7 @@ def stage_rergb(coimgs=None, bands=None, basedir=None, brickid=None,
     cmd = 'pngtopnm %s | pnmtojpeg -quality 90 > %s' % (tmpfn, fn)
     os.system(cmd)
     os.unlink(tmpfn)
-    print 'Wrote', fn
+    print('Wrote', fn)
 
 def stage_primage(coimgs=None, bands=None, ps=None, basedir=None,
                   **kwargs):
@@ -701,7 +702,7 @@ def stage_primage(coimgs=None, bands=None, ps=None, basedir=None,
     '''
 
 
-    print 'kwargs:', kwargs.keys()
+    print('kwargs:', kwargs.keys())
 
     rgb = get_rgb(coimgs, bands, mnmx=(0., 100.), arcsinh=1.)
     
@@ -714,7 +715,7 @@ def stage_primage(coimgs=None, bands=None, ps=None, basedir=None,
 
     jpegfn = fn.replace('.png','.jpg')
     cmd = 'pngtopnm %s | pnmtojpeg -quality 80 > %s' % (fn, jpegfn)
-    print cmd
+    print(cmd)
     os.system(cmd)
     
 
@@ -797,7 +798,7 @@ def main():
                  prereqs=prereqs, initial_args=initargs, **kwargs)
                  
                #tune(opt.brick, target_extent=opt.zoom)
-    print 'Total:', Time()-t0
+    print('Total:', Time()-t0)
 
 if __name__ == '__main__':
     main()

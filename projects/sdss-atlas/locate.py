@@ -1,3 +1,4 @@
+from __future__ import print_function
 #used to find red galaxies and run them in tractor and then compare their results to NSA
 from astrometry.util.file import *
 from astrometry.util.starutil_numpy import *
@@ -32,7 +33,7 @@ if __name__ == '__main__':
     good[indx2]=False
     indx3=np.where(radius > 158)
     good[indx3]=False
-    print radius[good].shape
+    print(radius[good].shape)
 
 
 #fnugriz
@@ -89,8 +90,8 @@ plt.ylim(-.1,0.8)
 #22883, 93093, 129429
 color=[x for x in xrange(len(nsaid[good])) if nsaid[good][x]==23057]
 for x in color:
-    print gr[x],ri[x],ur[x]
-    print 'done'
+    print(gr[x],ri[x],ur[x])
+    print('done')
 assert(False)
 fig1=plt.figure(1)
 plt.plot(badgr,badri,'m.', alpha=0.5)
@@ -105,15 +106,15 @@ plt.ylim(-.1,0.8)
 ngcs=[221,628,3034,3351,3368,3379,3623,3556,3627,3992,4192,4254,4321,4374,4382,4406,4472,4486,4501,4548,4552,4569,4579,4594,4621,4736,4826,5055,5194,4148, 521,681]
 
 for ngc in ngcs:
-    print ngc
+    print(ngc)
     CG=unpickle_from_file('ngc-%s.pickle'%(ngc)) 
     tot=CG.getBrightness()
-    print tot
+    print(tot)
     pos=CG.getPosition()
-    print pos
+    print(pos)
     dev=CG.brightnessDev
     exp=CG.brightnessExp
-    print CG
+    print(CG)
     assert(False)
 
 #extinction values by filter for Sloan
@@ -125,23 +126,23 @@ for ngc in ngcs:
 
 #get extinction from SFD
     galactic=radectolb(pos[0],pos[1])
-    print galactic
+    print(galactic)
     x=get_SFD_dust(galactic[0], galactic[1],dustmap='ebv',interpolate=True)
     correction=[x*sloanu,x*sloang,x*sloanr,x*sloani,x*sloanz]
     corrected_mags=map(operator.sub,tot,correction)
-    print 'corrected mags',corrected_mags
+    print('corrected mags',corrected_mags)
     tracgr=tot[1]-tot[2]
     tracri=tot[2]-tot[3]
     tracur=tot[0]-tot[2]
-    print 'g-r from trac',tracgr
-    print 'r-i from trac',tracri
-    print 'u-r from trac', tracur
+    print('g-r from trac',tracgr)
+    print('r-i from trac',tracri)
+    print('u-r from trac', tracur)
     gr_corrected=corrected_mags[1]-corrected_mags[2]
     ri_corrected=corrected_mags[2]-corrected_mags[3]
     ur_corrected=corrected_mags[0]-corrected_mags[2]
-    print gr_corrected, 'CORRECTED GR COLOR'
-    print ri_corrected, 'CORRECTED RI COLOR'
-    print ur_corrected, 'CORRECTED UR COLOR'
+    print(gr_corrected, 'CORRECTED GR COLOR')
+    print(ri_corrected, 'CORRECTED RI COLOR')
+    print(ur_corrected, 'CORRECTED UR COLOR')
 
     color1=[gr_corrected]
     color2=[ri_corrected]

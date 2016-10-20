@@ -1,3 +1,4 @@
+from __future__ import print_function
 import logging
 from astrometry.util.fits import *
 from astrometry.sdss.fields import *
@@ -7,7 +8,7 @@ from astrometry.util.run_command import run_command
 
 class PrimaryArea(object):
     def __init__(self, fn='field_primary.fits'):
-        print 'Reading', fn, '...'
+        print('Reading', fn, '...')
         F = fits_table(fn)
         self.fieldAreas = dict([((int(rr),int(r),int(c),int(f)),a) for rr,r,c,f,a
                                 in zip(F.rerun, F.run, F.camcol, F.field, F.primaryarea)])
@@ -41,7 +42,7 @@ def read_photoobjs(sdss, wcs, margin, cols=None, pa=None, wfn='window_flist.fits
     # a little extra margin
     rad += margin
 
-    print 'Searching for run,camcol,fields with radius', rad, 'deg'
+    print('Searching for run,camcol,fields with radius', rad, 'deg')
     RCF = radec_to_sdss_rcf(ra, dec, radius=rad*60., tablefn=wfn)
     log.debug('Found %i fields possibly in range' % len(RCF))
     RCF = [(run,camcol,field) for (run,camcol,field,r,d) in RCF]
@@ -71,9 +72,9 @@ def read_photoobjs(sdss, wcs, margin, cols=None, pa=None, wfn='window_flist.fits
             cmd = "wget --continue -nv -O %(outfn)s '%(url)s'"
             cmd = cmd % dict(outfn=fn, url=url)
             dirnm = os.path.dirname(fn)
-            print 'Directory:', dirnm
+            print('Directory:', dirnm)
             if not os.path.exists(dirnm):
-                print 'Creating', dirnm
+                print('Creating', dirnm)
                 try:
                     os.makedirs(dirnm)
                 except:
@@ -81,10 +82,10 @@ def read_photoobjs(sdss, wcs, margin, cols=None, pa=None, wfn='window_flist.fits
             log.debug('Retrieving photoObj from %s to %s' % (url, fn))
             (rtn,out,err) = run_command(cmd)
             if rtn:
-                print 'Command failed: command', cmd
-                print 'Output:', out
-                print 'Error:', err
-                print 'Return val:', rtn
+                print('Command failed: command', cmd)
+                print('Output:', out)
+                print('Error:', err)
+                print('Return val:', rtn)
                 return None
         
         T = fits_table(fn, columns=cols)

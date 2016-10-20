@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -14,18 +15,18 @@ opt,args = parser.parse_args()
 
 for fn in args:
     #'c4d_131028_014102_ooi_r_v1.fits.fz')
-    print 'Reading', fn
+    print('Reading', fn)
     F = fitsio.FITS(fn)
     mfn = fn.replace('_ooi_','_ood_')
-    print 'Reading', mfn
+    print('Reading', mfn)
     M = fitsio.FITS(mfn)
-    print len(F), 'hdus'
+    print(len(F), 'hdus')
 
     hdr = F[0].read_header()
     name = os.path.basename(fn)
     name = name.replace('.fits','').replace('.fz','')
     expnum = int(hdr['EXPNUM'])
-    print 'Exposure number', expnum
+    print('Exposure number', expnum)
     tt = 'Exp %i, %s' % (expnum, name)
 
     textargs = dict(ha='left', va='center', fontsize=8)
@@ -40,7 +41,7 @@ for fn in args:
         hdr = F[hdu].read_header()
         mask = M[hdu].read()
         extname = hdr['EXTNAME']
-        print extname,
+        print(extname, end=' ')
         med = np.median(I, axis=1)
         mm = np.median(med)
         med -= mm
@@ -119,7 +120,7 @@ for fn in args:
             plt.plot(cutx[cutnotok], yoff + cutmed[cutnotok], 'r.', alpha=0.5)
         plt.text(W, yoff, extname, **textargs)
 
-    print
+    print()
         
     plt.figure(1)
     plt.xlim(0, N)

@@ -8,6 +8,7 @@ Licensed under the GPLv2; see the file COPYING for details.
 
 General Sersic galaxy model.
 '''
+from __future__ import print_function
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
@@ -359,11 +360,11 @@ class SersicGalaxy(HoggGalaxy):
                 patchx = self.getUnitFluxModelPatch(img, px0, py0, modelMask=modelMask)
                 self.sersicindex.setParam(i, oldval)
                 if patchx is None:
-                    print 'patchx is None:'
-                    print '  ', self
-                    print '  stepping galaxy sersicindex', self.sersicindex.getParamNames()[i]
-                    print '  stepped', isteps[i]
-                    print '  to', self.sersicindex.getParams()[i]
+                    print('patchx is None:')
+                    print('  ', self)
+                    print('  stepping galaxy sersicindex', self.sersicindex.getParamNames()[i])
+                    print('  stepped', isteps[i])
+                    print('  to', self.sersicindex.getParams()[i])
                     derivs.append(None)
 
                 dx = (patchx - patch0) * (counts / istep)
@@ -391,15 +392,15 @@ if __name__ == '__main__':
                      Flux(1000.),
                      EllipseE(2., 0.5, 0.5),
                      SersicIndex(2.5))
-    print s
-    print s.getProfile()
+    print(s)
+    print(s.getProfile())
 
     s.sersicindex.setValue(4.0)
-    print s.getProfile()
+    print(s.getProfile())
 
     d = DevGalaxy(s.pos, s.brightness, s.shape)
-    print d
-    print d.getProfile()
+    print(d)
+    print(d.getProfile())
     
     # Extrapolation!
     # s.sersicindex.setValue(0.5)

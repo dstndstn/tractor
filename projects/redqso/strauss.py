@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
@@ -64,9 +65,9 @@ def _run_one((dataset, band, rlo, rhi, dlo, dhi, T, sfn)):
         #runtostage(700, opt, mp, rlo,rhi,dlo,dhi)
     except:
         import traceback
-        print
+        print()
         traceback.print_exc()
-        print
+        print()
     return None
     
 
@@ -149,13 +150,13 @@ if __name__ == '__main__':
                     W.set(c, np.array([]))
             wfn = os.path.join(datadir, 'wise-objs-%s.fits' % dataset)
             W.writeto(wfn)
-            print 'Wrote', wfn
+            print('Wrote', wfn)
             continue
     
         for band in [1,2,3,4]:
             pfn = os.path.join(datadir, '%s-w%i-stage108.pickle' % (dataset, band))
             if os.path.exists(pfn):
-                print 'Output exists:', pfn, '; skipping'
+                print('Output exists:', pfn, '; skipping')
                 continue
             args.append((dataset, band, rlo, rhi, dlo, dhi, T, sfn))
 
@@ -175,7 +176,7 @@ if __name__ == '__main__':
         for band in [1,2,3,4]:
             pfn = os.path.join(datadir, '%s-w%i-stage106.pickle' % (dataset, band))
             if not os.path.exists(pfn):
-                print 'File does not exist:', pfn, '; skipping'
+                print('File does not exist:', pfn, '; skipping')
                 gotall = False
                 break
             X = unpickle_from_file(pfn)
@@ -228,7 +229,7 @@ if __name__ == '__main__':
             continue
 
         T.writeto(resfn)
-        print 'Wrote', resfn
+        print('Wrote', resfn)
 
         results.append((i,T))
 
@@ -238,9 +239,9 @@ if __name__ == '__main__':
     origcols = TT.get_columns()
     for k in R.get_columns():
         if k in origcols:
-            print 'Skipping original column', k
+            print('Skipping original column', k)
             continue
-        print 'Adding column', k
+        print('Adding column', k)
         r = R.get(k)
         X = np.zeros(len(TT), r.dtype)
         X[I] = r

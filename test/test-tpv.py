@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -16,19 +17,19 @@ hdulist = fits.open(hdrfn)
 head = hdulist[0].header
 
 #T = fits_table('stxy.fits')
-print 'TPV.transform'
+print('TPV.transform')
 rr,dd = tpv.transform(np.array([1.]), np.array([1.]), head)
-print 'TPV RA,Dec', rr,dd
-print
+print('TPV RA,Dec', rr,dd)
+print()
 
-print 'Running wcs-pv2sip...'
-print
+print('Running wcs-pv2sip...')
+print()
 H,W = 4094, 2046
 wfn = 'pvsip.wcs'
 os.unlink(wfn)
 cmd = ('wcs-pv2sip -v -v -S -o 5 -e %i -W %i -H %i -X %i -Y %i %s %s' %
        (0, W, H, W, H, hdrfn, wfn))
-print cmd
+print(cmd)
 rtn = os.system(cmd)
 assert(rtn == 0)
 
@@ -37,11 +38,11 @@ pvsip = Sip(wfn)
 sip_compute_inverse_polynomials(pvsip, 100, 100, 1, W, 1, H)
 
 r,d = pvsip.pixelxy2radec(1., 1.)
-print 'PV-SIP RA,Dec', r,d
-print 'vs TPV RA,Dec', rr,dd
+print('PV-SIP RA,Dec', r,d)
+print('vs TPV RA,Dec', rr,dd)
 
 ok,x,y = pvsip.radec2pixelxy(rr,dd)
-print 'PV-SIP RA,Dec', rr,dd, '-> x,y', x,y
+print('PV-SIP RA,Dec', rr,dd, '-> x,y', x,y)
 
 #import sys
 #sys.exit(0)
@@ -72,7 +73,7 @@ for y in Y:
 plt.xlabel('pixel coord')
 plt.ylabel('dRA or dDec (arcsec)')
 plt.savefig('2.png')
-print 'saved plot 2'
+print('saved plot 2')
 
 
 
@@ -100,7 +101,7 @@ for y in Y:
 plt.xlabel('pixel coord')
 plt.ylabel('dPixel')
 plt.savefig('3.png')
-print 'saved plot 3'
+print('saved plot 3')
 
 
 ##### this is just checking the SIP inversion
@@ -125,7 +126,7 @@ for y in Y:
 plt.xlabel('pixel coord')
 plt.ylabel('dPixel')
 plt.savefig('4.png')
-print 'saved plot 4'
+print('saved plot 4')
 
 
     

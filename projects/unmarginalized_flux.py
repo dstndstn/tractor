@@ -1,5 +1,6 @@
 # Copyright 2011 David W. Hogg (NYU).  All rights reserved.
 
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -51,7 +52,7 @@ def main():
         pars = np.array([0.9, -1.0, 1.0])
         notpars = (trueimage, psf, invvar)
         bestpars = op.fmin(cost, pars, args=(notpars, ))
-        print bestpars
+        print(bestpars)
 
     # now loop over noisiness
     minx = -3.5
@@ -69,7 +70,7 @@ def main():
             notpars = (image, psf, invvar)
             bestpars = op.fmin(cost, pars, args=(notpars, ))
             fluxlist[i] = bestpars[0]
-            print i, logvar, bestpars
+            print(i, logvar, bestpars)
         an.pickle_to_file((logvarlist, fluxlist), picklefn)
     (logvarlist, fluxlist) = an.unpickle_from_file(picklefn)
 

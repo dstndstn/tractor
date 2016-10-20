@@ -1,3 +1,4 @@
+from __future__ import print_function
 
 '''
     2014-August run #1: g,r,z coverage:
@@ -71,7 +72,7 @@ def tweak_astrometry(SEcat, SDSScat, sip, ps):
     SDSScat = fits_table(sdssobjfn)
     ok,xx,yy = sip.radec2pixelxy(SDSScat.ra, SDSScat.dec)
     I,J,d = match_xy(xx, yy, SEcat.x_image, SEcat.y_image, 5.0)
-    print len(I), 'matches'
+    print(len(I), 'matches')
 
     # Try doing the EM tune-up thing.
 
@@ -84,9 +85,9 @@ def tweak_astrometry(SEcat, SDSScat, sip, ps):
 
     for i in range(20):
         weights,mu,sigma,B,Q,fore = em_step(X, weights, mu, sigma, bg, B)
-    print 'Sigma', sigma
-    print 'Mu', mu
-    print 'B', B
+    print('Sigma', sigma)
+    print('Mu', mu)
+    print('B', B)
 
     if ps:
         plt.clf()
@@ -107,12 +108,12 @@ def tweak_astrometry(SEcat, SDSScat, sip, ps):
 
     # UPDATE 'sip'
     crpix = sip.crpix
-    print 'CRPIX', crpix
+    print('CRPIX', crpix)
     sip.set_crpix((crpix[0] - mu[0], crpix[1] - mu[1]))
 
     ok,xx,yy = sip.radec2pixelxy(SDSScat.ra, SDSScat.dec)
     I,J,d = match_xy(xx, yy, SEcat.x_image, SEcat.y_image, 5.0)
-    print len(I), 'matches'
+    print(len(I), 'matches')
 
     if ps:
         plt.clf()
@@ -129,10 +130,10 @@ def tweak_astrometry(SEcat, SDSScat, sip, ps):
 def set_source_radii(psf, cat, minsb):
     # Render PSF profile to determine good source radii
     R = 100
-    print 'PSF type:', type(psf)
+    print('PSF type:', type(psf))
     psf.radius = R
     pat = psf.getPointSourcePatch(0., 0.)
-    print 'PSF patch: x0,y0', pat.x0,pat.y0, 'shape', pat.patch.shape
+    print('PSF patch: x0,y0', pat.x0,pat.y0, 'shape', pat.patch.shape)
     assert(pat.x0 == pat.y0)
     assert(pat.x0 == -R)
     # max of +dx, -dx, +dy, -dy directions.
@@ -142,7 +143,7 @@ def set_source_radii(psf, cat, minsb):
                                      pat.patch[R::-1, R]])
     # Set minimum flux to correspond to minimum radius
     defaultflux = minsb / psfprofile[minradius]
-    print 'Setting default flux', defaultflux
+    print('Setting default flux', defaultflux)
     
     # Set source radii based on initial fluxes
     rad = np.zeros(len(cat), int)
@@ -168,10 +169,10 @@ def detection_map(psf, img, inverr, sig1, nsigma=4, dilate_fwhm=1.):
     mx = psfim.patch.max()
     area = np.sum(psfim.patch > 0.5*mx)
     fwhm = 2. * np.sqrt(area / np.pi)
-    print 'PSF FWHM', fwhm
+    print('PSF FWHM', fwhm)
     psfsig = fwhm/2.35
     psfnorm = np.sqrt(gaussian_filter(psfim.patch, psfsig).max())
-    print 'PSF norm:', psfnorm
+    print('PSF norm:', psfnorm)
 
     # run rough detection alg on image
     img = img.copy()
@@ -202,7 +203,7 @@ def sky_subtract(img, cellsize, fullimg=None, x0=0, y0=0, gradient=True):
         xx += (xx[1]-xx[0])/2.
         xx = np.append(0, xx.astype(int))
         xx[-1] = fW
-        print 'xx', xx
+        print('xx', xx)
         yy = np.linspace(0., fH, ny+1)
         yy += (yy[1]-yy[0])/2.
         yy = np.append(0, yy.astype(int))
@@ -224,7 +225,7 @@ def sky_subtract(img, cellsize, fullimg=None, x0=0, y0=0, gradient=True):
         A[:,2] = 0.5*dy + yy.ravel()
         b = subs.ravel()
         X,res,rank,s = np.linalg.lstsq(A, b)
-        print 'Sky gradient:', X
+        print('Sky gradient:', X)
         bg = np.zeros_like(img) + X[0]
         bg += (X[1] * (x0 + np.arange(W)))[np.newaxis,:]
         bg += (X[2] * (y0 + np.arange(H)))[:,np.newaxis]
@@ -246,10 +247,10 @@ def read_decam_image(basefn, skysubtract=True, slc=None):
     imgfn  = basefn + '.fits'
     maskfn = basefn + '.bpm.fits'
     psffn  = basefn + '.cat.psf'
-    print 'Reading', imgfn, 'and', maskfn
+    print('Reading', imgfn, 'and', maskfn)
 
     wcsfn = os.path.join('data/decam/astrom', os.path.basename(imgfn).replace('.fits','.wcs'))
-    print 'Reading WCS from', wcsfn
+    print('Reading WCS from', wcsfn)
 
     f = fitsio.FITS(imgfn)
     m = fitsio.FITS(maskfn)
@@ -268,10 +269,10 @@ def read_decam_image(basefn, skysubtract=True, slc=None):
         mask = m[0].read()
         y0,x0 = 0,0
     #img,hdr = fitsio.read(imgfn, header=True)
-    print 'Got image', img.shape, img.dtype
-    print 'Mask', mask.shape, mask.dtype
-    print 'values', np.unique(mask)
-    print 'Mask=0:', sum(mask == 0)
+    print('Got image', img.shape, img.dtype)
+    print('Mask', mask.shape, mask.dtype)
+    print('values', np.unique(mask))
+    print('Mask=0:', sum(mask == 0))
 
     name = hdr['FILENAME'].replace('.fits','').replace('_', ' ')
     filt = hdr['FILTER'].split()[0]
@@ -280,17 +281,17 @@ def read_decam_image(basefn, skysubtract=True, slc=None):
     if zp is None:
         zp = hdr['UB1_ZP']
     zpscale = NanoMaggies.zeropointToScale(zp)
-    print 'Name', name, 'filter', filt, 'zp', zp
+    print('Name', name, 'filter', filt, 'zp', zp)
     
     #sip = Sip(imgfn)
     sip = Sip(wcsfn)
-    print 'SIP', sip
-    print 'RA,Dec bounds', sip.radec_bounds()
+    print('SIP', sip)
+    print('RA,Dec bounds', sip.radec_bounds())
     
     H,W = img.shape
-    print 'Reading PSF', psffn
+    print('Reading PSF', psffn)
     psf = PsfEx(psffn, W, H, scale=False, nx=9, ny=17)
-    print 'Got PSF', psf
+    print('Got PSF', psf)
     if x0 or y0:
         psf = ShiftedPsf(psf, x0, y0)
         
@@ -302,7 +303,7 @@ def read_decam_image(basefn, skysubtract=True, slc=None):
         sky1 = X[0] + X[1]*(x0 + W/2.) + X[2]*(y0 + H/2.)
     else:
         sky = np.median(img.ravel())
-        print 'Median:', sky
+        print('Median:', sky)
         sky1 = sky
 
     if fullimg is not None:
@@ -312,7 +313,7 @@ def read_decam_image(basefn, skysubtract=True, slc=None):
     diffs = dim[:-5:10,:-5:10] - dim[5::10,5::10]
     mad = np.median(np.abs(diffs).ravel())
     sig1 = 1.4826 * mad / np.sqrt(2.)
-    print 'MAD', mad, '-> sigma', sig1
+    print('MAD', mad, '-> sigma', sig1)
     invvar = np.zeros_like(img) + 1./sig1**2
     invvar[mask != 0] = 0.
     if sat is not None:
@@ -410,7 +411,7 @@ if __name__ == '__main__':
         subtr.freezeParam('images')
         subtr.catalog.thawAllRecursive()
 
-        print 'subtr', subtr
+        print('subtr', subtr)
         if len(bsrcs) == 0:
             continue
             
@@ -492,36 +493,36 @@ if __name__ == '__main__':
 
         p0 = subtr.getParams()
 
-        print 'Calling ceres optimization on subimage of size', subtim.shape,
-        print 'and', len(bsrcs), 'sources'
+        print('Calling ceres optimization on subimage of size', subtim.shape, end=' ')
+        print('and', len(bsrcs), 'sources')
         #print 'Fitting params:'
         #subtr.printThawedParams()
         #subtr._ceres_opt()
 
-        print
-        print '----------Dynamic LSQR ---------------------'
-        print
+        print()
+        print('----------Dynamic LSQR ---------------------')
+        print()
         subtr.setParams(p0)
 
         ss = subtr.getDynamicScales()
-        print 'Dynamic scales:', ss
+        print('Dynamic scales:', ss)
         subtr.catalog.setAllStepSizes(ss)
         ss2 = subtr.catalog.getAllStepSizes()
-        print 'ss2', ss2
+        print('ss2', ss2)
         ss = np.array(ss)
         ss2 = np.array(ss2)
-        print 'diff', ss - ss2
+        print('diff', ss - ss2)
 
         I = np.flatnonzero(ss != ss2)
         nm = subtr.catalog.getParamNames()
-        print 'Different:', [nm[i] for i in I]
+        print('Different:', [nm[i] for i in I])
 
         assert(np.all(np.array(ss) == np.array(ss2)))
         
         while True:
             dlnp,X,alpha,var = subtr.optimize(variance=True, shared_params=False,
                                               alphas=[0.01, 0.1, 1., 2., 4., 10.])
-            print 'dlnp', dlnp
+            print('dlnp', dlnp)
             if dlnp < 1e-3:
                 break
 
@@ -529,7 +530,7 @@ if __name__ == '__main__':
 
         p0 = subtr.getParams()
         lnp0 = subtr.getLogProb()
-        print 'Check vars:'
+        print('Check vars:')
         for i,(nm,val,vvar) in enumerate(zip(subtr.getParamNames(),
                                              subtr.getParams(), var)):
             lnpx = subtr.getLogProb()
@@ -540,21 +541,21 @@ if __name__ == '__main__':
             subtr.setParam(i, p0[i] - dvar)
             lnp2 = subtr.getLogProb()
             subtr.setParam(i, p0[i])
-            print '  ', nm, val, '+-', dvar, '-> dlnp', (lnp1-lnp0), (lnp2-lnp0)
+            print('  ', nm, val, '+-', dvar, '-> dlnp', (lnp1-lnp0), (lnp2-lnp0))
         
-        print
-        print '------------------- Ceres ---------------------'
-        print
+        print()
+        print('------------------- Ceres ---------------------')
+        print()
         subtr.setParams(p0)
         R = subtr._ceres_opt(variance=True, max_iterations=100)
 
-        print 'Report:', R['full_report']
+        print('Report:', R['full_report'])
 
         var = R['variance']
-        print 'Params:'
+        print('Params:')
         for nm,val,vvar in zip(subtr.getParamNames(),
                                subtr.getParams(), var):
-            print '  ', nm, '=', val, '+-', np.sqrt(vvar)
+            print('  ', nm, '=', val, '+-', np.sqrt(vvar))
 
 
         # print
@@ -590,7 +591,7 @@ if __name__ == '__main__':
         if True:
             pp = subtr.getParams()
             lnp0 = subtr.getLogProb()
-            print 'Check vars:'
+            print('Check vars:')
             for i,(nm,val,vvar) in enumerate(zip(subtr.getParamNames(),
                                                  subtr.getParams(), var)):
                 lnpx = subtr.getLogProb()
@@ -601,17 +602,17 @@ if __name__ == '__main__':
                 subtr.setParam(i, pp[i] - dvar)
                 lnp2 = subtr.getLogProb()
                 subtr.setParam(i, pp[i])
-                print '  ', nm, val, '+-', dvar, '-> dlnp', (lnp1-lnp0), (lnp2-lnp0)
+                print('  ', nm, val, '+-', dvar, '-> dlnp', (lnp1-lnp0), (lnp2-lnp0))
 
-        print
-        print '------------------- LSQR ---------------------'
-        print
+        print()
+        print('------------------- LSQR ---------------------')
+        print()
         subtr.setParams(p0)
 
         while True:
             dlnp,X,alpha,var = subtr.optimize(variance=True, shared_params=False,
                                               alphas=[0.01, 0.1, 1., 2., 4., 10.])
-            print 'dlnp', dlnp
+            print('dlnp', dlnp)
             if dlnp < 1e-3:
                 break
 
@@ -619,7 +620,7 @@ if __name__ == '__main__':
 
         p0 = subtr.getParams()
         lnp0 = subtr.getLogProb()
-        print 'Check vars:'
+        print('Check vars:')
         for i,(nm,val,vvar) in enumerate(zip(subtr.getParamNames(),
                                              subtr.getParams(), var)):
             lnpx = subtr.getLogProb()
@@ -630,20 +631,20 @@ if __name__ == '__main__':
             subtr.setParam(i, p0[i] - dvar)
             lnp2 = subtr.getLogProb()
             subtr.setParam(i, p0[i])
-            print '  ', nm, val, '+-', dvar, '-> dlnp', (lnp1-lnp0), (lnp2-lnp0)
+            print('  ', nm, val, '+-', dvar, '-> dlnp', (lnp1-lnp0), (lnp2-lnp0))
 
 
 
 
-        print 'Log-probs: ceres', ceres_lnp, 'vs', lsqr_lnp, '(delta: %g)' % (lsqr_lnp - ceres_lnp)
+        print('Log-probs: ceres', ceres_lnp, 'vs', lsqr_lnp, '(delta: %g)' % (lsqr_lnp - ceres_lnp))
 
-        print 'vs Dynamic LSQR:', dyn_lsqr_lnp, '(delta: %g)' % (dyn_lsqr_lnp - max(lsqr_lnp, ceres_lnp))
+        print('vs Dynamic LSQR:', dyn_lsqr_lnp, '(delta: %g)' % (dyn_lsqr_lnp - max(lsqr_lnp, ceres_lnp)))
                 
     sys.exit(0)
     
 
     tim = read_decam_image(decbase, slc=slc)
-    print 'Got', tim, tim.shape
+    print('Got', tim, tim.shape)
 
     basefn = os.path.basename(decbase).lower().replace('.p.w', '')
     picklefn = basefn + '.pickle'
@@ -652,20 +653,20 @@ if __name__ == '__main__':
     seobjfn = decbase + '.cat.fits'
     
     if os.path.exists(picklefn):
-        print 'Reading', picklefn
+        print('Reading', picklefn)
         X = unpickle_from_file(picklefn)
         tim.psf = X['psf']
     else:
         tim.psf.ensureFit()
         X = dict(psf=tim.psf)
         pickle_to_file(X, picklefn)
-        print 'Wrote', picklefn
+        print('Wrote', picklefn)
     
     catname = 'SDSS'
     sdss = DR9(basedir='dr9')
     sdss.saveUnzippedFiles('dr9')
     if os.environ.get('BOSS_PHOTOOBJ') is not None:
-        print 'Using local tree for SDSS files'
+        print('Using local tree for SDSS files')
         sdss.useLocalTree()
 
     # read_source_extractor_catalog(secatfn, tim.zp
@@ -688,7 +689,7 @@ if __name__ == '__main__':
     else:
         objs = fits_table(objfn)
 
-    print len(objs), 'SDSS photoObjs'
+    print(len(objs), 'SDSS photoObjs')
     # FIXME -- RA=0 wrap-around issues
     r0,r1,d0,d1 = sip.radec_bounds()
     cat = get_tractor_sources_dr9(
@@ -698,14 +699,14 @@ if __name__ == '__main__':
         useObjcType=True,
         ellipse=EllipseESoft.fromRAbPhi)
     catsources = objs
-    print len(cat), 'sources'
+    print(len(cat), 'sources')
 
     rcfnum = (objs.run.astype(np.int32) * 10000 +
               objs.camcol.astype(np.int32) * 1000 +
               objs.field)
     rcfnum = np.unique(rcfnum)
     rcfs = zip(rcfnum / 10000, rcfnum % 10000 / 1000, rcfnum % 1000)
-    print 'RCF', rcfs
+    print('RCF', rcfs)
 
     secat = fits_table(seobjfn, hdu=2,
                        column_map={'alpha_j2000':'ra', 'delta_j2000':'dec'})
@@ -739,7 +740,7 @@ if __name__ == '__main__':
     
     tractor = Tractor([tim], cat)
 
-    print 'Rendering initial model image (no optimization)...'
+    print('Rendering initial model image (no optimization)...')
     t0 = Time()
     mod = tractor.getModelImage(0)
     chi = (tim.data - mod) * tim.getInvError()
@@ -752,7 +753,7 @@ if __name__ == '__main__':
     imshow(mod, **ima)
     plt.title('Tractor model image: Initial')
     ps.savefig()
-    print 'That took', Time()-t0
+    print('That took', Time()-t0)
 
     imchi = dict(interpolation='nearest', origin='lower',
                  vmin=-5, vmax=5, cmap='RdBu')
@@ -785,10 +786,10 @@ if __name__ == '__main__':
     minradius = 3
     # -> min surface brightness
     minsb = tim.sig1 * minsig
-    print 'Sigma1:', tim.sig1, 'minsig', minsig, 'minsb', minsb
+    print('Sigma1:', tim.sig1, 'minsig', minsig, 'minsb', minsb)
     set_source_radii(tim.getPsf(), cat, minsb, minradius)
 
-    print 'Opt forced photom...'
+    print('Opt forced photom...')
     R = tractor.optimize_forced_photometry(
         minsb=minsb,
         shared_params=False, wantims=False, fitstats=True, variance=True,
@@ -862,7 +863,7 @@ if __name__ == '__main__':
     # ps.savefig()
 
     blobs,nblobs = label(uhot)
-    print 'N detected blobs:', nblobs
+    print('N detected blobs:', nblobs)
     blobslices = find_objects(blobs)
 
     # Find the sources *within* each blob.
@@ -908,11 +909,11 @@ if __name__ == '__main__':
         bslc = blobslices[b]
         bsrcs = blobsrcs[b]
 
-        print
-        print 'Blob', ii, 'of', len(blobchisq), 'index', b
-        print 
+        print()
+        print('Blob', ii, 'of', len(blobchisq), 'index', b)
+        print() 
 
-        print 'blob slice:', bslc
+        print('blob slice:', bslc)
 
         subiv = tim.getInvvar()[bslc]
         subiv[blobs[bslc] != (b+1)] = 0.
@@ -994,16 +995,16 @@ if __name__ == '__main__':
 
         pfn = 'subtim-%04i.pickle' % ii
         pickle_to_file(dict(tim=subtim, cat=bsrcs, bslc=bslc), pfn)
-        print 'Wrote', pfn
+        print('Wrote', pfn)
         
         subtr = Tractor([subtim], bsrcs)
         subtr.modtype = np.float64
         subtr.freezeParam('images')
         subtr.catalog.thawAllRecursive()
 
-        print 'Calling ceres optimization on subimage of size', subtim.shape,
-        print 'and', len(bsrcs), 'sources'
-        print 'Fitting params:'
+        print('Calling ceres optimization on subimage of size', subtim.shape, end=' ')
+        print('and', len(bsrcs), 'sources')
+        print('Fitting params:')
         subtr.printThawedParams()
 
         submod = subtr.getModelImage(0)
@@ -1031,33 +1032,33 @@ if __name__ == '__main__':
 
         R2 = subtr._ceres_opt(variance=True, scale_columns=False)
         var2 = R2['variance']
-        print 'Params2:'
+        print('Params2:')
         for nm,val,vvar in zip(subtr.getParamNames(),
                                subtr.getParams(), var2):
-            print '  ', nm, '=', val, '+-', np.sqrt(vvar)
+            print('  ', nm, '=', val, '+-', np.sqrt(vvar))
 
         #subtr._ceres_opt()
         R = subtr._ceres_opt(variance=True)
         var = R['variance']
-        print 'Params:'
+        print('Params:')
         for nm,val,vvar in zip(subtr.getParamNames(),
                                subtr.getParams(), var):
-            print '  ', nm, '=', val, '+-', np.sqrt(vvar)
+            print('  ', nm, '=', val, '+-', np.sqrt(vvar))
 
-        print
-        print 'Ceres with numeric differentiation:'
+        print()
+        print('Ceres with numeric differentiation:')
         R = subtr._ceres_opt(variance=True, numeric=True)
         var = R['variance']
-        print 'Params:'
+        print('Params:')
         for nm,val,vvar in zip(subtr.getParamNames(),
                                subtr.getParams(), var):
-            print '  ', nm, '=', val, '+-', np.sqrt(vvar)
-        print
+            print('  ', nm, '=', val, '+-', np.sqrt(vvar))
+        print()
 
             
         p0 = subtr.getParams()
         lnp0 = subtr.getLogProb()
-        print 'Check vars:'
+        print('Check vars:')
         for i,(nm,val,vvar) in enumerate(zip(subtr.getParamNames(),
                                              subtr.getParams(), var)):
             lnpx = subtr.getLogProb()
@@ -1068,7 +1069,7 @@ if __name__ == '__main__':
             subtr.setParam(i, p0[i] - dvar)
             lnp2 = subtr.getLogProb()
             subtr.setParam(i, p0[i])
-            print '  ', nm, val, '+-', dvar, '-> dlnp', (lnp1-lnp0), (lnp2-lnp0)
+            print('  ', nm, val, '+-', dvar, '-> dlnp', (lnp1-lnp0), (lnp2-lnp0))
 
         radec1.extend([(src.getPosition().ra, src.getPosition().dec)
                        for src in bsrcs])
@@ -1093,26 +1094,26 @@ if __name__ == '__main__':
         while True:
             dlnp,x,alpha,vars3 = subtr.optimize(
                 shared_params=False, variance=True)
-            print 'Opt: dlnp', dlnp
+            print('Opt: dlnp', dlnp)
             if dlnp < 1e-3:
                 break
-        print 'Params3:'
+        print('Params3:')
         for nm,val,vvar in zip(subtr.getParamNames(),
                                subtr.getParams(), vars3):
-            print '  ', nm, '=', val, '+-', np.sqrt(vvar)
+            print('  ', nm, '=', val, '+-', np.sqrt(vvar))
             
         subtr.catalog.freezeAllParams()
         vars2 = []
         for i,src in enumerate(bsrcs):
             subtr.catalog.thawParam(i)
-            print 'Fitting source', i
+            print('Fitting source', i)
             for nm,val in zip(subtr.getParamNames(), subtr.getParams()):
-                print '  ', nm, '=', val
+                print('  ', nm, '=', val)
             
             while True:
                 dlnp,X,alpha,svar = subtr.optimize(
                     shared_params=False, variance=True)
-                print 'Opt: dlnp', dlnp
+                print('Opt: dlnp', dlnp)
                 if svar is None:
                     svar = np.zeros_like(X)
                 if dlnp < 1e-3:
@@ -1122,15 +1123,15 @@ if __name__ == '__main__':
 
         vars2 = np.hstack(vars2)
         subtr.catalog.thawAllParams()
-        print 'Params4:'
+        print('Params4:')
         for nm,val,vvar in zip(subtr.getParamNames(),
                                subtr.getParams(), vars2):
-            print '  ', nm, '=', val, '+-', np.sqrt(vvar)
+            print('  ', nm, '=', val, '+-', np.sqrt(vvar))
 
 
         p0 = subtr.getParams()
         lnp0 = subtr.getLogProb()
-        print 'Check vars 2:'
+        print('Check vars 2:')
         for i,(nm,val,vvar) in enumerate(zip(subtr.getParamNames(),
                                              subtr.getParams(), vars2)):
             dvar = np.sqrt(vvar)
@@ -1139,7 +1140,7 @@ if __name__ == '__main__':
             subtr.setParam(i, p0[i] - dvar)
             lnp2 = subtr.getLogProb()
             subtr.setParam(i, p0[i])
-            print '  ', nm, val, '+-', dvar, '-> dlnp', (lnp1-lnp0), (lnp2-lnp0)
+            print('  ', nm, val, '+-', dvar, '-> dlnp', (lnp1-lnp0), (lnp2-lnp0))
 
             
         if ii < 25:
