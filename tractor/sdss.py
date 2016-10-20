@@ -188,7 +188,7 @@ def _check_sdss_files(sdss, run, camcol, field, bandname, filetypes,
             raise os.OSError('no such file: "%s"' % fn)
 
         
-def _getBrightness(counts, tsf, bands, extrabands):
+def _dr7_getBrightness(counts, tsf, bands, extrabands):
     from astrometry.sdss import band_name
 
     allcounts = counts
@@ -391,7 +391,7 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
             counts = [tsf.luptitude_to_counts(lup,j)
                       for j,lup in enumerate(lups)]
             counts = np.array(counts)
-            bright = _getBrightness(counts, tsf, bandnames, extrabands)
+            bright = _dr7_getBrightness(counts, tsf, bandnames, extrabands)
             return bright
         flux2bright = lup2bright
         starflux = objs.psfcounts
@@ -404,8 +404,8 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
             counts = np.array(counts)
             dcounts = counts * Ldev
             ecounts = counts * Lexp
-            dbright = _getBrightness(dcounts, tsf, bands, extrabands)
-            ebright = _getBrightness(ecounts, tsf, bands, extrabands)
+            dbright = _dr7_getBrightness(dcounts, tsf, bands, extrabands)
+            ebright = _dr7_getBrightness(ecounts, tsf, bands, extrabands)
             return dbright, ebright
     else:
         def nmgy2bright(flux):
