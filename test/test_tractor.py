@@ -53,40 +53,77 @@ class TractorTest(unittest.TestCase):
 
     def test_model_images(self):
         W,H = 100,100
+        psf_sig1 = 2.
+        psf_sig2 = 3.
         tim1 = Image(data=np.zeros((H,W)), invvar=np.ones((H,W)),
-                     psf=NCircularGaussianPSF([2.], [1.]),
+                     psf=NCircularGaussianPSF([psf_sig1], [1.]),
                      photocal=LinearPhotoCal(1.))
         tim2 = Image(data=np.zeros((H,W)), invvar=np.ones((H,W)),
-                     psf=NCircularGaussianPSF([3.], [1.]),
+                     psf=NCircularGaussianPSF([psf_sig2], [1.]),
                      photocal=LinearPhotoCal(1.))
 
-        star = PointSource(PixPos(W/2, H/2), Flux(100.))
-        
+        trueflux = 100.
+        star = PointSource(PixPos(W/2, H/2), Flux(trueflux))
 
-        for opt in [None]: #, CeresOptimizer()]:
-            tr = Tractor([tim1,tim2], [star], optimizer=opt)
-            mods = tr.getModelImages()
-            print('mods:', mods)
-            print(list(mods))
-            chis = tr.getChiImages()
-            print('chis:', chis)
-            print(list(chis))
-            lnp = tr.getLogProb()
-            print('lnp', lnp)
-    
-            tr.freezeParam('images')
-            X = tr.optimize()
-            # dlnp,x,a
-            # print 'dlnp', dlnp
-            # print 'x', x
-            # print 'a', a
-            print('opt result:', X)
+        tr = Tractor([tim1,tim2], [star])
+
+        # Create model images with known source
+        mods = list(tr.getModelImages())
+        print('Mod sums:', [np.sum(m) for m in mods])
+
+        # Sum of fluxes ~= trueflux
+        self.assertLess(np.abs(np.sum(mods[0]) - trueflux), 1e-3)
+        self.assertLess(np.abs(np.sum(mods[1]) - trueflux), 1e-3)
+
+        # Max: flux * peak of gaussian = 1./(2.*pi*sigma**2)
+        self.assertTrue(np.abs(np.max(mods[0]) -
+                               trueflux / (2.*pi*psf_sig1**2)) < 1e-3)
+        self.assertTrue(np.abs(np.max(mods[1]) -
+                               trueflux / (2.*pi*psf_sig2**2)) < 1e-3)
+
+        chis = list(tr.getChiImages())
+        #print('chis:', chis)
+        lnp = tr.getLogProb()
+        #print('lnp', lnp)
+
+        self.assertTrue(np.abs(lnp - -143.681) < 1e-3)
+        
+        tr.freezeParam('images')
+        X = tr.optimize()
+        print('opt result:', X)
             
-            star.brightness.setParams([100.])
-            star.freezeAllBut('brightness')
-            print('star', star)
-            tr.optimize_forced_photometry()
-            print('star', star)
+        # Image data is still zero -- forced phot should set flux to ~ zero.
+        star.brightness.setParams([100.])
+        star.freezeAllBut('brightness')
+        print('star', star)
+        tr.optimize_forced_photometry()
+        print('star', star)
+
+        self.assertTrue(np.abs(star.getBrightness().getValue()) < 1e-3)
+
+        # Now set data to model images
+        tim1.data = mods[0]
+        tim2.data = mods[1]
+        # And re-forced phot.
+        tr.optimize_forced_photometry()
+        print('star', star)
+
+        self.assertTrue(np.abs(star.getBrightness().getValue() - trueflux)
+                        < 1e-3)
+
+        star.getBrightness().setValue(0.)
+        
+        # Now set data to noisy model images.
+        np.random.seed(42)
+        tim1.data = mods[0] + np.random.normal(size=tim1.shape)
+        tim2.data = mods[1] + np.random.normal(size=tim2.shape)
+
+        # And re-forced phot.
+        tr.optimize_forced_photometry()
+        print('star', star)
+
+        self.assertTrue(np.abs(star.getBrightness().getValue() - trueflux)
+                        < 5.)
 
         
 if __name__ == '__main__':
