@@ -19,6 +19,8 @@ install:
    - pip install --user numpy==1.11.0
    - pip install --user numpydoc
    # - pip install --user pyfits
+   # For sdss.common
+   - pip install --user astropy
    - pip install --user coveralls
    - pip install --user fitsio
    - ls ~/.local
@@ -101,5 +103,8 @@ cache:
   directories:
   - $HOME/cache/.pip
   - $HOME/astrometry.net
+  # pip install --local goes here:
+  - $HOME/.local
+
 
 #  - $HOME/fitsio-git
