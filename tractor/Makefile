@@ -107,6 +107,34 @@ CERES_LIB ?= -L$(CERES_LIB_DIR) -l$(CERES_LIB_NAME) $(GLOG_LIB) $(SUITESPARSE_LI
 #
 # export CERES_LIB="/usr/local/ceres-solver-1.8.0/lib/libceres.a -lglog /usr/local/lib/libcxsparse.a /usr/local/lib/libcholmod.a /usr/local/lib/libcamd.a /usr/local/lib/libcolamd.a /usr/local/lib/libamd.a -lgomp /usr/lib/liblapack.a /usr/lib/libf77blas.a /usr/lib/libatlas.a /usr/lib/libcblas.a -lgfortran"
 # export CERES_INC="-I/usr/local/ceres-solver-1.8.0/include"
+#
+
+#
+# On Cori @ NERSC,
+# 
+#  module load mkl/10.3
+#  module load eigen
+#  module load gflags
+#  module load glog
+#  module load SuiteSparse
+#  module load cmake
+#
+# If you have MKL in your LD_LIBRARY_PATH (eg, by loading the module), cmake finds it automatically.
+#
+# cmake ../ceres-solver-1.8.0 \
+# -DEIGEN_INCLUDE_DIR=${EIGEN_DIR}/include/eigen3 \
+# -DSUITESPARSE_INCLUDE_DIR_HINTS=${SUITESPARSE_DIR}/include \
+# -DSUITESPARSE_LIBRARY_DIR_HINTS=${SUITESPARSE_DIR}/lib \
+# -DGFLAGS_INCLUDE_DIR=${GFLAGS_DIR}/include \
+# -DGFLAGS_LIBRARY=${GFLAGS_DIR}/lib/libgflags.so \
+# -DGLOG_INCLUDE_DIR=${GLOG_DIR}/include \
+# -DGLOG_LIBRARY=${GLOG_DIR}/lib/libglog.so \
+# -DBUILD_EXAMPLES=FALSE \
+# -DBUILD_TESTING=FALSE \
+# -DBUILD_SHARED_LIBS=ON \
+# -DCMAKE_INSTALL_PREFIX=/tmp/ceres
+# 
+#
 
 ceres.py: ceres.i
 	swig -python -c++ $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $(GLOG_INC) $(GFLAGS_INC) $<

@@ -20,6 +20,9 @@ from . import ducks
 #     def getShifted(self, x0, y0):
 #         return self
 
+class HybridPSF(object):
+    pass
+
 class PixelizedPSF(BaseParams, ducks.ImageCalibration):
     '''
     A PSF model based on an image postage stamp, which will be
