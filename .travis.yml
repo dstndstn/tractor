@@ -63,6 +63,7 @@ script:
     - echo "$PYTHONPATH"
     - ls -l
     - python -c "import sys; print '\n'.join(sys.path)"
+    - python -c "import numpy; print numpy.__file__"
     - pwd
     - make
     - make doc
