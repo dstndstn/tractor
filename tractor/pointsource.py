@@ -89,7 +89,7 @@ class PointSource(MultiParams, SingleProfileSource):
         return (self.getSourceType() + '(' + repr(self.pos) + ', ' +
                 repr(self.brightness) + ')')
 
-    def getUnitFluxModelPatch(self, img, minval=0., derivs=False, modelMask=None):
+    def getUnitFluxModelPatch(self, img, minval=0., derivs=False, modelMask=None, extent=None):
         (px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
         H,W = img.shape
         psf = self._getPsf(img)
@@ -99,7 +99,7 @@ class PointSource(MultiParams, SingleProfileSource):
             r = psf.getRadius()
         if px + r < 0 or px - r > W or py + r < 0 or py - r > H:
             return None
-        patch = psf.getPointSourcePatch(px, py, minval=minval, extent=[0,W,0,H],
+        patch = psf.getPointSourcePatch(px, py, minval=minval, extent=extent, #[0,W,0,H],
                                         radius=self.fixedRadius, derivs=derivs,
                                         minradius=self.minRadius, modelMask=modelMask)
         return patch
