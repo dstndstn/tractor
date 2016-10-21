@@ -29,6 +29,11 @@ class SdssTest(unittest.TestCase):
         print('tim1', tim1.name)
         print('tim2', tim2.name)
 
+        self.assertIsInstance(tim1.photocal, LinearPhotoCal)
+        self.assertIsInstance(tim2.photocal, MagsPhotoCal)
+        self.assertEqual(tim1.shape, (100,100))
+        self.assertEqual(tim2.shape, (100,100))
+        
         # Slightly larger ROI to get some
         roi = (0,150,0,150)
         args = (run, camcol, field)
@@ -39,6 +44,25 @@ class SdssTest(unittest.TestCase):
 
         print('srcs1:', srcs1)
         print('srcs2:', srcs2)
+
+        self.assertEqual(len(srcs1), 6)
+        self.assertEqual(len(srcs2), 6)
+        self.assertIsInstance(srcs1[0], PointSource)
+        self.assertIsInstance(srcs2[0], PointSource)
+        p1 = srcs1[0]
+        p2 = srcs2[0]
+        self.assertIsInstance(p1.getBrightness(), NanoMaggies)
+        self.assertIsInstance(p2.getBrightness(), Mags)
+
+        # The important thing is interoperability of Brightness and Photocal...
+        counts1 = tim1.getPhotoCal().brightnessToCounts(p1.getBrightness())
+        print('Counts1:', counts1)
+        counts2 = tim2.getPhotoCal().brightnessToCounts(p2.getBrightness())
+        print('Counts2:', counts2)
+
+        self.assertTrue(np.abs(counts1 - counts2) < 1e-3)
+        self.assertTrue(np.abs(counts1 - 541.697) < 1e-3)
+        
         
 if __name__ == '__main__':
     unittest.main()
