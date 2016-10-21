@@ -28,7 +28,10 @@ class SingleProfileSource(BasicSource):
     def getUnitFluxModelPatches(self, *args, **kwargs):
         return [self.getUnitFluxModelPatch(*args, **kwargs)]
 
-    def getModelPatch(self, img, minsb=None, modelMask=None):
+    def getModelPatch(self, img, minsb=None, modelMask=None,
+        # ????
+        extent=None
+        ):
         counts = img.getPhotoCal().brightnessToCounts(self.brightness)
         if counts == 0:
             return None
@@ -41,7 +44,7 @@ class SingleProfileSource(BasicSource):
             minsb = img.modelMinval
         minval = minsb / counts
         upatch = self.getUnitFluxModelPatch(img, minval=minval,
-                                            modelMask=modelMask)
+                                            modelMask=modelMask, extent=extent)
         if upatch is None:
             return None
 

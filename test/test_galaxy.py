@@ -3,17 +3,22 @@ from __future__ import print_function
 import unittest
 import os
 
-import pylab as plt
 import numpy as np
 
 from tractor import *
 from tractor.galaxy import *
+
+ps = None
 
 class GalaxyTest(unittest.TestCase):
     def setUp(self):
         pass
         
     def test_gal(self):
+
+        if ps is not None:
+            import pylab as plt
+
         #pos = RaDecPos(0., 1.)
         pos = PixPos(49.5, 50.)
         bright = NanoMaggies(g=1., r=2.)
@@ -80,24 +85,24 @@ class GalaxyTest(unittest.TestCase):
 
         self.assertTrue(np.abs(mod.sum() - 100.) < 1e-3)
 
-        plt.clf()
-        plt.imshow(mod, interpolation='nearest', origin='lower')
-        plt.colorbar()
-        plt.savefig('gal-1.png')
+        if ps is not None:
+            plt.clf()
+            plt.imshow(mod, interpolation='nearest', origin='lower')
+            plt.colorbar()
+            ps.savefig()
 
         mm = Patch(25, 25, np.ones((50,50), bool))
 
-        up2 = gal1.getUnitFluxModelPatch(tim, modelMask=mm)
-        print('Unit-flux patch:', up2)
-
-        px,py = tim.getWcs().positionToPixel(gal1.getPosition(), gal1)
-        rup2 = gal1._realGetUnitFluxModelPatch(tim, px, py, None,
-                                               modelMask=mm)
-        print('Real unit-flux patch:', rup2)
-
-        deps = gal1._getUnitFluxDeps(tim, px, py)
-        print('Unit-flux deps:', deps)
-
+        # up2 = gal1.getUnitFluxModelPatch(tim, modelMask=mm)
+        # print('Unit-flux patch:', up2)
+        # 
+        # px,py = tim.getWcs().positionToPixel(gal1.getPosition(), gal1)
+        # rup2 = gal1._realGetUnitFluxModelPatch(tim, px, py, None,
+        #                                        modelMask=mm)
+        # print('Real unit-flux patch:', rup2)
+        # 
+        # deps = gal1._getUnitFluxDeps(tim, px, py)
+        # print('Unit-flux deps:', deps)
         
         p2 = gal1.getModelPatch(tim, modelMask=mm)
         print('Patch:', p2)
@@ -109,15 +114,44 @@ class GalaxyTest(unittest.TestCase):
 
         mod2 = np.zeros((H,W), np.float32)
         p2.addTo(mod2)
-        print('Mod sum:', mod.sum())
+        print('Mod sum:', mod2.sum())
+        self.assertTrue(np.abs(mod2.sum() - 100.) < 1e-3)
 
-        self.assertTrue(np.abs(mod.sum() - 100.) < 1e-3)
+        if ps is not None:
+            plt.clf()
+            plt.imshow(mod2, interpolation='nearest', origin='lower')
+            plt.colorbar()
+            ps.savefig()
+
+            plt.clf()
+            plt.imshow(mod2-mod, interpolation='nearest', origin='lower')
+            plt.colorbar()
+            ps.savefig()
         
-        plt.clf()
-        plt.imshow(mod2, interpolation='nearest', origin='lower')
-        plt.colorbar()
-        plt.savefig('gal-2.png')
+        print('Diff between mods:', np.abs(mod - mod2).max())
+        self.assertTrue(np.abs(mod - mod2).max() < 1e-6)
+
+
+        p3 = gal1.getModelPatch(tim, extent=[30,70,29,69])
+        print('Patch:', p3)
+        self.assertEqual(p3.x0, 30)
+        self.assertEqual(p3.y0, 29)
+        self.assertEqual(p3.shape, (40,40))
+        print('patch sum:', p3.patch.sum())
+        mod3 = np.zeros((H,W), np.float32)
+        p3.addTo(mod3)
+        print('Mod sum:', mod3.sum())
+        self.assertTrue(np.abs(mod3.sum() - 100.) < 1e-3)
+        print('Diff between mods:', np.abs(mod3 - mod).max())
+        self.assertTrue(np.abs(mod3 - mod).max() < 1e-6)
+
         
 
 if __name__ == '__main__':
+    import sys
+    if '--plots' in sys.argv:
+        sys.argv.remove('--plots')
+        from astrometry.util.plotutils import PlotSequence
+        ps = PlotSequence('gal')
+
     unittest.main()
