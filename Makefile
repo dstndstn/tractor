@@ -11,6 +11,15 @@ emfit: FORCE
 mpf: FORCE
 	$(MAKE) -C tractor mpf
 
+cov:
+	coverage erase
+	coverage run test/test_psfex.py
+	coverage run -a test/test_sdss.py
+	coverage run -a test/test_tractor.py
+	coverage run -a examples/tractor-sdss-synth.py --roi 100 200 100 200 --no-flipbook
+	coverage html
+.PHONY: cov
+
 cython:
 	python setup-cython.py build_ext --inplace
 .PHONY: cython

@@ -6,7 +6,7 @@ import pylab as plt
 import unittest
 
 from tractor import *
-from tractor.sdss import *
+#from tractor.sdss import *
 from tractor.galaxy import *
 
 class TractorTest(unittest.TestCase):
@@ -14,13 +14,13 @@ class TractorTest(unittest.TestCase):
         ra,dec = 123., 45.
         pos = RaDecPos(ra, dec)
         flux = 6.
-        sflux = SdssFlux(flux)
+        sflux = NanoMaggies(r=flux)
         re,ab,phi = 7, 0.8, 9
         shape = GalaxyShape(re, ab, phi)
         gal = ExpGalaxy(pos, sflux, shape)
         # harsh
         self.assertEqual(str(gal),
-                         'ExpGalaxy at RaDecPos: RA, Dec = (123.00000, 45.00000) with SdssFlux: 6000000.0 and Galaxy Shape: re=7.00, ab=0.80, phi=9.0')
+                         'ExpGalaxy at RaDecPos: RA, Dec = (123.00000, 45.00000) with NanoMaggies: r=20.6 and Galaxy Shape: re=7.00, ab=0.80, phi=9.0')
         self.assertEqual(str(gal.shape), str(shape))
         self.assertEqual(shape.re, re)
         self.assertEqual(shape.ab, ab)
@@ -76,9 +76,9 @@ class TractorTest(unittest.TestCase):
 
         # Max: flux * peak of gaussian = 1./(2.*pi*sigma**2)
         self.assertTrue(np.abs(np.max(mods[0]) -
-                               trueflux / (2.*pi*psf_sig1**2)) < 1e-3)
+                               trueflux / (2.*np.pi*psf_sig1**2)) < 1e-3)
         self.assertTrue(np.abs(np.max(mods[1]) -
-                               trueflux / (2.*pi*psf_sig2**2)) < 1e-3)
+                               trueflux / (2.*np.pi*psf_sig2**2)) < 1e-3)
 
         chis = list(tr.getChiImages())
         #print('chis:', chis)

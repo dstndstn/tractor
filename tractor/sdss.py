@@ -728,12 +728,7 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 
     # http://data.sdss3.org/datamodel/files/BOSS_PHOTOOBJ/frames/RERUN/RUN/CAMCOL/frame.html
     frame = sdss.readFrame(run, camcol, field, bandname, filename=fn)
-
-    #image = frame.getImage().astype(np.float32)
-    #(H,W) = image.shape
-
     H,W = frame.getImageShape()
-    
     info = dict()
     hdr = frame.getHeader()
     tai = hdr.get('TAI')
@@ -832,7 +827,6 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
                 klpsf = klpsf[1:-1, 1:-1]
             else:
                 break
-
         mypsf = PixelizedPSF(klpsf)
         
     elif psf == 'kl-gm':
@@ -893,155 +887,6 @@ def get_tractor_image_dr9(*args, **kwargs):
         curl = kwargs.pop('curl', False)
         kwargs['sdss'] = DR9(curl=curl)
     return get_tractor_image_dr8(*args, **kwargs)
-
-class SdssNanomaggiesPhotoCal(BaseParams):
-    def __init__(self, bandname):
-        self.bandname = bandname
-    def __str__(self):
-        return self.__class__.__name__
-    def hashkey(self):
-        return ('SdssNanomaggiesPhotoCal', self.bandname)
-    def copy(self):
-        return SdssNanomaggiesPhotoCal(self.bandname)
-    def brightnessToCounts(self, brightness):
-        mag = brightness.getMag(self.bandname)
-        if not np.isfinite(mag):
-            return 0.
-        # MAGIC
-        if mag > 50.:
-            return 0.
-        #print('mag', mag)
-
-        if mag < -50:
-            print('Warning: mag', mag, ': clipping')
-            mag = -50
-
-        nmgy = 10. ** ((mag - 22.5) / -2.5)
-        #nmgy2 = np.exp(mag * -0.9210340371976184 + 20.723265836946414)
-        #print('nmgy', nmgy)
-        #print('nmgy2', nmgy2)
-        return nmgy
-    def countsToMag(self, nmgy):
-        # Attention: "mag" here is a simple scalar, not a Mag object...
-        if nmgy <= 0.0:
-            mag = 50.0 # MAGIC
-        else:
-            mag = 22.5 - 2.5*np.log10(nmgy)
-        return mag
-
-class SdssMagsPhotoCal(BaseParams):
-    '''
-    A photocal that uses Mags objects.
-    '''
-    def __init__(self, tsfield, bandname):
-        from astrometry.sdss import band_index
-        
-        self.bandname = bandname
-        self.band = band_index(bandname)
-
-        #self.tsfield = tsfield
-        band = self.band
-        self.exptime = tsfield.exptime
-        self.aa = tsfield.aa[band]
-        self.kk = tsfield.kk[band]
-        self.airmass = tsfield.airmass[band]
-
-        super(SdssMagsPhotoCal,self).__init__()
-
-    # @staticmethod
-    # def getNamedParams():
-    #   return dict(aa=0)
-    # # These underscored versions are for use by NamedParams(), and ignore
-    # # the active/inactive state.
-    # def _setThing(self, i, val):
-    #   assert(i == 0)
-    #   self.aa = val
-    # def _getThing(self, i):
-    #   assert(i == 0)
-    #   return self.aa
-    # def _getThings(self):
-    #   return [self.aa]
-    # def _numberOfThings(self):
-    #   return 1
-
-    # to implement Params
-    def getParams(self):
-        return [self.aa]
-    def getStepSizes(self, *args, **kwargs):
-        return [0.01]
-    def setParam(self, i, p):
-        assert(i == 0)
-        self.aa = p
-
-    def getParamNames(self):
-        return ['aa']
-
-    def hashkey(self):
-        return ('SdssMagsPhotoCal', self.bandname, #self.tsfield)
-                self.exptime, self.aa, self.kk, self.airmass)
-    
-    def brightnessToCounts(self, brightness):
-        mag = brightness.getMag(self.bandname)
-        if not np.isfinite(mag):
-            return 0.
-        # MAGIC
-        if mag > 50.:
-            return 0.
-        #return self.tsfield.mag_to_counts(mag, self.band)
-
-        # FROM astrometry.sdss.common.TsField.mag_to_counts:
-        logcounts = (-0.4 * mag + np.log10(self.exptime)
-                     - 0.4*(self.aa + self.kk * self.airmass))
-        rtn = 10.**logcounts
-        return rtn
-
-class SdssMagPhotoCal(object):
-    '''
-    A photocal that uses Mag objects.
-    '''
-    def __init__(self, tsfield, band):
-        '''
-        band: int
-        '''
-        self.tsfield = tsfield
-        self.band = band
-    def hashkey(self):
-        return ('SdssMagPhotoCal', self.band, self.tsfield)
-    def brightnessToCounts(self, brightness):
-        return self.tsfield.mag_to_counts(brightness.getValue(), self.band)
-    #def countsToBrightness(self, counts):
-    #   return Mag(self.tsfield.counts_to_mag(counts, self.band))
-
-
-        
-
-class SdssFluxPhotoCal(object):
-    scale = 1e6
-    def __init__(self, scale=None):
-        if scale is None:
-            scale = SdssFluxPhotoCal.scale
-        self.scale = scale
-    def brightnessToCounts(self, brightness):
-        '''
-        brightness: SdssFlux object
-        returns: float
-        '''
-        return brightness.getValue() * self.scale
-
-class SdssFlux(Flux):
-    def getStepSizes(self, *args, **kwargs):
-        return [1.]
-    def __str__(self):
-        return 'SdssFlux: %.1f' % (self.val * SdssFluxPhotoCal.scale)
-    def __repr__(self):
-        return 'SdssFlux(%.1f)' % (self.val * SdssFluxPhotoCal.scale)
-    def hashkey(self):
-        return ('SdssFlux', self.val)
-    def copy(self):
-        return SdssFlux(self.val)
-    def __add__(self, other):
-        assert(isinstance(other, SdssFlux))
-        return SdssFlux(self.val + other.val)
 
 class SdssWcs(ParamList):
     pnames = ['a', 'b', 'c', 'd', 'e', 'f',
