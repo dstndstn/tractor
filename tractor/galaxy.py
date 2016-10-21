@@ -335,9 +335,6 @@ class ProfileGalaxy(object):
                 0, img.getHeight())
             if inx == [] or iny == []:
                 # no overlap
-                if do_fft_timing:
-                    fft_timing.append((timing_id, 'no_overlap',
-                                       CpuMeas().cpu_seconds_since(tpatch)))
                 return None
             x0,x1 = outx.start, outx.stop
             y0,y1 = outy.start, outy.stop
