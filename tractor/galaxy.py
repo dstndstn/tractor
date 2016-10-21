@@ -25,19 +25,17 @@ from .cache import *
 from .patch import Patch, add_patches
 from .basics import SingleProfileSource, BasicSource
 
-_galcache = Cache(maxsize=10000)
 def get_galaxy_cache():
-    return _galcache
+    return None
 
 def set_galaxy_cache_size(N=10000):
-    global _galcache
-    _galcache = Cache(maxsize=N)
+    # Ugh, dealing with caching + extents / modelMasks was too much
+    pass
 
 enable_galaxy_cache = set_galaxy_cache_size
 
 def disable_galaxy_cache():
-    global _galcache
-    _galcache = None
+    pass
 
 class GalaxyShape(ParamList):
     '''
