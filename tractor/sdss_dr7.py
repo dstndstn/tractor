@@ -269,3 +269,16 @@ class SdssMagsPhotoCal(BaseParams):
         rtn = 10.**logcounts
         return rtn
 
+class SdssFluxPhotoCal(object):
+    scale = 1e6
+    def __init__(self, scale=None):
+        if scale is None:
+            scale = SdssFluxPhotoCal.scale
+        self.scale = scale
+    def brightnessToCounts(self, brightness):
+        '''
+        brightness: SdssFlux object
+        returns: float
+        '''
+        return brightness.getValue() * self.scale
+
