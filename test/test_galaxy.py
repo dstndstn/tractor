@@ -86,6 +86,19 @@ class GalaxyTest(unittest.TestCase):
         plt.savefig('gal-1.png')
 
         mm = Patch(25, 25, np.ones((50,50), bool))
+
+        up2 = gal1.getUnitFluxModelPatch(tim, modelMask=mm)
+        print('Unit-flux patch:', up2)
+
+        px,py = tim.getWcs().positionToPixel(gal1.getPosition(), gal1)
+        rup2 = gal1._realGetUnitFluxModelPatch(tim, px, py, None,
+                                               modelMask=mm)
+        print('Real unit-flux patch:', rup2)
+
+        deps = gal1._getUnitFluxDeps(tim, px, py)
+        print('Unit-flux deps:', deps)
+
+        
         p2 = gal1.getModelPatch(tim, modelMask=mm)
         print('Patch:', p2)
         self.assertEqual(p2.x0, 25)
