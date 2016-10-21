@@ -68,6 +68,8 @@ class Mags(MultiBandBrightness):
     '''
     An implementation of `Brightness` that stores magnitudes in
     multiple bands.
+
+    Works with MagsPhotoCal.
     '''
     def __init__(self, **kwargs):
         '''
