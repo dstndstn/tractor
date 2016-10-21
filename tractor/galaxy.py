@@ -254,59 +254,10 @@ class ProfileGalaxy(object):
                               extent=None, modelMask=None):
         if px is None or py is None:
             (px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
-        #
-        if _galcache is None:
-            return self._realGetUnitFluxModelPatch(
-                img, px, py, minval,
-                extent=extent, modelMask=modelMask)
-        
-        deps = self._getUnitFluxDeps(img, px, py)
-        #print('deps', deps, '->',)
-        #deps = hash(deps)
-        #print(deps)
-
-        try:
-            # FIXME -- what about when the extent was specified for
-            # the cached entry but not specified for this call?
-            #print('Searching cache for:', deps)
-            (cached,mv) = _galcache.get(deps)
-            # if cached is None:
-            #     print('Cache hit:', cached)
-            # else:
-            #     print('Cache hit:', cached.shape)
-            #     if modelMask is not None:
-            #         assert(cached.shape == modelMask.shape)
-
-            if mv <= minval:
-                if extent is None:
-                    if cached is None:
-                        return None
-                    return cached.copy()
-                if cached is not None:
-                    # do the extents overlap?
-                    (x0,x1,y0,y1) = extent
-                    (cx0,cx1,cy0,cy1) = cached.getExtent()
-                    if cx0 <= x0 and cx1 >= x1 and cy0 <= y0 and cy1 >= y1:
-                        pat = cached.copy()
-                        if cx0 != x0 or cx1 != x1 or cy0 != y0 or cy1 != y1:
-                            pat.clipToRoi(*extent)
-                        return pat
-        except KeyError:
-            pass
-
-        patch = self._realGetUnitFluxModelPatch(img, px, py, minval,
-                                                extent=extent, modelMask=modelMask)
-        if patch is not None:
-            patch = patch.copy()
-        # print('Adding to cache:', deps,)
-        # if patch is not None:
-        #     print('patch shape', patch.shape)
-        # else:
-        #     print('patch is None')
+        patch = self._realGetUnitFluxModelPatch(
+            img, px, py, minval, extent=extent, modelMask=modelMask)
         if patch is not None and modelMask is not None:
             assert(patch.shape == modelMask.shape)
-        # print('modelMask:', modelMask)
-        _galcache.put(deps, (patch,minval))
         return patch
 
     def _realGetUnitFluxModelPatch(self, img, px, py, minval, extent=None,
