@@ -7,6 +7,7 @@ import numpy as np
 
 from tractor import *
 from tractor.galaxy import *
+from tractor.ducks import ModelMask
 
 ps = None
 
@@ -91,7 +92,7 @@ class GalaxyTest(unittest.TestCase):
             plt.colorbar()
             ps.savefig()
 
-        mm = Patch(25, 25, np.ones((50,50), bool))
+        mm = ModelMask(25, 25, 50, 50)
 
         # up2 = gal1.getUnitFluxModelPatch(tim, modelMask=mm)
         # print('Unit-flux patch:', up2)
@@ -132,7 +133,9 @@ class GalaxyTest(unittest.TestCase):
         self.assertTrue(np.abs(mod - mod2).max() < 1e-6)
 
 
-        p3 = gal1.getModelPatch(tim, extent=[30,70,29,69])
+        mm2 = ModelMask(30, 29, np.ones((40,40), bool))
+        
+        p3 = gal1.getModelPatch(tim, modelMask=mm2)
         print('Patch:', p3)
         self.assertEqual(p3.x0, 30)
         self.assertEqual(p3.y0, 29)

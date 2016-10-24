@@ -109,8 +109,9 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
                 my0 + mh <= y0):
                 # No overlap
                 return None
-            # Otherwise, we'll just produce the Lanczos-shifted PSF image as usual,
-            # and then copy it into the modelMask space.
+            # Otherwise, we'll just produce the Lanczos-shifted PSF
+            # image as usual, and then copy it into the modelMask
+            # space.
 
         L = self.Lorder
         Lx = lanczos_filter(L, np.arange(-L, L+1) + dx)
@@ -328,17 +329,20 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
         return self.radius
 
     # returns a Patch object.
-    def getPointSourcePatch(self, px, py, minval=0., extent=None, radius=None,
+    def getPointSourcePatch(self, px, py, minval=0., radius=None,
                             derivs=False, minradius=None, modelMask=None,
                             **kwargs):
-        '''
-        extent = [x0,x1,y0,y1], clip to [x0,x1), [y0,y1).
-        '''
-
         if modelMask is not None:
-            return self.mog.evaluate_grid_masked(modelMask.x0, modelMask.y0,
-                                                 modelMask.patch, px, py,
-                                                 derivs=derivs, **kwargs)
+            if modelMask.mask is None:
+                return self.mog.evaluate_grid(modelMask.x0, modelMask.x1,
+                                              modelMask.y0, modelMask.y1,
+                                              px, py)
+            else:
+                return self.mog.evaluate_grid_masked(modelMask.x0, modelMask.y0,
+                                                     modelMask.mask, px, py,
+                                                     derivs=derivs, **kwargs)
+
+        # Yuck!
 
         if minval is None:
             minval = 0.
@@ -382,7 +386,6 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
             
             return self.mog.evaluate_grid_approx3(
                 x0, x1, y0, y1, px, py, minval, derivs=derivs, **kwa)
-            
 
         if radius is None:
             r = self.getRadius()
@@ -390,13 +393,6 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
             r = radius
         x0,x1 = int(np.floor(px-r)), int(np.ceil(px+r)) + 1
         y0,y1 = int(np.floor(py-r)), int(np.ceil(py+r)) + 1
-        if extent is not None:
-            [xl,xh,yl,yh] = extent
-            # clip
-            x0 = max(x0, xl)
-            x1 = min(x1, xh)
-            y0 = max(y0, yl)
-            y1 = min(y1, yh)
         return self.mog.evaluate_grid(x0, x1, y0, y1, px, py)
 
     def __str__(self):
@@ -710,7 +706,8 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
 
     def scale(self, factor):
         ''' Returns a new PSF that is *factor* times wider. '''
-        return NCircularGaussianPSF(np.array(self.mysigmas) * factor, self.myweights)
+        return NCircularGaussianPSF(np.array(self.mysigmas) * factor,
+                                    self.myweights)
 
     def getMixtureOfGaussians(self, px=None, py=None):
         K = len(self.myweights)
@@ -750,12 +747,9 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
 
     # returns a Patch object.
     def getPointSourcePatch(self, px, py, minval=0., radius=None,
-                            modelMask=None, extent=None, **kwargs):
-        ## FIXME!
-        assert(modelMask is None)
-
-        if extent is not None:
-            x0,x1,y0,y1 = extent
+                            modelMask=None, **kwargs):
+        if modelMask is not None:
+            x0,x1,y0,y1 = modelMask.extent
         else:
             ix = int(round(px))
             iy = int(round(py))
@@ -770,4 +764,5 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
         mix = self.getMixtureOfGaussians()
         mix.mean[:,0] += px
         mix.mean[:,1] += py
-        return mp.mixture_to_patch(mix, x0, x1, y0, y1, minval=minval)
+        return mp.mixture_to_patch(mix, x0, x1, y0, y1, minval=minval,
+                                   exactExtent=(modelMask is not None))

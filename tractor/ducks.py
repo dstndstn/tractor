@@ -207,6 +207,45 @@ class Sky(ImageCalibration, Params):
         s = self.copy()
         s.shift(x0, y0)
         return s
+
+class ModelMask(object):
+    def __init__(self, x0, y0, *args):
+        '''
+        ModelMask(x0, y0, w, h)
+        ModelMask(x0, y0, mask)
+        
+        *mask* is assumed to be a binary image, True for pixels we're
+         interested in.
+        '''
+        self.x0 = x0
+        self.y0 = y0
+        if len(args) == 2:
+            self.w, self.h = args
+            self.mask = None
+        elif len(args) == 1:
+            self.mask = args[0]
+            self.h, self.w = self.mask.shape
+        else:
+            raise ValueError('Wrong number of arguments')
+
+    @staticmethod
+    def fromExtent(x0,x1,y0,y1):
+        return ModelMask(x0, y0, x1-x0, y1-y0)
+
+    @property
+    def shape(self):
+        return (self.h,self.w)
+
+    @property
+    def x1(self):
+        return self.x0 + self.w
+    @property
+    def y1(self):
+        return self.y0 + self.h
+
+    @property
+    def extent(self):
+        return (self.x0, self.x0+self.w, self.y0, self.y0+self.h)
     
 class Source(Params):
     '''
@@ -220,9 +259,12 @@ class Source(Params):
         calibration information of the `Image`: the WCS, PSF, and
         photometric calibration.
 
-        The "minsb" argument, if given, is the allowable approximation
-        error per pixel; we are asking the source to render itself out
-        to this surface brightness.
+        *minsb*: the allowable approximation error per pixel; we are
+        asking the source to render itself out to this surface
+        brightness.
+
+        *modelMask*: a ModelMask object describing the rectangular
+         region of interest (image pixels).
         '''
         pass
 
@@ -322,7 +364,8 @@ class WCS(ImageCalibration, Params):
     '''
     def positionToPixel(self, pos, src=None):
         '''
-        Converts a :class:`tractor.Position` *pos* into ``x,y`` pixel coordinates.
+        Converts a :class:`tractor.Position` *pos* into ``x,y`` pixel
+        coordinates.
 
         Note that the :class:`tractor.Source` may be passed in; your
         :class:`tractor.WCS` could have color-specific behavior, for
@@ -362,6 +405,11 @@ class WCS(ImageCalibration, Params):
         '''
         return None
 
+    def cdInverseAtPixel(self, x, y):
+        cd = self.cdAtPixel(px, py)
+        cdi = np.linalg.inv(cd)
+        return cdi
+    
     def pixscale_at(self, x, y):
         '''
         Returns the local pixel scale at the given *x*,*y* pixel coords,
@@ -372,8 +420,8 @@ class WCS(ImageCalibration, Params):
     
     def shifted(self, dx, dy):
         '''
-        Returns a new WCS object appropriate for the subimage starting at (dx,dy)
-        with respect to the current WCS origin.
+        Returns a new WCS object appropriate for the subimage starting
+        at (dx,dy) with respect to the current WCS origin.
         '''
         return None
 
@@ -381,24 +429,19 @@ class PSF(ImageCalibration, Params):
     '''
     Duck-type definition of a point-spread function.
     '''
-    def getPointSourcePatch(self, px, py, minval=0.,
-                            extent=None, modelMask=None):
+    def getPointSourcePatch(self, px, py, minval=0., modelMask=None):
         '''
         Returns a `Patch`, a rendering of a point source at the given
         pixel coordinates.
 
         The returned `Patch` should have unit "counts".
 
-        The "minval" arg says that we are willing to accept an approximation
+        *minval* says that we are willing to accept an approximation
         such that pixels with counts < minval can be omitted.
 
-        The "extent" arg, [x0,x1, y0,y1], says that we are only
-        interested in pixels within the INCLUSIVE range [x0,x1],
-        [y0,y1]; this OPTIONALLY allows the PSF class to render a
-        smaller Patch.
-
-        "modelMask", if given, overrides "extent" and "minval"; it
-        specifies exactly which pixels are to be evaluated.
+        *modelMask* describes the pixels to be evaluated.  If the
+         *modelMask* includes a pixel-by-pixel mask, this overrides
+         *minval*.
         '''
         pass
 
