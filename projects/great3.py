@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
@@ -99,7 +100,7 @@ def main():
     if os.path.exists(gfn):
         ps = PlotSequence('gals')
         T = fits_table(gfn)
-        print 'Read', len(T), 'from', gfn
+        print('Read', len(T), 'from', gfn)
         #plt.figure(figsize=(12,8))
 
         import triangle
@@ -134,7 +135,7 @@ def main():
         xx = np.linspace(lo, hi, 500)
         
         p = scipy.stats.lognorm.fit(T.re, floc=0.2)
-        print 'lognorm params', p
+        print('lognorm params', p)
         dist = scipy.stats.lognorm(*p)
         yy = dist.pdf(xx) * len(T) * B
         I = np.isfinite(yy)
@@ -142,7 +143,7 @@ def main():
         plt.plot(xx, yy, 'b-', lw=2, alpha=0.5)
 
         p = scipy.stats.invgamma.fit(T.re, fscale=3.)
-        print 'invgamma params', p
+        print('invgamma params', p)
         #dist = scipy.stats.invgamma(*p)
         dist = scipy.stats.invgamma(3., scale=0.5)
         yy = dist.pdf(xx) * len(T) * B
@@ -232,15 +233,15 @@ def main():
         vv2 = np.arange(K) + np.std(T.e2)
         r = em_fit_1d_samples(T.e2, ww2, mm2, vv2)
 
-        print 'e1:'
-        print '  w', ww1
-        print '  mu', mm1
-        print '  std', np.sqrt(vv1)
+        print('e1:')
+        print('  w', ww1)
+        print('  mu', mm1)
+        print('  std', np.sqrt(vv1))
 
-        print 'e2:'
-        print '  w', ww2
-        print '  mu', mm2
-        print '  std', np.sqrt(vv2)
+        print('e2:')
+        print('  w', ww2)
+        print('  mu', mm2)
+        print('  std', np.sqrt(vv2))
 
         gfit = eval_mog(xx, ww1, mm1, vv1) * len(T)*B
         plt.plot(xx, gfit, 'r-', lw=2, alpha=0.5)
@@ -312,16 +313,16 @@ def main():
             if not os.path.exists(fn):
                 os.system('wget -O %s http://broiler.astrometry.net/~dstn/%s' % (fn, fn))
 
-    print 'Reading', imgfn
+    print('Reading', imgfn)
     img = fitsio.read(imgfn).astype(np.float32)
-    print 'Image size', img.shape
-    print 'Reading', starfn
+    print('Image size', img.shape)
+    print('Reading', starfn)
     stars = fitsio.read(starfn).astype(np.float32)
-    print 'Starfield size', stars.shape
+    print('Starfield size', stars.shape)
 
     # first star is "centered" in the 48x48 subimage (not centered on a pixel)
     star = stars[:SS,:SS]
-    print 'Star shape', star.shape
+    print('Star shape', star.shape)
     
     # estimate noise in image via Blanton's difference between 5-pixel
     # offset pixel pairs for a subset of pixels; median abs diff.
@@ -330,7 +331,7 @@ def main():
     # convert to Gaussian -- sqrt(2) because our diffs are the differences of
     # deviations of two pixels.
     sig1 = 1.4826 * mad / np.sqrt(2.)
-    print 'MAD', mad, '-> sigma', sig1
+    print('MAD', mad, '-> sigma', sig1)
 
     plt.figure(num=1, figsize=(5,5))
     plt.subplots_adjust(left=0.12, right=0.95, bottom=0.05, top=0.92,
@@ -367,7 +368,7 @@ def main():
 
     # Render the model PSF to check that it looks okay
     psfmodel = psf.getPointSourcePatch(0., 0., radius=24)
-    print 'PSF model', psfmodel.shape
+    print('PSF model', psfmodel.shape)
     psfmodel /= psfmodel.patch.sum()
 
     # Plot star postage stamp and model
@@ -405,12 +406,12 @@ def main():
     if opt.ngals:
         end = opt.start + opt.ngals
     for stamp in range(opt.start, end):
-        print 'Postage stamp', stamp
-        print Time()-t0
+        print('Postage stamp', stamp)
+        print(Time()-t0)
 
         h5fn = 'galsamples-%s%s-f%i-g%05i.h5' % (deeptag, food, opt.field, stamp)
         if os.path.exists(h5fn) and not opt.force:
-            print 'File exists:', h5fn
+            print('File exists:', h5fn)
             continue
 
         #plots = stamp < 5
@@ -493,8 +494,8 @@ def main():
                 # Plot initial model image
                 plotmodel(tractor, sig1, 'Initial ' + gal.getName())
 
-            print 'Galaxy:', gal
-            print 'Initial logprob:', tractor.getLogProb()
+            print('Galaxy:', gal)
+            print('Initial logprob:', tractor.getLogProb())
                 
             # Do a few rounds of optimization (each .optimize() is a single
             # linearized least squares step.
@@ -507,12 +508,12 @@ def main():
                                                     variance=True)
                 # print 'dlnp', dlnp
                 # print 'alpha', alpha
-                print 'After opt step:', gal
+                print('After opt step:', gal)
                 if dlnp < 1e-3:
                     break
 
-            print 'Opt gal:', gal
-            print 'Final logprob:', tractor.getLogProb()
+            print('Opt gal:', gal)
+            print('Final logprob:', tractor.getLogProb())
 
             if plots:
                 # Plot initial model image
@@ -522,7 +523,7 @@ def main():
             galvars.append(var)
             gallnprobs.append(lnp)
 
-            print str(type(gal)), 'logprob', lnp
+            print(str(type(gal)), 'logprob', lnp)
 
             # After optimize Exp and Dev, initialize the Comp and Sersic gals.
             if igal == 1:
@@ -535,7 +536,7 @@ def main():
                                        egal.shape.copy(),
                                        Flux(dgal.brightness.val / 2.),
                                        dgal.shape.copy())
-                print 'Created composite galaxy:', cgal
+                print('Created composite galaxy:', cgal)
                 cgal.halfsize = halfsize
                 gals.append(cgal)
 
@@ -550,7 +551,7 @@ def main():
                                         dgal.brightness.copy(),
                                         dgal.shape.copy(),
                                         ClippedSersicIndex(4.))
-                print 'Created Sersic galaxy:', sgal
+                print('Created Sersic galaxy:', sgal)
                 sgal.halfsize = halfsize
                 gals.append(sgal)
 
@@ -567,7 +568,7 @@ def main():
         # Freeze all the image calibration parameters.
         tractor.freezeParam('images')
 
-        print 'Chose best galaxy:', gal
+        print('Chose best galaxy:', gal)
 
         del gals
         del galvars
@@ -576,9 +577,9 @@ def main():
         if not opt.sample:
             continue
 
-        print 'Params:'
+        print('Params:')
         tractor.printThawedParams()
-        print 'Variance:', var
+        print('Variance:', var)
 
         def switchShape(tractor, shape, var):
             # This p0/p1/changed is a hack to know which elements of 'var' to change.
@@ -592,7 +593,7 @@ def main():
             # changes the values.
             # Could do something like: gal.shape.setParams([-np.inf] * 3) to be sure.
             changed = np.flatnonzero(p0 != p1)
-            print 'shape param indices:', changed
+            print('shape param indices:', changed)
             assert(len(changed) == 3)
             # ASSUME ordering re, e1, e2
             # We changed from log(re) to re.
@@ -610,28 +611,28 @@ def main():
             
         # Switch shape parameter space here -- variance too
         if type(gal) == CompositeGalaxy:
-            print 'shapeExp', gal.shapeExp
+            print('shapeExp', gal.shapeExp)
             gal.shapeExp = switchShape(tractor, gal.shapeExp, var)
-            print 'shapeExp', gal.shapeExp
-            print 'shapeDev', gal.shapeDev
+            print('shapeExp', gal.shapeExp)
+            print('shapeDev', gal.shapeDev)
             gal.shapeDev = switchShape(tractor, gal.shapeDev, var)
-            print 'shapeDev', gal.shapeDev
+            print('shapeDev', gal.shapeDev)
             shape = gal.shapeExp
         else:
             gal.shape = switchShape(tractor, gal.shape, var)
             shape = gal.shape
 
-        print 'Params:'
+        print('Params:')
         tractor.printThawedParams()
-        print 'Variance:', var
+        print('Variance:', var)
         
         # Initial parameter vector:
         p0 = np.array(tractor.getParams())
         ndim = len(p0)
         # number of walkers
         nw = max(50, 2*ndim)
-        print 'ndim', ndim
-        print 'nw', nw
+        print('ndim', ndim)
+        print('nw', nw)
         # variance is "var"
 
         # Create emcee sampler
@@ -644,10 +645,10 @@ def main():
         alllnp = []
         allp = []
 
-        print 'pp', pp.shape
+        print('pp', pp.shape)
         for i,nm in enumerate(tractor.getParamNames()):
-            print 'Param', nm
-            print pp[:,i]
+            print('Param', nm)
+            print(pp[:,i])
     
         lnp = None
         rstate = None
@@ -656,7 +657,7 @@ def main():
             pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
             imax = np.argmax(lnp)
             gal.setParams(pp[imax,:])
-            print 'Step', step, 'max lnprob:', lnp[imax], gal
+            print('Step', step, 'max lnprob:', lnp[imax], gal)
             #print 'lnprobs:', lnp
             # store all the params
             alllnp.append(lnp.copy())
@@ -673,7 +674,7 @@ def main():
 
         # Save samples
         if True:
-            print 'Saving samples in', h5fn
+            print('Saving samples in', h5fn)
             f = h5py.File(h5fn, 'w', libver='latest')
             f.attrs['food'] = food
             f.attrs['field'] = opt.field
@@ -700,7 +701,7 @@ def main():
         
             # Plot parameter distributions
             burn = 50
-            print 'All params:', allp.shape
+            print('All params:', allp.shape)
             for i,nm in enumerate(tractor.getParamNames()):
                 pp = allp[:,:,i].ravel()
                 lo,hi = [np.percentile(pp,x) for x in [5,95]]
@@ -720,7 +721,7 @@ def main():
     
             # Plot a sampling of ellipse parameters
             ellp = allp[-1, :, -3:]
-            print 'ellp:', ellp.shape
+            print('ellp:', ellp.shape)
             E = EllipseE(0.,0.,0.)
             angle = np.linspace(0., 2.*np.pi, 100)
             xx,yy = np.sin(angle), np.cos(angle)
@@ -772,13 +773,13 @@ def collate_samples():
 
     for stamp in range(10000):
         h5fn = 'galsamples-%s%s-f%i-g%05i.h5' % (deeptag, food, field, stamp)
-        print 'Reading', h5fn
+        print('Reading', h5fn)
         f = h5py.File(h5fn, 'r')
         gg = f['gal%05i' % stamp]
         gtype = gg.attrs['type2']
         if not gtype in paramnames:
             paramnames[gtype] = gg.attrs['paramnames']
-            print 'Params', gtype, paramnames[gtype]
+            print('Params', gtype, paramnames[gtype])
         opts,samples = galprops[gtype]
         gopt = gg['optimized']
         gopt = np.array(gopt)
@@ -798,7 +799,7 @@ def collate_samples():
 
     for gtype,(opts, samples) in galprops.items():
         if len(opts) == 0:
-            print 'No', gtype
+            print('No', gtype)
             continue
         opt = np.array([opt for stamp,opt in opts])
         stamps = np.array([stamp for stamp,o in opts])
@@ -809,13 +810,13 @@ def collate_samples():
 
         T = fits_table()
         T.stamp = stamps
-        print 'opt', opt.shape
+        print('opt', opt.shape)
         for i,nm in enumerate(paramnames[gtype]):
             T.set(nm, opt[:,i])
         fn = ('gals-opt-%s-%s%s-f%i.fits' %
                    (gtype.replace('Galaxy','').lower(), deeptag, food, field))
         T.writeto(fn, header=hdr)
-        print 'Wrote', fn
+        print('Wrote', fn)
 
         samples = np.array([samp for stamp,samp in samples])
         T = fits_table()
@@ -825,7 +826,7 @@ def collate_samples():
         fn = ('gals-samples-%s-%s%s-f%i.fits' %
               (gtype.replace('Galaxy','').lower(), deeptag, food, field))
         T.writeto(fn, header=hdr)
-        print 'Wrote', fn
+        print('Wrote', fn)
 
 
 

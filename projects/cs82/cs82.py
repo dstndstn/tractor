@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import numpy as np
@@ -42,12 +43,12 @@ CS82/semorphology/products/2013_06_30_catalogs/morphology_catalogs_V2.7.3/deVexp
 def get_cs82_masks(cs82field):
     # from http://vn90.phas.ubc.ca/CS82/masks/
     fn = os.path.join(data_dir, 'masks', '%s_lensingfinal_*_wcs.reg' % cs82field)
-    print 'Reading', fn
+    print('Reading', fn)
     # glob the "?" for band name -- W4 are "i", S82 are "y"
     fns = glob(fn)
     assert(len(fns) == 1)
     fn = fns[0]
-    print 'Reading', fn
+    print('Reading', fn)
     f = open(fn, 'rb')
     polys = []
     for line in f:
@@ -55,7 +56,7 @@ def get_cs82_masks(cs82field):
         if line.startswith('#'):
             continue
         if not line.startswith('polygon'):
-            print 'Ignoring line:', line
+            print('Ignoring line:', line)
             continue
         word = line.split()[0]
         assert(word[-1] == ')')
@@ -71,7 +72,7 @@ def get_cs82_masks(cs82field):
             poly.append((r,d))
         #print '  polygon with', len(poly), 'vertices'
         polys.append(np.array(poly))
-    print 'Read', len(polys), 'polygons'
+    print('Read', len(polys), 'polygons')
     return polys
         
 def get_cs82_sources(T, maglim=25, bands=['u','g','r','i','z']):
@@ -81,12 +82,12 @@ def get_cs82_sources(T, maglim=25, bands=['u','g','r','i','z']):
 
 def getTables(cs82field, enclosed=True, extra_cols=[]):
     fn = os.path.join(data_dir, 'cats', 'masked.%s_?.V2.7A.swarp.cut.deVexp.fit' % cs82field)
-    print 'Reading', fn
+    print('Reading', fn)
     # glob the "?" for band name -- W4 are "i", S82 are "y"
     fns = glob(fn)
     assert(len(fns) == 1)
     fn = fns[0]
-    print 'Reading', fn
+    print('Reading', fn)
     T = fits_table(fn,
             hdu=2, column_map={'ALPHA_J2000':'ra',
                                'DELTA_J2000':'dec'},
@@ -99,8 +100,8 @@ def getTables(cs82field, enclosed=True, extra_cols=[]):
                       'alphamodel_j2000', 'deltamodel_j2000'] + extra_cols])
     ra0,ra1 = T.ra.min(), T.ra.max()
     dec0,dec1 = T.dec.min(), T.dec.max()
-    print 'RA', ra0,ra1
-    print 'Dec', dec0,dec1
+    print('RA', ra0,ra1)
+    print('Dec', dec0,dec1)
     T.index = np.arange(len(T))
 
     # ASSUME no RA wrap-around in the CS82 catalog
@@ -111,7 +112,7 @@ def getTables(cs82field, enclosed=True, extra_cols=[]):
 
     fn = 'sdssfield-%s.fits' % cs82field
     if os.path.exists(fn):
-        print 'Reading', fn
+        print('Reading', fn)
         F = fits_table(fn)
     else:
         F = fits_table(window_flist)
@@ -133,14 +134,14 @@ def getTables(cs82field, enclosed=True, extra_cols=[]):
                            (F.ra1 >= T.ra.min()) *
                            (F.dec0 <= T.dec.max()) *
                            (F.dec1 >= T.dec.min()))
-        print 'Possibly overlapping fields:', len(I)
+        print('Possibly overlapping fields:', len(I))
         F.cut(I)
 
         # When will I ever learn not to cut on RA boxes when there is wrap-around?
         xyz = radectoxyz(F.ra, F.dec)
         r2 = np.sum((xyz - tcen)**2, axis=1)
         I = np.flatnonzero(r2 < deg2distsq(trad + frad))
-        print 'Possibly overlapping fields:', len(I)
+        print('Possibly overlapping fields:', len(I))
         F.cut(I)
 
         F.enclosed = ((F.ra0 >= T.ra.min()) *
@@ -156,11 +157,11 @@ def getTables(cs82field, enclosed=True, extra_cols=[]):
         F.cut(I)
 
         F.writeto(fn)
-        print 'Wrote', fn
+        print('Wrote', fn)
 
     if enclosed:
         F.cut(F.enclosed)
-        print 'Enclosed fields:', len(F)
+        print('Enclosed fields:', len(F))
         
     return T,F
 
@@ -176,7 +177,7 @@ def main(opt, cs82field):
         ps = None
     
     version = get_git_version()
-    print 'git version info:', version
+    print('git version info:', version)
 
     hdr = fitsio.FITSHDR()
     hdr.add_record(dict(name='PHO_VER', value=version['commit'],
@@ -203,8 +204,8 @@ def main(opt, cs82field):
     ra1 = T.ra.max()
     dec0 = T.dec.min()
     dec1 = T.dec.max()
-    print 'RA range:', ra0, ra1
-    print 'Dec range:', dec0, dec1
+    print('RA range:', ra0, ra1)
+    print('Dec range:', dec0, dec1)
     # check for wrap-around
     assert(ra1 - ra0 < 2.)
 
@@ -219,7 +220,7 @@ def main(opt, cs82field):
     pa = PrimaryArea()
     S = read_photoobjs(sdss, wcs, 1./3600., pa=pa,
                        cols=['ra','dec','cmodelflux', 'resolve_status'])
-    print 'Read', len(S), 'SDSS objects'
+    print('Read', len(S), 'SDSS objects')
 
     if ps:
         plt.clf()
@@ -237,10 +238,10 @@ def main(opt, cs82field):
 
     addmargin = True
 
-    print 'Score range:', F.score.min(), F.score.max()
-    print 'Before score cut:', len(F)
+    print('Score range:', F.score.min(), F.score.max())
+    print('Before score cut:', len(F))
     F.cut(F.score > 0.5)
-    print 'Cut on score:', len(F)
+    print('Cut on score:', len(F))
 
     T.phot_done = np.zeros(len(T), bool)
     T.marginal = np.zeros(len(T), bool)
@@ -260,20 +261,20 @@ def main(opt, cs82field):
         T.set('fit_ok_%s' % band, np.zeros(len(T), bool))
 
     for decslice,(dlo,dhi) in enumerate(zip(decs, decs[1:])):
-        print 'Dec slice:', dlo, dhi
+        print('Dec slice:', dlo, dhi)
 
         if addmargin:
             dlo -= margin
             dhi += margin
 
         for raslice,(rlo,rhi) in enumerate(zip(ras, ras[1:])):
-            print 'RA slice:', rlo, rhi
+            print('RA slice:', rlo, rhi)
 
             if addmargin:
                 rlo -= margin
                 rhi += margin
 
-            print 'Expanded margins to RA', rlo,rhi, 'Dec', dlo,dhi
+            print('Expanded margins to RA', rlo,rhi, 'Dec', dlo,dhi)
             
             tslice0 = Time()
 
@@ -285,7 +286,7 @@ def main(opt, cs82field):
                 if mr1 < rlo or mr0 > rhi or md1 < dlo or md0 > dhi:
                     continue
                 masksi.append(m)
-            print len(masksi), 'masks overlap this slice'
+            print(len(masksi), 'masks overlap this slice')
             
             # Cut to CS82 sources overlapping
             Ibox = np.flatnonzero(
@@ -295,13 +296,13 @@ def main(opt, cs82field):
             T.marginal[Ibox] = np.logical_not(
                 (T.dec[Ibox] >= dlo) * (T.dec[Ibox] <= dhi) *
                 (T.ra [Ibox] >= rlo) * (T.ra [Ibox] <= rhi))
-            print len(Ibox), 'sources in RA,Dec slice'
-            print len(np.flatnonzero(T.marginal)), 'are in the margins'
+            print(len(Ibox), 'sources in RA,Dec slice')
+            print(len(np.flatnonzero(T.marginal)), 'are in the margins')
 
             # Cut to SDSS fields overlapping
             Fi = F[np.logical_not(np.logical_or(F.dec0 > dhi, F.dec1 < dlo)) *
                    np.logical_not(np.logical_or(F.ra0  > rhi, F.ra1  < rlo))]
-            print len(Fi), 'fields in RA,Dec slice'
+            print(len(Fi), 'fields in RA,Dec slice')
 
             if False:
                 plt.clf()
@@ -319,14 +320,14 @@ def main(opt, cs82field):
                 setRadecAxes(rlo,rhi,dlo,dhi)
                 ps.savefig()
 
-            print 'Creating Tractor sources...'
+            print('Creating Tractor sources...')
             maglim = 24
             cat,icat = get_cs82_sources(T[Ibox], maglim=maglim, bands=bands)
-            print 'Got', len(cat), 'sources'
+            print('Got', len(cat), 'sources')
             # Icat: index into T, row-parallel to cat
             Icat = Ibox[icat]
             del icat
-            print len(Icat), 'sources created'
+            print(len(Icat), 'sources created')
 
             # Match to SDSS sources only for those catalog objects
             # that haven't already been photometered in a previous
@@ -336,11 +337,11 @@ def main(opt, cs82field):
             # For 'cat' objects, should we set the flux?
             setflux = np.logical_not(T.phot_done[Icat])
             
-            print 'Matching to SDSS sources...'
-            print 'N SDSS', len(S)
+            print('Matching to SDSS sources...')
+            print('N SDSS', len(S))
             I,J,d = match_radec(T.ra[Icat], T.dec[Icat], S.ra, S.dec,
                                 1./3600., nearest=True)
-            print 'found', len(I), 'matches'
+            print('found', len(I), 'matches')
             # initialize fluxes based on SDSS matches -- useful for
             # "minsb" approx, and for sources in the margins.
             for i,j in zip(I, J):
@@ -355,10 +356,10 @@ def main(opt, cs82field):
 
             # index into cat of sources to freeze
             Ifreeze = np.flatnonzero(T.marginal[Icat])
-            print 'Freezing', len(Ifreeze), 'sources'
+            print('Freezing', len(Ifreeze), 'sources')
             # index into T of sources being fit
             Ifit = Icat[np.flatnonzero(np.logical_not(T.marginal[Icat]))]
-            print len(Ifit), 'sources being fit'
+            print(len(Ifit), 'sources being fit')
 
             if ps:
                 # Create a fake WCS for this subregion -- for plots only
@@ -392,12 +393,12 @@ def main(opt, cs82field):
                 cat.thawPathsTo(band)
 
                 # Now freeze sources in the margins.
-                print 'Before freezing marginal sources:',
-                print len(cat.getParams()), 'params'
+                print('Before freezing marginal sources:', end=' ')
+                print(len(cat.getParams()), 'params')
                 for i in Ifreeze:
                     cat.freezeParam(i)
-                print 'After freezing marginal sources:',
-                print len(cat.getParams()), 'params'
+                print('After freezing marginal sources:', end=' ')
+                print(len(cat.getParams()), 'params')
 
                 tb0 = Time()
 
@@ -406,7 +407,7 @@ def main(opt, cs82field):
                 sigs = []
                 npix = 0
                 for i,(r,c,f) in enumerate(zip(Fi.run, Fi.camcol, Fi.field)):
-                    print 'Reading', (i+1), 'of', len(Fi), ':', r,c,f,band
+                    print('Reading', (i+1), 'of', len(Fi), ':', r,c,f,band)
                     tim,inf = get_tractor_image_dr9(
                         r, c, f, band, sdss=sdss,
                         nanomaggies=True, zrange=[-2,5],
@@ -415,7 +416,7 @@ def main(opt, cs82field):
                     if tim is None:
                         continue
                     (H,W) = tim.shape
-                    print 'Tim', tim.shape
+                    print('Tim', tim.shape)
                     tim.wcs.setConstantCd(W/2., H/2.)
                     del tim.origInvvar
                     del tim.starMask
@@ -424,8 +425,8 @@ def main(opt, cs82field):
                     tims.append(tim)
                     sigs.append(1./np.sqrt(np.median(tim.invvar)))
                     npix += (H*W)
-                    print 'got', (H*W), 'pixels, total', npix
-                    print 'Read image', i+1, 'in band', band, ':', Time()-tb0
+                    print('got', (H*W), 'pixels, total', npix)
+                    print('Read image', i+1, 'in band', band, ':', Time()-tb0)
 
                     tm0 = Time()
                     # Apply CS82 masks to SDSS images
@@ -451,14 +452,14 @@ def main(opt, cs82field):
 
                         masked[slc] |= point_in_poly(xx[slc], yy[slc],
                                                      np.vstack((mx,my)).T)
-                    print 'Masking', np.sum(masked), 'pixels'
+                    print('Masking', np.sum(masked), 'pixels')
                     tim.invvar[masked] = 0.
                     tim.setInvvar(tim.invvar)
-                    print 'Total of', np.sum(tim.invvar > 0), 'unmasked pixels'
-                    print 'Masking took:', Time()-tm0
+                    print('Total of', np.sum(tim.invvar > 0), 'unmasked pixels')
+                    print('Masking took:', Time()-tm0)
                     
-                print 'Read', len(tims), 'images'
-                print 'total of', npix, 'pixels'
+                print('Read', len(tims), 'images')
+                print('total of', npix, 'pixels')
 
                 if ps:
                     coadd = np.zeros((wcs.imageh, wcs.imagew), np.float32)
@@ -473,14 +474,14 @@ def main(opt, cs82field):
                                 wcs, wcswrap, [], 3)
                         except:
                             import traceback
-                            print 'Failed to resample:'
+                            print('Failed to resample:')
                             traceback.print_exc()
                             continue
                         coadd[Yo,Xo] += tim.getImage()[Yi,Xi]
                         coiv[Yo,Xo] += tim.getInvvar()[Yi,Xi]
                         ncoadd[Yo,Xo] += 1
                     coadd = coadd / np.maximum(1, ncoadd).astype(np.float32)
-                    print len(tims), 'tims; ncoadd range %i %i; coadd range %g, %g' % (ncoadd.min(), ncoadd.max(), coadd.min(), coadd.max())
+                    print(len(tims), 'tims; ncoadd range %i %i; coadd range %g, %g' % (ncoadd.min(), ncoadd.max(), coadd.min(), coadd.max()))
                     plt.clf()
                     coa = dict(interpolation='nearest', origin='lower',
                                extent=[rlo,rhi,dlo,dhi], vmin=-0.05, vmax=0.5)
@@ -518,7 +519,7 @@ def main(opt, cs82field):
                 sig1 = np.median(sigs)
                 minsig = 0.1
                 minsb = minsig * sig1
-                print 'Sigma1:', sig1, 'minsig', minsig, 'minsb', minsb
+                print('Sigma1:', sig1, 'minsig', minsig, 'minsb', minsb)
                 
                 tractor = Tractor(tims, cat)
                 tractor.freezeParam('images')
@@ -526,8 +527,8 @@ def main(opt, cs82field):
                 wantims = (ps is not None)
 
                 tp0 = Time()
-                print 'Starting forced phot:', Time()-tb0
-                print '(since start of band)'
+                print('Starting forced phot:', Time()-tb0)
+                print('(since start of band)')
 
                 # Here we go...!
                 R = tractor.optimize_forced_photometry(
@@ -536,7 +537,7 @@ def main(opt, cs82field):
                     shared_params=False, use_ceres=True,
                     BW=sz, BH=sz)
 
-                print 'Forced phot finished:', Time()-tb0
+                print('Forced phot finished:', Time()-tb0)
 
                 IV = R.IV
                 fitstats = R.fitstats
@@ -559,7 +560,7 @@ def main(opt, cs82field):
                                             np.abs(T.dec[Ifit] - dhi)))
                 K = (mdist >= T.margindist[Ifit])
                 Isave = Ifit[K]
-                print 'Saving results for', len(Isave), 'sources based on margin dist'
+                print('Saving results for', len(Isave), 'sources based on margin dist')
                 T.margindist[Isave] = (mdist[K]).astype(np.float32)
                 del mdist
 
@@ -613,7 +614,7 @@ def main(opt, cs82field):
                                     wcs, wcswrap, [], 3)
                             except:
                                 import traceback
-                                print 'Failed to resample:'
+                                print('Failed to resample:')
                                 traceback.print_exc()
                                 continue
                             coadd[Yo,Xo] += mod[Yi,Xi]
@@ -682,8 +683,8 @@ def main(opt, cs82field):
 
             # All bands done for this slice.
                 
-            print 'Slice:', Time()-tslice0
-            print 'Total:', Time()-t0
+            print('Slice:', Time()-tslice0)
+            print('Total:', Time()-t0)
 
             T.phot_done[Ifit] = True
             
@@ -692,14 +693,14 @@ def main(opt, cs82field):
                       (opt.prefix, cs82field, decslice * (len(ras)-1) + raslice))
                 T.writeto(fn, header=hdr)
                 T.about()
-                print 'Wrote', fn
+                print('Wrote', fn)
                 Tdone = T[T.phot_done]
                 fn = ('%s-phot-%s-slice%i-cut.fits' %
                       (opt.prefix, cs82field, decslice * (len(ras)-1) + raslice))
                 Tdone.writeto(fn)
                 Tdone.about()
                 del Tdone
-                print 'Wrote', fn
+                print('Wrote', fn)
 
     T.delete_column('marginal')
     T.delete_column('alphamodel_j2000')
@@ -707,7 +708,7 @@ def main(opt, cs82field):
 
     fn = '%s-phot-%s-%s.fits' % (opt.prefix, cs82field, opt.bands)
     T.writeto(fn, header=hdr)
-    print 'Wrote', fn
+    print('Wrote', fn)
     return
 
 if __name__ == '__main__':
@@ -756,6 +757,6 @@ if __name__ == '__main__':
         work = [work[arr]]
 
     for field,bands in work:
-        print 'Field', field, 'bands', bands
+        print('Field', field, 'bands', bands)
         opt.bands = bands
         T = main(opt, field)

@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -72,7 +73,7 @@ def stage0(**kwargs):
 
     decals = CfhtDecals()
     B = decals.get_bricks()
-    print 'Bricks:'
+    print('Bricks:')
     B.about()
 
     ra,dec = 190.0, 11.0
@@ -81,7 +82,7 @@ def stage0(**kwargs):
     bands = 'gri'
     
     B.cut(np.argsort(degrees_between(ra, dec, B.ra, B.dec)))
-    print 'Nearest bricks:', B.ra[:5], B.dec[:5], B.brickid[:5]
+    print('Nearest bricks:', B.ra[:5], B.dec[:5], B.brickid[:5])
 
     brick = B[0]
     pixscale = 0.186
@@ -97,12 +98,12 @@ def stage0(**kwargs):
     else:
         T = get_ccd_list()
         T.writeto(ccdfn)
-    print len(T), 'CCDs'
+    print(len(T), 'CCDs')
     T.cut(ccds_touching_wcs(targetwcs, T))
-    print len(T), 'CCDs touching brick'
+    print(len(T), 'CCDs touching brick')
 
     T.cut(np.array([b in bands for b in T.filter]))
-    print len(T), 'in bands', bands
+    print(len(T), 'in bands', bands)
 
     ims = []
     for t in T:
@@ -112,8 +113,8 @@ def stage0(**kwargs):
         # print '-> FWHM', fwhm, 'pix'
         im.seeing = t.seeing
         im.pixscale = t.pixscale
-        print 'seeing', t.seeing
-        print 'pixscale', im.pixscale*3600, 'arcsec/pix'
+        print('seeing', t.seeing)
+        print('pixscale', im.pixscale*3600, 'arcsec/pix')
         im.run_calibs(t.ra, t.dec, im.pixscale, W=t.width, H=t.height)
         ims.append(im)
 
@@ -124,8 +125,8 @@ def stage0(**kwargs):
     keepims = []
     tims = []
     for im in ims:
-        print
-        print 'Reading expnum', im.expnum, 'name', im.extname, 'band', im.band, 'exptime', im.exptime
+        print()
+        print('Reading expnum', im.expnum, 'name', im.extname, 'band', im.band, 'exptime', im.exptime)
         band = im.band
         wcs = im.read_wcs()
         imh,imw = wcs.imageh,wcs.imagew
@@ -149,19 +150,19 @@ def stage0(**kwargs):
         # cross = dx0*dy1 - dx1*dy0
         # print 'Cross:', cross
 
-        print 'Image slice: x [%i,%i], y [%i,%i]' % (x0,x1, y0,y1)
-        print 'Reading image from', im.imgfn, 'HDU', im.hdu
+        print('Image slice: x [%i,%i], y [%i,%i]' % (x0,x1, y0,y1))
+        print('Reading image from', im.imgfn, 'HDU', im.hdu)
         img,imghdr = im.read_image(header=True, slice=slc)
         goodpix = (img != 0)
-        print 'Number of pixels == 0:', np.sum(img == 0)
-        print 'Number of pixels != 0:', np.sum(goodpix)
+        print('Number of pixels == 0:', np.sum(img == 0))
+        print('Number of pixels != 0:', np.sum(goodpix))
         if np.sum(goodpix) == 0:
             continue
         # print 'Image shape', img.shape
-        print 'Image range', img.min(), img.max()
-        print 'Goodpix image range:', (img[goodpix]).min(), (img[goodpix]).max()
+        print('Image range', img.min(), img.max())
+        print('Goodpix image range:', (img[goodpix]).min(), (img[goodpix]).max())
         if img[goodpix].min() == img[goodpix].max():
-            print 'No dynamic range in image'
+            print('No dynamic range in image')
             continue
         # print 'Reading invvar from', im.wtfn, 'HDU', im.hdu
         # invvar = im.read_invvar(slice=slc)
@@ -196,7 +197,7 @@ def stage0(**kwargs):
         slice2 = (slice(5,None,10),slice(5,None,10))
         mad = np.median(np.abs(fullimg[slice1] - fullimg[slice2])[fullgood[slice1] * fullgood[slice2]].ravel())
         sig1 = 1.4826 * mad / np.sqrt(2.)
-        print 'MAD sig1:', sig1
+        print('MAD sig1:', sig1)
         medsky = np.median(fullimg[fullgood])
         invvar = np.zeros_like(img)
         invvar[goodpix] = 1./sig1**2
@@ -227,9 +228,9 @@ def stage0(**kwargs):
         primhdr = im.read_image_primary_header()
 
         magzp = decals.get_zeropoint_for(im)
-        print 'magzp', magzp
+        print('magzp', magzp)
         zpscale = NanoMaggies.zeropointToScale(magzp)
-        print 'zpscale', zpscale
+        print('zpscale', zpscale)
 
         # Scale images to Nanomaggies
         img /= zpscale
@@ -239,10 +240,10 @@ def stage0(**kwargs):
 
         zpscale = 1.
         assert(np.sum(invvar > 0) > 0)
-        print 'After scaling:'
-        print 'sig1', sig1
-        print 'invvar range', invvar.min(), invvar.max()
-        print 'image range', img.min(), img.max()
+        print('After scaling:')
+        print('sig1', sig1)
+        print('invvar range', invvar.min(), invvar.max())
+        print('image range', img.min(), img.max())
 
         assert(np.all(np.isfinite(img)))
         assert(np.all(np.isfinite(invvar)))
@@ -266,18 +267,18 @@ def stage0(**kwargs):
 
         # read fit PsfEx model
         psfex = PsfEx.fromFits(im.psffitfn)
-        print 'Read', psfex
+        print('Read', psfex)
 
         # HACK -- highly approximate PSF here!
         #psf_fwhm = imghdr['FWHM']
         #psf_fwhm = im.seeing
 
         psf_fwhm = im.seeing / (im.pixscale * 3600)
-        print 'PSF FWHM', psf_fwhm, 'pixels'
+        print('PSF FWHM', psf_fwhm, 'pixels')
         psf_sigma = psf_fwhm / 2.35
         psf = NCircularGaussianPSF([psf_sigma],[1.])
 
-        print 'img type', img.dtype
+        print('img type', img.dtype)
         
         tim = Image(img, invvar=invvar, wcs=twcs, psf=psf,
                     photocal=LinearPhotoCal(zpscale, band=band),
@@ -299,7 +300,7 @@ def stage0(**kwargs):
 
     ims = keepims
 
-    print 'Computing resampling...'
+    print('Computing resampling...')
     # save resampling params
     for tim in tims:
         wcs = tim.sip_wcs
@@ -309,13 +310,13 @@ def stage0(**kwargs):
         try:
             Yo,Xo,Yi,Xi,rims = resample_with_wcs(targetwcs, subwcs, [], 2)
         except OverlapError:
-            print 'No overlap'
+            print('No overlap')
             continue
         if len(Yo) == 0:
             continue
         tim.resamp = (Yo,Xo,Yi,Xi)
 
-    print 'Creating coadds...'
+    print('Creating coadds...')
     # Produce per-band coadds, for plots
     coimgs = []
     cons = []
@@ -375,7 +376,7 @@ def stage0(**kwargs):
     plt.suptitle('Number of exposures')
     ps.savefig()
 
-    print 'Grabbing SDSS sources...'
+    print('Grabbing SDSS sources...')
     bandlist = [b for b in bands]
     cat,T = get_sdss_sources(bandlist, targetwcs)
     # record coordinates in target brick image
@@ -393,7 +394,7 @@ def stage0(**kwargs):
     plt.title('SDSS sources')
     ps.savefig()
 
-    print 'Detmaps...'
+    print('Detmaps...')
     # Render the detection maps
     detmaps = dict([(b, np.zeros((H,W), np.float32)) for b in bands])
     detivs  = dict([(b, np.zeros((H,W), np.float32)) for b in bands])
@@ -456,7 +457,7 @@ def stage1(T=None, coimgs=None, cons=None, detmaps=None, detivs=None,
 
     peaks = (hot > 4)
     blobs,nblobs = label(peaks)
-    print 'N detected blobs:', nblobs
+    print('N detected blobs:', nblobs)
     blobslices = find_objects(blobs)
     # Un-set catalog blobs
     for x,y in zip(T.itx, T.ity):
@@ -482,7 +483,7 @@ def stage1(T=None, coimgs=None, cons=None, detmaps=None, detivs=None,
     # These are our peaks
     pki = np.flatnonzero(peaks)
     peaky,peakx = np.unravel_index(pki, peaks.shape)
-    print len(peaky), 'peaks'
+    print(len(peaky), 'peaks')
 
     crossa = dict(ms=10, mew=1.5)
     plt.clf()
@@ -499,7 +500,7 @@ def stage1(T=None, coimgs=None, cons=None, detmaps=None, detivs=None,
 
     # Segment, and record which sources fall into each blob
     blobs,nblobs = label((hot > 20))
-    print 'N detected blobs:', nblobs
+    print('N detected blobs:', nblobs)
     blobslices = find_objects(blobs)
     T.blob = blobs[T.ity, T.itx]
     blobsrcs = []
@@ -529,10 +530,10 @@ def stage1(T=None, coimgs=None, cons=None, detmaps=None, detivs=None,
         if len(Isrcs) == 0:
             continue
 
-        print
-        print 'Blob', blobnumber, 'of', len(blobflux), ':', len(Isrcs), 'sources'
-        print 'Source indices:', Isrcs
-        print
+        print()
+        print('Blob', blobnumber, 'of', len(blobflux), ':', len(Isrcs), 'sources')
+        print('Source indices:', Isrcs)
+        print()
 
         # blob bbox in target coords
         sy,sx = bslc
@@ -567,7 +568,7 @@ def stage1(T=None, coimgs=None, cons=None, detmaps=None, detivs=None,
             try:
                 Yo,Xo,Yi,Xi,rims = resample_with_wcs(subsubwcs, subtarget, [], 2)
             except OverlapError:
-                print 'No overlap'
+                print('No overlap')
                 continue
             if len(Yo) == 0:
                 continue
@@ -628,19 +629,19 @@ def stage1(T=None, coimgs=None, cons=None, detmaps=None, detivs=None,
                     mods.append(mod)
                     if mod is not None:
                         if not np.all(np.isfinite(mod.patch)):
-                            print 'Non-finite mod patch'
-                            print 'source:', src
-                            print 'tim:', tim
-                            print 'PSF:', tim.getPsf()
+                            print('Non-finite mod patch')
+                            print('source:', src)
+                            print('tim:', tim)
+                            print('PSF:', tim.getPsf())
                         assert(np.all(np.isfinite(mod.patch)))
                         mod.addTo(tim.getImage(), scale=-1)
                 initial_models.append(mods)
             # For sources in decreasing order of brightness
             for numi,i in enumerate(Ibright):
                 tsrc = Time()
-                print 'Fitting source', i, '(%i of %i in blob)' % (numi, len(Ibright))
+                print('Fitting source', i, '(%i of %i in blob)' % (numi, len(Ibright)))
                 src = subcat[i]
-                print src
+                print(src)
 
                 srctractor = Tractor(subtims, [src])
                 srctractor.freezeParams('images')
@@ -651,12 +652,12 @@ def stage1(T=None, coimgs=None, cons=None, detmaps=None, detivs=None,
                     if mod is not None:
                         mod.addTo(tim.getImage())
 
-                print 'Optimizing:', srctractor
+                print('Optimizing:', srctractor)
                 srctractor.printThawedParams()
                 for step in range(50):
                     dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
                                                   alphas=alphas)
-                    print 'dlnp:', dlnp, 'src', src
+                    print('dlnp:', dlnp, 'src', src)
                     if dlnp < 0.1:
                         break
 
@@ -675,29 +676,29 @@ def stage1(T=None, coimgs=None, cons=None, detmaps=None, detivs=None,
             subcat.freezeAllParams()
             for numi,i in enumerate(Ibright):
                 tsrc = Time()
-                print 'Fitting source', i, '(%i of %i in blob)' % (numi, len(Ibright))
-                print subcat[i]
+                print('Fitting source', i, '(%i of %i in blob)' % (numi, len(Ibright)))
+                print(subcat[i])
                 subcat.freezeAllBut(i)
-                print 'Optimizing:', subtr
+                print('Optimizing:', subtr)
                 subtr.printThawedParams()
                 for step in range(10):
                     dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
                                                   alphas=alphas)
-                    print 'dlnp:', dlnp
+                    print('dlnp:', dlnp)
                     if dlnp < 0.1:
                         break
-                print 'Fitting source took', Time()-tsrc
-                print subcat[i]
+                print('Fitting source took', Time()-tsrc)
+                print(subcat[i])
         if len(Isrcs) > 1 and len(Isrcs) <= 10:
             tfit = Time()
             # Optimize all at once?
             subcat.thawAllParams()
-            print 'Optimizing:', subtr
+            print('Optimizing:', subtr)
             subtr.printThawedParams()
             for step in range(20):
                 dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
                                               alphas=alphas)
-                print 'dlnp:', dlnp
+                print('dlnp:', dlnp)
                 if dlnp < 0.1:
                     break
 
@@ -705,12 +706,12 @@ def stage1(T=None, coimgs=None, cons=None, detmaps=None, detivs=None,
         subcat.thawAllRecursive()
         subcat.freezeAllParams()
         for isub,srci in enumerate(Isrcs):
-            print 'Variances for source', srci
+            print('Variances for source', srci)
             subcat.thawParam(isub)
 
             src = subcat[isub]
-            print 'Source', src
-            print 'Params:', src.getParamNames()
+            print('Source', src)
+            print('Params:', src.getParamNames())
             
             if isinstance(src, (DevGalaxy, ExpGalaxy)):
                 src.shape = EllipseE.fromEllipseESoft(src.shape)
@@ -718,7 +719,7 @@ def stage1(T=None, coimgs=None, cons=None, detmaps=None, detivs=None,
                 src.shapeExp = EllipseE.fromEllipseESoft(src.shapeExp)
                 src.shapeDev = EllipseE.fromEllipseESoft(src.shapeDev)
 
-            print 'Converted ellipse:', src
+            print('Converted ellipse:', src)
 
             allderivs = subtr.getDerivs()
             for iparam,derivs in enumerate(allderivs):
@@ -741,12 +742,12 @@ def stage1(T=None, coimgs=None, cons=None, detmaps=None, detivs=None,
     cat.thawAllRecursive()
 
     for i,src in enumerate(cat):
-        print 'Source', i, src
-        print 'variances:', srcvariances[i]
-        print len(srcvariances[i]), 'vs', src.numberOfParams()
+        print('Source', i, src)
+        print('variances:', srcvariances[i])
+        print(len(srcvariances[i]), 'vs', src.numberOfParams())
         if len(srcvariances[i]) != src.numberOfParams():
             # This can happen for sources outside the brick bounds: they never get optimized?
-            print 'Warning: zeroing variances for source', src
+            print('Warning: zeroing variances for source', src)
             srcvariances[i] = [0]*src.numberOfParams()
             if isinstance(src, (DevGalaxy, ExpGalaxy)):
                 src.shape = EllipseE.fromEllipseESoft(src.shape)
@@ -762,7 +763,7 @@ def stage1(T=None, coimgs=None, cons=None, detmaps=None, detivs=None,
 
 def stage2(cat=None, variances=None, T=None, bands=None, ps=None,
            targetwcs=None, **kwargs):
-    print 'kwargs:', kwargs.keys()
+    print('kwargs:', kwargs.keys())
     #print 'variances:', variances
 
     from desi_common import prepare_fits_catalog
@@ -817,9 +818,9 @@ def stage2(cat=None, variances=None, T=None, bands=None, ps=None,
         sn = T2.get('decam_%s_nanomaggies' % band) * np.sqrt(T2.get('decam_%s_nanomaggies_invvar' % band))
         #mag = T2.get('decam_%s_mag_corr' % band)
         mag = T2.get('decam_%s_mag' % band)
-        print 'band', band
-        print 'Mags:', mag
-        print 'SN:', sn
+        print('band', band)
+        print('Mags:', mag)
+        print('SN:', sn)
         cc = ccmap[band]
         p = plt.semilogy(mag, sn, '.', color=cc, alpha=0.5)
         lp.append(p[0])
@@ -936,7 +937,7 @@ def stage3(cat=None, variances=None, T=None, bands=None, ps=None,
 
         zp = np.median(np.log10(Ti.sn) + 0.4*Ti.mag)
         zps[band] = zp
-        print 'zp', zp
+        print('zp', zp)
         xx = np.array([lo,hi])
         plt.plot(xx, 10.**(zp - 0.4*xx), '-', alpha=0.4, color=cc)
         plt.plot(xx, 10.**(zp - 0.4*xx), 'k-', alpha=0.4)
@@ -1064,7 +1065,7 @@ def stage3(cat=None, variances=None, T=None, bands=None, ps=None,
                 (np.flatnonzero((Ti.type == 'C') * (Ti.fracDev <= 0.5)),
                  'comp/exp', '^', False),
                 ]:
-            print len(J), name
+            print(len(J), name)
             if deV:
                 size = Ti.shapeDev[:,0]
             else:
@@ -1133,7 +1134,7 @@ def get_ccd_list():
         filter = primhdr['FILTER'].split('.')[0]
         exptime = primhdr['EXPTIME']
         pixscale = primhdr['PIXSCAL1'] / 3600.
-        print 'Pixscale:', pixscale * 3600, 'arcsec/pix'
+        print('Pixscale:', pixscale * 3600, 'arcsec/pix')
 
         for hdu in range(1, len(F)):
         #for hdu in [13]:
@@ -1149,7 +1150,7 @@ def get_ccd_list():
                 T.get(k.lower()).append(val)
                 args.append(val)
             wcs = Tan(*(args + [hdr[k] for k in ['NAXIS1', 'NAXIS2']]))
-            print 'WCS pixscale', wcs.pixel_scale()
+            print('WCS pixscale', wcs.pixel_scale())
             W,H = wcs.get_width(), wcs.get_height()
             ra,dec = wcs.radec_center()
             T.ra.append(ra)
@@ -1171,7 +1172,7 @@ def get_ccd_list():
 
 class CfhtImage(DecamImage):
     def read_invvar(self, slice=None, **kwargs):
-        print 'CFHT read_invvar'
+        print('CFHT read_invvar')
         info = self.get_image_info()
         H,W = info['dims']
         ### FIXME!
@@ -1195,7 +1196,7 @@ class CfhtImage(DecamImage):
         pixscale: in degrees/pixel
         '''
         for fn in [self.wcsfn,self.sefn,self.psffn,self.psffitfn]:
-            print 'exists?', os.path.exists(fn), fn
+            print('exists?', os.path.exists(fn), fn)
         self.makedirs()
     
         run_fcopy = False
@@ -1219,7 +1220,7 @@ class CfhtImage(DecamImage):
         if run_fcopy and (run_se and se):
             tmpimgfn  = create_temp(suffix='.fits')
             cmd = 'imcopy %s"+%i" %s' % (self.imgfn, self.hdu, tmpimgfn)
-            print cmd
+            print(cmd)
             if os.system(cmd):
                 raise RuntimeError('Command failed: ' + cmd)
         if run_astrom or run_se:
@@ -1228,7 +1229,7 @@ class CfhtImage(DecamImage):
             hdr     = self.read_image_header()
             magzp = hdr['PHOT_C'] + 2.5 * np.log10(hdr['EXPTIME'])
             seeing = self.seeing
-            print 'Seeing', seeing, 'arcsec'
+            print('Seeing', seeing, 'arcsec')
     
         if run_se and se:
             #'-SEEING_FWHM %f' % seeing,
@@ -1242,7 +1243,7 @@ class CfhtImage(DecamImage):
                 '-FILTER_NAME', os.path.join(sedir, 'default.conv'),
                 '-CATALOG_NAME', self.sefn,
                 tmpimgfn])
-            print cmd
+            print(cmd)
             if os.system(cmd):
                 raise RuntimeError('Command failed: ' + cmd)
     
@@ -1259,7 +1260,7 @@ class CfhtImage(DecamImage):
                 '-N none -U none -S none -M none --rdls', self.sdssfn,
                 '--corr', self.corrfn, '--wcs', self.wcsfn, 
                 '--temp-axy', '--tag-all', self.sefn])
-            print cmd
+            print(cmd)
             if os.system(cmd):
                 raise RuntimeError('Command failed: ' + cmd)
     
@@ -1267,20 +1268,20 @@ class CfhtImage(DecamImage):
             cmd = ('psfex -c %s -PSF_DIR %s %s -NTHREADS 1' %
                    (os.path.join(sedir, 'gradmap.psfex'),
                     os.path.dirname(self.psffn), self.sefn))
-            print cmd
+            print(cmd)
             if os.system(cmd):
                 raise RuntimeError('Command failed: ' + cmd)
 
             dotpsf = self.psffn.replace('.fits', '.psf')
             if os.path.exists(dotpsf) and not os.path.exists(self.psffn):
                 cmd = 'mv %s %s' % (dotpsf, self.psffn)
-                print cmd
+                print(cmd)
                 if os.system(cmd):
                     raise RuntimeError('Command failed: ' + cmd)
                 
     
         if run_psfexfit and psfexfit:
-            print 'Fit PSF...'
+            print('Fit PSF...')
     
             from tractor.basics import GaussianMixtureEllipsePSF, GaussianMixturePSF
             from tractor.psfex import PsfEx
@@ -1291,7 +1292,7 @@ class CfhtImage(DecamImage):
             psfex = PsfEx(self.psffn, W, H, ny=13, nx=7,
                           psfClass=GaussianMixtureEllipsePSF)
             psfex.savesplinedata = True
-            print 'Fitting MoG model to PsfEx'
+            print('Fitting MoG model to PsfEx')
             psfex._fitParamGrid(damp=1)
             pp,XX,YY = psfex.splinedata
     
@@ -1306,7 +1307,7 @@ class CfhtImage(DecamImage):
                              psfClass=GaussianMixturePSF)
             psfexvar.splinedata = (ppvar, XX, YY)
             psfexvar.toFits(self.psffitfn, merge=True)
-            print 'Wrote', self.psffitfn
+            print('Wrote', self.psffitfn)
             
     
 

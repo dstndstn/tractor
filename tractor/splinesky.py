@@ -110,6 +110,10 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         S = self.evaluateGrid(np.arange(W), np.arange(H))
         mod += (S * scale)
 
+    def evaluateGrid(self, x, y):
+        S = self.spl(x + self.x0, y + self.y0).T
+        return S
+        
     def getParamGrid(self):
         arr = np.array(self.vals)
         assert(len(arr) == (self.W * self.H))

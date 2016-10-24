@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -59,7 +60,7 @@ def get_rgb_image(g, r, z,
     return np.clip(np.dstack([R,G,B]), 0., 1.)
 
 def _det_one((cowcs, fn, wcsfn, do_img, wise)):
-    print 'Image', fn
+    print('Image', fn)
     F = fitsio.FITS(fn)[0]
     imginf = F.get_info()
     hdr = F.read_header()
@@ -73,9 +74,9 @@ def _det_one((cowcs, fn, wcsfn, do_img, wise)):
     else:
         pixscale = wcs.pixel_scale()
         seeing = hdr['SEEING']
-        print 'Seeing', seeing
+        print('Seeing', seeing)
         psf_sigma = seeing / pixscale / 2.35
-    print 'Sigma:', psf_sigma
+    print('Sigma:', psf_sigma)
     psfnorm = 1./(2. * np.sqrt(np.pi) * psf_sigma)
 
     if False:
@@ -83,10 +84,10 @@ def _det_one((cowcs, fn, wcsfn, do_img, wise)):
         # (units: arcsec FWHM)
         from tractor.psfex import *
         psffn = fn.replace('.p.w.fits', '.p.w.cat.psf')
-        print 'PSF', psffn
+        print('PSF', psffn)
         psfmod = PsfEx(psffn, W, H)
         psfim = psfmod.instantiateAt(W/2, H/2)
-        print 'psfim', psfim.shape
+        print('psfim', psfim.shape)
         ph,pw = psfim.shape
         plt.clf()
         plt.plot(psfim[ph/2,:], 'r-')
@@ -99,13 +100,13 @@ def _det_one((cowcs, fn, wcsfn, do_img, wise)):
 
     # Read full image and estimate noise
     img = F.read()
-    print 'Image', img.shape
+    print('Image', img.shape)
 
     if wise:
         ivfn = fn.replace('img-m.fits', 'invvar-m.fits.gz')
         iv = fitsio.read(ivfn)
         sig1 = 1./np.sqrt(np.median(iv))
-        print 'Per-pixel noise estimate:', sig1
+        print('Per-pixel noise estimate:', sig1)
         mask = (iv == 0)
     else:
         # Estimate and subtract background
@@ -115,7 +116,7 @@ def _det_one((cowcs, fn, wcsfn, do_img, wise)):
         diffs = img[:-5:10,:-5:10] - img[5::10,5::10]
         mad = np.median(np.abs(diffs).ravel())
         sig1 = 1.4826 * mad / np.sqrt(2.)
-        print 'Per-pixel noise estimate:', sig1
+        print('Per-pixel noise estimate:', sig1)
         # Read bad pixel mask
         maskfn = fn.replace('.p.w.fits', '.p.w.bpm.fits')
         mask = fitsio.read(maskfn)
@@ -143,10 +144,10 @@ def _det_one((cowcs, fn, wcsfn, do_img, wise)):
     # Produce detection map
     detmap = gaussian_filter(img, psf_sigma, mode='constant') / psfnorm**2
     detmap_sig1 = sig1 / psfnorm
-    print 'Detection map sig1', detmap_sig1
+    print('Detection map sig1', detmap_sig1)
 
     # Lanczos resample
-    print 'Resampling...'
+    print('Resampling...')
     L = 3
     try:
         lims = [detmap]
@@ -156,7 +157,7 @@ def _det_one((cowcs, fn, wcsfn, do_img, wise)):
         rdetmap = rims[0]
     except OverlapError:
         return None
-    print 'Resampled'
+    print('Resampled')
 
     detmap_iv = (mask[Yo,Xo] == 0) * 1./detmap_sig1**2
 
@@ -197,7 +198,7 @@ def create_detmaps(bands):
             if path.endswith('.p.w.fits'):
                 if any([('/C%02i/' % chip) in path for chip in chips]):
                     paths.append(path)
-    print 'Found', len(paths), 'images'
+    print('Found', len(paths), 'images')
 
     # Plug the WCS header cards into the output coadd files.
     f,tmpfn = tempfile.mkstemp()
@@ -208,8 +209,8 @@ def create_detmaps(bands):
 
     for band in bands:
 
-        print
-        print 'Band', band
+        print()
+        print('Band', band)
 
         wise = band.startswith('W')
         if not wise:
@@ -236,7 +237,7 @@ def create_detmaps(bands):
         args = [(cowcs, fn, wcsfn, do_img, wise) for fn,wcsfn in zip(fns,wcsfns)]
         for i,A in enumerate(mp.map(_det_one, args)):
             if A is None:
-                print 'Skipping input', fns[i]
+                print('Skipping input', fns[i])
                 continue
             Yo,Xo,rdetmap,detmap_iv,rimg = A
             codet[Yo,Xo] += rdetmap * detmap_iv
@@ -263,7 +264,7 @@ def main2(bands):
 
     detmaps = [fitsio.read('detmap-%s.fits' % b) for b in bands]
     for b,d in zip(bands,detmaps):
-        print 'Band', b, 'detmap peak:', np.max(d)
+        print('Band', b, 'detmap peak:', np.max(d))
     cowcs = Tan('detmap-%s.fits' % bands[0])
     coH,coW = cowcs.get_height(), cowcs.get_width()
 
@@ -294,14 +295,14 @@ def main2(bands):
             zp = hdr.get(zpkey, None)
             if zp is not None:
                 break
-        print 'ZP', zp
-        print 'Mags', T.mag_auto.min(), T.mag_auto.max()
-        print 'Fluxes', T.flux_auto.min(), T.flux_auto.max()
+        print('ZP', zp)
+        print('Mags', T.mag_auto.min(), T.mag_auto.max())
+        print('Fluxes', T.flux_auto.min(), T.flux_auto.max())
 
         wcsfn = os.path.basename(fn).replace('.cat.fits','.wcs')
         wcsdir = 'data/decam/astrom'
         wcsfn = os.path.join(wcsdir, wcsfn)
-        print 'WCS fn', wcsfn
+        print('WCS fn', wcsfn)
         wcs = Sip(wcsfn)
         T.ra,T.dec = wcs.pixelxy2radec(T.x_image, T.y_image)
         # Cut to sources within the coadd.
@@ -327,13 +328,13 @@ def main2(bands):
 
     R = 0.5 / 3600.
     I,J,d = match_radec(g.ra, g.dec, r.ra, r.dec, R, nearest=True)
-    print len(I), 'g-r matches'
+    print(len(I), 'g-r matches')
     # CUT to g-r matches only!
     g.cut(I)
     r.cut(J)
 
     I,J,d = match_radec(g.ra, g.dec, z.ra, z.dec, R, nearest=True)
-    print len(I), 'g-r-z matches'
+    print(len(I), 'g-r-z matches')
     # CUT to g-r-z matches only!
     g.cut(I)
     r.cut(I)
@@ -347,17 +348,17 @@ def main2(bands):
 
     # Match to AllWISE catalog to find typical colors.
     wise = fits_table('wise-sources-3524p000.fits')
-    print len(wise), 'WISE sources'
+    print(len(wise), 'WISE sources')
 
     ok,wise.cox,wise.coy = cowcs.radec2pixelxy(wise.ra, wise.dec)
     wise.cut((wise.cox >= 1) * (wise.cox <= coW) * (wise.coy >= 1) * (wise.coy <= coH))
-    print 'Cut to', len(wise), 'within coadd'
+    print('Cut to', len(wise), 'within coadd')
 
-    print 'Min W1:', np.min(wise.w1mpro)
-    print 'Min W2:', np.min(wise.w2mpro)
+    print('Min W1:', np.min(wise.w1mpro))
+    print('Min W2:', np.min(wise.w2mpro))
 
     I,J,d = match_radec(r.ra, r.dec, wise.ra, wise.dec, 4./3600)
-    print len(I), 'matches'
+    print(len(I), 'matches')
 
     plt.clf()
     plt.plot(g.mag[I] - r.mag[I], r.mag[I] - wise.w1mpro[J], 'k.')
@@ -474,7 +475,7 @@ def main3(bands):
         wcsfn = os.path.basename(fn).replace('.cat.fits','.wcs')
         wcsdir = 'data/decam/astrom'
         wcsfn = os.path.join(wcsdir, wcsfn)
-        print 'WCS fn', wcsfn
+        print('WCS fn', wcsfn)
         wcs = Sip(wcsfn)
         T.ra,T.dec = wcs.pixelxy2radec(T.x_image, T.y_image)
         # Cut to sources within the coadd.
@@ -490,7 +491,7 @@ def main3(bands):
         cats[band].append(T)
     for k in cats.keys():
         cats[k] = merge_tables(cats[k])
-        print len(cats[k]), 'SourceExtractor sources for', k, 'band'
+        print(len(cats[k]), 'SourceExtractor sources for', k, 'band')
 
     match_pix = 2.5
     match_radius = 0.27 * match_pix / 3600.
@@ -511,13 +512,13 @@ def main3(bands):
         keep[J] = False
         oo.cut(keep)
     secat = merge_tables([gg, rr, zz])
-    print 'Total of', len(secat), 'SExtractor sources'
+    print('Total of', len(secat), 'SExtractor sources')
 
     # Cut SExtractor detections near the CCD edges
     # FIXME -- hard-coded DECam CCD sizes!
     secat.cut((secat.x_image > 2.) * (secat.x_image < 2047) *
               (secat.y_image > 2.) * (secat.y_image < 4095))
-    print 'Cut to', len(secat), 'SExtractor sources not near edges'
+    print('Cut to', len(secat), 'SExtractor sources not near edges')
 
     #noptical = sednames.index('W1-only')
     noptical = 6
@@ -552,7 +553,7 @@ def main3(bands):
     upx,upy = None,None
 
     rgb = fitsio.read('rgb.fits')
-    print 'RGB', rgb.shape
+    print('RGB', rgb.shape)
 
     # smooth the rgb image a little
     for i in range(3):
@@ -569,7 +570,7 @@ def main3(bands):
     alldetmaps = []
 
     for ised,(name,sed) in enumerate(seds):
-        print 'SED:', name
+        print('SED:', name)
         mdet, msig, msig1 = detmapdet.sed_matched_filter(sed, detmaps, detivs, sig1s)
 
         blobs,blobslices,P,Px,Py,peaks = detmapdet.get_detections(mdet / msig, 1., mdet,
@@ -588,11 +589,11 @@ def main3(bands):
             keep = np.ones(len(Px), bool)
             I,J,d = match_xy(upx, upy, Px, Py, match_pix)
             keep[J] = False
-            print 'Keeping', sum(keep), 'new peaks'
+            print('Keeping', sum(keep), 'new peaks')
             upx = np.append(upx, Px[keep])
             upy = np.append(upy, Py[keep])
             newpeaks = Px[keep],Py[keep]
-        print 'Total of', len(upx), 'peaks'
+        print('Total of', len(upx), 'peaks')
 
         px,py = newpeaks
         if len(px) == 0:
@@ -601,11 +602,11 @@ def main3(bands):
         I = np.argsort(-peaksn)
 
         if ised >= noptical:
-            print 'New peaks: S/N vs Flat S/N:'
+            print('New peaks: S/N vs Flat S/N:')
             for i in I[:25]:
                 optsn = [m[py[i],px[i]] for m in alldetmaps[:noptical]]
                 optimax = np.argmax(optsn)
-                print '  % 8.1f' % (peaksn[i]), '  % 8.1f' % optsn[optimax], 'in', sednames[optimax]
+                print('  % 8.1f' % (peaksn[i]), '  % 8.1f' % optsn[optimax], 'in', sednames[optimax])
 
         # Plot most significant new peaks
         plt.clf()
@@ -696,8 +697,8 @@ def main3(bands):
     ps.savefig()
 
     I,J,d = match_xy(upx, upy, secat.cox-1, secat.coy-1, match_pix)
-    print 'Of', len(upx), 'SED-matched and', len(secat), 'SExtractor,'
-    print 'Matched', len(I)
+    print('Of', len(upx), 'SED-matched and', len(secat), 'SExtractor,')
+    print('Matched', len(I))
 
     only = np.ones(len(secat), bool)
     only[J] = False
@@ -713,7 +714,7 @@ def main3(bands):
     # Cut to sources within the coadd.
     ok,sdss.cox,sdss.coy = cowcs.radec2pixelxy(sdss.ra, sdss.dec)
     sdss.cut((sdss.cox >= 1) * (sdss.cox <= coW) * (sdss.coy >= 1) * (sdss.coy <= coH))
-    print len(sdss), 'SDSS sources within coadd'
+    print(len(sdss), 'SDSS sources within coadd')
     
 
     plt.clf()

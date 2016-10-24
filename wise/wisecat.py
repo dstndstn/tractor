@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 import numpy as np
 from astrometry.util.fits import *
@@ -17,7 +18,7 @@ def _read_wise_cats_wcs(wcs,
             continue
         fn = rdpattern % (i+1)
         T = fits_table(fn)
-        print 'Read', len(T), 'from', fn
+        print('Read', len(T), 'from', fn)
         I = np.flatnonzero((T.dec >= d0) * (T.dec <= d1))
         ok,x,y = wcs.radec2pixelxy(T.ra[I], T.dec[I])
         J = (ok *
@@ -26,7 +27,7 @@ def _read_wise_cats_wcs(wcs,
              (x <= (W+0.5+pixelmargin)) *
              (y <= (H+0.5+pixelmargin)))
         I = I[J]
-        print 'found', len(I), 'within WCS'
+        print('found', len(I), 'within WCS')
         if len(I) == 0:
             continue
         fn = pattern % (i+1)
@@ -43,17 +44,17 @@ def _read_wise_cats_wcs(wcs,
 def _read_wise_cats(r0,r1,d0,d1,
                    pattern, rdpattern, decranges, cols=None):
     if r1 - r0 > 180:
-        print 'WARNING: wise_catalog_radecbox: RA range', r0, 'to', r1, ': maybe wrap-around?'
+        print('WARNING: wise_catalog_radecbox: RA range', r0, 'to', r1, ': maybe wrap-around?')
     TT = []
     for i,(dlo,dhi) in enumerate(decranges):
         if dlo > d1 or dhi < d0:
             continue
         fn = rdpattern % (i+1)
         T = fits_table(fn)
-        print 'Read', len(T), 'from', fn
+        print('Read', len(T), 'from', fn)
         I = np.flatnonzero((T.ra  >= r0) * (T.ra  <= r1) *
                            (T.dec >= d0) * (T.dec <= d1))
-        print 'found', len(I), 'in range'
+        print('found', len(I), 'in range')
         if len(I) == 0:
             continue
         fn = pattern % (i+1)

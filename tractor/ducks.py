@@ -220,9 +220,12 @@ class Source(Params):
         calibration information of the `Image`: the WCS, PSF, and
         photometric calibration.
 
-        The "minsb" argument, if given, is the allowable approximation
-        error per pixel; we are asking the source to render itself out
-        to this surface brightness.
+        *minsb*: the allowable approximation error per pixel; we are
+        asking the source to render itself out to this surface
+        brightness.
+
+        *modelMask*: a ModelMask object describing the rectangular
+         region of interest (image pixels).
         '''
         pass
 
@@ -322,7 +325,8 @@ class WCS(ImageCalibration, Params):
     '''
     def positionToPixel(self, pos, src=None):
         '''
-        Converts a :class:`tractor.Position` *pos* into ``x,y`` pixel coordinates.
+        Converts a :class:`tractor.Position` *pos* into ``x,y`` pixel
+        coordinates.
 
         Note that the :class:`tractor.Source` may be passed in; your
         :class:`tractor.WCS` could have color-specific behavior, for
@@ -362,6 +366,11 @@ class WCS(ImageCalibration, Params):
         '''
         return None
 
+    def cdInverseAtPixel(self, x, y):
+        cd = self.cdAtPixel(px, py)
+        cdi = np.linalg.inv(cd)
+        return cdi
+    
     def pixscale_at(self, x, y):
         '''
         Returns the local pixel scale at the given *x*,*y* pixel coords,
@@ -372,8 +381,8 @@ class WCS(ImageCalibration, Params):
     
     def shifted(self, dx, dy):
         '''
-        Returns a new WCS object appropriate for the subimage starting at (dx,dy)
-        with respect to the current WCS origin.
+        Returns a new WCS object appropriate for the subimage starting
+        at (dx,dy) with respect to the current WCS origin.
         '''
         return None
 
@@ -381,24 +390,19 @@ class PSF(ImageCalibration, Params):
     '''
     Duck-type definition of a point-spread function.
     '''
-    def getPointSourcePatch(self, px, py, minval=0.,
-                            extent=None, modelMask=None):
+    def getPointSourcePatch(self, px, py, minval=0., modelMask=None):
         '''
         Returns a `Patch`, a rendering of a point source at the given
         pixel coordinates.
 
         The returned `Patch` should have unit "counts".
 
-        The "minval" arg says that we are willing to accept an approximation
+        *minval* says that we are willing to accept an approximation
         such that pixels with counts < minval can be omitted.
 
-        The "extent" arg, [x0,x1, y0,y1], says that we are only
-        interested in pixels within the INCLUSIVE range [x0,x1],
-        [y0,y1]; this OPTIONALLY allows the PSF class to render a
-        smaller Patch.
-
-        "modelMask", if given, overrides "extent" and "minval"; it
-        specifies exactly which pixels are to be evaluated.
+        *modelMask* describes the pixels to be evaluated.  If the
+         *modelMask* includes a pixel-by-pixel mask, this overrides
+         *minval*.
         '''
         pass
 

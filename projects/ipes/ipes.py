@@ -1,5 +1,6 @@
+from __future__ import print_function
 if False:
-	print 'Hello'
+	print('Hello')
 """
 We want to show some Tractor vs SDSS improvements using only SDSS
 data.  Some validation can be done using the stripe overlaps -- the
@@ -106,7 +107,7 @@ def main():
 def my_ipe_errors():
 	ps = PlotSequence('myipe')
 	T = fits_table('my-ipes.fits')
-	print 'Got', len(T), 'galaxies'
+	print('Got', len(T), 'galaxies')
 
 	# Photo errors are in arcsec.
 	T.raerr /= 3600.
@@ -115,7 +116,7 @@ def my_ipe_errors():
 	# The galaxies here are in consecutive pairs.
 	T1 = T[::2]
 	T2 = T[1::2]
-	print len(T1), 'pairs'
+	print(len(T1), 'pairs')
 
 	plt.clf()
 	plt.plot(T1.raerr * 3600., np.abs((T1.ra - T2.ra) / T1.raerr), 'r.')
@@ -346,11 +347,11 @@ def ipe_errors():
 
 	#T = fits_table('ipe2_dstn_1.fit')
 	T = fits_table('ipe3_dstn_2.fit')
-	print len(T), 'objects'
+	print(len(T), 'objects')
 
-	print 'Runs', np.unique(T.run)
-	print 'Camcols', np.unique(T.camcol)
-	print 'Fields', np.unique(T.field)
+	print('Runs', np.unique(T.run))
+	print('Camcols', np.unique(T.camcol))
+	print('Fields', np.unique(T.field))
 
 	T1 = T[T.run == 5183]
 	T2 = T[T.run == 5224]
@@ -362,15 +363,15 @@ def ipe_errors():
 
 	for T in [T1,T2]:
 		# self-matches:
-		print 'T:', len(T)
+		print('T:', len(T))
 		R = 0.5 / 3600.
 		I,J,d = match_radec(T.ra, T.dec, T.ra, T.dec, R, notself=True)
-		print len(I), 'matches'
+		print(len(I), 'matches')
 		K = (I < J)
 		I = I[K]
 		J = J[K]
-		print len(I), 'symmetric'
-		print sum(T.field[I] == T.field[J]), 'are in the same field'
+		print(len(I), 'symmetric')
+		print(sum(T.field[I] == T.field[J]), 'are in the same field')
 
 		#plt.clf()
 		#plt.plot(T.rowc[I], T.colc[I], 'r.')
@@ -381,13 +382,13 @@ def ipe_errors():
 		keep[I[T.field[I] != T.field[J]]] = False
 
 		T.cut(keep)
-		print 'Cut to', len(T), 'with no matches in other fields'
+		print('Cut to', len(T), 'with no matches in other fields')
 
 
 	R = 1./3600.
 
 	I,J,d = match_radec(T1.ra, T1.dec, T2.ra, T2.dec, R)
-	print len(I), 'matches'
+	print(len(I), 'matches')
 
 	dra = (T1.ra[I] - T2.ra[J])*np.cos(np.deg2rad(T1.dec[I])) * 3600.
 	ddec = (T1.dec[I] - T2.dec[J]) * 3600.
@@ -396,9 +397,9 @@ def ipe_errors():
 	#loghist(dra, ddec, 100, range=((-1,1),(-1,1)))
 	#ps.savefig()
 
-	print 'Range of Decs:', T1.dec.min(), T1.dec.max(), T2.dec.min(), T2.dec.max()
+	print('Range of Decs:', T1.dec.min(), T1.dec.max(), T2.dec.min(), T2.dec.max())
 	ras = np.cos(np.deg2rad(np.append(T1.dec, T2.dec)))
-	print 'Range of RAscales:', ras.min(), ras.max()
+	print('Range of RAscales:', ras.min(), ras.max())
 
 	rascale = np.mean(ras)
 
@@ -407,20 +408,20 @@ def ipe_errors():
 	inds,d = nearest(X1, X2, R)
 	J = np.flatnonzero(inds > -1)
 	I = inds[J]
-	print 'Nearest-neighbour matches:', len(I)
+	print('Nearest-neighbour matches:', len(I))
 	d = np.sqrt(d[J])
-	print 'd', d.shape
-	print 'I,J', len(I), len(J)
-	print 'd max', np.max(d), 'min', np.min(d)
-	print 'R', R
+	print('d', d.shape)
+	print('I,J', len(I), len(J))
+	print('d max', np.max(d), 'min', np.min(d))
+	print('R', R)
 	assert(np.all(d <= R))
 	assert(np.all(J >= 0))
 	assert(np.all(I >= 0))
 
 	dx = X1[I] - X2[J]
-	print 'dx', dx.shape
+	print('dx', dx.shape)
 	dr = np.hypot(dx[:,0], dx[:,1])
-	print 'dr', dr.shape
+	print('dr', dr.shape)
 	assert(np.all(dr <= R))
 
 	dra	 = (T1.ra [I] - T2.ra [J]) * rascale * 3600.
@@ -478,7 +479,7 @@ def ipe_errors():
 	plt.xlabel('N sigma of psfmag_r')
 	xx = np.linspace(0, hi, 500)
 	yy = 2./np.sqrt(2.*np.pi)*np.exp(-0.5 * xx**2)
-	print 'yy', sum(yy)
+	print('yy', sum(yy))
 	plt.plot(xx, yy * len(M1) * (b[1]-b[0]), 'k-')
 	ps.savefig()
 
@@ -487,12 +488,12 @@ def ipe_errors():
 	K2 = (M1.type == 6) * (M2.type == 3)
 	G = merge_tables((M1[K1], M2[K2]))
 	S = merge_tables((M2[K1], M1[K2]))
-	print 'G types:', np.unique(G.type)
-	print 'S types:', np.unique(S.type)
+	print('G types:', np.unique(G.type))
+	print('S types:', np.unique(S.type))
 	mhi,mlo = 24,10
 	K = ((G.modelmag_r < mhi) * (S.psfmag_r < mhi) *
 		 (G.modelmag_r > mlo) * (S.psfmag_r > mlo))
-	print 'Star/gal mismatches with good mags:', np.sum(K)
+	print('Star/gal mismatches with good mags:', np.sum(K))
 
 	# gm = G.modelmag_r.copy()
 	# gm[np.logical_or(gm > mhi, gm < mlo)] = 25.
@@ -533,7 +534,7 @@ def ipe_errors():
 	K = ((M1.type == 3) * (M2.type == 3))
 	G1 = M1[K]
 	G2 = M2[K]
-	print len(G1), 'pairs where both are galaxies'
+	print(len(G1), 'pairs where both are galaxies')
 	
 	#for 
 	plt.clf()
@@ -565,12 +566,12 @@ def ipe_errors():
 	dscale = 1.
 
 	I = (G1.fracdev_r < 0.5) * (G2.fracdev_r < 0.5)
-	print sum(I), 'of', len(G1), 'both have fracdev_r < 0.5'
+	print(sum(I), 'of', len(G1), 'both have fracdev_r < 0.5')
 	E1 = G1[I]
 	E2 = G2[I]
 
 	I = (G1.fracdev_r >= 0.5) * (G2.fracdev_r >= 0.5)
-	print sum(I), 'of', len(G1), 'both have fracdev_r >= 0.5'
+	print(sum(I), 'of', len(G1), 'both have fracdev_r >= 0.5')
 	D1 = G1[I]
 	D2 = G2[I]
 
@@ -631,7 +632,7 @@ def ipe_errors():
 
 	
 	I,J,d = match_radec(T.ra, T.dec, T.ra, T.dec, 0.5/3600., notself=True)
-	print len(I), 'matches'
+	print(len(I), 'matches')
 
 	plt.clf()
 	loghist((T.ra[I] - T.ra[J])*np.cos(np.deg2rad(T.dec[I])) * 3600.,
@@ -643,7 +644,7 @@ def ipe_errors():
 	I = I[K]
 	J = J[K]
 	d = d[K]
-	print 'Cut to', len(I), 'symmetric'
+	print('Cut to', len(I), 'symmetric')
 	
 	plt.clf()
 	plt.plot(T.ra, T.dec, 'r.')
@@ -657,15 +658,15 @@ def ipe_errors():
 	for i in np.unique(I):
 		K = (I == i)
 		JJ = J[K]
-		print
-		print 'Source', i, 'has', len(JJ), 'matches'
-		print '	 ', np.sum(RC[JJ] == RC[i]), 'in the same run/camcol'
-		print '	 ', np.sum(RCF[JJ] == RCF[i]), 'in the same run/camcol/field'
+		print()
+		print('Source', i, 'has', len(JJ), 'matches')
+		print('	 ', np.sum(RC[JJ] == RC[i]), 'in the same run/camcol')
+		print('	 ', np.sum(RCF[JJ] == RCF[i]), 'in the same run/camcol/field')
 		orc = (RC[JJ] != RC[i])
-		print '	 ', np.sum(orc), 'are in other run/camcols'
-		print '	 ', len(np.unique(RC[JJ][orc])), 'unique other run/camcols'
-		print '	 ', len(np.unique(RCF[JJ][orc])), 'unique other run/camcols/fields'
-		print '	 other sources:', JJ
+		print('	 ', np.sum(orc), 'are in other run/camcols')
+		print('	 ', len(np.unique(RC[JJ][orc])), 'unique other run/camcols')
+		print('	 ', len(np.unique(RCF[JJ][orc])), 'unique other run/camcols/fields')
+		print('	 other sources:', JJ)
 		dra.extend((T.ra[JJ] - T.ra[i]) * np.cos(np.deg2rad(T.dec[i])))
 		ddec.extend(T.dec[JJ] - T.dec[i])
 		raerr.extend ([T.raerr [i]] * len(JJ))
@@ -691,7 +692,7 @@ def refit_galaxies_2():
 	band = 'r'
 
 	T = fits_table('ipe3_dstn_2.fit')
-	print len(T), 'objects'
+	print(len(T), 'objects')
 
 	binned1 = 268435456
 	blended = 8
@@ -699,11 +700,11 @@ def refit_galaxies_2():
 	bright = 2
 
 	T.cut((T.flags & (bad | blended)) == 0)
-	print 'Removing bad or blended:', len(T)
+	print('Removing bad or blended:', len(T))
 	T.cut((T.flags & bright) == 0)
-	print 'Removing bright:', len(T)
+	print('Removing bright:', len(T))
 	T.cut((T.flags & binned1) > 0)
-	print 'Binned1:', len(T)
+	print('Binned1:', len(T))
 
 	T1 = T[T.run == 5183]
 	T2 = T[T.run == 5224]
@@ -715,8 +716,8 @@ def refit_galaxies_2():
 	inds,d = nearest(X1, X2, R)
 	J = np.flatnonzero(inds > -1)
 	I = inds[J]
-	print len(J), 'matches'
-	print len(np.unique(I)), 'unique objs in target'
+	print(len(J), 'matches')
+	print(len(np.unique(I)), 'unique objs in target')
 
 	from collections import Counter
 	tally = Counter(I)
@@ -725,14 +726,14 @@ def refit_galaxies_2():
 	# remove zero and negative entries
 	tally += Counter()
 	# Now "tally" just contains keys (from I) with >= 2 counts
-	print 'multiple matches:', len(tally), ':', tally.keys()
+	print('multiple matches:', len(tally), ':', tally.keys())
 	multi = set(tally.keys())
 	K = np.array([k for k,ii in enumerate(I) if not ii in multi])
 	I = I[K]
 	J = J[K]
-	print 'Kept', len(I), 'non-multi-matched pairs'
-	print len(np.unique(J)), 'unique J'
-	print len(np.unique(I)), 'unique I'
+	print('Kept', len(I), 'non-multi-matched pairs')
+	print(len(np.unique(J)), 'unique J')
+	print(len(np.unique(I)), 'unique I')
 	M1 = T1[I]
 	M2 = T2[J]
 
@@ -740,7 +741,7 @@ def refit_galaxies_2():
 	K = ((M1.type == 3) * (M2.type == 3))
 	M1 = M1[K]
 	M2 = M2[K]
-	print 'Both galaxies:', len(M1)
+	print('Both galaxies:', len(M1))
 
 	# sort by mag, moving -9999 to the end.
 	mag = M1.get('modelmag_' + band).copy()
@@ -766,7 +767,7 @@ def refit_galaxies_2():
 	MM = M1
 	# We have to set the length manually.
 	MM._length = 2*N
-	print 'Length of MM:', len(MM)
+	print('Length of MM:', len(MM))
 	del M1
 	del M2
 
@@ -812,7 +813,7 @@ def refit_galaxies_1():
 
 	Ti = Ti[I]
 
-	print 'Cut to', len(Ti), 'galaxies in radius and mag cuts'
+	print('Cut to', len(Ti), 'galaxies in radius and mag cuts')
 
 	refit_galaxies(Ti, intermediate_fn='mye4-%06i.fits', mp=mp,
 				   modswitch=True)
@@ -824,8 +825,8 @@ def refit_galaxies(T, band='i', S=100,
 	if mp is None:
 		mp = multiproc()
 	sdss = DR9(basedir='paper0-data-dr9')
-	print 'basedir', sdss.basedir
-	print 'dasurl', sdss.dasurl
+	print('basedir', sdss.basedir)
+	print('dasurl', sdss.dasurl)
 
 	N = len(T)
 	ps = [('my_',''), ('init_',''),]
@@ -883,9 +884,9 @@ def refit_galaxies(T, band='i', S=100,
 			gali = argi[4]
 			###
 			if resi is None:
-				print 'Result', gali, 'is None'
+				print('Result', gali, 'is None')
 				continue
-			print 'Saving result', gali
+			print('Saving result', gali)
 			T[gali] = resi
 
 		#for gali in range(min(len(T), len(tinew))):
@@ -917,7 +918,7 @@ def _real_refit_gal((ti, band, S, sdss, gali,
 								  sdss=sdss, roi=roi, bands=[band])
 
 	tractor = Tractor(Images(im), cat)
-	print 'Tractor', tractor
+	print('Tractor', tractor)
 
 	ima = dict(interpolation='nearest', origin='lower')
 	zr = im.zr
@@ -947,22 +948,22 @@ def _real_refit_gal((ti, band, S, sdss, gali,
 			ii = i
 			dd = d
 	assert(ii is not None)
-	print 'Closest to image center:', tractor.catalog[ii]
+	print('Closest to image center:', tractor.catalog[ii])
 	gal = tractor.catalog[ii]
 
 	gal0 = gal.copy()
 	set_table_from_galaxy(ti, gal0, 'init_', band=band)
 
-	print 'Fitting the target galaxy:'
+	print('Fitting the target galaxy:')
 	tractor.catalog.freezeAllBut(ii)
 	while True:
 		dlnp,X,alpha = tractor.optimize(damp=1e-3)
-		print 'dlnp', dlnp
-		print 'alpha', alpha
+		print('dlnp', dlnp)
+		print('alpha', alpha)
 		if dlnp < 1:
 			break
 
-	print 'Fitting all sources that overlap the target galaxy:'
+	print('Fitting all sources that overlap the target galaxy:')
 	thaw = []
 	galpatch = tractor.getModelPatch(im, gal)
 	galpatch.trimToNonZero()
@@ -978,13 +979,13 @@ def _real_refit_gal((ti, band, S, sdss, gali,
 
 	tractor.catalog.freezeAllBut(*thaw)
 
-	print len(tractor.getCatalog()), 'sources in the region'
-	print len(thaw), 'overlap the target galaxy'
+	print(len(tractor.getCatalog()), 'sources in the region')
+	print(len(thaw), 'overlap the target galaxy')
 
 	while True:
 		dlnp,X,alpha = tractor.optimize(damp=1e-3)
-		print 'dlnp', dlnp
-		print 'alpha', alpha
+		print('dlnp', dlnp)
+		print('alpha', alpha)
 		if dlnp < 1:
 			# p0 = np.array(tractor.getParams())
 			# dp = np.array(X)				
@@ -1015,7 +1016,7 @@ def _real_refit_gal((ti, band, S, sdss, gali,
 	#		break
 
 	if errors:
-		print 'Computing errors on the target galaxy:'
+		print('Computing errors on the target galaxy:')
 		tractor.catalog.freezeAllBut(ii)
 		sigs = tractor.computeParameterErrors(symmetric=True)
 		nms = gal.getParamNames()
@@ -1039,21 +1040,21 @@ def _real_refit_gal((ti, band, S, sdss, gali,
 		tractor.catalog.freezeAllBut(ii)
 		#print 'Catalog length (with all but one frozen):', len(tractor.catalog)
 		gal = tractor.catalog[ii]
-		print 'Galaxy', gal
+		print('Galaxy', gal)
 
 		if isinstance(gal, DevGalaxy) or isinstance(gal, ExpGalaxy):
-			print 'Single-component.  Try Composite...'
+			print('Single-component.  Try Composite...')
 			m = gal.brightness
 			# Give the new component 1% of the flux...
 			m1 = m + 0.01
 			m2 = m + 5.
-			print 'Mag 1', m1
-			print 'Mag 2', m2
+			print('Mag 1', m1)
+			print('Mag 2', m2)
 
 			s1 = gal.shape.copy()
 			s2 = gal.shape.copy()
-			print 'Galaxy shape 1', s1
-			print 'Galaxy shape 2', s2
+			print('Galaxy shape 1', s1)
+			print('Galaxy shape 2', s2)
 
 			if isinstance(gal, DevGalaxy):
 				comp = CompositeGalaxy(gal.pos, m2, gal.shape.copy(),
@@ -1063,25 +1064,25 @@ def _real_refit_gal((ti, band, S, sdss, gali,
 									   m2, gal.shape.copy())
 
 			tractor.catalog[ii] = comp
-			print 'Trying composite', comp
+			print('Trying composite', comp)
 
 			lnp2 = tractor.getLogProb()
-			print 'Single->comp Initial dlnp:', lnp2 - lnp1
+			print('Single->comp Initial dlnp:', lnp2 - lnp1)
 
-			print 'Fitting:'
+			print('Fitting:')
 			for nm in tractor.getParamNames():
-				print '	 ', nm
+				print('	 ', nm)
 
 			while True:
 				dlnp,X,alpha = tractor.optimize(damp=1e-3)
-				print 'Single->comp'
-				print 'dlnp', dlnp
-				print 'alpha', alpha
+				print('Single->comp')
+				print('dlnp', dlnp)
+				print('alpha', alpha)
 				if dlnp < 0.1:
 					break
 
 			lnp2 = tractor.getLogProb()
-			print 'Single->comp Final dlnp:', lnp2 - lnp1
+			print('Single->comp Final dlnp:', lnp2 - lnp1)
 
 			tractor.catalog.thawAllParams()
 
@@ -1091,52 +1092,52 @@ def _real_refit_gal((ti, band, S, sdss, gali,
 			lnp2 = tractor.getLogProb()
 			gal2 = comp.copy()
 
-			print 'tractor.catalog[ii]:', tractor.catalog[ii]
-			print 'comp:', comp.copy()
+			print('tractor.catalog[ii]:', tractor.catalog[ii])
+			print('comp:', comp.copy())
 
-			print 'Reverting'
+			print('Reverting')
 			tractor.catalog[ii] = gal
 
 		elif isinstance(gal, CompositeGalaxy):
-			print 'Composite.  Flux ratio:'
+			print('Composite.  Flux ratio:')
 			photocal = im.getPhotoCal()
 			ce = photocal.brightnessToCounts(gal.brightnessExp)
 			cd = photocal.brightnessToCounts(gal.brightnessDev)
-			print ce / (ce + cd), 'exp'
+			print(ce / (ce + cd), 'exp')
 
 			frac = ce / (ce + cd)
 
 			#if frac < 0.1:
 			if frac < 0.5:
-				print 'Trying pure Dev'
+				print('Trying pure Dev')
 				newgal = DevGalaxy(gal.pos, gal.getBrightness(), gal.shapeDev)
 			#elif frac > 0.9:
 			elif frac >= 0.5:
-				print 'Trying pure Exp'
+				print('Trying pure Exp')
 				newgal = ExpGalaxy(gal.pos, gal.getBrightness(), gal.shapeExp)
 			else:
 				newgal = None
 			if newgal is not None:
-				print newgal
+				print(newgal)
 				tractor.catalog[ii] = newgal
-				print tractor.catalog[ii]
+				print(tractor.catalog[ii])
 				lnp2 = tractor.getLogProb()
-				print 'Comp->single: Initial dlnp:', lnp2 - lnp1
+				print('Comp->single: Initial dlnp:', lnp2 - lnp1)
 
-				print 'Fitting:'
+				print('Fitting:')
 				for nm in tractor.getParamNames():
-					print '	 ', nm
+					print('	 ', nm)
 
 				while True:
 					dlnp,X,alpha = tractor.optimize(damp=1e-3)
-					print 'comp->single'
-					print 'dlnp', dlnp
-					print 'alpha', alpha
+					print('comp->single')
+					print('dlnp', dlnp)
+					print('alpha', alpha)
 					if dlnp < 0.1:
 						break
 
 				lnp2 = tractor.getLogProb()
-				print 'comp->single Final dlnp:', lnp2 - lnp1
+				print('comp->single Final dlnp:', lnp2 - lnp1)
 
 			tractor.catalog.thawAllParams()
 			p2 = tractor.getParams()
@@ -1146,14 +1147,14 @@ def _real_refit_gal((ti, band, S, sdss, gali,
 			#gal2 = tractor.catalog[0].copy()
 			gal2 = newgal.copy()
 
-			print 'tractor.catalog[ii]:', tractor.catalog[ii]
-			print 'newgal:', newgal.copy()
+			print('tractor.catalog[ii]:', tractor.catalog[ii])
+			print('newgal:', newgal.copy())
 
-			print 'Reverting'
+			print('Reverting')
 			tractor.catalog[ii] = gal
 
 		else:
-			print 'Hmmm?  Unknown source type', gal
+			print('Hmmm?  Unknown source type', gal)
 
 	if gal2 is not None:
 		set_table_from_galaxy(ti, gal2, 'sw_', band=band)
@@ -1251,18 +1252,18 @@ def set_table_from_galaxy(ti, gal, prefix, band='i', errors=None):
 		fields.append(('devmag_' + band, 'brightnessDev.' + band))
 
 	if errors:
-		print 'Errors:', errors
+		print('Errors:', errors)
 
 	for tnm,gnm in fields:
 		val = gal
 		for t in gnm.split('.'):
 			val = getattr(val, t)
 		#val = getattr(gal, gnm)
-		print 'galaxy', gnm, '->', val
+		print('galaxy', gnm, '->', val)
 		ti.set(prefix + tnm, val)
 		if errors:
 			err = errors.get(gnm, None)
-			print 'Error', err
+			print('Error', err)
 			if err is not None:
 				ti.set(prefix + tnm + '_err', err)
 
@@ -1292,7 +1293,7 @@ def plot_ellipses(im, cat):
 			gals.append((True,	src.shapeExp, 'm', dict(lw=2, alpha=0.5)))
 			gals.append((False, src.shapeDev, 'c', {}))
 		else:
-			print 'Unknown source type:', src
+			print('Unknown source type:', src)
 			continue
 
 		theta = np.linspace(0, 2*np.pi, 90)
@@ -1350,7 +1351,7 @@ def plot_ipes():
 		p.apply_settings()
 		for rr,dd in zip(RR.T, DD.T):
 			if not (np.all((rr - 180) > 0) or np.all((rr - 180) < 0)):
-				print 'Skipping boundary-spanning', rr,dd
+				print('Skipping boundary-spanning', rr,dd)
 				continue
 			p.move_to_radec(rr[0], dd[0])
 			for r,d in zip(rr[1:],dd[1:]):
@@ -1361,16 +1362,16 @@ def plot_ipes():
 		p.write('rd1.png')
 
 	Ti = T[(T.ra > 190) * (T.ra < 200) * (T.dec > 23) * (T.dec < 24)]
-	print 'Runs', np.unique(Ti.run)
-	print 'Camcols', np.unique(Ti.camcol)
-	print 'Stripes', np.unique(Ti.stripe)
-	print 'Strips', np.unique(Ti.strip)
+	print('Runs', np.unique(Ti.run))
+	print('Camcols', np.unique(Ti.camcol))
+	print('Stripes', np.unique(Ti.stripe))
+	print('Strips', np.unique(Ti.strip))
 
 	Ti = T[(T.ra > 194) * (T.ra < 195) * (T.dec > 23.3) * (T.dec < 23.7)]
-	print 'Runs', np.unique(Ti.run)
-	print 'Camcols', np.unique(Ti.camcol)
-	print 'Stripes', np.unique(Ti.stripe)
-	print 'Strips', np.unique(Ti.strip)
+	print('Runs', np.unique(Ti.run))
+	print('Camcols', np.unique(Ti.camcol))
+	print('Stripes', np.unique(Ti.stripe))
+	print('Strips', np.unique(Ti.strip))
 
 	
 	#if True:
@@ -1388,7 +1389,7 @@ def plot_ipes():
 		p = Plotstuff(outformat=PLOTSTUFF_FORMAT_PNG, size=(W,H),
 					  rdw=(r,d,w))
 		rmn,rmx,dmn,dmx = anwcs_get_radec_bounds(p.wcs, 100)
-		print 'Bounds', rmn,rmx,dmn,dmx
+		print('Bounds', rmn,rmx,dmn,dmx)
 	
 		Ti = T[((T.ramin < rmx) * (T.ramax > rmn) *
 				(T.decmin < dmx) * (T.decmax > dmn))]

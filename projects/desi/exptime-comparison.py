@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -20,7 +21,7 @@ def stage_read():
     C = fits_table('decals/decals-ccds.fits')
     band = 'z'
     C.cut(C.filter == band)
-    print len(C), 'z-band CCDs'
+    print(len(C), 'z-band CCDs')
     C.cut(np.argsort(C.expnum))
     
     parser,gvs = getParserAndGlobals()
@@ -35,7 +36,7 @@ def stage_read():
     Z.ccdname = np.array([s.strip() for s in Z.ccdname])
     
     obstatus = fits_table('../obs-trunk/obstatus/decam-tiles_obstatus.fits')
-    print len(obstatus), 'obstatus tiles'
+    print(len(obstatus), 'obstatus tiles')
     obskd = tree_build_radec(obstatus.ra, obstatus.dec)
     
     R = fits_table()
@@ -82,8 +83,8 @@ def stage_read():
             udates.append(date)
             ui.append(len(R.zp))
 
-        print '  ', c.cpimage
-        print '  exptime', c.exptime
+        print('  ', c.cpimage)
+        print('  exptime', c.exptime)
             
         J = []
         ZZ = Z[(Z.expnum == expnum)]
@@ -100,7 +101,7 @@ def stage_read():
             keep = np.flatnonzero(CC.dr1 == 1)
             CC.cut(keep)
             ZZ.cut(keep)
-            print 'Cut to', len(keep), 'photometric CCDs in this exposure'
+            print('Cut to', len(keep), 'photometric CCDs in this exposure')
 
         #airmass = np.median(CC.airmass)
         airmass = 1.0
@@ -111,38 +112,38 @@ def stage_read():
         gain = np.median(c.arawgain)
         skyflux = skylev / c.exptime
         
-        print '  zeropoint', zp, 'in CP'
-        print '  fwhm', fwhm
-        print '  sky level', skylev, 'in CP'
-        print '  sky flux', skyflux, 'per second in CP units'
+        print('  zeropoint', zp, 'in CP')
+        print('  fwhm', fwhm)
+        print('  sky level', skylev, 'in CP')
+        print('  sky flux', skyflux, 'per second in CP units')
         skyflux /= (0.27**2)
-        print '  sky flux', skyflux, 'per second per square arcsecond in CP'
+        print('  sky flux', skyflux, 'per second per square arcsecond in CP')
         skyflux *= gain
-        print '  sky flux', skyflux, 'e- per second per square arcsec'
+        print('  sky flux', skyflux, 'e- per second per square arcsec')
         skysb = -2.5 * np.log10(skyflux)
     
         zpRaw = zp + 2.5*np.log10(gain)
-        print '  zpRaw:', zpRaw
+        print('  zpRaw:', zpRaw)
         
         skyRaw = skysb + zpRaw
-        print '  skyRaw', skyRaw
+        print('  skyRaw', skyRaw)
     
         tsat = np.floor((30000.0/(0.27)**2)*np.power(10.0,-0.4*(26.484 - skyRaw)))
-        print '  sat_max:', tsat
+        print('  sat_max:', tsat)
         
         J = tree_search_radec(obskd, c.ra_bore, c.dec_bore, 1)
-        print '  ', len(J), 'obstatus matches'
+        print('  ', len(J), 'obstatus matches')
         ebv = obstatus[J[0]].ebv_med
-        print '  ebv', ebv
+        print('  ebv', ebv)
 
         ef = ExposureFactor(band, airmass, ebv, fwhm, zpRaw, skyRaw, gvs)
-        print '  Exposure factor', ef
+        print('  Exposure factor', ef)
     
         et = np.floor(ef * gvs.base_exptimes[band])
-        print '  Exposure time', et
+        print('  Exposure time', et)
         et = np.clip(et, gvs.floor_exptimes[band], gvs.ceil_exptimes[band])
-        print '  Clipped exposure time', et
-        print '  Actual  exposure time', c.exptime
+        print('  Clipped exposure time', et)
+        print('  Actual  exposure time', c.exptime)
     
         R.zp.append(zp)
         R.zpRaw.append(zpRaw)

@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 import math
 import sys
@@ -29,30 +30,30 @@ if __name__ == '__main__':
 	psffn = '%s-psf.fits' % outbase
 
 	exposure = afwImage.ExposureF(infn)
-	print 'Read', exposure
+	print('Read', exposure)
 	W,H = exposure.getWidth(), exposure.getHeight()
 
 	wcs = exposure.getWcs()
 	if opt.ra is not None and opt.dec is not None:
 		x,y = wcs.skyToPixel(opt.ra * afwGeom.degrees, opt.dec * afwGeom.degrees)
-		print 'Instantiating PSF at x,y', x,y
+		print('Instantiating PSF at x,y', x,y)
 	else:
 		x,y = W/2, H/2
 
 	# Plug in a reasonable variance plane.
 	mi = exposure.getMaskedImage()
 	bg = afwMath.makeStatistics(mi, afwMath.MEDIAN).getValue()
-	print 'bg', bg
+	print('bg', bg)
 
 	varval = afwMath.makeStatistics(mi, afwMath.VARIANCE).getValue()
-	print 'variance', varval, 'std', math.sqrt(varval)
+	print('variance', varval, 'std', math.sqrt(varval))
 	varval = afwMath.makeStatistics(mi, afwMath.VARIANCECLIP).getValue()
-	print 'clipped variance', varval, 'std', math.sqrt(varval)
+	print('clipped variance', varval, 'std', math.sqrt(varval))
 	var = exposure.getMaskedImage().getVariance()
 	var.set(varval)
 
 	var = exposure.getMaskedImage().getVariance()
-	print 'Variance:', var.get(0,0)
+	print('Variance:', var.get(0,0))
 
 	calconf = pipeTasks.calibrate.CalibrateConfig()
 	calconf.doAstrometry = False
@@ -72,7 +73,7 @@ if __name__ == '__main__':
 
 	calconf.photometry.thresholdValue = 50.
 
-	print 'Calibration config:', calconf
+	print('Calibration config:', calconf)
 
 	cal = pipeTasks.calibrate.CalibrateTask(config=calconf)
 	result = cal.run(exposure)
@@ -80,12 +81,12 @@ if __name__ == '__main__':
 	exposure = result.exposure
 	psf = result.psf
 
-	print 'Exposure', exposure
+	print('Exposure', exposure)
 	mi = exposure.getMaskedImage()
 	mask = mi.getMask()
 	mask.writeFits(maskfn)
 	exposure.writeFits(crfn)
 
-	print 'PSF', psf
+	print('PSF', psf)
 	psfimg = psf.computeImage(afwGeom.Point2D(x,y))
 	psfimg.writeFits(psffn)

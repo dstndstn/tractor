@@ -1,3 +1,4 @@
+from __future__ import print_function
 class TractorLBFGSBMixin(object):
     def optimize_lbfgsb(self, hessian_terms=10, plotfn=None):
 
@@ -5,7 +6,7 @@ class TractorLBFGSBMixin(object):
         OO = []
         def objective(x, tractor, stepsizes, lnp0):
             res = lnp0 - tractor(x * stepsizes)
-            print 'LBFGSB objective:', res
+            print('LBFGSB objective:', res)
             if plotfn:
                 XX.append(x.copy())
                 OO.append(res)
@@ -17,25 +18,25 @@ class TractorLBFGSBMixin(object):
         p0 = np.array(self.getParams())
         lnp0 = self.getLogProb()
 
-        print 'Active parameters:', len(p0)
+        print('Active parameters:', len(p0))
 
-        print 'Calling L-BFGS-B ...'
+        print('Calling L-BFGS-B ...')
         X = fmin_l_bfgs_b(objective, p0 / stepsizes, fprime=None,
                           args=(self, stepsizes, lnp0),
                           approx_grad=True, bounds=None, m=hessian_terms,
                           epsilon=1e-8, iprint=0)
         p1,lnp1,d = X
-        print d
-        print 'lnp0:', lnp0
+        print(d)
+        print('lnp0:', lnp0)
         self.setParams(p1 * stepsizes)
-        print 'lnp1:', self.getLogProb()
+        print('lnp1:', self.getLogProb())
 
         if plotfn:
             import pylab as plt
             plt.clf()
             XX = np.array(XX)
             OO = np.array(OO)
-            print 'XX shape', XX.shape
+            print('XX shape', XX.shape)
             (N,D) = XX.shape
             for i in range(D):
                 OO[np.abs(OO) < 1e-8] = 1e-8

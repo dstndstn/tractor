@@ -1,3 +1,4 @@
+from __future__ import print_function
 import multiprocessing
 from scipy.ndimage.measurements import label,find_objects
 from astrometry.util.multiproc import *
@@ -6,7 +7,7 @@ from datetime import datetime
 
 #def runfield((r, c, f, band, basename, r0,r1,d0,d1, T, opt)):
 def runfield((r, c, f, band, basename, r0,r1,d0,d1, opt, cat,icat)):
-	print 'Runfield:', r,c,f,band
+	print('Runfield:', r,c,f,band)
 	sdss = DR9(basedir='cs82data/dr9')
 
 	tim,inf = get_tractor_image_dr9(r, c, f, band, sdss=sdss,
@@ -67,10 +68,10 @@ def runfield((r, c, f, band, basename, r0,r1,d0,d1, opt, cat,icat)):
 	imx = dict(interpolation='nearest', origin='lower')
 
 	if opt.plots:
-		print 'Getting initial model...'
+		print('Getting initial model...')
 		t0 = Time()
 		mod = tr.getModelImage(0, minsb=minsb)
-		print 'initial model took', Time()-t0
+		print('initial model took', Time()-t0)
 
 		plt.clf()
 		plt.imshow(img, **ima)
@@ -114,7 +115,7 @@ def runfield((r, c, f, band, basename, r0,r1,d0,d1, opt, cat,icat)):
 		gslice = gslices[gl]
 		gl += 1
 		if not gl in groups:
-			print 'Group', gl, 'not in groups array; skipping'
+			print('Group', gl, 'not in groups array; skipping')
 			continue
 		gsrcs = groups[gl]
 		#print 'Group number', (gi+1), 'of', len(Gorder), ', id', gl, ': sources', gsrcs
@@ -206,13 +207,13 @@ def runfield((r, c, f, band, basename, r0,r1,d0,d1, opt, cat,icat)):
 	br1 = [src.getBrightness().copy() for src in cat]
 	nm1 = np.array([b.getBand(band) for b in br1])
 
-	print 'Runfield:', r,c,f,band, 'took', Time()-t00
+	print('Runfield:', r,c,f,band, 'took', Time()-t00)
 
 	mags0 = NanoMaggies.nanomaggiesToMag(nm0)
 	mags1 = NanoMaggies.nanomaggiesToMag(nm1)
 
-	print 'mags0:', mags0
-	print 'mags1:', mags1
+	print('mags0:', mags0)
+	print('mags1:', mags1)
 
 	plt.clf()
 	I = (mags0 == mags1)
@@ -241,15 +242,15 @@ def runfield((r, c, f, band, basename, r0,r1,d0,d1, opt, cat,icat)):
 	T.set('sdss_mag_%s' % band, mags1)
 	T.cs82_index = icat
 	fn = 'mags-%s.fits' % basename
-	print 'Writing:'
+	print('Writing:')
 	T.about()
 	T.writeto(fn)
-	print 'Wrote', fn
+	print('Wrote', fn)
 
 def makecmd(opt, cs82field):
 	T,F = getTables(cs82field)
 	urun = np.unique(F.run)
-	print len(urun), 'unique runs'
+	print(len(urun), 'unique runs')
 
 	rmap = dict([(r,i) for i,r in enumerate(urun)])
 
@@ -259,16 +260,16 @@ def makecmd(opt, cs82field):
 	for r,c,f,r0,r1,d0,d1 in zip(F.run, F.camcol, F.field,
 								 F.ra0, F.ra1, F.dec0, F.dec1):
 		ri = rmap[r]
-		print 'Run', r, '->', ri
+		print('Run', r, '->', ri)
 		for band in 'ugriz':
 			basename = 'cs82-%s-%04i-%i-%04i-%s' % (cs82field, r, c, f, band)
 			fn = 'mags-%s.fits' % basename
 			if not os.path.exists(fn):
-				print 'No such file', fn, '-- skipping'
+				print('No such file', fn, '-- skipping')
 				continue
-			print 'Reading', fn
+			print('Reading', fn)
 			M = fits_table(fn)
-			print 'Got', len(M)
+			print('Got', len(M))
 			m = M.get('sdss_mag_%s' % band)
 			m[np.logical_not(np.isfinite(m))] = 0.
 			I = M.cs82_index
@@ -401,7 +402,7 @@ def main(opt, cs82field):
 			basename = 'cs82-%s-%04i-%i-%04i-%s' % (cs82field, r, c, f, band)
 			outfn = 'mags-%s.fits' % basename
 			if opt.skipExisting and os.path.exists(outfn):
-				print 'File', outfn, 'exists, skipping.'
+				print('File', outfn, 'exists, skipping.')
 				continue
 			dobands.append(band)
 
@@ -409,14 +410,14 @@ def main(opt, cs82field):
 			continue
 
 		margin = 10. / 3600.
-		print 'Cutting to sources in range of image.'
+		print('Cutting to sources in range of image.')
 		Ti = T[(T.ra  + margin >= r0) * (T.ra  - margin <= r1) *
 			   (T.dec + margin >= d0) * (T.dec - margin <= d1)]
-		print len(Ti), 'CS82 sources in range'
-		print 'Creating Tractor sources...'
+		print(len(Ti), 'CS82 sources in range')
+		print('Creating Tractor sources...')
 		maglim = 24
 		cat,icat = get_cs82_sources(Ti, maglim=maglim)
-		print 'Got', len(cat), 'sources'
+		print('Got', len(cat), 'sources')
 
 		realinds = Ti.index[icat]
 
@@ -431,13 +432,13 @@ def main(opt, cs82field):
 		if alldone:
 			break
 
-	print len(results), 'async jobs'
+	print(len(results), 'async jobs')
 	for r in results:
-		print '  waiting for', r
+		print('  waiting for', r)
 		if r is None:
 			continue
 		r.wait()
-	print 'Done!'
+	print('Done!')
 
 
 def _simul_one(opt, cs82field, Ti, Fi, sdss, ps, band, raslice, rlo, rhi,
@@ -459,7 +460,7 @@ def _simul_one(opt, cs82field, Ti, Fi, sdss, ps, band, raslice, rlo, rhi,
 	npix = 0
 	ie = []
 	for i,(r,c,f) in enumerate(zip(Fi.run, Fi.camcol, Fi.field)):
-		print 'Reading', (i+1), 'of', len(Fi), ':', r,c,f,band
+		print('Reading', (i+1), 'of', len(Fi), ':', r,c,f,band)
 		tim,inf = get_tractor_image_dr9(r, c, f, band, sdss=sdss,
 										nanomaggies=True, zrange=[-2,5],
 										roiradecbox=[rlo,rhi,dlo,dhi],
@@ -482,14 +483,14 @@ def _simul_one(opt, cs82field, Ti, Fi, sdss, ps, band, raslice, rlo, rhi,
 
 		tims.append(tim)
 		npix += (H*W)
-		print 'got', (H*W), 'pixels, total', npix
+		print('got', (H*W), 'pixels, total', npix)
 	
-	print 'Read', len(tims), 'images'
-	print 'total of', npix, 'pixels'
+	print('Read', len(tims), 'images')
+	print('total of', npix, 'pixels')
 	memusage()
 
 	ie = max(ie)
-	print 'max inverr:', ie
+	print('max inverr:', ie)
 
 	marginal = Ti.marginal[icat]
 	assert(len(icat) == len(cat))
@@ -502,7 +503,7 @@ def _simul_one(opt, cs82field, Ti, Fi, sdss, ps, band, raslice, rlo, rhi,
 			continue
 		gslice = gslices[gl]
 		gsrcs = groups[gl]
-		print 'Group number', (gi+1), 'of', len(Gorder), ', id', gl, ': sources', gsrcs
+		print('Group number', (gi+1), 'of', len(Gorder), ', id', gl, ': sources', gsrcs)
 		tgroups = np.unique(L[gslice])
 		tsrcs = []
 		for g in tgroups:
@@ -589,7 +590,7 @@ def _simul_one(opt, cs82field, Ti, Fi, sdss, ps, band, raslice, rlo, rhi,
 			fitnpix[i] = n
 
 		if opt.plots:
-			print 'ims0,ims1', len(ims0), len(ims1)
+			print('ims0,ims1', len(ims0), len(ims1))
 			n = len(ims0)
 			imchi = dict(interpolation='nearest', origin='lower',
 						 vmin=-5, vmax=5, cmap='gray')
@@ -641,7 +642,7 @@ def _simul_one(opt, cs82field, Ti, Fi, sdss, ps, band, raslice, rlo, rhi,
 	M.fit_npix = fitnpix
 	fn = 'smags-%s-%s-%i-%i.fits' % (cs82field, band, raslice, decslice)
 	M.writeto(fn)
-	print 'Wrote', fn
+	print('Wrote', fn)
 	
 	
 def simulfit(opt, cs82field):
@@ -657,13 +658,13 @@ def simulfit(opt, cs82field):
 			pixscale = 0.396 / 3600.
 			W = int((rhi - rlo) / pixscale)
 			H = int((dhi - dlo) / pixscale)
-			print 'Fake tim:', W, H
+			print('Fake tim:', W, H)
 			wcs = FitsWcs(Tan((rlo+rhi)/2., (dlo+dhi)/2., (W+1)/2., (H+1)/2.,
 							  0., pixscale, pixscale, 0, W, H))
 							  #-pixscale, 0, 0, pixscale, W, H))
 			fwhm = 1.5
 			psig = fwhm / 0.396 / 2.35
-			print 'PSF sigma:', psig
+			print('PSF sigma:', psig)
 			psf = GaussianMixturePSF(np.array([1.]), np.array([[0.,0.]]),
 									 np.array([[[psig**2, 0],[0,psig**2]]]))
 			ie = 25.
@@ -678,10 +679,10 @@ def simulfit(opt, cs82field):
 
             #...
             
-			print 'Finding overlapping sources...'
+			print('Finding overlapping sources...')
 			tr = Tractor([faketim], cat)
 			groups,L,nil = tr.getOverlappingSources(0, minsb=minsb)
-			print 'Got', len(groups), 'groups of sources'
+			print('Got', len(groups), 'groups of sources')
 			nl = L.max()
 			gslices = find_objects(L, nl)
 			# find_objects returns a (zero-indexed) list corresponding to the
@@ -720,21 +721,21 @@ def xmatch(opt, cs82field):
 	S = fits_table('cs82data/cas-DR7-S82-p18p.fits')
 	T,F = getTables(cs82field, extra_cols=['mag_model'])
 
-	print 'Got', len(S), 'CAS sources'
-	print 'unique runs:', np.unique(S.run)
-	print 'Got', len(T), 'CS82 sources'
+	print('Got', len(S), 'CAS sources')
+	print('unique runs:', np.unique(S.run))
+	print('Got', len(T), 'CS82 sources')
 
 	I = np.logical_or(S.run == 106, S.run == 206)
 	S.cut(I)
-	print 'Cut to', len(S), 'Annis coadd sources'
+	print('Cut to', len(S), 'Annis coadd sources')
 
 	S.cut(S.nchild == 0)
-	print 'Cut to', len(S), 'deblend children'
+	print('Cut to', len(S), 'deblend children')
 	
 
 	R = 1. / 3600.
 	I,J,d = match_radec(S.ra, S.dec, T.ra, T.dec, R)
-	print 'Found', len(I), 'matches'
+	print('Found', len(I), 'matches')
 
 	Si = S[I]
 	Ti = T[J]

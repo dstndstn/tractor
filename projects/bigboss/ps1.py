@@ -1,3 +1,4 @@
+from __future__ import print_function
 import pyfits, numpy, os, fnmatch, re, pdb, tractor, tempfile, subprocess
 from scipy import optimize
 from tractor.emfit import em_fit_2d
@@ -90,7 +91,7 @@ def xy_to_rd(x, y, image, mosaic, debug=False):
             raise ValueError('Must set mosaic with chip astrometry.')
         r, d = xy_to_rd(r, d, mosaic, mosaic, debug=debug)
     if debug:
-        print r, d
+        print(r, d)
     return r, d
 
 def xy_to_lm(xpix, ypix, image):
@@ -182,7 +183,7 @@ def get_smf_filename(filename_base):
     if len(matches) == 0:
         raise ValueError("Could not find smf file for %s." % filename_base)
     if len(matches) > 1:
-        print matches
+        print(matches)
         raise ValueError("Multiple possible smf files for %s." % filename_base)
     return matches[0]
 

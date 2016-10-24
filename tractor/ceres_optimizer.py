@@ -1,5 +1,6 @@
 from __future__ import print_function
 import numpy as np
+from collections import Counter
 
 from astrometry.util.ttime import Time
 
@@ -244,6 +245,14 @@ class CeresOptimizer(Optimizer):
 
         sky = (skyderivs is not None)
 
+        umod_sizes = Counter()
+        for zi,(umods,img,scale,mod0, paramoffset) in enumerate(Z):
+            umod_sizes.update([umod.shape for umod in umods if umod is not None])
+        print('Unit-model sizes')
+        print(umod_sizes.most_common())
+
+            
+        
         for zi,(umods,img,scale,mod0, paramoffset) in enumerate(Z):
             H,W = img.shape
             if img in blockstart:
@@ -366,9 +375,11 @@ class CeresTractorAdapter(object):
         self.scale = scales
 
     def getImage(self, i):
+        print('CeresTractorAdapter: getImage(%i)' % i)
         return self.tractor.getImage(i)
 
     def getChiImage(self, i):
+        print('CeresTractorAdapter: getChiImage(%i)' % i)
         return self.tractor.getChiImage(i)
 
     def _getOneImageDerivs(self, i):
@@ -378,4 +389,5 @@ class CeresTractorAdapter(object):
         return derivs
 
     def setParams(self, p):
+        print('CeresTractorAdapter: setParams:', self.offset + self.scale * p)
         return self.tractor.setParams(self.offset + self.scale * p)

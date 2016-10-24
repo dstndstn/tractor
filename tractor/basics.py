@@ -16,7 +16,6 @@ import numpy as np
 from .image import Image
 from .patch import Patch
 from .utils import *
-from . import ducks
 from . import mixture_profiles as mp
 
 from .tractortime import TAITime

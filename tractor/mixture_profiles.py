@@ -35,7 +35,7 @@ def get_exp_mixture():
 def get_dev_mixture():
     return MixtureOfGaussians(dev_amp, np.zeros((dev_amp.size, 2)), dev_var)
 
-class MixtureOfGaussians():
+class MixtureOfGaussians(object):
 
     # symmetrize is an unnecessary step in principle, but in practice?
     def __init__(self, amp, mean, var):

@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 import tempfile
 import tractor
@@ -19,7 +20,7 @@ def read_cfht_coadd(imgfn, weightfn, roi=None, radecroi=None,
     '''
 
     P = pyfits.open(imgfn)
-    print 'Read', P[0].data.shape, 'image'
+    print('Read', P[0].data.shape, 'image')
     img = P[0].data
     imgheader = P[0].header
 
@@ -42,7 +43,7 @@ def read_cfht_coadd(imgfn, weightfn, roi=None, radecroi=None,
         xy = np.array(xy)
         x0,x1 = xy[:,0].min(), xy[:,0].max()
         y0,y1 = xy[:,1].min(), xy[:,1].max()
-        print 'RA,Dec ROI', ralo,rahi, declo,dechi, 'becomes x,y ROI', x0,x1,y0,y1
+        print('RA,Dec ROI', ralo,rahi, declo,dechi, 'becomes x,y ROI', x0,x1,y0,y1)
 
         # Clip to image size...
         H,W = data.shape
@@ -50,7 +51,7 @@ def read_cfht_coadd(imgfn, weightfn, roi=None, radecroi=None,
         x1 = max(0, min(x1, W))
         y0 = max(0, min(y0, H-1))
         y1 = max(0, min(y1, H))
-        print ' clipped to', x0,x1,y0,y1
+        print(' clipped to', x0,x1,y0,y1)
 
     else:
         H,W = img.shape
@@ -62,12 +63,12 @@ def read_cfht_coadd(imgfn, weightfn, roi=None, radecroi=None,
         # Also tell the WCS to apply an offset.
         twcs.setX0Y0(x0,y0)
 
-    print 'Image:', img.shape
+    print('Image:', img.shape)
 
     # HACK, tell the WCS how big the image is...
     # (needed because of the previous HACK, copying the header)
     twcs.wcs.set_imagesize(x1-x0, y1-y0)
-    print twcs
+    print(twcs)
 
     # Argh, this doesn't work: the files are .fz compressed
     #P = pyfits.open(weightfn)
@@ -75,11 +76,11 @@ def read_cfht_coadd(imgfn, weightfn, roi=None, radecroi=None,
     # HACK: use "imcopy" to uncompress to a temp file!
     #print 'Writing to temp file', tempfn
     cmd = "imcopy '%s[%i:%i,%i:%i]' '!%s'" % (weightfn, x0+1,x1,y0+1,y1, tempfn)
-    print 'running', cmd
+    print('running', cmd)
     os.system(cmd)
     P = pyfits.open(tempfn)
     weight = P[0].data
-    print 'Read', weight.shape, 'weight image'
+    print('Read', weight.shape, 'weight image')
 
     # PSF model: FAKE IT for now
     tpsf = tractor.GaussianMixturePSF(np.array([0.9, 0.1]), np.zeros((2,2)), np.array([1,2]))

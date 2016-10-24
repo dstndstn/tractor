@@ -1,3 +1,4 @@
+from __future__ import print_function
 from multiprocessing import Manager
 from multiprocessing.managers import BaseManager
 #from .cache import Cache
@@ -27,8 +28,8 @@ def testProcess(cache):
 	import os
 	for i in range(10):
 		time.sleep(1)
-		print os.getpid(), 'get', i, cache.get(i, None)
-		print os.getpid(), 'put', i
+		print(os.getpid(), 'get', i, cache.get(i, None))
+		print(os.getpid(), 'put', i)
 		cache.put(i, i**3)
 
 if __name__ == '__main__':

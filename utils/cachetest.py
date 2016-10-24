@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
 	import matplotlib
 	matplotlib.use('Agg')
@@ -33,22 +34,22 @@ tractor.cache = Cache(maxsize=100)
 
 for step in range(10):
 	tractor.getLogProb()
-	print 'After getLogProb() number', (step+1)
-	print tractor.cache
-	print 'Items:'
+	print('After getLogProb() number', (step+1))
+	print(tractor.cache)
+	print('Items:')
 	tractor.cache.printItems()
-	print
+	print()
 
-print 'Before clearing cache...'
-print tractor.cache
+print('Before clearing cache...')
+print(tractor.cache)
 memusage()
 
 tractor.cache.clear()
 
 gc.collect()
 
-print 'After clearing cache...'
-print tractor.cache
+print('After clearing cache...')
+print(tractor.cache)
 memusage()
 
 #print 'garbage:'

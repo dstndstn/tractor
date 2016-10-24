@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
 	import matplotlib
 	matplotlib.use('Agg')
@@ -52,9 +53,9 @@ def coadd_video():
 		img.image_high = 1e3
 		img.resample = 1
 		for sid,fnum in zip(T.scan_id[I], T.frame_num[I]):
-			print 'scan,frame', sid, fnum
+			print('scan,frame', sid, fnum)
 			fn = get_l1b_file(sid, fnum, bandnum)
-			print '-->', fn
+			print('-->', fn)
 			assert(os.path.exists(fn))
 			#I = pyfits.open(fn)[0].data
 			#print 'img min,max,median', I.min(), I.max(), np.median(I.ravel())
@@ -63,23 +64,23 @@ def coadd_video():
 			plot.plot('image')
 			pfn = ps.getnext()
 			plot.write(pfn)
-			print 'Wrote', pfn
+			print('Wrote', pfn)
 
 def wcs_checks():
 	if False:
 		psf = pyfits.open('wise-psf-w1-500-500.fits')[0].data
-		print 'PSF image shape', psf.shape
+		print('PSF image shape', psf.shape)
 		H,W = psf.shape
 		X,Y = np.meshgrid(np.arange(W), np.arange(H))
 		mx = np.sum(X * psf) / np.sum(psf)
 		my = np.sum(Y * psf) / np.sum(psf)
-		print 'First moments:', mx, my
+		print('First moments:', mx, my)
 
 		#S = fits_table('stripe82-19objs.fits', hdu=2)
 		S = fits_table('wise-sources-nearby.fits')
-		print 'Got', len(S)
+		print('Got', len(S))
 		S.cut((S.w1mpro >= 14) * (S.w1mpro < 15))
-		print 'Cut to', len(S)
+		print('Cut to', len(S))
 
 		T = fits_table('wise-images-overlapping.fits')
 		T.filename = [fn.strip() for fn in T.filename]
@@ -104,7 +105,7 @@ def wcs_checks():
 				Y2.append(y2)
 			X2 = np.array(X2)
 			Y2 = np.array(Y2)
-			print 'Round-trip error on x,y:', np.std(X2-X), np.std(Y2-Y)
+			print('Round-trip error on x,y:', np.std(X2-X), np.std(Y2-Y))
 
 			plt.clf()
 			plt.plot(np.vstack((X, X + (X2 - X)*100.)),
@@ -124,7 +125,7 @@ def wcs_checks():
 
 
 			sip = Sip(fn, 0)
-			print 'Read', sip
+			print('Read', sip)
 
 			X3 = []
 			Y3 = []
@@ -135,10 +136,10 @@ def wcs_checks():
 				Y3.append(y2)
 			X3 = np.array(X3)
 			Y3 = np.array(Y3)
-			print 'Round-trip error:', np.std(X3-X), np.std(Y3-Y)
+			print('Round-trip error:', np.std(X3-X), np.std(Y3-Y))
 
 			sip_compute_inverse_polynomials(sip, 30, 30, 0, 0, 0, 0)
-			print 'After computing inverse polynomials:', sip
+			print('After computing inverse polynomials:', sip)
 
 			X4 = []
 			Y4 = []
@@ -149,7 +150,7 @@ def wcs_checks():
 				Y4.append(y2)
 			X4 = np.array(X4)
 			Y4 = np.array(Y4)
-			print 'Round-trip error on x,y with 4th-order:', np.std(X4-X), np.std(Y4-Y)
+			print('Round-trip error on x,y with 4th-order:', np.std(X4-X), np.std(Y4-Y))
 
 
 			plt.clf()
@@ -267,9 +268,9 @@ def coadd():
 			if i == 5:
 				break
 	
-			print 'scan,frame', sid, fnum
+			print('scan,frame', sid, fnum)
 			fn = get_l1b_file(sid, fnum, band)
-			print '-->', fn
+			print('-->', fn)
 			assert(os.path.exists(fn))
 	
 			tim = wise.read_wise_level1b(fn.replace('-int-1b.fits',''),
@@ -322,7 +323,7 @@ def coadd():
 	
 			ok = np.flatnonzero(connw > 0)
 			pl,ph = [np.percentile(snn.flat[ok], p) for p in [10,98]]
-			print 'plo,phi', pl,ph
+			print('plo,phi', pl,ph)
 	
 			plt.clf()
 			plt.imshow(snn, interpolation='nearest', origin='lower',
@@ -355,7 +356,7 @@ def coadd():
 		coadd_set_lanczos(co, 3);
 	
 		for i,(sid,fnum) in enumerate(zip(T.scan_id, T.frame_num)):
-			print 'scan,frame', sid, fnum
+			print('scan,frame', sid, fnum)
 			fn = T.filename[i]
 	
 			tim = wise.read_wise_level1b(fn.replace('-int-1b.fits',''),
@@ -368,11 +369,11 @@ def coadd():
 							tim.getInvvar().astype(np.float32), 1., awcs)
 	
 			snap = coadd_get_snapshot_numpy(co, -100.)
-			print 'Snapshot:', snap.min(), snap.max(), np.median(snap)
+			print('Snapshot:', snap.min(), snap.max(), np.median(snap))
 	
 			ok = np.flatnonzero(snap > -100)
 			pl,ph = [np.percentile(snap.flat[ok], p) for p in [10,98]]
-			print 'plo,phi', pl,ph
+			print('plo,phi', pl,ph)
 	
 			plt.clf()
 			plt.imshow(snap, interpolation='nearest', origin='lower',
@@ -430,11 +431,11 @@ def main(opt, ps):
 	ofn = 'wise-images-overlapping.fits'
 
 	if os.path.exists(ofn):
-		print 'File exists:', ofn
+		print('File exists:', ofn)
 		T = fits_table(ofn)
-		print 'Found', len(T), 'images overlapping'
+		print('Found', len(T), 'images overlapping')
 
-		print 'Reading WCS headers...'
+		print('Reading WCS headers...')
 		wcses = []
 		T.filename = [fn.strip() for fn in T.filename]
 		for fn in T.filename:
@@ -446,16 +447,16 @@ def main(opt, ps):
 		for d in wisedatadirs:
 			ifn = os.path.join(d, 'WISE-index-L1b.fits') #'index-allsky-astr-L1b.fits')
 			T = fits_table(ifn, columns=['ra','dec','scan_id','frame_num'])
-			print 'Read', len(T), 'from WISE index', ifn
+			print('Read', len(T), 'from WISE index', ifn)
 			I = np.flatnonzero((T.ra > ralo) * (T.ra < rahi) * (T.dec > declo) * (T.dec < dechi))
-			print len(I), 'overlap RA,Dec box'
+			print(len(I), 'overlap RA,Dec box')
 			T.cut(I)
 
 			fns = []
 			for sid,fnum in zip(T.scan_id, T.frame_num):
-				print 'scan,frame', sid, fnum
+				print('scan,frame', sid, fnum)
 				fn = get_l1b_file(d, sid, fnum, bandnum)
-				print '-->', fn
+				print('-->', fn)
 				assert(os.path.exists(fn))
 				fns.append(fn)
 			T.filename = np.array(fns)
@@ -477,7 +478,7 @@ def main(opt, ps):
 				corners.append(rd)
 				ii.append(i)
 
-		print 'Found', len(wcses), 'overlapping'
+		print('Found', len(wcses), 'overlapping')
 		I = np.array(ii)
 		T.cut(I)
 
@@ -485,23 +486,23 @@ def main(opt, ps):
 		corners = np.vstack(corners)
 
 		nin = sum([1 if point_in_poly(ra,dec,ol) else 0 for ol in outlines])
-		print 'Number of images containing RA,Dec,', ra,dec, 'is', nin
+		print('Number of images containing RA,Dec,', ra,dec, 'is', nin)
 
 		r0,r1 = corners[:,0].min(), corners[:,0].max()
 		d0,d1 = corners[:,1].min(), corners[:,1].max()
-		print 'RA,Dec extent', r0,r1, d0,d1
+		print('RA,Dec extent', r0,r1, d0,d1)
 
 		T.writeto(ofn)
-		print 'Wrote', ofn
+		print('Wrote', ofn)
 
 
 	# MAGIC 2.75: approximate pixel scale, "/pix
 	S = int(3600. / 2.75)
-	print 'Coadd size', S
+	print('Coadd size', S)
 	cowcs = anwcs_create_box(ra, dec, 1., S, S)
 
 	if False:
-		print 'Plotting map...'
+		print('Plotting map...')
 		plot = Plotstuff(outformat='png', ra=ra, dec=dec, width=width, size=(800,800))
 		out = plot.outline
 		plot.color = 'white'
@@ -534,7 +535,7 @@ def main(opt, ps):
 
 		pfn = ps.getnext()
 		plot.write(pfn)
-		print 'Wrote', pfn
+		print('Wrote', pfn)
 
 
 	# Re-sort by distance to RA,Dec center...
@@ -554,11 +555,11 @@ def main(opt, ps):
 
 
 		S = fits_table(opt.sources)
-		print 'Read', len(S), 'sources from', opt.sources
+		print('Read', len(S), 'sources from', opt.sources)
 
 		groups,singles = cluster_radec(S.ra, S.dec, Wrad, singles=True)
-		print 'Source clusters:', groups
-		print 'Singletons:', singles
+		print('Source clusters:', groups)
+		print('Singletons:', singles)
 
 		tractors = []
 
@@ -567,26 +568,26 @@ def main(opt, ps):
 
 		for i in singles:
 			r,d = S.ra[i],S.dec[i]
-			print 'Source', i, 'at', r,d
+			print('Source', i, 'at', r,d)
 			fn = sdss.retrieve('photoObj', S.run[i], S.camcol[i], S.field[i], band=sband)
-			print 'Reading', fn
+			print('Reading', fn)
 			oo = fits_table(fn)
-			print 'Got', len(oo)
+			print('Got', len(oo))
 			cat1,obj1,I = get_tractor_sources_dr9(None, None, None, bandname=sband,
 												  objs=oo, radecrad=(r,d,Srad), bands=[],
 												  nanomaggies=True, extrabands=[band],
 												  fixedComposites=True,
 												  getobjs=True, getobjinds=True)
-			print 'Got', len(cat1), 'SDSS sources nearby'
+			print('Got', len(cat1), 'SDSS sources nearby')
 
 			# Find images that overlap?
 
 			ims = []
 			for j,wcs in enumerate(wcses):
 
-				print 'Filename', T.filename[j]
+				print('Filename', T.filename[j])
 				ok,x,y = wcs.radec2pixelxy(r,d)
-				print 'WCS', j, '-> x,y:', x,y
+				print('WCS', j, '-> x,y:', x,y)
 
 				if not anwcs_radec_is_inside_image(wcs, r, d):
 					continue
@@ -596,7 +597,7 @@ def main(opt, ps):
 					nanomaggies=True, mask_gz=True, unc_gz=True,
 					sipwcs=True, constantInvvar=True, radecrad=(r,d,Wrad))
 				ims.append(tim)
-			print 'Found', len(ims), 'images containing this source'
+			print('Found', len(ims), 'images containing this source')
 
 			tr = Tractor(ims, cat1)
 			tractors.append(tr)
@@ -619,15 +620,15 @@ def main(opt, ps):
 		objs = []
 		for run,camcol,field,r,d in zip(S.run, S.camcol, S.field, S.ra, S.dec):
 			fn = sdss.retrieve('photoObj', run, camcol, field, band=sband)
-			print 'Reading', fn
+			print('Reading', fn)
 			oo = fits_table(fn)
-			print 'Got', len(oo)
+			print('Got', len(oo))
 			cat1,obj1,I = get_tractor_sources_dr9(None, None, None, bandname=sband,
 												  objs=oo, radecrad=(r,d,rad), bands=[],
 												  nanomaggies=True, extrabands=[band],
 												  fixedComposites=True,
 												  getobjs=True, getobjinds=True)
-			print 'Got', len(cat1), 'SDSS sources nearby'
+			print('Got', len(cat1), 'SDSS sources nearby')
 			cats.append(cat1)
 			objs.append(obj1[I])
 
@@ -638,17 +639,17 @@ def main(opt, ps):
 				cat.append(src)
 		S = merge_tables(objs)
 
-		print 'Merged catalog has', len(cat), 'entries'
-		print 'S table has', len(S)
+		print('Merged catalog has', len(cat), 'entries')
+		print('S table has', len(S))
 		assert(len(S) == len(cat))
 
 		if opt.ptsrc:
-			print 'Converting all sources to PointSources'
+			print('Converting all sources to PointSources')
 			pcat = Catalog()
 			for src in cat:
 				ps = PointSource(src.getPosition(), src.getBrightness())
 				pcat.append(ps)
-			print 'PointSource catalog:', pcat
+			print('PointSource catalog:', pcat)
 			cat = pcat
 
 		# ??
@@ -659,11 +660,11 @@ def main(opt, ps):
 		# 							  objs=S, bands=[], nanomaggies=True,
 		# 							  extrabands=[band])
 
-		print 'Got', len(cat), 'tractor sources'
+		print('Got', len(cat), 'tractor sources')
 		#cat = Catalog(*cat)
-		print cat
+		print(cat)
 		for src in cat:
-			print '  ', src
+			print('  ', src)
 
 		### FIXME -- match to WISE catalog to initialize mags?
 
@@ -679,9 +680,9 @@ def main(opt, ps):
 		p0 = cat.getParams()
 		cat.setParams(np.maximum(minbright, p0))
 
-		print 'Set minimum W1 brightness:'
+		print('Set minimum W1 brightness:')
 		for src in cat:
-			print '  ', src
+			print('  ', src)
 
 		# Cut images that don't overlap.
 		ii = []
@@ -694,41 +695,41 @@ def main(opt, ps):
 			if isin:
 				ii.append(i)
 		T.cut(np.array(ii))
-		print 'Cut to', len(T), 'images containing sources'
+		print('Cut to', len(T), 'images containing sources')
 
 
 		
 	else:
 		wfn = 'wise-sources-nearby.fits'
 		if os.path.exists(wfn):
-			print 'Reading existing file', wfn
+			print('Reading existing file', wfn)
 			W = fits_table(wfn)
-			print 'Got', len(W), 'with range RA', W.ra.min(), W.ra.max(), ', Dec', W.dec.min(), W.dec.max()
+			print('Got', len(W), 'with range RA', W.ra.min(), W.ra.max(), ', Dec', W.dec.min(), W.dec.max())
 		else:
 			# Range of WISE slices (inclusive) containing this Dec range.
 			ws0, ws1 = 26,27
 			WW = []
 			for w in range(ws0, ws1+1):
 				fn = os.path.join(wisecatdir, 'wise-allsky-cat-part%02i-radec.fits' % w)
-				print 'Searching for sources in', fn
+				print('Searching for sources in', fn)
 				W = fits_table(fn)
 				I = np.flatnonzero((W.ra >= r0) * (W.ra <= r1) * (W.dec >= d0) * (W.dec <= d1))
 				fn = os.path.join(wisecatdir, 'wise-allsky-cat-part%02i.fits' % w)
-				print 'Reading', len(I), 'rows from', fn
+				print('Reading', len(I), 'rows from', fn)
 				W = fits_table(fn, rows=I)
-				print 'Cut to', len(W), 'sources in range'
+				print('Cut to', len(W), 'sources in range')
 				WW.append(W)
 			W = merge_tables(WW)
 			del WW
-			print 'Total of', len(W)
+			print('Total of', len(W))
 			W.writeto(wfn)
-			print 'wrote', wfn
+			print('wrote', wfn)
 	
 		# DEBUG
 		W.cut((W.ra >= rl) * (W.ra <= rh) * (W.dec >= dl) * (W.dec <= dh))
-		print 'Cut to', len(W), 'in the central region'
+		print('Cut to', len(W), 'in the central region')
 	
-		print 'Creating', len(W), 'Tractor sources'
+		print('Creating', len(W), 'Tractor sources')
 		cat = Catalog()
 		for i in range(len(W)):
 			w1 = W.w1mpro[i]
@@ -779,16 +780,16 @@ def main(opt, ps):
 	# 	print '--> x,y', wcs.positionToPixel(src.getPosition())
 	
 
-	print 'Finding overlapping sources...'
+	print('Finding overlapping sources...')
 	t0 = Time()
 	tractor = Tractor([faketim], cat)
 	groups,L,fakemod = tractor.getOverlappingSources(0, minsb=minsb)
-	print 'Overlapping sources took', Time()-t0
-	print 'Got', len(groups), 'groups of sources'
+	print('Overlapping sources took', Time()-t0)
+	print('Got', len(groups), 'groups of sources')
 	nl = L.max()
 	gslices = find_objects(L, nl)
 
-	print 'unique labels:', np.unique(L)
+	print('unique labels:', np.unique(L))
 
 	# plt.clf()
 	# plt.imshow(fakemod, interpolation='nearest', origin='lower',
@@ -858,14 +859,14 @@ def main(opt, ps):
 
 
 
-	print 'Group size histogram:'
+	print('Group size histogram:')
 	ng = Counter()
 	for g in groups.values():
 		ng[len(g)] += 1
 	kk = ng.keys()
 	kk.sort()
 	for k in kk:
-		print '  ', k, 'sources:', ng[k], 'groups'
+		print('  ', k, 'sources:', ng[k], 'groups')
 
 	nms = []
 	tims = []
@@ -887,7 +888,7 @@ def main(opt, ps):
 			x,y = tim.getWcs().positionToPixel(src.getPosition())
 			if x >= 0 and y >= 0 and x < W and y < H:
 				nin += 1
-		print 'Number of sources inside image:', nin
+		print('Number of sources inside image:', nin)
 
 		tractor = Tractor([tim], cat)
 		tractor.freezeParam('images')
@@ -903,7 +904,7 @@ def main(opt, ps):
 			gslice = gslices[gl]
 			gl += 1
 			if not gl in groups:
-				print 'Group', gl, 'not in groups array; skipping'
+				print('Group', gl, 'not in groups array; skipping')
 				continue
 			gsrcs = groups[gl]
 			tsrcs = tgroups[gl]
@@ -929,13 +930,13 @@ def main(opt, ps):
 				x1 = max(x1, x)
 				y1 = max(y1, y)
 			if x1 == x0 or y1 == y0:
-				print 'Gslice', gslice, 'is completely outside this image'
+				print('Gslice', gslice, 'is completely outside this image')
 				continue
 			
 			gslice = (slice(y0,y1+1), slice(x0, x1+1))
 
 			if np.all(tim.getInvError()[gslice] == 0):
-				print 'This whole object group has invvar = 0.'
+				print('This whole object group has invvar = 0.')
 
 				if not gl in badrois:
 					badrois[gl] = {}
@@ -956,7 +957,7 @@ def main(opt, ps):
 				subcat.freezeParam(len(gsrcs) + i)
 			tractor.catalog = subcat
 
-			print len(gsrcs), 'sources unfrozen; total', len(subcat)
+			print(len(gsrcs), 'sources unfrozen; total', len(subcat))
 
 			pgroups += 1
 			pobjs += len(gsrcs)
@@ -964,7 +965,7 @@ def main(opt, ps):
 			t0 = Time()
 			tractor.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
 											   rois=[gslice])
-			print 'optimize_forced_photometry took', Time()-t0
+			print('optimize_forced_photometry took', Time()-t0)
 
 			tractor.catalog = fullcat
 
@@ -994,7 +995,7 @@ def main(opt, ps):
 		# ps.savefig()
 
 		if opt.individual:
-			print 'Photometered', pgroups, 'groups containing', pobjs, 'objects'
+			print('Photometered', pgroups, 'groups containing', pobjs, 'objects')
 	
 			cat.thawPathsTo(band)
 			nm1 = np.array([src.getBrightness().getBand(band) for src in cat])
@@ -1003,7 +1004,7 @@ def main(opt, ps):
 			WW.nms = np.array(nms).T
 			fn = opt.output % imi
 			WW.writeto(fn)
-			print 'Wrote', fn
+			print('Wrote', fn)
 
 	return dict(cat0=cat0, WW=WW, band=band, tims=tims,
 				allrois=allrois, badrois=badrois, groups=groups,
@@ -1063,12 +1064,12 @@ def simult_photom(cat0=None, WW=None, band=None, tims=None,
 	if opt.osources:
 		O = fits_table(opt.osources)
 		ocat = Catalog()
-		print 'Other catalog:'
+		print('Other catalog:')
 		for i in range(len(O)):
 			w1 = O.wiseflux[i, 0]
 			s = PointSource(RaDecPos(O.ra[i], O.dec[i]), NanoMaggies(w1=w1))
 			ocat.append(s)
-		print ocat
+		print(ocat)
 		ocat.freezeParamsRecursive('*')
 		ocat.thawPathsTo(band)
 
@@ -1087,17 +1088,17 @@ def simult_photom(cat0=None, WW=None, band=None, tims=None,
 		gl = gi
 		gl += 1
 		if not gl in groups:
-			print 'Group', gl, 'not in groups array; skipping'
+			print('Group', gl, 'not in groups array; skipping')
 			continue
 		gsrcs = groups[gl]
 		tsrcs = tgroups[gl]
 
-		print 'Group', gl
-		print 'gsrcs:', gsrcs
-		print 'tsrcs:', tsrcs
+		print('Group', gl)
+		print('gsrcs:', gsrcs)
+		print('tsrcs:', tsrcs)
 
 		if (not gl in allrois) and (not gl in badrois):
-			print 'Group', gl, 'does not touch any images?'
+			print('Group', gl, 'does not touch any images?')
 			continue
 
 		mytims = []
@@ -1114,7 +1115,7 @@ def simult_photom(cat0=None, WW=None, band=None, tims=None,
 				mybadtims.append(tims[imi])
 				mybadrois.append(roi)
 
-		print 'Group', gl, 'touches', len(mytims), 'images and', len(mybadtims), 'bad ones'
+		print('Group', gl, 'touches', len(mytims), 'images and', len(mybadtims), 'bad ones')
 
 		tt = 'group %i: %i+%i sources' % (gl, len(gsrcs), len(tsrcs))
 
@@ -1132,20 +1133,20 @@ def simult_photom(cat0=None, WW=None, band=None, tims=None,
 			tractor = Tractor(mytims, subcat)
 			tractor.freezeParam('images')
 
-			print len(gsrcs), 'sources unfrozen; total', len(subcat)
+			print(len(gsrcs), 'sources unfrozen; total', len(subcat))
 
-			print 'Before fitting:'
+			print('Before fitting:')
 			for src in subcat[:len(gsrcs)]:
-				print '  ', src
+				print('  ', src)
 				
 			t0 = Time()
 			ims0,ims1 = tractor.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
 														   rois=rois)
-			print 'optimize_forced_photometry took', Time()-t0
+			print('optimize_forced_photometry took', Time()-t0)
 
-			print 'After fitting:'
+			print('After fitting:')
 			for src in subcat[:len(gsrcs)]:
-				print '  ', src
+				print('  ', src)
 
 			imas = [dict(interpolation='nearest', origin='lower',
 						 vmin=tim.zr[0], vmax=tim.zr[1])
@@ -1203,7 +1204,7 @@ def simult_photom(cat0=None, WW=None, band=None, tims=None,
 			# plt.suptitle('Initial chi: ' + tt)
 			# ps.savefig()
 
-			print 'After simultaneous photometry:'
+			print('After simultaneous photometry:')
 			subcat.printThawedParams()
 
 			# Copy updated params to "catsim"
@@ -1219,7 +1220,7 @@ def simult_photom(cat0=None, WW=None, band=None, tims=None,
 
 
 		if len(mytims) and opt.opt:
-			print 'Optimizing RA,Dec'
+			print('Optimizing RA,Dec')
 
 			subcat = tractor.catalog
 
@@ -1250,7 +1251,7 @@ def simult_photom(cat0=None, WW=None, band=None, tims=None,
 			for i in range(NG):
 				subcat[i].thawPathsTo('ra','dec')
 			p0 = subcat.getParams()
-			print 'Optimizing params:'
+			print('Optimizing params:')
 			subcat.printThawedParams()
 
 			thetims = tractor.images
@@ -1268,22 +1269,22 @@ def simult_photom(cat0=None, WW=None, band=None, tims=None,
 
 			while True:
 				dlnp,X,alpha = tractor.optimize()
-				print 'dlnp', dlnp
-				print 'alpha', alpha
+				print('dlnp', dlnp)
+				print('alpha', alpha)
 				if dlnp < 0.1:
 					break
 
 			p1 = subcat.getParams()
 
-			print 'Param changes:'
+			print('Param changes:')
 			for nm,pp0,pp1 in zip(subcat.getParamNames(), p0, p1):
-				print '  ', nm, pp0, 'to', pp1, '; delta', pp1-pp0
+				print('  ', nm, pp0, 'to', pp1, '; delta', pp1-pp0)
 
 
 			cat.thawPathsTo('ra','dec')
 			catopt = cat.getParams()
 
-			print 'Saving catopt:'
+			print('Saving catopt:')
 			cat.printThawedParams()
 
 			cat.freezeParamsRecursive('ra', 'dec')
@@ -1293,13 +1294,13 @@ def simult_photom(cat0=None, WW=None, band=None, tims=None,
 			nil,nil,ims2 = tractor.optimize_forced_photometry(minsb=minsb, rois=rois,
 															  justims0=True)
 
-			print 'Plotting mods after RA,Dec opt'
+			print('Plotting mods after RA,Dec opt')
 			#_plot_grid([mod for (img, mod, chi, roi) in ims2], imas)
 			_plot_grid2(ims2, subcat, mytims, imas)
 			plt.suptitle('RA,Dec-opt model: ' + tt)
 			plt.savefig(op1)
 			
-			print 'Plotting chis after RA,Dec opt'
+			print('Plotting chis after RA,Dec opt')
 			#_plot_grid([chi for (img, mod, chi, roi) in ims2], imchis)
 			_plot_grid2(ims2, subcat, mytims, imchis, ptype='chi')
 			plt.suptitle('RA,Dec-opt chi: ' + tt)
@@ -1379,7 +1380,7 @@ def simult_photom(cat0=None, WW=None, band=None, tims=None,
 
 		fn = opt.output % 998
 		WW.writeto(fn)
-		print 'Wrote', fn
+		print('Wrote', fn)
 
 		cat.thawPathsTo('ra','dec')
 		cat.setParams(catopt)
@@ -1393,7 +1394,7 @@ def simult_photom(cat0=None, WW=None, band=None, tims=None,
 
 	fn = opt.output % 999
 	WW.writeto(fn)
-	print 'Wrote', fn
+	print('Wrote', fn)
 	
 
 
@@ -1453,15 +1454,15 @@ if __name__ == '__main__':
 		if not opt.cache or not os.path.exists(opt.cache):
 			profn = 'prof-%s.dat' % (datetime.now().isoformat())
 			#cProfile.run('main(opt, ps)', profn)
-			print 'Wrote profile to', profn
+			print('Wrote profile to', profn)
 			X = main(opt, ps)
 
 			if opt.cache:
-				print 'Writing', opt.cache
+				print('Writing', opt.cache)
 				pickle_to_file(X, opt.cache)
 
 		else:
-			print 'Reading from cache', opt.cache
+			print('Reading from cache', opt.cache)
 			X = unpickle_from_file(opt.cache)
 
 		simult_photom(ps=ps, opt=opt, **X)
@@ -1470,10 +1471,10 @@ if __name__ == '__main__':
 		sys.exit(0)
 
 	T = fits_table('stripe82-19objs.fits', hdu=2)
-	print 'Reading results file', opt.result
+	print('Reading results file', opt.result)
 	R = fits_table(opt.result)
 	W = fits_table('wise-sources-nearby.fits', columns=['ra','dec','w1mpro'])
-	print 'Read', len(W), 'WISE sources nearby'
+	print('Read', len(W), 'WISE sources nearby')
 
 	if 'nms' in R.get_columns():
 		plt.clf()
@@ -1516,13 +1517,13 @@ if __name__ == '__main__':
 	TW = T[I]
 	WT = W[J]
 	WT.nm1 = NanoMaggies.magToNanomaggies(WT.w1mpro)
-	print 'Matched', len(TW), 'Schlegel sources to WISE'
+	print('Matched', len(TW), 'Schlegel sources to WISE')
 
 	if opt.match:
 		r = 4./3600.
 		#r = 10./3600.
 		I,J,d = match_radec(T.ra, T.dec, R.ra, R.dec, r, nearest=opt.nearest)
-		print 'Matched', len(I)
+		print('Matched', len(I))
 		T.cut(I)
 		R.cut(J)
 		T.I = I
@@ -1535,7 +1536,7 @@ if __name__ == '__main__':
 				mgroups[i] = []
 			mgroups[i].append(row)
 		mgroups = [np.array(v) for v in mgroups.values() if len(v) > 1]
-		print 'Match groups:', mgroups
+		print('Match groups:', mgroups)
 
 	else:
 		assert(len(T) == len(R))
@@ -1565,7 +1566,7 @@ if __name__ == '__main__':
 		for j in range(R):
 			nm = R.nms[j,:]
 			I = np.flatnonzero(nm != R.nm0[j])
-			print 'Measured flux', j, 'in', len(I), 'images'
+			print('Measured flux', j, 'in', len(I), 'images')
 			if len(I) == 0:
 				continue
 			mns.append(np.mean(nm[I]))
@@ -1610,7 +1611,7 @@ if __name__ == '__main__':
 		for j in range(R):
 			nm = R.nms[j,:]
 			I = np.flatnonzero(nm != R.nm0[j])
-			print 'Measured flux', j, 'in', len(I), 'images'
+			print('Measured flux', j, 'in', len(I), 'images')
 			if len(I) == 0:
 				continue
 			mns.append(np.mean(nm[I]))

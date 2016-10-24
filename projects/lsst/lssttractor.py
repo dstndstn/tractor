@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
 	import matplotlib
 	matplotlib.use('Agg')
@@ -43,7 +44,7 @@ def main():
 
 	pimg = pyfits.open(imgfn)
 	if len(pimg) != 4:
-		print 'Image must have 3 extensions'
+		print('Image must have 3 extensions')
 		sys.exit(-1)
 	img = pimg[1].data
 	mask = pimg[2].data
@@ -51,17 +52,17 @@ def main():
 	var = pimg[3].data
 	del pimg
 	
-	print 'var', var.shape
+	print('var', var.shape)
 	#print var
-	print 'mask', mask.shape
+	print('mask', mask.shape)
 	#print mask
-	print 'img', img.shape
+	print('img', img.shape)
 	#print img
 
 	mask = mask.astype(np.int16)
 	for bit in range(16):
 		on = ((mask & (1<<bit)) != 0)
-		print 'Bit', bit, 'has', np.sum(on), 'pixels set'
+		print('Bit', bit, 'has', np.sum(on), 'pixels set')
 
 	'''
 	MP_BAD  =                    0
@@ -78,18 +79,18 @@ def main():
 	Bit 5 has 37032 pixels set
 	'''
 
-	print 'Mask header:', maskhdr
+	print('Mask header:', maskhdr)
 	maskplanes = {}
-	print 'Mask planes:'
+	print('Mask planes:')
 	for card in maskhdr.ascardlist():
 		if not card.key.startswith('MP_'):
 			continue
-		print card.value, card.key
+		print(card.value, card.key)
 		maskplanes[card.key[3:]] = card.value
 
-	print 'Variance range:', var.min(), var.max()
+	print('Variance range:', var.min(), var.max())
 
-	print 'Image median:', np.median(img.ravel())
+	print('Image median:', np.median(img.ravel()))
 
 	invvar = 1./var
 	invvar[var == 0] = 0.
@@ -119,14 +120,14 @@ def main():
 	badmask += (1 << maskplanes['EDGE'])
 	#badmask = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3)
 	#badmask |= (1 << 4)
-	print 'Masking out: 0x%x' % badmask
+	print('Masking out: 0x%x' % badmask)
 	invvar[(mask & badmask) != 0] = 0.
 
 	assert(all(np.isfinite(img.ravel())))
 	assert(all(np.isfinite(invvar.ravel())))
 
 	psf = pyfits.open(psffn)[0].data
-	print 'psf', psf.shape
+	print('psf', psf.shape)
 	psf /= psf.sum()
 
 	from tractor.emfit import em_fit_2d
@@ -141,10 +142,10 @@ def main():
 	II /= II.sum()
 	# HIDEOUS HACK
 	II = np.maximum(II, 0)
-	print 'Multi-Gaussian PSF fit...'
+	print('Multi-Gaussian PSF fit...')
 	xm,ym = -(S/2), -(S/2)
 	em_fit_2d(II, xm, ym, w, mu, sig)
-	print 'w,mu,sig', w,mu,sig
+	print('w,mu,sig', w,mu,sig)
 	mypsf = tractor.GaussianMixturePSF(w, mu, sig)
 
 
@@ -168,10 +169,10 @@ def main():
 	plt.savefig('imghist.png')
 
 	srcs = fits_table(srcfn)
-	print 'Initial:', len(srcs), 'sources'
+	print('Initial:', len(srcs), 'sources')
 	# Trim sources with x=0 or y=0
 	srcs = srcs[(srcs.x != 0) * (srcs.y != 0)]
-	print 'Trim on x,y:', len(srcs), 'sources left'
+	print('Trim on x,y:', len(srcs), 'sources left')
 	# Zero out nans & infs
 	for c in ['theta', 'a', 'b']:
 		I = np.logical_not(np.isfinite(srcs.get(c)))
@@ -187,7 +188,7 @@ def main():
 	H,W = img.shape
 	srcs = srcs[(srcs.x > -margin) * (srcs.y > -margin) *
 				(srcs.x < (W+margin) * (srcs.y < (H+margin)))]
-	print 'Trim out-of-bounds:', len(srcs), 'sources left'
+	print('Trim out-of-bounds:', len(srcs), 'sources left')
 
 
 	wcs = tractor.FitsWcs(Sip(imgfn, 1))
@@ -211,21 +212,21 @@ def main():
 			re,ab,phi = s.a, s.b/s.a, 90.-s.theta
 			eshape = gal.GalaxyShape(re,ab,phi)
 			dshape = gal.GalaxyShape(re,ab,phi)
-			print 'Fluxes', eflux, dflux
+			print('Fluxes', eflux, dflux)
 			tsrc = gal.CompositeGalaxy(pos, eflux, eshape, dflux, dshape)
 		else:
 			flux = tractor.Flux(s.flux)
-			print 'Flux', flux
+			print('Flux', flux)
 			tsrc = tractor.PointSource(pos, flux)
 		tsrcs.append(tsrc)
 
 	chug = tractor.Tractor([timg])
 	for src in tsrcs:
 		if chug.getModelPatch(timg, src) is None:
-			print 'Dropping non-overlapping source:', src
+			print('Dropping non-overlapping source:', src)
 			continue
 		chug.addSource(src)
-	print 'Kept a total of', len(chug.catalog), 'sources'
+	print('Kept a total of', len(chug.catalog), 'sources')
 
 	ima = dict(interpolation='nearest', origin='lower',
 			   vmin=-3.*sig, vmax=10.*sig)
@@ -258,9 +259,9 @@ def main():
 		cat = chug.getCatalog()
 		for src in cat:
 			if chug.getModelPatch(timg, src) is None:
-				print 'Dropping non-overlapping source:', src
+				print('Dropping non-overlapping source:', src)
 				chug.removeSource(src)
-		print 'Kept a total of', len(chug.catalog), 'sources'
+		print('Kept a total of', len(chug.catalog), 'sources')
 
 		#cat = chug.getCatalog()
 		#for i,src in enumerate([]):
@@ -278,14 +279,14 @@ def main():
 			#		print '*',
 			#	print '(%6.1f, %6.1f)'%(x,y), s
 
-			print 'Optimizing source', i, 'of', len(cat)
+			print('Optimizing source', i, 'of', len(cat))
 
 			x,y = timg.getWcs().positionToPixel(src.getPosition(), src)
-			print '(%6.1f, %6.1f)'%(x,y), src
+			print('(%6.1f, %6.1f)'%(x,y), src)
 			# pre = src.getModelPatch(timg)
 
 			s1 = str(src)
-			print 'src1 ', s1
+			print('src1 ', s1)
 			dlnp1,X,a = chug.optimizeCatalogFluxes(srcs=[src])
 			s2 = str(src)
 			dlnp2,X,a = chug.optimizeCatalogAtFixedComplexityStep(srcs=[src], sky=False)
@@ -293,14 +294,14 @@ def main():
 
 			#post = src.getModelPatch(timg)
 
-			print 'src1 ', s1
-			print 'src2 ', s2
-			print 'src3 ', s3
-			print 'dlnp', dlnp1, dlnp2
+			print('src1 ', s1)
+			print('src2 ', s2)
+			print('src3 ', s3)
+			print('dlnp', dlnp1, dlnp2)
 
 			if chug.getModelPatch(timg, src) is None:
-				print 'After optimizing, no overlap!'
-				print 'Removing source', src
+				print('After optimizing, no overlap!')
+				print('Removing source', src)
 				chug.removeSource(src)
 				i -= 1
 			i += 1

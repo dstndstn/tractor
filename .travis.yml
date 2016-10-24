@@ -16,8 +16,11 @@ sudo: false
 # (currently Travis-CI uses 12.x precise)
 
 install:
+   - pip install --user numpy==1.11.0
+   - pip install --user matplotlib==1.5.1
    - pip install --user numpydoc
-   - pip install --user pyfits
+   - pip install --user coveralls
+   - pip install --user fitsio
    - ls ~/.local
 
 language: c
@@ -38,10 +41,10 @@ before_script:
     - echo $HOME
     - ls $HOME
     - ls $HOME/astrometry.net
-    - set
     - if [ ! -d "$HOME/astrometry.net" ]; then (cd $HOME; git clone https://github.com/dstndstn/astrometry.net.git; cd astrometry.net; ln -sf /usr/include netpbm; make && make py); fi
     - (cd $HOME/astrometry.net && git pull && make && make py) || (rm -Rf $HOME/astrometry.net && cd $HOME && git clone https://github.com/dstndstn/astrometry.net.git && cd astrometry.net && make && make py)
     - ln -s $HOME/astrometry.net astrometry
+    - export PATH=${PATH}:~/astrometry/blind/
 
 # Clean Astrometry.net cache?
 #    - (cd $HOME; rm -R astrometry.net; git clone https://github.com/dstndstn/astrometry.net.git; cd astrometry.net; ln -sf /usr/include netpbm)
@@ -59,10 +62,20 @@ script:
     - echo "$PYTHONPATH"
     - ls -l
     - python -c "import sys; print '\n'.join(sys.path)"
+    - python -c "import numpy; print numpy.__file__"
     - pwd
     - make
     - make doc
-    - python test/test_tractor.py
+    - coverage erase
+    - coverage run test/test_psfex.py
+    - coverage run -a test/test_sdss.py
+    - coverage run -a test/test_tractor.py
+    - coverage run -a test/test_galaxy.py
+    - coverage run -a examples/tractor-sdss-synth.py --roi 100 200 100 200 --no-flipbook
+
+after_success:
+    #- coveralls debug
+    - coveralls
 
 addons:
   apt:
@@ -72,23 +85,25 @@ addons:
     - wcslib-dev
     - libcfitsio3
     - libcfitsio3-dev
-    - python-numpy
     - swig
     - gsl-bin
     - libgsl0-dev
     - python-sphinx
     - sphinx-common
     - python-scipy
-    - python-matplotlib
     - python-tk
 
+#    - python-matplotlib
+#    - python-numpy
 #    - python-mock
-#    - python-pyfits
 #    - python-numpydoc
 
 cache:
   directories:
   - $HOME/cache/.pip
   - $HOME/astrometry.net
+  # pip install --local goes here:
+  - $HOME/.local
+
 
 #  - $HOME/fitsio-git

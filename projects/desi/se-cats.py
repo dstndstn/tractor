@@ -1,3 +1,4 @@
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -25,7 +26,7 @@ if __name__ == '__main__':
     targetwcs = wcs_for_brick(brick)
     T = D.get_ccds()
     T.cut(ccds_touching_wcs(targetwcs, T))
-    print len(T), 'CCDs touching brick'
+    print(len(T), 'CCDs touching brick')
 
     MM = []
     SS = []
@@ -43,26 +44,26 @@ if __name__ == '__main__':
         wcs = im.read_wcs()
 
         M = fits_table(im.morphfn, hdu=2)
-        print len(M), 'morphs', im.morphfn
+        print(len(M), 'morphs', im.morphfn)
         M.filter = np.array([t.filter] * len(M))
         MM.append(M)
 
         #S = fits_table(im.sefn, hdu=2)
         S = fits_table(im.se2fn, hdu=2)
-        print len(S), 'se2', im.se2fn
+        print(len(S), 'se2', im.se2fn)
         S.ra,S.dec = wcs.pixelxy2radec(S.x_image, S.y_image)
         zp = D.get_zeropoint_for(im)
-        print 'zp', zp
+        print('zp', zp)
 
         flux = S.flux_auto
         mag = -2.5 * np.log10(flux)
-        print 'Median mag', np.median(mag)
+        print('Median mag', np.median(mag))
         #S.set('mag_auto_%s' % im.band, mag + zp)
         S.mag_auto = mag + zp
 
         for ap in range(5):
             mag = -2.5 * np.log10(S.flux_aper[:,ap])
-            print 'Median mag', np.median(mag)
+            print('Median mag', np.median(mag))
             #S.set('mag_ap%i_%s' % (ap,im.band), mag + zp)
             S.set('mag_ap%i' % (ap), mag + zp)
 
@@ -81,12 +82,12 @@ if __name__ == '__main__':
     Sfilt = {}
     for band in 'grz':
         SF = S[S.filter == band]
-        print len(SF), 'in', band
+        print(len(SF), 'in', band)
         I,J,d = match_radec(SF.ra, SF.dec, SF.ra, SF.dec, 0.5/3600., notself=True)
         keep = np.ones(len(SF), bool)
         keep[np.minimum(I,J)] = False
         SF.cut(keep)
-        print 'Cut to', len(SF), 'un-matched'
+        print('Cut to', len(SF), 'un-matched')
         Sfilt[band] = SF
 
     Sr = Sfilt['r']
@@ -101,14 +102,14 @@ if __name__ == '__main__':
     for col in Sg.get_columns():
         Sg.rename(col, col + '_g')
     Sgrz.add_columns_from(Sg)
-    print len(Sgrz), 'matched gr'
+    print(len(Sgrz), 'matched gr')
     I,J,d = match_radec(Sgrz.ra, Sgrz.dec, Sz.ra, Sz.dec, 0.5/3600.)
     Sgrz.cut(I)
     Sz.cut(J)
     for col in Sz.get_columns():
         Sz.rename(col, col + '_z')
     Sgrz.add_columns_from(Sz)
-    print len(Sgrz), 'matched grz'
+    print(len(Sgrz), 'matched grz')
 
     del Sg
     del Sr
@@ -142,7 +143,7 @@ if __name__ == '__main__':
 
 
     rgb = fitsio.read('rgb.fits')
-    print 'rgb', rgb.shape
+    print('rgb', rgb.shape)
     h,w,three = rgb.shape
 
     def plot_rgbs(I):
@@ -169,7 +170,7 @@ if __name__ == '__main__':
     r = Sgrz.mag_ap4_r
     z = Sgrz.mag_ap4_z
     I = np.flatnonzero(((r-z) > (0.5 + ((g-r) - 0.5) * (1.0-0.5)/(1.25-0.5))) * ((g-r) < 1.25))
-    print len(I), 'away from stellar locus'
+    print(len(I), 'away from stellar locus')
 
     loghist(g[I] - r[I], r[I] - z[I], 100, range=((-0.5, 2.5),(-1,3)))
     plt.xlabel('g - r')
@@ -239,7 +240,7 @@ if __name__ == '__main__':
     X = S.flux_auto / S.fluxerr_auto
     X = X[np.isfinite(X)]
     mn,mx = [np.percentile(X, p) for p in [1,99]]
-    print 'min,max SNR', mn,mx
+    print('min,max SNR', mn,mx)
     mx = 50.
     plt.hist(X, 50, range=(mn,mx))
     plt.xlabel('flux_auto SNR')

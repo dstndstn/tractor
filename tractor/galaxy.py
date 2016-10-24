@@ -19,25 +19,23 @@ import numpy as np
 from astrometry.util.miscutils import get_overlapping_region
 
 from . import mixture_profiles as mp
-from .engine import *
-from .utils import *
-from .cache import *
-from .patch import Patch, add_patches
+from .utils import ParamList, MultiParams, ScalarParam, BaseParams
+from .patch import Patch, add_patches, ModelMask
 from .basics import SingleProfileSource, BasicSource
 
-_galcache = Cache(maxsize=10000)
+#from .cache import Cache
+
 def get_galaxy_cache():
-    return _galcache
+    return None
 
 def set_galaxy_cache_size(N=10000):
-    global _galcache
-    _galcache = Cache(maxsize=N)
+    # Ugh, dealing with caching + extents / modelMasks was too much
+    pass
 
 enable_galaxy_cache = set_galaxy_cache_size
 
 def disable_galaxy_cache():
-    global _galcache
-    _galcache = None
+    pass
 
 class GalaxyShape(ParamList):
     '''
@@ -93,9 +91,6 @@ class GalaxyShape(ParamList):
         # (~intermediate world coords)
         return re_deg * np.array([[cp, sp*self.ab], [-sp, cp*self.ab]])
 
-
-plotnum = 0
-
 class Galaxy(MultiParams, SingleProfileSource):
     '''
     Generic Galaxy profile with position, brightness, and shape.
@@ -131,7 +126,7 @@ class Galaxy(MultiParams, SingleProfileSource):
     def __repr__(self):
         return (self.name + '(pos=' + repr(self.pos) +
                 ', brightness=' + repr(self.brightness) +
-                ', shape=' + repr(self.shape))
+                ', shape=' + repr(self.shape) + ')')
 
     def getUnitFluxModelPatch(self, img, **kwargs):
         raise RuntimeError('getUnitFluxModelPatch unimplemented in' +
@@ -156,13 +151,14 @@ class Galaxy(MultiParams, SingleProfileSource):
             return [None] * self.numberOfParams()
         derivs = []
 
-        extent = patch0.getExtent()
-        
-        # derivatives wrt position
-
+        if modelMask is None:
+            modelMask = ModelMask.fromExtent(*patch0.getExtent())
+        assert(modelMask is not None)
+            
         ## FIXME -- would we be better to do central differences in
         ## pixel space, and convert to Position via CD matrix?
 
+        # derivatives wrt position
         psteps = pos0.getStepSizes()
         if not self.isParamFrozen('pos'):
             params = pos0.getParams()
@@ -173,51 +169,12 @@ class Galaxy(MultiParams, SingleProfileSource):
                 oldval = pos0.setParam(i, params[i]+pstep)
                 (px,py) = img.getWcs().positionToPixel(pos0, self)
                 pos0.setParam(i, oldval)
-
-                patchx = self.getUnitFluxModelPatch(img, px, py, minval=minval,
-                                                    extent=extent, modelMask=modelMask)
+                patchx = self.getUnitFluxModelPatch(
+                    img, px, py, minval=minval, modelMask=modelMask)
                 if patchx is None or patchx.getImage() is None:
                     derivs.append(None)
                     continue
-
-                # Plot derivatives.
-                if False:
-                    import pylab as plt
-                    plt.clf()
-                    global plotnum
-                    plt.subplot(2,2,1)
-                    mn = patch0.patch.min()
-                    mx = patch0.patch.max()
-                    plt.imshow(patch0.patch, extent=patch0.getExtent(),
-                               interpolation='nearest', origin='lower',
-                               vmin=mn, vmax=mx)
-                    plt.colorbar()
-                    plt.subplot(2,2,2)
-                    plt.imshow(patchx.patch, extent=patchx.getExtent(),
-                               interpolation='nearest', origin='lower',
-                               vmin=mn, vmax=mx)
-                    plt.colorbar()
-                    plt.subplot(2,2,3)
-                    diff = patchx.patch - patch0.patch
-                    mx = np.max(np.abs(diff))
-                    plt.imshow(diff, extent=patchx.getExtent(),
-                               interpolation='nearest', origin='lower',
-                               vmin=-mx, vmax=mx)
-                    plt.colorbar()
-                    fn = 'galdiff-%03i.png' % plotnum
-                    plt.suptitle('dpos of %s in %s' % (str(self), img.name))
-                    plt.savefig(fn)
-                    print('wrote', fn)
-                    plotnum += 1
-                               
                 dx = (patchx - patch0) * (counts / pstep)
-
-                if modelMask is None:
-                    # We evaluated patch0 and patchx on the same extent,
-                    # so they are pixel aligned.  Take the intersection of
-                    # the pixels they evaluated (>minval) to avoid jumps.
-                    dx.patch *= ((patch0.patch > 0) * (patchx.patch > 0))
-
                 dx.setName('d(%s)/d(pos%i)' % (self.dname, i))
                 derivs.append(dx)
 
@@ -238,43 +195,28 @@ class Galaxy(MultiParams, SingleProfileSource):
         if not self.isParamFrozen('shape'):
             gnames = self.shape.getParamNames()
             oldvals = self.shape.getParams()
-            # print('Galaxy.getParamDerivatives:', self.getName())
-            # print('  oldvals:', oldvals)
             if counts == 0:
                 derivs.extend([None] * len(oldvals))
                 gsteps = []
             for i,gstep in enumerate(gsteps):
                 oldval = self.shape.setParam(i, oldvals[i]+gstep)
-                #print('  stepped', gnames[i], 'by', gsteps[i],)
-                #print('to get', self.shape)
-                patchx = self.getUnitFluxModelPatch(img, px0, py0, minval=minval,
-                                                    extent=extent, modelMask=modelMask)
+                patchx = self.getUnitFluxModelPatch(
+                    img, px0, py0, minval=minval, modelMask=modelMask)
                 self.shape.setParam(i, oldval)
                 if patchx is None:
                     print('patchx is None:')
                     print('  ', self)
-                    print('  stepping galaxy shape', self.shape.getParamNames()[i])
+                    print('  stepping galaxy shape',
+                          self.shape.getParamNames()[i])
                     print('  stepped', gsteps[i])
                     print('  to', self.shape.getParams()[i])
                     derivs.append(None)
                     continue
-
                 dx = (patchx - patch0) * (counts / gstep)
                 dx.setName('d(%s)/d(%s)' % (self.dname, gnames[i]))
                 derivs.append(dx)
         return derivs
 
-
-from astrometry.util.plotutils import *
-psfft = PlotSequence('fft')
-
-do_fft_timing = False
-if do_fft_timing:
-    from astrometry.util.ttime import *
-    fft_timing = []
-    fft_timing_id = 0
-
-    
 class ProfileGalaxy(object):
     '''
     A mix-in class that renders itself based on a Mixture-of-Gaussians
@@ -300,89 +242,21 @@ class ProfileGalaxy(object):
         return 0
     
     def getUnitFluxModelPatch(self, img, px=None, py=None, minval=0.0,
-                              extent=None, modelMask=None):
+                              modelMask=None):
         if px is None or py is None:
             (px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
-        #
-        if _galcache is None:
-            return self._realGetUnitFluxModelPatch(img, px, py, minval,
-                                                   extent=extent, modelMask=modelMask)
-        
-        deps = self._getUnitFluxDeps(img, px, py)
-        #print('deps', deps, '->',)
-        #deps = hash(deps)
-        #print(deps)
-
-        try:
-            # FIXME -- what about when the extent was specified for
-            # the cached entry but not specified for this call?
-            #print('Searching cache for:', deps)
-            (cached,mv) = _galcache.get(deps)
-            # if cached is None:
-            #     print('Cache hit:', cached)
-            # else:
-            #     print('Cache hit:', cached.shape)
-            #     if modelMask is not None:
-            #         assert(cached.shape == modelMask.shape)
-
-            if mv <= minval:
-                if extent is None:
-                    if cached is None:
-                        return None
-                    return cached.copy()
-                if cached is not None:
-                    # do the extents overlap?
-                    (x0,x1,y0,y1) = extent
-                    (cx0,cx1,cy0,cy1) = cached.getExtent()
-                    if cx0 <= x0 and cx1 >= x1 and cy0 <= y0 and cy1 >= y1:
-                        pat = cached.copy()
-                        if cx0 != x0 or cx1 != x1 or cy0 != y0 or cy1 != y1:
-                            pat.clipToRoi(*extent)
-                        return pat
-        except KeyError:
-            pass
-
-        patch = self._realGetUnitFluxModelPatch(img, px, py, minval,
-                                                extent=extent, modelMask=modelMask)
-        if patch is not None:
-            patch = patch.copy()
-        # print('Adding to cache:', deps,)
-        # if patch is not None:
-        #     print('patch shape', patch.shape)
-        # else:
-        #     print('patch is None')
+        patch = self._realGetUnitFluxModelPatch(
+            img, px, py, minval, modelMask=modelMask)
         if patch is not None and modelMask is not None:
             assert(patch.shape == modelMask.shape)
-        # print('modelMask:', modelMask)
-        _galcache.put(deps, (patch,minval))
         return patch
 
-    def _realGetUnitFluxModelPatch(self, img, px, py, minval, extent=None,
-                                   modelMask=None):
-        '''
-        extent: if not None, [x0,x1,y0,y1], where the range to render
-        is [x0, x1), [y0,y1).
-        '''
-
-        #####
-        global psfft
-
-        if do_fft_timing:
-            global fft_timing
-            global fft_timing_id
-            fft_timing_id += 1
-            timing_id = fft_timing_id
-            tpatch = CpuMeas()
-            fft_timing.append((timing_id, 'get_unit_patch', 0,
-                               (self,)))
-        
-        if modelMask is None:
-            # now choose the patch size
-            halfsize = self._getUnitFluxPatchSize(img, px, py, minval)
-
+    def _realGetUnitFluxModelPatch(self, img, px, py, minval, modelMask=None):
         if modelMask is not None:
             x0,y0 = modelMask.x0, modelMask.y0
-        elif extent is None:
+        else:
+            # choose the patch size
+            halfsize = self._getUnitFluxPatchSize(img, px, py, minval)
             # find overlapping pixels to render
             (outx, inx) = get_overlapping_region(
                 int(np.floor(px-halfsize)), int(np.ceil(px+halfsize+1)),
@@ -392,17 +266,12 @@ class ProfileGalaxy(object):
                 0, img.getHeight())
             if inx == [] or iny == []:
                 # no overlap
-
-                if do_fft_timing:
-                    fft_timing.append((timing_id, 'no_overlap', CpuMeas().cpu_seconds_since(tpatch)))
-
                 return None
             x0,x1 = outx.start, outx.stop
             y0,y1 = outy.start, outy.stop
-        else:
-            x0,x1,y0,y1 = extent
-        psf = img.getPsf()
 
+        psf = img.getPsf()
+        
         # We have two methods of rendering profile galaxies: If the
         # PSF can be represented as a mixture of Gaussians, then we do
         # the analytic Gaussian convolution, producing a larger
@@ -411,61 +280,59 @@ class ProfileGalaxy(object):
         # FFT of the galaxy, and IFFT back to get the rendered
         # profile.
 
-        if hasattr(psf, 'getMixtureOfGaussians'):
-            amix = self._getAffineProfile(img, px, py)
+        # The "HybridPSF" class is just a marker to indicate whether this
+        # code should treat the PSF as a hybrid.
+        from tractor.psf import HybridPSF
+        hybrid = isinstance(psf, HybridPSF)
+
+        def run_mog(amix=None, mm=None):
+            ''' This runs the mixture-of-Gaussians convolution method.
+            '''
+            if amix is None:
+                amix = self._getAffineProfile(img, px, py)
+            if mm is None:
+                mm = modelMask
             # now convolve with the PSF, analytically
             psfmix = psf.getMixtureOfGaussians(px=px, py=py)
             cmix = amix.convolve(psfmix)
-
-            # print('galaxy affine mixture:', amix)
-            # print('psf mixture:', psfmix)
-            # print('convolved mixture:', cmix)
-            # print('_realGetUnitFluxModelPatch: extent', x0,x1,y0,y1)
-            if modelMask is None:
-                return mp.mixture_to_patch(cmix, x0, x1, y0, y1, minval,
-                                           exactExtent=(extent is not None))
+            if mm is None:
+                return mp.mixture_to_patch(cmix, x0, x1, y0, y1, minval)
+            # The convolved mixture *already* has the px,py offset added
+            # (via px,py to amix) so set px,py=0,0 in this call.
+            if mm.mask is not None:
+                p = cmix.evaluate_grid_masked(x0, y0, mm.mask, 0., 0.)
             else:
-                # The convolved mixture *already* has the px,py offset added
-                # (via px,py to amix) so set px,py=0,0 in this call.
-                p = cmix.evaluate_grid_masked(x0, y0, modelMask.patch, 0., 0.)
-                assert(p.shape == modelMask.shape)
-                return p
-
+                p = cmix.evaluate_grid(x0, mm.x1, y0, mm.y1, 0., 0.)
+            assert(p.shape == mm.shape)
+            return p
+        
+        if hasattr(psf, 'getMixtureOfGaussians') and not hybrid:
+            return run_mog()
 
         # Otherwise, FFT:
         imh,imw = img.shape
-
-        haveExtent = (modelMask is not None) or (extent is not None)
-
-        if not haveExtent:
-            halfsize = self._getUnitFluxPatchSize(img, px, py, minval)
-
+        if modelMask is None:
             # Avoid huge galaxies -> huge halfsize in a tiny image (blob)
             imsz = max(imh,imw)
             halfsize = min(halfsize, imsz)
 
         else:
-            # FIXME -- max of modelMask, PSF, and Galaxy sizes!
-
-            if modelMask is not None:
-                mh,mw = modelMask.shape
-                x1 = x0 + mw
-                y1 = y0 + mh
-            else:
-                # x0,x1,y0,y1 were set to extent, above.
-                mw = x1 - x0
-                mh = y1 - y0
+            # FIXME -- should take some kind of combination of
+            # modelMask, PSF, and Galaxy sizes!
+            mh,mw = modelMask.shape
+            x1 = x0 + mw
+            y1 = y0 + mh
 
             # is the source center outside the modelMask?
             sourceOut = (px < x0 or px > x1-1 or py < y0 or py > y1-1)
+            # print('mh,mw', mh,mw, 'sourceout?', sourceOut)
             
             if sourceOut:
-                # FIXME -- could also *think* about switching to a
-                # Gaussian approximation when very far from the source
-                # center...
-                #
-                #print('modelMask does not contain source center!  Fetching bigger model...')
-                # If the source is *way* outside the patch, return zero.
+                if hybrid:
+                    return run_mog()
+
+                # Super Yuck -- FFT, modelMask, source is outside the
+                # box.
                 neardx,neardy = 0., 0.
                 if px < x0:
                     neardx = x0 - px
@@ -477,11 +344,7 @@ class ProfileGalaxy(object):
                     neardy = py - y1
                 nearest = np.hypot(neardx, neardy)
                 if nearest > self.getRadius():
-
-                    if do_fft_timing:
-                        fft_timing.append((timing_id, 'source_way_outside', CpuMeas().cpu_seconds_since(tpatch)))
                     return None
-
                 # how far is the furthest point from the source center?
                 farw = max(abs(x0 - px), abs(x1 - px))
                 farh = max(abs(y0 - py), abs(y1 - py))
@@ -497,67 +360,33 @@ class ProfileGalaxy(object):
                 assert(bigh >= mh)
                 assert(boffx >= 0)
                 assert(boffy >= 0)
-                if modelMask is None:
-                    bigMask = np.ones((bigh,bigw), bool)
+                bigMask = np.zeros((bigh,bigw), bool)
+                if modelMask.mask is not None:
+                    bigMask[boffy:boffy+mh, boffx:boffx+mw] = modelMask.mask
                 else:
-                    bigMask = np.zeros((bigh,bigw), bool)
-                    bigMask[boffy:boffy+mh, boffx:boffx+mw] = modelMask.patch
-                bigMask = Patch(bigx0, bigy0, bigMask)
-
-                if do_fft_timing:
-                    fft_timing.append((timing_id, 'calling_sourceout', None))
-                    t0 = CpuMeas()
-
+                    bigMask[boffy:boffy+mh, boffx:boffx+mw] = True
+                bigMask = ModelMask(bigx0, bigy0, bigMask)
                 # print('Recursing:', self, ':', (mh,mw), 'to', (bigh,bigw))
                 bigmodel = self._realGetUnitFluxModelPatch(
-                    img, px, py, minval, extent=None, modelMask=bigMask)
-
-                if do_fft_timing:
-                    t1 = CpuMeas()
-                    fft_timing.append((timing_id, 'sourceout', t1.cpu_seconds_since(t0),
-                                       (bigMask.shape, (mh,mw))))
-
+                    img, px, py, minval, modelMask=bigMask)
                 return Patch(x0, y0,
                              bigmodel.patch[boffy:boffy+mh, boffx:boffx+mw])
             
             halfsize = max(mh/2., mw/2.)
-
             psfh,psfw = psf.shape
             halfsize = max(halfsize, max(psfw/2., psfh/2.))
 
-        if do_fft_timing:
-            t0 = CpuMeas()
-
         P,(cx,cy),(pH,pW),(v,w) = psf.getFourierTransform(px, py, halfsize)
 
-        #print('Computing', self, ': halfsize=', halfsize, 'FFT', (pH,pW))
-        
-        if do_fft_timing:
-            t1 = CpuMeas()
-            fft_timing.append((timing_id, 'psf_fft', t1.cpu_seconds_since(t0),
-                               (haveExtent, halfsize)))
-
-        # print('PSF Fourier transform size:', P.shape)
-        # print('Padded size:', pH,pW)
-        # print('PSF center in padded image:', cx,cy)
-        # print('Source center px,py', px,py)
-
-        # One example:
-        # pH,pW = (256, 256)
-        # P.shape = (256, 129)
-        # cx,cy = (127, 127)
-        
         dx = px - cx
         dy = py - cy
-        if haveExtent:
+        if modelMask is not None:
             # the Patch we return *must* have this origin.
             ix0 = x0
             iy0 = y0
-
             # Put the difference into the galaxy FFT.
             mux = dx - ix0
             muy = dy - iy0
-
             # ASSUME square PSF
             assert(pH == pW)
             psfh,psfw = psf.shape
@@ -570,6 +399,8 @@ class ProfileGalaxy(object):
                 # and then copy it into the result.
                 gx0 = int(np.round(mux))
                 gy0 = int(np.round(muy))
+                print('Wrap-around possible/likely:', mux, muy,
+                      'vs', psfmargin, '->', gx0,gy0)
                 mux -= gx0
                 muy -= gy0
                 
@@ -577,142 +408,55 @@ class ProfileGalaxy(object):
             # Put the integer portion of the offset into Patch x0,y0
             ix0 = int(np.round(dx))
             iy0 = int(np.round(dy))
-
             # Put the subpixel portion into the galaxy FFT.
             mux = dx - ix0
             muy = dy - iy0
 
-        if do_fft_timing:
-            t0 = CpuMeas()
-        
         amix = self._getAffineProfile(img, mux, muy)
-
-        if do_fft_timing:
-            t1 = CpuMeas()
+        fftmix = amix
+        mogmix = None
         
-        Fsum = amix.getFourierTransform(v, w)
-        
-        if do_fft_timing:
-            t2 = CpuMeas()
+        if hybrid:
+            # Split "amix" into terms that we will evaluate using MoG
+            # vs FFT.
+            vv = amix.var[:,0,0] + amix.var[:,1,1]
+            nsigma = 3.
+            # Terms that will wrap-around significantly...
+            I = (np.sqrt(vv) * nsigma > pW)
+            if np.sum(I):
+                #print('Evaluating', np.sum(I), 'terms as MoGs')
+                # Yuck, re-evaluate affine profile using 'px,py' vs 'mux,muy'
+                gmix = self._getAffineProfile(img, px, py)
+                mogmix = mp.MixtureOfGaussians(gmix.amp[I], gmix.mean[I,:],
+                                               gmix.var[I,:,:])
+            I = np.logical_not(I)
+            if np.sum(I):
+                fftmix = mp.MixtureOfGaussians(amix.amp[I], amix.mean[I,:],
+                                               amix.var[I,:,:])
+            else:
+                fftmix = None
 
-            fft_timing.append((timing_id, 'get_affine', t1.cpu_seconds_since(t0),
-                               (haveExtent,)))
-            fft_timing.append((timing_id, 'get_ft', t2.cpu_seconds_since(t1),
-                               (haveExtent,)))
-
-        if False:
-            # for fakedx in []:#0]:#, 1, 10]:
-
-            amix2 = self._getAffineProfile(img, mux + fakedx, muy)
-            Fsum2 = amix2.getFourierTransform(v, w)
-
-            plt.clf()
-            plt.subplot(3,3,1)
-            plt.imshow(Fsum2.real, interpolation='nearest', origin='lower')
-            plt.title('Galaxy FFT')
-            plt.subplot(3,3,2)
-            plt.imshow(P.real, interpolation='nearest', origin='lower')
-            plt.title('PSF FFT')
-            plt.subplot(3,3,3)
-            plt.imshow((Fsum2 * P).real,
-                       interpolation='nearest', origin='lower')
-            plt.title('Galaxy * PSF FFT')
-            plt.subplot(3,3,4)
-            plt.imshow(Fsum2.imag, interpolation='nearest', origin='lower')
-            plt.title('Galaxy FFT')
-            plt.subplot(3,3,5)
-            plt.imshow(P.imag, interpolation='nearest', origin='lower')
-            plt.title('PSF FFT')
-            plt.subplot(3,3,6)
-            plt.imshow((Fsum2 * P).imag,
-                       interpolation='nearest', origin='lower')
-            plt.title('Galaxy * PSF FFT')
-
-            plt.subplot(3,3,7)
-            plt.imshow(np.fft.irfft2(Fsum2, s=(pH,pW)),
-                       interpolation='nearest', origin='lower')
-            plt.title('iFFT Galaxy')
-            plt.subplot(3,3,8)
-            plt.imshow(np.fft.irfft2(P, s=(pH,pW)),
-                       interpolation='nearest', origin='lower')
-            plt.title('iFFT PSF')
-            plt.subplot(3,3,9)
-            plt.imshow(np.fft.irfft2(Fsum2*P, s=(pH,pW)),
-                       interpolation='nearest', origin='lower')
-            plt.title('iFFT Galaxy*PSF')
-            
-            plt.suptitle('dx = %i pixel' % fakedx)
-            psfft.savefig()
-
-        
-        
-        if haveExtent:
-
-            if False:
-                plt.clf()
-                plt.imshow(np.fft.irfft2(Fsum * P, s=(pH,pW)),
-                           interpolation='nearest', origin='lower')
-                plt.title('iFFT in PSF shape')
-                psfft.savefig()
-
-            if do_fft_timing:
-                t0 = CpuMeas()
-
+        if fftmix is not None:
+            Fsum = fftmix.getFourierTransform(v, w)
             G = np.fft.irfft2(Fsum * P, s=(pH,pW))
-
-            if do_fft_timing:
-                t1 = CpuMeas()
-                fft_timing.append((timing_id, 'irfft2', t1.cpu_seconds_since(t0),
-                                   (haveExtent, (pH,pW))))
-            
-
+        else:
+            G = np.zeros((pH,pW), np.float32)
+        
+        if modelMask is not None:
             gh,gw = G.shape
-
             if gx0 != 0 or gy0 != 0:
                 #print('gx0,gy0', gx0,gy0)
                 yi,yo = get_overlapping_region(-gy0, -gy0+mh-1, 0, gh-1)
                 xi,xo = get_overlapping_region(-gx0, -gx0+mw-1, 0, gw-1)
-
                 # shifted
                 shG = np.zeros((mh,mw), G.dtype)
                 shG[yo,xo] = G[yi,xi]
                 G = shG
-            
             if gh > mh or gw > mw:
                 G = G[:mh,:mw]
-            if modelMask is not None:
-                assert(G.shape == modelMask.shape)
-            else:
-                assert(G.shape == (mh,mw))
+            assert(G.shape == modelMask.shape)
             
         else:
-            #print('iFFT', (pW,pH))
-
-            # psfim = np.fft.irfft2(P)
-            # print('psf iFFT', psfim.shape, psfim.sum())
-            # psfim /= psfim.sum()
-            # xx,yy = np.meshgrid(np.arange(pW), np.arange(pH))
-            # print('centroid', np.sum(psfim*xx), np.sum(psfim*yy))
-
-            if do_fft_timing:
-                t0 = CpuMeas()
-
-            G = np.fft.irfft2(Fsum * P, s=(pH,pW))
-
-            if do_fft_timing:
-                t1 = CpuMeas()
-                fft_timing.append((timing_id, 'irfft2_b', t1.cpu_seconds_since(t0),
-                                   (haveExtent, (pH,pW))))
-
-            # print('Evaluating iFFT with shape', pH,pW)
-            # print('G shape:', G.shape)
-
-            if False:
-                plt.clf()
-                plt.imshow(G, interpolation='nearest', origin='lower')
-                plt.title('iFFT in padded PSF shape')
-                psfft.savefig()
-            
             # Clip down to suggested "halfsize"
             if x0 > ix0:
                 G = G[:,x0 - ix0:]
@@ -726,12 +470,16 @@ class ProfileGalaxy(object):
             if gh+iy0 > y1:
                 G = G[:y1-iy0,:]
 
-        if do_fft_timing:
-            fft_timing.append((timing_id, 'get_unit_patch_finished', CpuMeas().cpu_seconds_since(tpatch),
-                               (self,)))
-
+        if mogmix is not None:
+            if modelMask is not None:
+                mogpatch = run_mog(amix=mogmix)
+            else:
+                gh,gw = G.shape
+                mogpatch = run_mog(amix=mogmix, mm=ModelMask(ix0,iy0,gw,gh))
+            assert(mogpatch.patch.shape == G.shape)
+            G += mogpatch.patch
+            
         return Patch(ix0, iy0, G)
-                    
 
 class HoggGalaxy(ProfileGalaxy, Galaxy):
 
@@ -866,7 +614,8 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy, SingleProfileSource):
         self.name = self.getName()
 
     def getRadius(self):
-        return max(self.shapeExp.re * ExpGalaxy.nre, self.shapeDev.re * DevGalaxy.nre)
+        return max(self.shapeExp.re * ExpGalaxy.nre,
+                   self.shapeDev.re * DevGalaxy.nre)
 
     @staticmethod
     def getNamedParams():
@@ -1026,13 +775,7 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy, SingleProfileSource):
             derivs.extend(dexp[i0:])
         if not self.isParamFrozen('shapeDev'):
             derivs.extend(ddev[i0:])
-
-        # print('Returning derivs:')
-        # for deriv in derivs:
-        #     print('  ', deriv.name, deriv.getExtent())
-            
         return derivs
-
 
 class CompositeGalaxy(MultiParams, BasicSource):
     '''
@@ -1042,20 +785,24 @@ class CompositeGalaxy(MultiParams, BasicSource):
     but have different brightnesses and shapes.
     '''
     def __init__(self, pos, brightnessExp, shapeExp, brightnessDev, shapeDev):
-        MultiParams.__init__(self, pos, brightnessExp, shapeExp, brightnessDev, shapeDev)
+        MultiParams.__init__(self, pos, brightnessExp, shapeExp,
+                             brightnessDev, shapeDev)
         self.name = self.getName()
 
     @staticmethod
     def getNamedParams():
-        return dict(pos=0, brightnessExp=1, shapeExp=2, brightnessDev=3, shapeDev=4)
+        return dict(pos=0, brightnessExp=1, shapeExp=2,
+                    brightnessDev=3, shapeDev=4)
 
     def getName(self):
         return 'CompositeGalaxy'
 
     def __str__(self):
         return (self.name + ' at ' + str(self.pos)
-                + ' with Exp ' + str(self.brightnessExp) + ' ' + str(self.shapeExp)
-                + ' and deV ' + str(self.brightnessDev) + ' ' + str(self.shapeDev))
+                + ' with Exp ' + str(self.brightnessExp) + ' '
+                + str(self.shapeExp)
+                + ' and deV ' + str(self.brightnessDev) + ' '
+                + str(self.shapeDev))
 
     def __repr__(self):
         return (self.name + '(pos=' + repr(self.pos) +
@@ -1064,9 +811,10 @@ class CompositeGalaxy(MultiParams, BasicSource):
                 ', brightnessDev=' + repr(self.brightnessDev) +
                 ', shapeDev=' + repr(self.shapeDev))
 
-    def getBrightness(self):
-        ''' This makes some assumptions about the ``Brightness`` / ``PhotoCal`` and
-        should be treated as approximate.'''
+    def getBrightness(self): 
+        ''' This makes some assumptions about the
+        ``Brightness`` / ``PhotoCal`` and should be treated as
+        approximate.'''
         return self.brightnessExp + self.brightnessDev
 
     def getBrightnesses(self):
@@ -1097,8 +845,10 @@ class CompositeGalaxy(MultiParams, BasicSource):
         d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
         if hasattr(self, 'halfsize'):
             e.halfsize = d.halfsize = self.halfsize
-        return (e.getUnitFluxModelPatches(img, minval=minval, modelMask=modelMask) +
-                d.getUnitFluxModelPatches(img, minval=minval, modelMask=modelMask))
+        return (e.getUnitFluxModelPatches(img, minval=minval,
+                                          modelMask=modelMask) +
+                d.getUnitFluxModelPatches(img, minval=minval,
+                                          modelMask=modelMask))
 
     def getUnitFluxModelPatch(self, img, px=None, py=None, modelMask=None):
         # this code is un-tested
@@ -1123,9 +873,6 @@ class CompositeGalaxy(MultiParams, BasicSource):
     # MAGIC: ASSUMES EXP AND DEV SHAPES SAME LENGTH
     # CompositeGalaxy.
     def getParamDerivatives(self, img, modelMask=None):
-        #print('CompositeGalaxy: getParamDerivatives')
-        #print('  Exp brightness', self.brightnessExp, 'shape', self.shapeExp)
-        #print('  Dev brightness', self.brightnessDev, 'shape', self.shapeDev)
         e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
         d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
         if hasattr(self, 'halfsize'):

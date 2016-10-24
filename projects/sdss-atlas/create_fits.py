@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 import pyfits as pyf
 import os
@@ -23,7 +24,7 @@ def extinction(pos):
     sloanz=1.479
 
     galactic=radectolb(pos[0],pos[1])
-    print 'galactic',galactic
+    print('galactic',galactic)
     x=get_SFD_dust(galactic[0], galactic[1],dustmap='ebv',interpolate=True)
     correction=[x*sloanu,x*sloang,x*sloanr,x*sloani,x*sloanz]
     correctu=float(correction[0])
@@ -72,17 +73,17 @@ def makeNSAtlastable():
 
     for files in os.listdir("."):
         if files.endswith("-updated.pickle"):
-            print files
+            print(files)
             # this gives the tractor results 
             #data from rc3
             strip=files.rstrip('-updated.pickle')
             replace=strip.replace('_',' ')
             nsa_name.append(replace)
             nsid = int(replace.split()[2])
-            print nsid
+            print(nsid)
             e=data.field('NSAID')
             mask = e ==nsid
-            print mask
+            print(mask)
             record = data[mask]
             ra = float(record['RA'][0])
             dec = float(record['DEC'][0])
@@ -91,12 +92,12 @@ def makeNSAtlastable():
             nsa_dec.append(dec)
             nsa_nsid.append(nsid)
             nsa_sersic_th50.append(sersic_th50)
-            print ra,dec,nsid,sersic_th50
+            print(ra,dec,nsid,sersic_th50)
             CG,r50s,r90s,concs=unpickle_from_file(files)
-            print CG,r50s,r90s,concs
+            print(CG,r50s,r90s,concs)
             pos=CG.getPosition()
             tot=CG.getBrightness()
-            print tot, 'tot mags'
+            print(tot, 'tot mags')
 
             dev=CG.brightnessDev
             dev_re=CG.shapeDev.re
@@ -125,7 +126,7 @@ def makeNSAtlastable():
 
             #get extinction from SFD
             galactic=radectolb(pos[0],pos[1])
-            print 'galactic',galactic
+            print('galactic',galactic)
             x=get_SFD_dust(galactic[0], galactic[1],dustmap='ebv',interpolate=True)
             correction=[x*sloanu,x*sloang,x*sloanr,x*sloani,x*sloanz]
             correctu=float(correction[0])
@@ -153,14 +154,14 @@ def makeNSAtlastable():
     # print rc3_dec
     # print rc3_log_ae
     # print rc3_log_d25
-    print cg_ra, cg_dec
-    print cg_totmags
+    print(cg_ra, cg_dec)
+    print(cg_totmags)
     # print cg_devmags
     # print cg_devre
     # print cg_devab
     # print cg_devphi
     # print cg_conc
-    print cg_extinction 
+    print(cg_extinction) 
     n=np.arange(100)
     hdu=pyf.PrimaryHDU(n)
     a1=np.array(nsa_name)
@@ -254,7 +255,7 @@ def makeRC3table():
 
     for files in os.listdir("."):
         if files.endswith("-updated.pickle"):
-            print files
+            print(files)
             # this gives the tractor results 
             #data from rc3
             strip=files.rstrip('-updated.pickle')
@@ -271,11 +272,11 @@ def makeRC3table():
             rc3_dec.append(dec)
             rc3_log_ae.append(log_ae)
             rc3_log_d25.append(log_d25)
-            print ra,dec,log_ae,log_d25
+            print(ra,dec,log_ae,log_d25)
             CG,r50s,r90s,concs=unpickle_from_file(files)
             pos=CG.getPosition()
             tot=CG.getBrightness()
-            print tot, 'tot mags'
+            print(tot, 'tot mags')
 
             dev=CG.brightnessDev
             dev_re=CG.shapeDev.re
@@ -304,7 +305,7 @@ def makeRC3table():
 
             #get extinction from SFD
             galactic=radectolb(pos[0],pos[1])
-            print 'galactic',galactic
+            print('galactic',galactic)
             x=get_SFD_dust(galactic[0], galactic[1],dustmap='ebv',interpolate=True)
             correction=[x*sloanu,x*sloang,x*sloanr,x*sloani,x*sloanz]
             correctu=float(correction[0])
@@ -322,8 +323,8 @@ def makeRC3table():
             #print cg_extinction
             
             imag_corrected=tot[3]-correcti
-            print tot[3],correcti,imag_corrected
-            print r50s[3]
+            print(tot[3],correcti,imag_corrected)
+            print(r50s[3])
             y=mu_50(imag_corrected,r50s[3])
     
             cg_mu50.append(mu_50(imag_corrected,r50s[3]))
@@ -341,7 +342,7 @@ def makeRC3table():
     # print cg_devab
     # print cg_devphi
     # print cg_conc
-    print cg_extinction 
+    print(cg_extinction) 
     n=np.arange(100)
     hdu=pyf.PrimaryHDU(n)
     a1=np.array(rc3_name)

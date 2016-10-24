@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
@@ -29,7 +30,7 @@ def deep2(deep2field, ps):
     tiledir = 'wise-coadds'
 
     T = fits_table('pcat.%i.fits' % deep2field)
-    print 'Read', len(T), 'sources'
+    print('Read', len(T), 'sources')
 
     # DEEP2, Field 1 part 1
     #ralo, rahi  = 213.2, 214.5
@@ -37,7 +38,7 @@ def deep2(deep2field, ps):
 
     ralo, rahi = T.ra.min(), T.ra.max()
     declo,dechi = T.dec.min(), T.dec.max()
-    print 'RA,Dec range', ralo,rahi, declo,dechi
+    print('RA,Dec range', ralo,rahi, declo,dechi)
 
     # unwise tile half-size, in degrees
     ddec = (1024 * 2.75 / 3600)
@@ -46,14 +47,14 @@ def deep2(deep2field, ps):
     A = fits_table(os.path.join(tiledir, 'tiles.fits'))
     A.cut((A.ra  + dra  > ralo ) * (A.ra  - dra  < rahi ) *
           (A.dec + ddec > declo) * (A.dec - ddec < dechi))
-    print len(A), 'tiles overlap:', A.coadd_id
+    print(len(A), 'tiles overlap:', A.coadd_id)
     tiles = A.coadd_id
 
     T.cut(T.magr < 24.1)
     #T.cut(T.magr < 21.)
     T.cut(T.magr > 0.)
-    print len(T), 'sources in mag range'
-    print 'Mag range r', T.magr.min(), T.magr.max()
+    print(len(T), 'sources in mag range')
+    print('Mag range r', T.magr.min(), T.magr.max())
 
     for band in [1,2]:
         tims = []
@@ -63,7 +64,7 @@ def deep2(deep2field, ps):
                                            bandname='w')
             tim.psf.radius = 25
             tims.append(tim)
-            print 'tim', tim
+            print('tim', tim)
 
         if band == 1:
             plt.clf()
@@ -100,7 +101,7 @@ def deep2(deep2field, ps):
             variance=True, shared_params=False,
             use_ceres=True, BW=8, BH=8, wantims=True,
             sky=fitsky)
-        print 'That took', Time()-t0
+        print('That took', Time()-t0)
 
         for im0,im1 in zip(R.ims0, R.ims1):
             #(dat,mod,ie,chi,roi) = im0

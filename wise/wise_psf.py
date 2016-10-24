@@ -1,3 +1,4 @@
+from __future__ import print_function
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
@@ -70,13 +71,13 @@ class WisePSF(VaryingGaussianPSF):
             btag = ', BRIGHT=1' if self.bright else ''
             idlcmd = ("mwrfits, wise_psf_cutout(%.1f, %.1f, band=%i, allsky=1%s), '%s'" % 
                       (gx, gy, self.band, btag, fullfn))
-            print 'IDL command:', idlcmd
+            print('IDL command:', idlcmd)
             idl = os.path.join(os.environ['IDL_DIR'], 'bin', 'idl')
             cmd = 'cd wise-psf/pro; echo "%s" | %s' % (idlcmd, idl)
-            print 'Command:', cmd
+            print('Command:', cmd)
             os.system(cmd)
 
-        print 'Reading', fn
+        print('Reading', fn)
         psf = pyfits.open(fn)[0].data
         return psf
 
@@ -109,7 +110,7 @@ def create_average_psf_model(bright=False):
                 gy = dy * int(np.round(y / dy))
 
                 fn = 'wise-psf/wise-psf-w%i-%.1f-%.1f%s.fits' % (band, gx, gy, btag)
-                print 'Reading', fn
+                print('Reading', fn)
                 I = fitsio.read(fn)
                 psfsum = psfsum + I
         psfsum /= psfsum.sum()
@@ -135,7 +136,7 @@ def create_wise_psf_models(bright, K=3):
     for band in [1,2,3,4]:
         pfn = 'w%i%s.pickle' % (band, tag)
         if os.path.exists(pfn):
-            print 'Reading', pfn
+            print('Reading', pfn)
             w = unpickle_from_file(pfn)
         else:
             w = WisePSF(band)
@@ -145,7 +146,7 @@ def create_wise_psf_models(bright, K=3):
             w.ensureFit()
             pickle_to_file(w, pfn)
 
-        print 'Fit data:', w.splinedata
+        print('Fit data:', w.splinedata)
         T = tabledata()
         (pp,xx,yy) = w.splinedata
         (NY,NX,NP) = pp.shape
@@ -162,25 +163,25 @@ def _allwise_psf_models():
     global plotslice
     # AllWISE PSF models
     for band in [1,2,3,4]:
-        print
-        print 'W%i' % band
-        print
+        print()
+        print('W%i' % band)
+        print()
 
         pix = reduce(np.add,
                      [fitsio.read('wise-w%i-psf-wpro-09x09-%02ix%02i.fits' %
                                   (band, 1+(i/9), 1+(i%9)))
                                   for i in range(9*9)])
-        print 'Pix', pix.shape
+        print('Pix', pix.shape)
         h,w = pix.shape
-        print 'Pix sum', pix.sum()
-        print 'Pix max', pix.max()
+        print('Pix sum', pix.sum())
+        print('Pix max', pix.max())
         pix /= pix.sum()
         
         psf = GaussianMixturePSF.fromStamp(pix)
-        print 'Fit PSF', psf
+        print('Fit PSF', psf)
         psfmodel = psf.getPointSourcePatch(0., 0., radius=h/2)
         mod = psfmodel.patch
-        print 'Orig mod sum', mod.sum()
+        print('Orig mod sum', mod.sum())
 
         S = h/2
         plotss = 30
@@ -198,8 +199,8 @@ def _allwise_psf_models():
             sigmas.append(np.sqrt(np.sqrt(v[0,0] * v[1,1])))
 
         
-        print 'Initializing concentric Gaussian model with sigmas', sigmas
-        print 'And weights', psf.mog.amp
+        print('Initializing concentric Gaussian model with sigmas', sigmas)
+        print('And weights', psf.mog.amp)
 
         # (Initial) W1:
         # sig [7.1729391870564569, 24.098952864976805, 108.78869923786333]
@@ -245,28 +246,28 @@ def _allwise_psf_models():
         #tractor.freezeParam('catalog')
         src.freezeAllBut('pos')
 
-        print 'Optimizing Params:'
+        print('Optimizing Params:')
         tractor.printThawedParams()
     
         for i in range(100):
             dlnp,X,alpha = tractor.optimize(damp=0.1)
-            print 'dlnp', dlnp
-            print 'PSF', mypsf
+            print('dlnp', dlnp)
+            print('PSF', mypsf)
             if dlnp < 0.001:
                 break
 
-        print 'PSF3(opt): flux', src.brightness
-        print 'PSF amps:', np.sum(mypsf.amp)
-        print 'PSF amps * Source brightness:', src.brightness.getValue() * np.sum(mypsf.amp)
-        print 'pix sum:', pix.sum()
+        print('PSF3(opt): flux', src.brightness)
+        print('PSF amps:', np.sum(mypsf.amp))
+        print('PSF amps * Source brightness:', src.brightness.getValue() * np.sum(mypsf.amp))
+        print('pix sum:', pix.sum())
 
-        print 'Optimize source:', src
-        print 'Optimized PSF:', mypsf
+        print('Optimize source:', src)
+        print('Optimized PSF:', mypsf)
         
         mod = tractor.getModelImage(0)
-        print 'Mod sum:', mod.sum()
-        print 'Mod min:', mod.min()
-        print 'Mod max:', mod.max()
+        print('Mod sum:', mod.sum())
+        print('Mod min:', mod.min())
+        print('Mod max:', mod.max())
 
         _plot_psf(pix, mod, mypsf, flux=src.brightness.getValue())
         plt.suptitle('W%i psf3 (opt): %g = %s, resid %.3f' %
@@ -290,9 +291,9 @@ def _allwise_psf_models():
         
         mypsf.weights.setParams(np.array(mypsf.weights.getParams()) /
                                 sum(mypsf.weights.getParams()))
-        print 'Normalized PSF weights:', mypsf
+        print('Normalized PSF weights:', mypsf)
         mod = tractor.getModelImage(0)
-        print 'Mod sum:', mod.sum()
+        print('Mod sum:', mod.sum())
         _plot_psf(pix, mod, mypsf, flux=src.brightness.getValue())
         plt.suptitle('W%i psf3 (opt): %g = %s, resid %.3f' %
                      (band, np.sum(mypsf.amp), ','.join(['%.3f'%a for a in mypsf.amp]), np.sum(pix-mod)))
@@ -313,8 +314,8 @@ def _lanczos_subsample(opix, scale):
     LL = [opix]
     lanczos3_interpolate(ix, iy, dx, dy, RR, LL)
     lpix = RR[0].reshape((lh,lw))
-    print 'new size', lh,lw
-    print 'vs', lpix.shape
+    print('new size', lh,lw)
+    print('vs', lpix.shape)
     lpix /= (scale**2)
     return lpix
         
@@ -323,9 +324,9 @@ def _meisner_psf_models():
     # Meisner's PSF models
     #for band in [4]:
     for band in [1,2,3,4]:
-        print
-        print 'W%i' % band
-        print
+        print()
+        print('W%i' % band)
+        print()
         
         #pix = fitsio.read('wise-psf-avg-pix.fits', ext=band-1)
         pix = fitsio.read('wise-psf-avg-pix-bright.fits', ext=band-1)
@@ -334,12 +335,12 @@ def _meisner_psf_models():
     
         scale = 1.
     
-        print 'Pix shape', pix.shape
+        print('Pix shape', pix.shape)
         h,w = pix.shape
 
         xx,yy = np.meshgrid(np.arange(w), np.arange(h))
         cx,cy = np.sum(xx*pix)/np.sum(pix), np.sum(yy*pix)/np.sum(pix)
-        print 'Centroid:', cx,cy
+        print('Centroid:', cx,cy)
 
         #S = 100
         S = h/2
@@ -349,18 +350,18 @@ def _meisner_psf_models():
         plotslice = slice(S-plotss, -(S-plotss)), slice(S-plotss, -(S-plotss))
         
         opix = pix
-        print 'Original pixels sum:', opix.sum()
+        print('Original pixels sum:', opix.sum())
         pix /= pix.sum()
         pix = pix[slc]
-        print 'Sliced pix sum', pix.sum()
+        print('Sliced pix sum', pix.sum())
 
         psf = GaussianMixturePSF(fit.amp, fit.mean * scale, fit.var * scale**2)
         psfmodel = psf.getPointSourcePatch(0., 0., radius=h/2)
         mod = psfmodel.patch
-        print 'Orig mod sum', mod.sum()
+        print('Orig mod sum', mod.sum())
         mod = mod[slc]
-        print 'Sliced mod sum', mod.sum()
-        print 'Amps:', np.sum(psf.mog.amp)
+        print('Sliced mod sum', mod.sum())
+        print('Amps:', np.sum(psf.mog.amp))
         
         _plot_psf(pix, mod, psf)
         plt.suptitle('W%i: Orig' % band)
@@ -374,16 +375,16 @@ def _meisner_psf_models():
 
             #S = 140
             slc = slice(h/2-S, h/2+S+1), slice(w/2-S, w/2+S+1)
-            print 'Resampled pix sum', pix.sum()
+            print('Resampled pix sum', pix.sum())
             pix = pix[slc]
-            print 'sliced pix sum', pix.sum()
+            print('sliced pix sum', pix.sum())
 
             psf = GaussianMixturePSF(fit.amp, fit.mean * scale, fit.var * scale**2)
             psfmodel = psf.getPointSourcePatch(0., 0., radius=h/2)
             mod = psfmodel.patch
-            print 'Scaled mod sum', mod.sum()
+            print('Scaled mod sum', mod.sum())
             mod = mod[slc]
-            print 'Sliced mod sum', mod.sum()
+            print('Sliced mod sum', mod.sum())
 
             _plot_psf(pix, mod, psf)
             plt.suptitle('W%i: Scaled' % band)
@@ -394,16 +395,16 @@ def _meisner_psf_models():
         psfx = GaussianMixturePSF.fromStamp(pix, P0=(fit.amp, fit.mean*scale, fit.var*scale**2))
         psfmodel = psfx.getPointSourcePatch(0., 0., radius=h/2)
         mod = psfmodel.patch
-        print 'From stamp: mod sum', mod.sum()
+        print('From stamp: mod sum', mod.sum())
         mod = mod[slc]
-        print 'Sliced mod sum:', mod.sum()
+        print('Sliced mod sum:', mod.sum())
         _plot_psf(pix, mod, psfx)
         plt.suptitle('W%i: fromStamp: %g = %s, res %.3f' %
                      (band, np.sum(psfx.mog.amp), ','.join(['%.3f'%a for a in psfx.mog.amp]),
                       np.sum(pix - mod)))
         ps.savefig()
         
-        print 'Stamp-Fit PSF params:', psfx
+        print('Stamp-Fit PSF params:', psfx)
     
         # class MyGaussianMixturePSF(GaussianMixturePSF):
         #     def getLogPrior(self):
@@ -432,7 +433,7 @@ def _meisner_psf_models():
         for k in range(psfx.mog.K):
             v = psfx.mog.var[k,:,:]
             sigmas.append(np.sqrt(np.sqrt(np.abs(v[0,0] * v[1,1]))))
-        print 'Initializing concentric Gaussian PSF with sigmas', sigmas
+        print('Initializing concentric Gaussian PSF with sigmas', sigmas)
         gpsf = NCircularGaussianPSF(sigmas, psfx.mog.amp)
         gpsf.radius = sh/2
         mypsf = gpsf
@@ -459,13 +460,13 @@ def _meisner_psf_models():
         # tractor.thawParam('images')
         # print 'Source flux after forced-photom fit:', src.getBrightness()
     
-        print 'Optimizing Params:'
+        print('Optimizing Params:')
         tractor.printThawedParams()
     
         for i in range(200):
             #dlnp,X,alpha = tractor.optimize(damp=0.1)
             dlnp,X,alpha = tractor.optimize(damp=1)
-            print i,'dlnp %.3g' % dlnp, 'psf', gpsf
+            print(i,'dlnp %.3g' % dlnp, 'psf', gpsf)
             if dlnp < 1e-6:
                 break
 
@@ -476,21 +477,21 @@ def _meisner_psf_models():
         for i in range(200):
             #dlnp,X,alpha = tractor.optimize(damp=0.1)
             dlnp,X,alpha = tractor.optimize(damp=1)
-            print i,'dlnp %.3g' % dlnp, 'psf', gpsf
+            print(i,'dlnp %.3g' % dlnp, 'psf', gpsf)
             if dlnp < 1e-6:
                 break
 
             
-        print 'PSF3(opt): flux', src.brightness
-        print 'PSF amps:', np.sum(mypsf.amp)
-        print 'PSF amps * Source brightness:', src.brightness.getValue() * np.sum(mypsf.amp)
-        print 'pix sum:', pix.sum()
+        print('PSF3(opt): flux', src.brightness)
+        print('PSF amps:', np.sum(mypsf.amp))
+        print('PSF amps * Source brightness:', src.brightness.getValue() * np.sum(mypsf.amp))
+        print('pix sum:', pix.sum())
 
-        print 'Optimize source:', src
-        print 'Optimized PSF:', mypsf
+        print('Optimize source:', src)
+        print('Optimized PSF:', mypsf)
         
         mod = tractor.getModelImage(0)
-        print 'Mod sum:', mod.sum()
+        print('Mod sum:', mod.sum())
         _plot_psf(pix, mod, mypsf, flux=src.brightness.getValue())
         plt.suptitle('W%i psf3 (opt): %g = %s, resid %.3f' %
                      (band, np.sum(mypsf.amp), ','.join(['%.3f'%a for a in mypsf.amp]), np.sum(pix-mod)))
@@ -506,9 +507,9 @@ def _meisner_psf_models():
         
         mypsf.weights.setParams(np.array(mypsf.weights.getParams()) /
                                 sum(mypsf.weights.getParams()))
-        print 'Normalized PSF weights:', mypsf
+        print('Normalized PSF weights:', mypsf)
         mod = tractor.getModelImage(0)
-        print 'Mod sum:', mod.sum()
+        print('Mod sum:', mod.sum())
         _plot_psf(pix, mod, mypsf, flux=src.brightness.getValue())
         plt.suptitle('W%i psf3 (opt): %g = %s, resid %.3f' %
                      (band, np.sum(mypsf.amp), ','.join(['%.3f'%a for a in mypsf.amp]), np.sum(pix-mod)))
@@ -558,13 +559,13 @@ def _meisner_psf_models():
 
         tim.psf = mypsf
         
-        print 'Optimizing Params:'
+        print('Optimizing Params:')
         tractor.printThawedParams()
     
         for i in range(200):
             #dlnp,X,alpha = tractor.optimize(damp=0.1)
             dlnp,X,alpha = tractor.optimize(damp=1)
-            print i,'dlnp %.3g' % dlnp, 'psf', mypsf
+            print(i,'dlnp %.3g' % dlnp, 'psf', mypsf)
             if dlnp < 1e-6:
                 break
 
@@ -574,17 +575,17 @@ def _meisner_psf_models():
         for i in range(200):
             #dlnp,X,alpha = tractor.optimize(damp=0.1)
             dlnp,X,alpha = tractor.optimize(damp=1)
-            print i,'dlnp %.3g' % dlnp, 'psf', mypsf
+            print(i,'dlnp %.3g' % dlnp, 'psf', mypsf)
             if dlnp < 1e-6:
                 break
         
-        print 'PSF amps:', np.sum(mypsf.amp)
-        print 'pix sum:', pix.sum()
-        print 'Optimize source:', src
-        print 'Optimized PSF:', mypsf
+        print('PSF amps:', np.sum(mypsf.amp))
+        print('pix sum:', pix.sum())
+        print('Optimize source:', src)
+        print('Optimized PSF:', mypsf)
         
         mod = tractor.getModelImage(0)
-        print 'Mod sum:', mod.sum()
+        print('Mod sum:', mod.sum())
         _plot_psf(pix, mod, mypsf, flux=src.brightness.getValue())
         plt.suptitle('W%i psf3 (opt2): %g = %s, resid %.3f' %
                      (band, np.sum(mypsf.amp), ','.join(['%.3f'%a for a in mypsf.amp]), np.sum(pix-mod)))
@@ -605,8 +606,8 @@ def _plot_psf_models(fn, ps):
                         hspace=0.25)
     lp,lt = [],[]
     for band in [1,2,3,4]:
-        print
-        print 'Band W%i' % band
+        print()
+        print('Band W%i' % band)
         
         #plt.clf()
         plt.subplot(2,2, band)
@@ -627,7 +628,7 @@ def _plot_psf_models(fn, ps):
         lp.append(p1[0])
         lt.append('Meisner+')
         yy = pix[:,w/2]
-        print 'Meisner max:', pix.max(), 'sum', pix.sum()
+        print('Meisner max:', pix.max(), 'sum', pix.sum())
         
         pix = reduce(np.add,
                      [fitsio.read('wise-w%i-psf-wpro-09x09-%02ix%02i.fits' %
@@ -647,15 +648,15 @@ def _plot_psf_models(fn, ps):
         p4 = plt.plot(xx, pix[:, w/2] * vscale, 'r--')
         lp.append(p3[0])
         lt.append('AllWISE')
-        print 'AllWISE max:', pix.max(), 'sum', pix.sum()
+        print('AllWISE max:', pix.max(), 'sum', pix.sum())
 
 
         T = fits_table(fn, hdu=band)
         # T.about()
-        print 'Amp sum:', np.sum(T.amp)
-        print 'Amp', T.amp
+        print('Amp sum:', np.sum(T.amp))
+        print('Amp', T.amp)
         # print 'Mean', T.mean
-        print 'Var', T.var[:,0,0]
+        print('Var', T.var[:,0,0])
 
         vscale = 1
         if band == 4:
@@ -681,14 +682,14 @@ def _plot_psf_models(fn, ps):
         #     else:
         #         plt.plot(xx, yy * vscale, 'k-', alpha=0.5)
 
-        print 'Mid:', yy[len(yy)/2]
-        print 'Model max:', yy.max()
+        print('Mid:', yy[len(yy)/2])
+        print('Model max:', yy.max())
 
         xx,yy = np.meshgrid(np.arange(w)-w/2, np.arange(h)-h/2)
         zz = reduce(np.add,
                     [amp * 1./(2.*np.pi*var) * np.exp(-0.5 * (xx**2 + yy**2) / var)
                      for amp,var in zip(T.amp, T.var[:,0,0])])
-        print 'Model sum:', zz.sum()
+        print('Model sum:', zz.sum())
 
         
         #plt.yscale('symlog', linthreshy=1e-6)
@@ -945,7 +946,7 @@ if __name__ == '__main__':
     tractor.freezeParam('catalog')
     for i in range(100):
 
-        print 'Optimizing PSF:'
+        print('Optimizing PSF:')
         tractor.printThawedParams()
         
         dlnp,X,alpha = tractor.optimize(damp=1.)
@@ -953,7 +954,7 @@ if __name__ == '__main__':
         tractor.freezeParam('images')
         tractor.thawParam('catalog')
 
-        print 'Optimizing flux:'
+        print('Optimizing flux:')
         tractor.printThawedParams()
 
         tractor.optimize_forced_photometry()
@@ -965,7 +966,7 @@ if __name__ == '__main__':
     plt.suptitle('psf2 (opt)')
     ps.savefig()
 
-    print 'amps', psf2.mog.amp
+    print('amps', psf2.mog.amp)
     
     T = fits_table()
     T.amp  = psf2.mog.amp / psf2.mog.amp.sum()
@@ -986,14 +987,14 @@ if __name__ == '__main__':
     
         tim.psf = gpsf
     
-        print 'Params:'
+        print('Params:')
         tractor.printThawedParams()
     
         for i in range(10):
             dlnp,X,alpha = tractor.optimize()
-            print 'dlnp', dlnp
-            print 'alpha', alpha
-            print 'PSF', tim.psf
+            print('dlnp', dlnp)
+            print('alpha', alpha)
+            print('PSF', tim.psf)
     
         mod = tractor.getModelImage(0)
     
@@ -1006,9 +1007,9 @@ if __name__ == '__main__':
     tractor.freezeParam('catalog')
     var = tractor.optimize(variance=True, just_variance=True)
 
-    print 'Initializing sampler at:'
+    print('Initializing sampler at:')
     tractor.printThawedParams()
-    print 'Stddevs', np.sqrt(var)
+    print('Stddevs', np.sqrt(var))
 
 
     
@@ -1042,7 +1043,7 @@ if __name__ == '__main__':
         todo = np.flatnonzero(np.logical_not(np.isfinite(lnp)))
         if len(todo) == 0:
             break
-        print 'Re-drawing', len(todo), 'initial parameters'
+        print('Re-drawing', len(todo), 'initial parameters')
         pp[todo,:] = sampleBall(p0, 0.5 * np.sqrt(var), len(todo))
     lnp0 = lnp
 
@@ -1054,14 +1055,14 @@ if __name__ == '__main__':
     lnp = None
     rstate = None
     for step in range(1000):
-        print 'Taking step', step
+        print('Taking step', step)
         pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
         imax = np.argmax(lnp)
-        print 'Max lnp', lnp[imax]
+        print('Max lnp', lnp[imax])
         if lnp[imax] > bestlnp:
             bestlnp = lnp[imax]
             bestp = pp[imax,:]
-            print 'New best params', bestp
+            print('New best params', bestp)
 
         alllnp.append(lnp.copy())
         allp.append(pp.copy())
@@ -1069,7 +1070,7 @@ if __name__ == '__main__':
     allp = np.array(allp)
     alllnp = np.array(alllnp)
         
-    print 'Best params', bestp
+    print('Best params', bestp)
     tractor.setParams(bestp)
 
     mod = tractor.getModelImage(0)
@@ -1081,8 +1082,8 @@ if __name__ == '__main__':
     h,w = lpix.shape
     xx,yy = np.meshgrid(np.arange(w), np.arange(h))
 
-    print 'Pix mean', np.sum(xx * lpix)/np.sum(lpix), np.sum(yy * lpix)/np.sum(lpix)
-    print 'Mod mean', np.sum(xx * mod)/np.sum(mod), np.sum(yy * mod)/np.sum(mod)
+    print('Pix mean', np.sum(xx * lpix)/np.sum(lpix), np.sum(yy * lpix)/np.sum(lpix))
+    print('Mod mean', np.sum(xx * mod)/np.sum(mod), np.sum(yy * mod)/np.sum(mod))
 
 
     amps = mypsf.mog.amp.copy()
@@ -1108,7 +1109,7 @@ if __name__ == '__main__':
 
     # Plot parameter distributions
     burn = 0
-    print 'All params:', allp.shape
+    print('All params:', allp.shape)
     for i,nm in enumerate(tractor.getParamNames()):
         pp = allp[:,:,i].ravel()
         lo,hi = [np.percentile(pp,x) for x in [5,95]]
@@ -1159,11 +1160,11 @@ if __name__ == '__main__':
     pix = w.instantiateAt(50., 50.)
     r = (pix.shape[0]-1)/2
     mod = w.getPointSourcePatch(50., 50., radius=r)
-    print 'mod', mod.shape
-    print 'pix', pix.shape
+    print('mod', mod.shape)
+    print('pix', pix.shape)
     w.bright = True
     bpix = w.instantiateAt(50., 50.)
-    print 'bpix:', bpix.shape
+    print('bpix:', bpix.shape)
 
     s1 = mod.shape[0]
     s2 = bpix.shape[1]

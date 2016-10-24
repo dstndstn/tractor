@@ -9,6 +9,7 @@ This code builds a simultaneous emitting dust model for a set of
 It has various things related to Herschel data hard-coded.
 """
 
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 matplotlib.rc('text', usetex=True)
@@ -216,8 +217,8 @@ class DustSheet(MultiParams):
             0.
             )
 
-        print 'getLogPrior:'
-        print self
+        print('getLogPrior:')
+        print(self)
 
         # Smoothness:
         for p,smooth in [(logt,  self.prior_logt_smooth),
@@ -302,7 +303,7 @@ class DustSheet(MultiParams):
             c0 += nparams
             r0 += NI
 
-            print 'Added', NI, 'rows of priors for absolute value of', pname
+            print('Added', NI, 'rows of priors for absolute value of', pname)
 
         # Smoothness priors:
         c0 = 0
@@ -356,7 +357,7 @@ class DustSheet(MultiParams):
                 assert(len(rA[-1]) == len(cA[-1]))
                 assert(len(rA[-1]) == len(vA[-1]))
 
-                print 'Added', NI, 'rows of priors for smoothness of', pname
+                print('Added', NI, 'rows of priors for smoothness of', pname)
 
             # This is outside the loop
             c0 += len(I)
@@ -423,18 +424,18 @@ class DustSheet(MultiParams):
         if False:
             i0 = S/2
         else:
-            print 'Image', img.name
-            print 'Image PSF', img.getPsf()
+            print('Image', img.name)
+            print('Image PSF', img.getPsf())
             psfw = img.getPsf().getRadius()
             scale = img.getWcs().pixel_scale() / self.wcs.pixel_scale()
-            print 'Image pixel scale', img.getWcs().pixel_scale()
-            print 'Model pixel scale', self.wcs.pixel_scale()
-            print 'PSF extent', psfw, 'pixels'
-            print 'pixel scale factor', scale
-            print '->', psfw * scale, 'model pixels'
-            print 'Increasing S from', S
+            print('Image pixel scale', img.getWcs().pixel_scale())
+            print('Model pixel scale', self.wcs.pixel_scale())
+            print('PSF extent', psfw, 'pixels')
+            print('pixel scale factor', scale)
+            print('->', psfw * scale, 'model pixels')
+            print('Increasing S from', S)
             S += int(np.ceil(psfw*scale)) * 2
-            print 'to', S
+            print('to', S)
             i0 = S/2
 
         cmock = np.zeros((S,S), np.float32)
@@ -442,7 +443,7 @@ class DustSheet(MultiParams):
 
         if True:
             spsf = img.getPsf().scale(scale)
-            print 'Scaled PSF', spsf
+            print('Scaled PSF', spsf)
             cmock = spsf.applyTo(cmock)
             #print 'cmock'
             #print cmock
@@ -454,7 +455,7 @@ class DustSheet(MultiParams):
 
         X = {}
         for i in range(ylo, yhi):
-            print 'Precomputing matrix for image', img.name, 'model row', i
+            print('Precomputing matrix for image', img.name, 'model row', i)
             for j in range(W):
                 #print 'Precomputing matrix for grid pixel', j,i
                 cwcs.set_crpix(cx0 - j + i0, cy0 - i + i0)
@@ -504,14 +505,14 @@ class DustSheet(MultiParams):
         sumr = np.zeros(iH *iW, np.float32)
         for (I, outim, NZ, NZI) in X.values():
             sumr[I] += outim
-        print 'sumr range', sumr.min(), sumr.max()
+        print('sumr range', sumr.min(), sumr.max())
         sumr[sumr == 0] = 1.
         mn,mx = 0.,0.
         for (I, outim, NZ, NZI) in X.values():
             outim /= sumr.ravel()[I]
             mx = max(outim.max(), mx)
             mn = max(outim.min(), mn)
-        print 'Min,Max grid-spread function:', mn,mx
+        print('Min,Max grid-spread function:', mn,mx)
 
     def _setTransformation(self, img, X):
         key = (img.getWcs(), img.getPsf())
@@ -580,7 +581,7 @@ class DustSheet(MultiParams):
         for si,sub in self._enumerateActiveSubs():
             for parami,gridi in sub._indexBoth():
                 if parami % 100 == 0:
-                    print 'Img', img.name, 'deriv', i0+parami, nms[i0+parami]
+                    print('Img', img.name, 'deriv', i0+parami, nms[i0+parami])
                 try:
                     I,V,((x0,y0),nzshape),NZI = X[gridi]
                 except KeyError:
@@ -631,7 +632,7 @@ class DustSheet(MultiParams):
         return derivs
 
 def makeplots(tractor, step, suffix):
-    print 'Making plots'
+    print('Making plots')
 
     ds = tractor.getCatalog()[0]
     logsa, logt, emis = ds.getArrays()
@@ -646,7 +647,7 @@ def makeplots(tractor, step, suffix):
     H = 3.
     W1 = 3.5
     W2 = (0.90 / 0.99) * H
-    print 'W2', W2
+    print('W2', W2)
 
     plt.figure(1, figsize=(W1,H))
     plt.subplots_adjust(**spa)
@@ -727,7 +728,7 @@ def makeplots(tractor, step, suffix):
         ima = dict(interpolation='nearest', origin='lower',
                    vmin=tim.zr[0], vmax=tim.zr[1])
 
-        print 'Getting model image', i
+        print('Getting model image', i)
         mod = tractor.getModelImage(i)
         mods.append(mod)
         plt.clf()
@@ -787,8 +788,8 @@ def makeplots(tractor, step, suffix):
     for i,mod in enumerate(mods):
         tim = tractor.getImage(i)
 
-        print 'Image', tim.name, ': data median', np.median(tim.getImage()),
-        print 'model median:', np.median(mod)
+        print('Image', tim.name, ': data median', np.median(tim.getImage()), end=' ')
+        print('model median:', np.median(mod))
 
         ima = dict(interpolation='nearest', origin='lower',
                    vmin=tim.zr[0], vmax=tim.zr[1])
@@ -849,13 +850,13 @@ def makeplots(tractor, step, suffix):
 
 
 def np_err_handler(typ, flag):
-    print 'Floating point error (%s), with flag %s' % (typ, flag)
+    print('Floating point error (%s), with flag %s' % (typ, flag))
     import traceback
     #print traceback.print_stack()
     tb = traceback.extract_stack()
     # omit myself
     tb = tb[:-1]
-    print ''.join(traceback.format_list(tb))
+    print(''.join(traceback.format_list(tb)))
 
 def create_tractor(opt):
     """
@@ -886,11 +887,11 @@ def create_tractor(opt):
     if opt.no100:
         dataList = dataList[1:]
 
-    print 'Reading images...'
+    print('Reading images...')
     tims = []
     for i, (fn, nm, noise, fwhm) in enumerate(dataList):
-        print
-        print 'Reading', fn
+        print()
+        print('Reading', fn)
         P = pyfits.open(fn)
         image = P[0].data.astype(np.float32)
         #wcs = Tan(fn, 0)
@@ -902,15 +903,15 @@ def create_tractor(opt):
         assert(hdr['CROTA2'] == 0.)
         if noise is None:
             noise = float(hdr['NOISE'])
-        print 'Noise', noise
-        print 'Median image value', np.median(image)
+        print('Noise', noise)
+        print('Median image value', np.median(image))
         inverr = np.ones_like(image) / noise
 
         skyval = np.percentile(image, 5)
         sky = ConstantSky(skyval)
 
         lam = float(hdr['FILTER'])
-        print 'Lambda', lam
+        print('Lambda', lam)
         # calibrated, yo
         assert(hdr['BUNIT'] == 'MJy/Sr')
         # "Filter" is in *microns* in the headers; convert to *m* here, to match "lam0"
@@ -919,15 +920,15 @@ def create_tractor(opt):
         #nm = fn.replace('.fits', '')
         #zr = noise * np.array([-3, 10]) + skyval
         zr = np.array([np.percentile(image.ravel(), p) for p in [1, 99]])
-        print 'Pixel scale:', wcs.pixel_scale()
+        print('Pixel scale:', wcs.pixel_scale())
         # meh
         sigma = fwhm / wcs.pixel_scale() / 2.35
-        print 'PSF sigma', sigma, 'pixels'
+        print('PSF sigma', sigma, 'pixels')
         psf = NCircularGaussianPSF([sigma], [1.])
         twcs = ConstantFitsWcs(wcs)
         tim = Image(data=image, inverr=inverr, psf=psf, wcs=twcs,
                     sky=sky, photocal=pcal, name=nm)
-        print 'created', tim
+        print('created', tim)
         tim.zr = zr
         tims.append(tim)
 
@@ -960,7 +961,7 @@ def create_tractor(opt):
     setRadecAxes(*plotrange)
     plt.savefig('radec1%s.png' % opt.suffix)
 
-    print 'Creating dust sheet...'
+    print('Creating dust sheet...')
     N = opt.gridn
 
     # Build a WCS for the dust sheet to match the first image
@@ -1080,7 +1081,7 @@ def main():
         Time.add_measurement(debugpool.DebugPoolMeas(dpool))
         mp = multiproc(pool=dpool)
     else:
-        print 'N threads', opt.threads
+        print('N threads', opt.threads)
         mp = multiproc(opt.threads)#, wrap_all=True)
 
     if opt.callgrind:
@@ -1094,12 +1095,12 @@ def main():
 
     if opt.resume > -1:
         pfn = 'herschel-%02i%s.pickle' % (opt.resume, opt.suffix)
-        print 'Reading from', pfn
+        print('Reading from', pfn)
         tractor = unpickle_from_file(pfn)
         tractor.mp = mp
 
         ds = tractor.getCatalog()[0]
-        print 'DustSheet:', ds
+        print('DustSheet:', ds)
 
         # derivs = ds.getParamDerivatives(tim)
         # dim = np.zeros(tim.shape)
@@ -1145,9 +1146,9 @@ def main():
             poly = np.array([tim.getWcs().positionToPixel(
                 RaDecPos(rdi[0], rdi[1])) for rdi in rd])
             poly = poly[:-1,:]
-            print 'Model bounding box in image', tim.name, 'coordinates:'
+            print('Model bounding box in image', tim.name, 'coordinates:')
             #print poly.shape
-            print poly
+            print(poly)
             H,W = tim.shape
             xx,yy = np.meshgrid(np.arange(W), np.arange(H))
             inside = point_in_poly(xx, yy, poly)
@@ -1175,7 +1176,7 @@ def main():
         plt.legend()
         plt.savefig('radec.png')
             
-        print 'Precomputing transformations...'
+        print('Precomputing transformations...')
         ds = tractor.getCatalog()[0]
 
         # Split the grid-spread matrix into strips...
@@ -1201,7 +1202,7 @@ def main():
         for im,X in zip(tractor.getImages(), XX):
             ds._normalizeTransformation(im, X)
             ds._setTransformation(im, X)
-        print 'done precomputing.'
+        print('done precomputing.')
 
         # Plot the grid-spread functions.
         for itim,tim in enumerate(tractor.images):
@@ -1219,13 +1220,13 @@ def main():
         makeplots(tractor, 0, opt.suffix)
         pfn = 'herschel-%02i%s.pickle' % (0, opt.suffix)
         pickle_to_file(tractor, pfn)
-        print 'Wrote', pfn
+        print('Wrote', pfn)
 
     for im in tractor.getImages():
         im.freezeAllBut('sky')
 
     for i in range(step0, opt.steps):
-        print 'Step', i
+        print('Step', i)
         if callgrind:
             callgrind.callgrind_start_instrumentation()
 
@@ -1237,10 +1238,10 @@ def main():
         makeplots(tractor, 1 + i, opt.suffix)
         pfn = 'herschel-%02i%s.pickle' % (1 + i, opt.suffix)
         pickle_to_file(tractor, pfn)
-        print 'Wrote', pfn
+        print('Wrote', pfn)
 
 def _map_trans((ds, img, ylo, yhi)):
-    print 'computing transformation in PID', os.getpid()
+    print('computing transformation in PID', os.getpid())
     return ds._computeTransformation(img, ylo, yhi)
 
 def check_priors():
@@ -1269,7 +1270,7 @@ def check_priors():
         tractor.setCatalog(cat)
 
         p0 = tractor.getParams()
-        print 'lnp0', tractor.getLogProb()
+        print('lnp0', tractor.getLogProb())
 
         if True:
             # check getLogProb()
@@ -1334,9 +1335,9 @@ def check_priors():
             (4, 3.),
             (5, 3.),
             ]):
-            print
-            print
-            print 'Setting', ds.getParamNames()[ip], 'from', p0[ip], 'to', val
+            print()
+            print()
+            print('Setting', ds.getParamNames()[ip], 'from', p0[ip], 'to', val)
 
             tractor.setParams(p0)
             tractor.setParam(ip, val)
@@ -1356,7 +1357,7 @@ def check_priors():
 
             plt.clf()
             xxall = np.vstack(xxall)
-            print 'xxall', xxall.shape
+            print('xxall', xxall.shape)
             for i in range(6):
                 #plt.subplot(1,3,(i/2)+1)
                 #plt.plot(xxall[:,i], pp, 'ro-')
@@ -1388,7 +1389,7 @@ def check_priors():
         tractor.setCatalog(cat)
 
         p0 = tractor.getParams()
-        print 'lnp0', tractor.getLogProb()
+        print('lnp0', tractor.getLogProb())
 
         # no prior on solid angle
         # N(log(17.), log(1.2)) on T
@@ -1417,9 +1418,9 @@ def check_priors():
             (2, 1.),
             (2, 3.),
             ]):
-            print
-            print
-            print 'Setting', ds.getParamNames()[ip], 'to', val
+            print()
+            print()
+            print('Setting', ds.getParamNames()[ip], 'to', val)
 
             tractor.setParams(p0)
             tractor.setParam(ip, val)
@@ -1439,8 +1440,8 @@ def check_physics():
     for lam in 100. + 400. * np.random.uniform(size=ntry):
         lam *= 1.e-6 # go to meters
         lnT = np.log(10.) + 2. * np.random.uniform()
-        print lam, lnT, Physics.black_body_nu(lam, lnT), lam * Physics.black_body_lam(lam, lnT) / Physics.lam2nu(lam)
-        print lam, lnT, Physics.d_black_body_nu_d_lnT(lam, lnT), (Physics.black_body_nu(lam, lnT + 0.0005) - Physics.black_body_nu(lam, lnT - 0.0005)) / 0.001
+        print(lam, lnT, Physics.black_body_nu(lam, lnT), lam * Physics.black_body_lam(lam, lnT) / Physics.lam2nu(lam))
+        print(lam, lnT, Physics.d_black_body_nu_d_lnT(lam, lnT), (Physics.black_body_nu(lam, lnT + 0.0005) - Physics.black_body_nu(lam, lnT - 0.0005)) / 0.001)
     return None
 
 if __name__ == '__main__':
