@@ -102,11 +102,12 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         '''
         self.prior_smooth_sigma = sigma
 
+    def evaluateGrid(self, xvals, yvals):
+        return self.spl(xvals + self.x0, yvals + self.y0).T
+
     def addTo(self, mod, scale=1.):
         H,W = mod.shape
-        X = np.arange(W) + self.x0
-        Y = np.arange(H) + self.y0
-        S = self.spl(X, Y).T
+        S = self.evaluateGrid(np.arange(W), np.arange(H))
         mod += (S * scale)
 
     def getParamGrid(self):
