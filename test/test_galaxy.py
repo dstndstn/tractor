@@ -7,7 +7,7 @@ import numpy as np
 
 from tractor import *
 from tractor.galaxy import *
-from tractor.ducks import ModelMask
+from tractor.patch import ModelMask
 
 ps = None
 
