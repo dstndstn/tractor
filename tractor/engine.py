@@ -128,7 +128,8 @@ class Tractor(MultiParams):
             self.optimizer = optimizer
         
     def __str__(self):
-        s = '%s with %i sources and %i images' % (self.getName(), len(self.catalog), len(self.images))
+        s = ('%s with %i sources and %i images' % (
+            self.getName(), len(self.catalog), len(self.images)))
         names = []
         for im in self.images:
             if im.name is None:
@@ -216,8 +217,8 @@ class Tractor(MultiParams):
 
         ASSUMES the PSF and Sky models are position-independent!!
 
-        PRIORS probably don't work because we don't setParams() when evaluating
-        likelihood or prior!
+        PRIORS probably don't work because we don't setParams() when
+        evaluating likelihood or prior!
         '''
         return self.optimizer.forced_photometry(self, **kwargs)
 
@@ -317,7 +318,6 @@ class Tractor(MultiParams):
         return allderivs
 
     def setModelMasks(self, masks, assumeMasks=True):
-
         '''
         A "model mask" is used to define the pixels that are evaluated
         when computing the model patch for a source in an image.  This
@@ -325,16 +325,15 @@ class Tractor(MultiParams):
         optimization, without introducing errors due to approximating
         the profiles differently given different parameter settings.
 
-        If *masks* is None, this masking is disabled, and normal
+        *masks*: if None, this masking is disabled, and normal
         approximation rules apply.
 
         Otherwise, *masks* must be a list, with length equal to the
         number of images.  Each list element must be a dictionary with
-        Source objects for keys and Patch objects for values, where
-        the Patch images are binary masks (True for pixels that should
-        be evaluated).  Sources that do not touch the image should not
-        exist in the dictionary; all the Patches should be non-None
-        and non-empty.
+        Source objects for keys and ModelMask objects for values.
+        Sources that do not touch the image should not exist in the
+        dictionary; all the ModelMask objects should be non-None and
+        non-empty.
         '''
         self.modelMasks = masks
         assert((masks is None) or (len(masks) == len(self.images)))
@@ -350,7 +349,6 @@ class Tractor(MultiParams):
             return None
 
     def _checkModelMask(self, patch, mask):
-
         if self.expectModelMasks:
             if patch is not None:
                 assert(mask is not None)
@@ -362,7 +360,7 @@ class Tractor(MultiParams):
         if patch is not None and mask is not None and patch.patch is not None:
             nonzero = Patch(patch.x0, patch.y0, patch.patch != 0)
             #print('nonzero type:', nonzero.patch.dtype)
-            unmasked = Patch(mask.x0, mask.y0, np.logical_not(mask.patch))
+            unmasked = Patch(mask.x0, mask.y0, np.logical_not(mask.mask))
             #print('unmasked type:', unmasked.patch.dtype)
             bad = nonzero.performArithmetic(unmasked, '__iand__', otype=bool)
             assert(np.all(bad.patch == False))
@@ -373,13 +371,7 @@ class Tractor(MultiParams):
         # HACK! -- assume no modelMask -> no overlap
         if self.expectModelMasks and mask is None:
             return [None] * src.numberOfParams()
-
-        #print('getting param derivs for', src)
-
-        #print('_getSourceDerivatives:', src, img, kwargs)
-
         derivs = src.getParamDerivatives(img, modelMask=mask, **kwargs)
-        #print('done getting param derivs for', src)
 
         # HACK -- auto-add?
         # if self.expectModelMasks:
@@ -442,18 +434,7 @@ class Tractor(MultiParams):
     def getChiImage(self, imgi=-1, img=None, srcs=None, minsb=0.):
         if img is None:
             img = self.getImage(imgi)
-
-        # print('getChiImage:', img, ':', img.shape)
-        # if srcs is None:
-        #     print('Sources:')
-        #     for src in self.catalog:
-        #         print('  ', src)
-        # else:
-        #     print('Sources:', srcs)
-        # print('LogPriorDerivatives:', self.getLogPriorDerivatives())
-            
         mod = self.getModelImage(img, srcs=srcs, minsb=minsb)
-        #print('mod:', mod.shape)
         chi = (img.getImage() - mod) * img.getInvError()
         if not np.all(np.isfinite(chi)):
             print('Chi not finite')

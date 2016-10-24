@@ -207,45 +207,6 @@ class Sky(ImageCalibration, Params):
         s = self.copy()
         s.shift(x0, y0)
         return s
-
-class ModelMask(object):
-    def __init__(self, x0, y0, *args):
-        '''
-        ModelMask(x0, y0, w, h)
-        ModelMask(x0, y0, mask)
-        
-        *mask* is assumed to be a binary image, True for pixels we're
-         interested in.
-        '''
-        self.x0 = x0
-        self.y0 = y0
-        if len(args) == 2:
-            self.w, self.h = args
-            self.mask = None
-        elif len(args) == 1:
-            self.mask = args[0]
-            self.h, self.w = self.mask.shape
-        else:
-            raise ValueError('Wrong number of arguments')
-
-    @staticmethod
-    def fromExtent(x0,x1,y0,y1):
-        return ModelMask(x0, y0, x1-x0, y1-y0)
-
-    @property
-    def shape(self):
-        return (self.h,self.w)
-
-    @property
-    def x1(self):
-        return self.x0 + self.w
-    @property
-    def y1(self):
-        return self.y0 + self.h
-
-    @property
-    def extent(self):
-        return (self.x0, self.x0+self.w, self.y0, self.y0+self.h)
     
 class Source(Params):
     '''

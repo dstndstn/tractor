@@ -2,6 +2,7 @@ from __future__ import print_function
 import numpy as np
 
 from .utils import MultiParams
+from .patch import ModelMask
 import ducks
 
 class BasicSource(ducks.Source):
@@ -89,7 +90,7 @@ class PointSource(MultiParams, SingleProfileSource):
 
         ## ??
         if modelMask is None:
-            modelMask = ducks.ModelMask(0, 0, W, H)
+            modelMask = ModelMask(0, 0, W, H)
 
         patch = psf.getPointSourcePatch(px, py, minval=minval,
                                         radius=self.fixedRadius,

@@ -19,9 +19,8 @@ import numpy as np
 from astrometry.util.miscutils import get_overlapping_region
 
 from . import mixture_profiles as mp
-from .utils import ParamList, MultiParams, ScalarParam
-from .ducks import ModelMask
-from .patch import Patch, add_patches
+from .utils import ParamList, MultiParams, ScalarParam, BaseParams
+from .patch import Patch, add_patches, ModelMask
 from .basics import SingleProfileSource, BasicSource
 
 #from .cache import Cache
