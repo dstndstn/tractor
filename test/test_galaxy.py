@@ -75,7 +75,7 @@ class GalaxyTest(unittest.TestCase):
         print('Model patch:', p1)
         print('patch sum:', p1.patch.sum())
 
-        # specific...
+        # Very specific tests...
         self.assertEqual(p1.x0, 16)
         self.assertEqual(p1.y0, 17)
         self.assertEqual(p1.shape, (68,69))
@@ -92,29 +92,16 @@ class GalaxyTest(unittest.TestCase):
             plt.colorbar()
             ps.savefig()
 
+        # Test with ModelMask
         mm = ModelMask(25, 25, 50, 50)
-
-        # up2 = gal1.getUnitFluxModelPatch(tim, modelMask=mm)
-        # print('Unit-flux patch:', up2)
-        # 
-        # px,py = tim.getWcs().positionToPixel(gal1.getPosition(), gal1)
-        # rup2 = gal1._realGetUnitFluxModelPatch(tim, px, py, None,
-        #                                        modelMask=mm)
-        # print('Real unit-flux patch:', rup2)
-        # 
-        # deps = gal1._getUnitFluxDeps(tim, px, py)
-        # print('Unit-flux deps:', deps)
-        
         p2 = gal1.getModelPatch(tim, modelMask=mm)
+        mod2 = np.zeros((H,W), np.float32)
+        p2.addTo(mod2)
         print('Patch:', p2)
         self.assertEqual(p2.x0, 25)
         self.assertEqual(p2.y0, 25)
         self.assertEqual(p2.shape, (50,50))
-
         print('patch sum:', p2.patch.sum())
-
-        mod2 = np.zeros((H,W), np.float32)
-        p2.addTo(mod2)
         print('Mod sum:', mod2.sum())
         self.assertTrue(np.abs(mod2.sum() - 100.) < 1e-3)
 
@@ -132,22 +119,76 @@ class GalaxyTest(unittest.TestCase):
         print('Diff between mods:', np.abs(mod - mod2).max())
         self.assertTrue(np.abs(mod - mod2).max() < 1e-6)
 
-
-        mm2 = ModelMask(30, 29, np.ones((40,40), bool))
-        
-        p3 = gal1.getModelPatch(tim, modelMask=mm2)
+        # Test with a ModelMask with a binary map of pixels of interest
+        mm3 = ModelMask(30, 29, np.ones((40,40), bool))
+        p3 = gal1.getModelPatch(tim, modelMask=mm3)
+        mod3 = np.zeros((H,W), np.float32)
+        p3.addTo(mod3)
         print('Patch:', p3)
         self.assertEqual(p3.x0, 30)
         self.assertEqual(p3.y0, 29)
         self.assertEqual(p3.shape, (40,40))
         print('patch sum:', p3.patch.sum())
-        mod3 = np.zeros((H,W), np.float32)
-        p3.addTo(mod3)
         print('Mod sum:', mod3.sum())
         self.assertTrue(np.abs(mod3.sum() - 100.) < 1e-3)
         print('Diff between mods:', np.abs(mod3 - mod).max())
         self.assertTrue(np.abs(mod3 - mod).max() < 1e-6)
 
+        # Test with a PixelizedPSF (FFT method), created from the Gaussian PSF
+        # image (so we can check consistency)
+        psfpatch = tim.psf.getPointSourcePatch(
+            24., 24., modelMask=ModelMask(0, 0, 50, 50))
+        print('PSF patch:', psfpatch)
+        tim.psf = PixelizedPSF(psfpatch.patch[:49,:49])
+        
+        p4 = gal1.getModelPatch(tim)
+        mod4 = np.zeros((H,W), np.float32)
+        p4.addTo(mod4)
+        print('Patch:', p4)
+        # These assertions are fairly arbitrary...
+        self.assertEqual(p4.x0, 6)
+        self.assertEqual(p4.y0, 7)
+        self.assertEqual(p4.shape, (88,89))
+        print('patch sum:', p4.patch.sum())
+        print('Mod sum:', mod4.sum())
+        self.assertTrue(np.abs(mod4.sum() - 100.) < 1e-3)
+        print('Diff between mods:', np.abs(mod4 - mod).max())
+        self.assertTrue(np.abs(mod4 - mod).max() < 1e-6)
+
+        # Test with ModelMask with "mm"
+        p5 = gal1.getModelPatch(tim, modelMask=mm)
+        mod5 = np.zeros((H,W), np.float32)
+        p5.addTo(mod5)
+        print('Patch:', p5)
+        self.assertEqual(p5.x0, 25)
+        self.assertEqual(p5.y0, 25)
+        self.assertEqual(p5.shape, (50,50))
+        print('patch sum:', p5.patch.sum())
+        print('Mod sum:', mod5.sum())
+        self.assertTrue(np.abs(mod5.sum() - 100.) < 1e-3)
+        print('Diff between mods:', np.abs(mod5 - mod).max())
+        self.assertTrue(np.abs(mod5 - mod).max() < 1e-6)
+
+        # Test with a source center outside the ModelMask.
+        # Way outside the ModelMask -> model is None
+        pos0 = gal1.pos
+        gal1.pos = PixPos(200, -50.)
+        p6 = gal1.getModelPatch(tim, modelMask=mm)
+        self.assertIsNone(p6)
+
+        # Slightly outside the ModelMask
+        gal1.pos = PixPos(20., 25.)
+        p7 = gal1.getModelPatch(tim, modelMask=mm)
+        mod7 = np.zeros((H,W), np.float32)
+        p7.addTo(mod7)
+        print('Patch:', p7)
+        self.assertEqual(p7.x0, 25)
+        self.assertEqual(p7.y0, 25)
+        self.assertEqual(p7.shape, (50,50))
+        print('patch sum:', p7.patch.sum())
+        print('Mod sum:', mod7.sum())
+        self.assertTrue(np.abs(mod7.sum() - 1.362) < 1e-3)
+        
         
 
 if __name__ == '__main__':

@@ -378,9 +378,6 @@ class PsfExModel(object):
         if term is not None:
             plt.suptitle('PSF component for x^%i y^%i' % (xpows[term], ypows[term]))
 
-        
-
-
 class PixelizedPsfEx(PixelizedPSF):
     def __init__(self, fn, ext=1, psfexmodel=PsfExModel, psfex=None):
         if fn is not None:
@@ -673,13 +670,6 @@ class CachingPsfEx(PsfEx):
         #print 'CachingPsf: getting PSF at', cx,cy, '->', mog
         self.cache.put(key, mog)
         return mog
-    
-# class PixelizedPsfEx(PsfEx):
-#     def getPointSourcePatch(self, px, py, minval=0., extent=None):
-#         pix = self.instantiateAt(px, py, nativeScale=True)
-#         pixpsf = PixelizedPSF(pix).getPointSourcePatch(px, py)
-#         #sz = pix.shape[0]
-#         #return Patch(pix, -sz/2, -sz/2)
 
 if __name__ == '__main__':
     import sys

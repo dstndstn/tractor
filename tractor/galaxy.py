@@ -315,10 +315,11 @@ class ProfileGalaxy(object):
             # Avoid huge galaxies -> huge halfsize in a tiny image (blob)
             imsz = max(imh,imw)
             halfsize = min(halfsize, imsz)
-
-        else:
             # FIXME -- should take some kind of combination of
             # modelMask, PSF, and Galaxy sizes!
+
+        else:
+            # ModelMask sets the sizes.
             mh,mw = modelMask.shape
             x1 = x0 + mw
             y1 = y0 + mh
@@ -343,6 +344,7 @@ class ProfileGalaxy(object):
                 if py > y1:
                     neardy = py - y1
                 nearest = np.hypot(neardx, neardy)
+                print('Nearest corner:', nearest, 'vs radius', self.getRadius())
                 if nearest > self.getRadius():
                     return None
                 # how far is the furthest point from the source center?
