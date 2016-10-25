@@ -140,7 +140,8 @@ class GalaxyTest(unittest.TestCase):
             24., 24., modelMask=ModelMask(0, 0, 50, 50))
         print('PSF patch:', psfpatch)
         tim.psf = PixelizedPSF(psfpatch.patch[:49,:49])
-        
+
+        # No modelmask
         p4 = gal1.getModelPatch(tim)
         mod4 = np.zeros((H,W), np.float32)
         p4.addTo(mod4)
@@ -188,7 +189,60 @@ class GalaxyTest(unittest.TestCase):
         print('patch sum:', p7.patch.sum())
         print('Mod sum:', mod7.sum())
         self.assertTrue(np.abs(mod7.sum() - 1.362) < 1e-3)
+
+        # Test a HybridPSF
+        tim.psf = HybridPixelizedPSF(tim.psf)
+
+        # Slightly outside the ModelMask
+        gal1.pos = PixPos(20., 25.)
+        p8 = gal1.getModelPatch(tim, modelMask=mm)
+        mod8 = np.zeros((H,W), np.float32)
+        p8.addTo(mod8)
+        print('Patch:', p8)
+        self.assertEqual(p8.x0, 25)
+        self.assertEqual(p8.y0, 25)
+        self.assertEqual(p8.shape, (50,50))
+        print('patch sum:', p8.patch.sum())
+        print('Mod sum:', mod8.sum())
+        self.assertTrue(np.abs(mod8.sum() - 1.362) < 1e-3)
+
+        if ps is not None:
+            plt.clf()
+            plt.imshow(mod7, interpolation='nearest', origin='lower')
+            plt.colorbar()
+            plt.title('Source outside mask')
+            ps.savefig()
+
+            plt.clf()
+            plt.imshow(mod8, interpolation='nearest', origin='lower')
+            plt.colorbar()
+            plt.title('Source outside mask, Hybrid PSF')
+            ps.savefig()
+
+        # Put the source close to the image edge.
+        gal1.pos = PixPos(5., 5.)
+        # No model mask
+        p9 = gal1.getModelPatch(tim)
+        mod9 = np.zeros((H,W), np.float32)
+        p9.addTo(mod9)
+        print('Patch:', p9)
+        #self.assertEqual(p8.x0, 25)
+        #self.assertEqual(p8.y0, 25)
+        #self.assertEqual(p8.shape, (50,50))
+        print('Mod sum:', mod9.sum())
+        self.assertTrue(np.abs(mod9.sum() - 96.98) < 1e-2)
+
+        # Zero outside (0,50),(0,50)
+        self.assertEqual(np.sum(np.abs(mod9[50:,:])), 0.)
+        self.assertEqual(np.sum(np.abs(mod9[:,50:])), 0.)
         
+        if ps is not None:
+            plt.clf()
+            plt.imshow(mod9, interpolation='nearest', origin='lower',
+                       vmin=0, vmax=1e-12)
+            plt.colorbar()
+            plt.title('Source near image edge')
+            ps.savefig()
         
 
 if __name__ == '__main__':

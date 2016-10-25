@@ -1,6 +1,8 @@
 from .engine import *
 from .ducks import *
 from .basics import *
+from .psf import (NCircularGaussianPSF, GaussianMixturePSF, PixelizedPSF,
+                  HybridPSF, HybridPixelizedPSF, GaussianMixtureEllipsePSF)
 from .motion import *
 from .psfex import *
 from .ellipses import *
@@ -24,6 +26,7 @@ __all__ = [
     'WCS', 'NullWCS',
     'TanWcs', 'WcslibWcs', 'ConstantFitsWcs',
     'NCircularGaussianPSF', 'GaussianMixturePSF', 'PixelizedPSF',
+    'HybridPSF', 'HybridPixelizedPSF',
     'GaussianMixtureEllipsePSF',
     'ScaledWcs', 'ShiftedWcs', 'ScaledPhotoCal', 'ShiftedPsf',
     'ParamsWrapper',

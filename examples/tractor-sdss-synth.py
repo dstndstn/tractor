@@ -196,6 +196,8 @@ def main():
     parser.add_option('--itune', action='callback', callback=store_value, type=int, nargs=2, help='Optimizes each source individually')
     parser.add_option('--roi', dest='roi', type=int, nargs=4, help='Select an x0,x1,y0,y1 subset of the image')
     parser.add_option('--prefix', dest='prefix', help='Set output filename prefix; default is the SDSS  RRRRRR-BC-FFFF string (run, band, camcol, field)')
+    parser.add_option('--sdss-dir', help='Set base directory for SDSS data')
+    parser.add_option('--const-invvar', help='Constant invvar, not per-pixel variable', action='store_true', default=False)
     parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
                       help='Make more verbose')
     parser.add_option('-d','--debug',dest='debug',action='store_true',default=False,help="Trigger debug images")
@@ -282,10 +284,15 @@ def main():
             dec = dec.replace(':',' ')
             dec = dmsstring2dec(dec)
 
-    sdss = DR9()
+    if opt.sdss_dir is not None:
+        sdss = DR9(basedir=opt.sdss_dir)
+    else:
+        sdss = DR9()
     getim = st.get_tractor_image_dr9
     getsrc = st.get_tractor_sources_dr9
     imkw = dict(zrange=[-3,100], sdss=sdss)
+    if opt.const_invvar:
+        imkw.update(invvarAtCenter=True)
     if opt.unzip:
         sdss.saveUnzippedFiles(opt.unzip)
         

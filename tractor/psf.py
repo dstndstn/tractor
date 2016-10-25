@@ -506,12 +506,12 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
         tpsf = GaussianMixturePSF(w, mu, var)
         return tpsf
 
-class HybridPixelizedPsf(HybridPSF):
+class HybridPixelizedPSF(HybridPSF):
     '''
     This class wraps a PixelizedPSF model, adding a Gaussian approximation
     model.
     '''
-    def __init__(self, pix, gauss, N=2):
+    def __init__(self, pix, gauss=None, N=2):
         '''
         Create a new hybrid PSF model using the given PixelizedPSF
         model *pix* and Gaussian approximation *gauss*.
@@ -519,14 +519,14 @@ class HybridPixelizedPsf(HybridPSF):
         If *gauss* is *None*, a *GaussianMixturePSF* model will be fit
         to the PixelizedPSF image using *N* Gaussian components.
         '''
-        super(MyHybridPsf, self).__init__()
+        super(HybridPixelizedPSF, self).__init__()
         self.pix = pix
         if gauss is None:
             gauss = GaussianMixturePSF.fromStamp(pix.getImage(0.,0.), N=N)
         self.gauss = gauss
 
     def __str__(self):
-        return ('MyHybridPsf: Gaussian sigma %.2f, Pix %s' %
+        return ('HybridPixelizedPSF: Gaussian sigma %.2f, Pix %s' %
                 (np.sqrt(self.gauss.mog.var[0,0,0]), str(self.pix)))
         
     def getMixtureOfGaussians(self, **kwargs):
@@ -534,11 +534,11 @@ class HybridPixelizedPsf(HybridPSF):
 
     def getShifted(self, dx, dy):
         pix = self.pix.shifted(dx, dy)
-        return MyHybridPsf(self.gauss, pix)
+        return HybridPixelizedPSF(pix, self.gauss)
     
     def constantPsfAt(self, x, y):
         pix = self.pix.constantPsfAt(x, y)
-        return MyHybridPsf(self.gauss, pix)
+        return HybridPixelizedPSF(pix, self.gauss)
 
     def __getattr__(self, name):
         '''Delegate to my pixelized PSF model.'''
