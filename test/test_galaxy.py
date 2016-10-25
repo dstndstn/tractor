@@ -22,6 +22,7 @@ class GalaxyTest(unittest.TestCase):
 
         #pos = RaDecPos(0., 1.)
         pos = PixPos(49.5, 50.)
+        pos0 = pos
         bright = NanoMaggies(g=1., r=2.)
         shape = GalaxyShape(2., 0.5, 45.)
 
@@ -172,7 +173,6 @@ class GalaxyTest(unittest.TestCase):
 
         # Test with a source center outside the ModelMask.
         # Way outside the ModelMask -> model is None
-        pos0 = gal1.pos
         gal1.pos = PixPos(200, -50.)
         p6 = gal1.getModelPatch(tim, modelMask=mm)
         self.assertIsNone(p6)
@@ -243,6 +243,44 @@ class GalaxyTest(unittest.TestCase):
             plt.colorbar()
             plt.title('Source near image edge')
             ps.savefig()
+
+        # Source back in the middle.
+        # Tight ModelMask
+        gal1.pos = pos0
+        mm10 = ModelMask(45, 45, 10, 10)
+        p10 = gal1.getModelPatch(tim, modelMask=mm10)
+        mod10 = np.zeros((H,W), np.float32)
+        p10.addTo(mod10)
+        print('Patch:', p10)
+        self.assertEqual(p10.x0, 45)
+        self.assertEqual(p10.y0, 45)
+        self.assertEqual(p10.shape, (10,10))
+        print('Mod sum:', mod10.sum())
+        #self.assertTrue(np.abs(mod10.sum() - 96.98) < 1e-2)
+
+        # Larger modelMask
+        mm11 = ModelMask(30, 30, 40, 40)
+        p11 = gal1.getModelPatch(tim, modelMask=mm11)
+        mod11 = np.zeros((H,W), np.float32)
+        p11.addTo(mod11)
+        print('Patch:', p11)
+        print('Mod sum:', mod11.sum())
+        self.assertTrue(np.abs(mod11.sum() - 100.) < 1e-3)
+        
+        if ps is not None:
+            plt.clf()
+            plt.imshow(mod10, interpolation='nearest', origin='lower')
+            plt.colorbar()
+            ps.savefig()
+
+            plt.clf()
+            plt.imshow(mod11, interpolation='nearest', origin='lower')
+            plt.colorbar()
+            ps.savefig()
+
+        diff = (mod11 - mod10)[45:55, 45:55]
+        print('Max diff:', np.abs(diff).max())
+        self.assertTrue(np.abs(diff).max() < 1e-6)
         
 
 if __name__ == '__main__':
