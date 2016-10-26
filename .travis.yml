@@ -65,6 +65,8 @@ script:
     - python -c "import numpy; print numpy.__file__"
     - export PATH=${PATH}:~/astrometry/blind/
     - which fitsverify
+    - (cd ~/astrometry/blind && make fitsverify)
+    - which fitsverify
     - pwd
     - make
     - make doc
