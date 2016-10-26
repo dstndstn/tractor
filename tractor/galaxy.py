@@ -840,6 +840,7 @@ class CompositeGalaxy(MultiParams, BasicSource):
         return add_patches(pe,pd)
 
     def getUnitFluxModelPatches(self, img, minval=0., modelMask=None):
+        ## Needed for forced photometry
         if minval > 0:
             # allow each component half the error
             minval = minval * 0.5

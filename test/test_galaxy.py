@@ -365,6 +365,17 @@ class GalaxyTest(unittest.TestCase):
         derivs = gal4.getParamDerivatives(tim)
         print('Derivs:', derivs)
         self.assertEqual(len(derivs), 12)
+
+        p17,p18 = gal4.getUnitFluxModelPatches(tim, modelMask=mm)
+        mod17 = np.zeros((H,W), np.float32)
+        mod18 = np.zeros((H,W), np.float32)
+        p17.addTo(mod17)
+        p18.addTo(mod18)
+        print('SAD', np.sum(np.abs(mod17 * 100. - mod2)))
+        print('SAD', np.sum(np.abs(mod18 * 100. - mod12)))
+        self.assertTrue(np.abs(mod17 * 100. - mod2).sum() < 1e-5)
+        self.assertTrue(np.abs(mod18 * 100. - mod12).sum() < 1e-5)
+        
         
 
 if __name__ == '__main__':
