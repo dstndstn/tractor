@@ -281,6 +281,90 @@ class GalaxyTest(unittest.TestCase):
         diff = (mod11 - mod10)[45:55, 45:55]
         print('Max diff:', np.abs(diff).max())
         self.assertTrue(np.abs(diff).max() < 1e-6)
+
+
+        # DevGalaxy test
+        gal1.pos = pos0
+
+        bright2 = bright
+        shape2 = GalaxyShape(3., 0.4, 60.)
+        gal2 = DevGalaxy(pos, bright2, shape2)
+
+        p12 = gal2.getModelPatch(tim, modelMask=mm)
+        mod12 = np.zeros((H,W), np.float32)
+        p12.addTo(mod12)
+        print('Patch:', p12)
+        print('patch sum:', p12.patch.sum())
+        print('Mod sum:', mod12.sum())
+        self.assertTrue(np.abs(mod12.sum() - 99.95) < 1e-2)
+
+        # Test FixedCompositeGalaxy
+        shapeExp = shape
+        shapeDev = shape2
+
+        # Set FracDev = 0 --> equals gal1 in patch2.
+        gal3 = FixedCompositeGalaxy(pos, bright, FracDev(0.), shapeExp,shapeDev)
+        print('Testing galaxy:', gal3)
+        print('repr', repr(gal3))
+        p13 = gal3.getModelPatch(tim, modelMask=mm)
+        mod13 = np.zeros((H,W), np.float32)
+        p13.addTo(mod13)
+        print('Patch:', p13)
+        print('patch sum:', p13.patch.sum())
+        print('Mod sum:', mod13.sum())
+        self.assertTrue(np.abs(mod13.sum() - 100.00) < 1e-2)
+        print('SAD:', np.sum(np.abs(mod13 - mod2)))
+        self.assertTrue(np.sum(np.abs(mod13 - mod2)) < 1e-8)
+
+        # Set FracDev = 1 --> equals gal2 in patch12.
+        gal3.fracDev.setValue(1.)
+        p14 = gal3.getModelPatch(tim, modelMask=mm)
+        mod14 = np.zeros((H,W), np.float32)
+        p14.addTo(mod14)
+        print('Patch:', p14)
+        print('patch sum:', p14.patch.sum())
+        print('Mod sum:', mod14.sum())
+        self.assertTrue(np.abs(mod14.sum() - 99.95) < 1e-2)
+        print('SAD:', np.sum(np.abs(mod14 - mod12)))
+        self.assertTrue(np.sum(np.abs(mod14 - mod12)) < 1e-8)
+
+        # Set FracDev = 0.5 --> equals mean
+        gal3.fracDev = SoftenedFracDev(0.5)
+        p15 = gal3.getModelPatch(tim, modelMask=mm)
+        mod15 = np.zeros((H,W), np.float32)
+        p15.addTo(mod15)
+        print('Patch:', p15)
+        print('patch sum:', p15.patch.sum())
+        print('Mod sum:', mod15.sum())
+        self.assertTrue(np.abs(mod15.sum() - 99.98) < 1e-2)
+        target = (mod12 + mod2) / 2.
+        print('SAD:', np.sum(np.abs(mod15 - target)))
+        self.assertTrue(np.sum(np.abs(mod15 - target)) < 1e-5)
+
+        derivs = gal3.getParamDerivatives(tim)
+        print('Derivs:', derivs)
+        self.assertEqual(len(derivs), 11)
+
+        # CompositeGalaxy
+        
+        gal4 = CompositeGalaxy(pos, bright, shapeExp, bright, shapeDev)
+        print('Testing galaxy:', gal4)
+        print('repr', repr(gal4))
+        
+        p16 = gal4.getModelPatch(tim, modelMask=mm)
+        mod16 = np.zeros((H,W), np.float32)
+        p16.addTo(mod16)
+        print('Patch:', p16)
+        print('patch sum:', p16.patch.sum())
+        print('Mod sum:', mod16.sum())
+        self.assertTrue(np.abs(mod16.sum() - 199.95) < 1e-2)
+        target = (mod12 + mod2)
+        print('SAD:', np.sum(np.abs(mod16 - target)))
+        self.assertTrue(np.sum(np.abs(mod16 - target)) < 1e-5)
+
+        derivs = gal4.getParamDerivatives(tim)
+        print('Derivs:', derivs)
+        self.assertEqual(len(derivs), 12)
         
 
 if __name__ == '__main__':
