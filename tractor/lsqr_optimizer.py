@@ -299,8 +299,8 @@ class LsqrOptimizer(Optimizer):
         R = {}
         for step in range(steps):
             dlnp,X,alpha = self.optimize(tractor, **kwargs)
-            print('Opt step: dlnp', dlnp,
-                  ', '.join([str(src) for src in tractor.getCatalog()]))
+            #print('Opt step: dlnp', dlnp,
+            #      ', '.join([str(src) for src in tractor.getCatalog()]))
             if dlnp <= dchisq:
                 break
         R.update(steps=step)
