@@ -327,7 +327,7 @@ def main():
         print('Scaling images by', opt.scale)
         tims = [st.scale_sdss_image(tim, opt.scale) for tim in tims]
         
-    sources = getsrc(run, camcol, field, bandname, bands=bands, curl=opt.curl, roi=opt.roi)
+    sources = getsrc(run, camcol, field, bandname, bands=bands, curl=opt.curl, roi=opt.roi, sdss=sdss, retrieve=False, checkFiles=False)
     tractor = Tractor(tims, sources)
 
     sa = dict(debug=opt.debug, plotAll=opt.plotAll, roi=opt.roi)
