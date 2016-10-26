@@ -186,7 +186,7 @@ def _check_sdss_files(sdss, run, camcol, field, bandname, filetypes,
                                    'rcfb %i/%i/%i/%s' %
                                    (run, camcol, field, bandname))
         elif not exists:
-            raise OSError('no such file: "%s"' % fn)
+            raise OSError('no such file: "%s", or failed to verify' % fn)
 
 def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
                  objs=None,
