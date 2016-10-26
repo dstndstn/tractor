@@ -8,6 +8,7 @@ import numpy as np
 from tractor import *
 from tractor.galaxy import *
 from tractor.patch import ModelMask
+#from tractor.sersic import SersicGalaxy, SersicIndex
 
 ps = None
 
@@ -32,6 +33,8 @@ class GalaxyTest(unittest.TestCase):
                     psf=GaussianMixturePSF(1., 0., 0., 4., 4., 0.),
                     photocal=LinearPhotoCal(1., band='r'),
             )
+
+        psf0 = tim.psf
         
         # base class
         #gal1 = Galaxy(pos, bright, shape)
@@ -110,6 +113,7 @@ class GalaxyTest(unittest.TestCase):
             plt.clf()
             plt.imshow(mod2, interpolation='nearest', origin='lower')
             plt.colorbar()
+            plt.title('Exp')
             ps.savefig()
 
             plt.clf()
@@ -302,6 +306,9 @@ class GalaxyTest(unittest.TestCase):
         shapeExp = shape
         shapeDev = shape2
 
+        modExp = mod2
+        modDev = mod12
+        
         # Set FracDev = 0 --> equals gal1 in patch2.
         gal3 = FixedCompositeGalaxy(pos, bright, FracDev(0.), shapeExp,shapeDev)
         print('Testing galaxy:', gal3)
@@ -313,8 +320,8 @@ class GalaxyTest(unittest.TestCase):
         print('patch sum:', p13.patch.sum())
         print('Mod sum:', mod13.sum())
         self.assertTrue(np.abs(mod13.sum() - 100.00) < 1e-2)
-        print('SAD:', np.sum(np.abs(mod13 - mod2)))
-        self.assertTrue(np.sum(np.abs(mod13 - mod2)) < 1e-8)
+        print('SAD:', np.sum(np.abs(mod13 - modExp)))
+        self.assertTrue(np.sum(np.abs(mod13 - modExp)) < 1e-8)
 
         # Set FracDev = 1 --> equals gal2 in patch12.
         gal3.fracDev.setValue(1.)
@@ -325,8 +332,8 @@ class GalaxyTest(unittest.TestCase):
         print('patch sum:', p14.patch.sum())
         print('Mod sum:', mod14.sum())
         self.assertTrue(np.abs(mod14.sum() - 99.95) < 1e-2)
-        print('SAD:', np.sum(np.abs(mod14 - mod12)))
-        self.assertTrue(np.sum(np.abs(mod14 - mod12)) < 1e-8)
+        print('SAD:', np.sum(np.abs(mod14 - modDev)))
+        self.assertTrue(np.sum(np.abs(mod14 - modDev)) < 1e-8)
 
         # Set FracDev = 0.5 --> equals mean
         gal3.fracDev = SoftenedFracDev(0.5)
@@ -337,7 +344,7 @@ class GalaxyTest(unittest.TestCase):
         print('patch sum:', p15.patch.sum())
         print('Mod sum:', mod15.sum())
         self.assertTrue(np.abs(mod15.sum() - 99.98) < 1e-2)
-        target = (mod12 + mod2) / 2.
+        target = (modDev + modExp) / 2.
         print('SAD:', np.sum(np.abs(mod15 - target)))
         self.assertTrue(np.sum(np.abs(mod15 - target)) < 1e-5)
 
@@ -358,7 +365,7 @@ class GalaxyTest(unittest.TestCase):
         print('patch sum:', p16.patch.sum())
         print('Mod sum:', mod16.sum())
         self.assertTrue(np.abs(mod16.sum() - 199.95) < 1e-2)
-        target = (mod12 + mod2)
+        target = (modDev + modExp)
         print('SAD:', np.sum(np.abs(mod16 - target)))
         self.assertTrue(np.sum(np.abs(mod16 - target)) < 1e-5)
 
@@ -371,13 +378,70 @@ class GalaxyTest(unittest.TestCase):
         mod18 = np.zeros((H,W), np.float32)
         p17.addTo(mod17)
         p18.addTo(mod18)
-        print('SAD', np.sum(np.abs(mod17 * 100. - mod2)))
-        print('SAD', np.sum(np.abs(mod18 * 100. - mod12)))
-        self.assertTrue(np.abs(mod17 * 100. - mod2).sum() < 1e-5)
-        self.assertTrue(np.abs(mod18 * 100. - mod12).sum() < 1e-5)
-        
-        
+        print('SAD', np.sum(np.abs(mod17 * 100. - modExp)))
+        print('SAD', np.sum(np.abs(mod18 * 100. - modDev)))
+        self.assertTrue(np.abs(mod17 * 100. - modExp).sum() < 1e-5)
+        self.assertTrue(np.abs(mod18 * 100. - modDev).sum() < 1e-5)
 
+        # SersicGalaxy
+        # gal5 = SersicGalaxy(pos, bright, shapeExp, SersicIndex(1.))
+        # 
+        # tim.psf = psf0
+        # 
+        # p19 = gal5.getModelPatch(tim, modelMask=mm)
+        # mod19 = np.zeros((H,W), np.float32)
+        # p19.addTo(mod19)
+        # 
+        # if ps is not None:
+        #     plt.clf()
+        #     plt.imshow(mod19, interpolation='nearest', origin='lower')
+        #     plt.colorbar()
+        #     plt.title('Sersic n=1')
+        #     ps.savefig()
+        # 
+        #     plt.clf()
+        #     plt.imshow(mod19 - modExp, interpolation='nearest', origin='lower')
+        #     plt.colorbar()
+        #     plt.title('Sersic n=1 - EXP')
+        #     ps.savefig()
+        # 
+        # print('Patch:', p19)
+        # print('patch sum:', p19.patch.sum())
+        # print('Mod sum:', mod19.sum())
+        # self.assertTrue(np.abs(mod19.sum() - 100.00) < 1e-2)
+        # target = modExp
+        # # print('SAD:', np.sum(np.abs(mod19 - target)))
+        # # self.assertTrue(np.sum(np.abs(mod19 - target)) < 1e-5)
+        # 
+        # gal5.sersicindex.setValue(4.)
+        # gal5.shape = shapeDev
+        # 
+        # p20 = gal5.getModelPatch(tim, modelMask=mm)
+        # mod20 = np.zeros((H,W), np.float32)
+        # p20.addTo(mod20)
+        # print('Patch:', p20)
+        # print('patch sum:', p20.patch.sum())
+        # print('Mod sum:', mod20.sum())
+        # 
+        # if ps is not None:
+        #     plt.clf()
+        #     plt.imshow(mod20, interpolation='nearest', origin='lower')
+        #     plt.colorbar()
+        #     plt.title('Sersic n=4')
+        #     ps.savefig()
+        # 
+        #     plt.clf()
+        #     plt.imshow(mod20 - modDev, interpolation='nearest', origin='lower')
+        #     plt.colorbar()
+        #     plt.title('Sersic n=4 - DEV')
+        #     ps.savefig()
+        # 
+        # self.assertTrue(np.abs(mod20.sum() - 99.95) < 1e-2)
+        # target = modDev
+        # print('SAD:', np.sum(np.abs(mod20 - target)))
+        # self.assertTrue(np.sum(np.abs(mod20 - target)) < 1e-5)
+
+        
 if __name__ == '__main__':
     import sys
     if '--plots' in sys.argv:
