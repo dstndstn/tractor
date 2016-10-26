@@ -853,25 +853,6 @@ class CompositeGalaxy(MultiParams, BasicSource):
                 d.getUnitFluxModelPatches(img, minval=minval,
                                           modelMask=modelMask))
 
-    def getUnitFluxModelPatch(self, img, px=None, py=None, modelMask=None):
-        # this code is un-tested
-        assert(False)
-        fe = self.brightnessExp / (self.brightnessExp + self.brightnessDev)
-        fd = 1. - fe
-        assert(fe >= 0.)
-        assert(fe <= 1.)
-        e = ExpGalaxy(self.pos, fe, self.shapeExp)
-        d = DevGalaxy(self.pos, fd, self.shapeDev)
-        if hasattr(self, 'halfsize'):
-            e.halfsize = d.halfsize = self.halfsize
-        pe = e.getModelPatch(img, px, py)
-        pd = d.getModelPatch(img, px, py)
-        if pe is None:
-            return pd
-        if pd is None:
-            return pe
-        return pe + pd
-
     # MAGIC: ORDERING OF EXP AND DEV PARAMETERS
     # MAGIC: ASSUMES EXP AND DEV SHAPES SAME LENGTH
     # CompositeGalaxy.
