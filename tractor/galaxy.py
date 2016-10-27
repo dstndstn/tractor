@@ -302,14 +302,14 @@ class ProfileGalaxy(object):
             # The convolved mixture *already* has the px,py offset added
             # (via px,py to amix) so set px,py=0,0 in this call.
             if mm.mask is not None:
-                p = cmix.evaluate_grid_masked(x0, y0, mm.mask, 0., 0.)
+                p = cmix.evaluate_grid_masked(mm.x0, mm.y0, mm.mask, 0., 0.)
             else:
-                p = cmix.evaluate_grid(x0, mm.x1, y0, mm.y1, 0., 0.)
+                p = cmix.evaluate_grid(mm.x0, mm.x1, mm.y0, mm.y1, 0., 0.)
             assert(p.shape == mm.shape)
             return p
         
         if hasattr(psf, 'getMixtureOfGaussians') and not hybrid:
-            return run_mog()
+            return run_mog(mm=modelMask)
 
         # Otherwise, FFT:
         imh,imw = img.shape
@@ -332,7 +332,7 @@ class ProfileGalaxy(object):
             
             if sourceOut:
                 if hybrid:
-                    return run_mog()
+                    return run_mog(mm=modelMask)
 
                 # Super Yuck -- FFT, modelMask, source is outside the
                 # box.
@@ -489,7 +489,7 @@ class ProfileGalaxy(object):
 
         if mogmix is not None:
             if modelMask is not None:
-                mogpatch = run_mog(amix=mogmix)
+                mogpatch = run_mog(amix=mogmix, mm=modelMask)
             else:
                 gh,gw = G.shape
                 mogpatch = run_mog(amix=mogmix, mm=ModelMask(ix0,iy0,gw,gh))

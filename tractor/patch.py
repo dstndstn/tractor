@@ -29,6 +29,14 @@ class ModelMask(object):
             return s
         return s + ', has mask'
 
+    def __repr__(self):
+        if self.mask is None:
+            return ('ModelMask(%i,%i, w=%i, h=%i)' %
+                    (self.x0, self.y0, self.w, self.h))
+        else:
+            return ('ModelMask(%i,%i, mask of shape w=%i, h=%i)' %
+                    (self.x0, self.y0, self.w, self.h))
+
     @staticmethod
     def fromExtent(x0,x1,y0,y1):
         return ModelMask(x0, y0, x1-x0, y1-y0)
