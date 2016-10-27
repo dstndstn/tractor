@@ -25,6 +25,8 @@ from .basics import SingleProfileSource, BasicSource
 
 #from .cache import Cache
 
+debug_ps = None
+
 def get_galaxy_cache():
     return None
 
@@ -401,8 +403,8 @@ class ProfileGalaxy(object):
                 # and then copy it into the result.
                 gx0 = int(np.round(mux))
                 gy0 = int(np.round(muy))
-                print('Wrap-around possible/likely:', mux, muy,
-                      'vs', psfmargin, '->', gx0,gy0)
+                # print('Wrap-around possible/likely:', mux, muy,
+                #       'vs margin', psfmargin, '-> shift by', gx0,gy0)
                 mux -= gx0
                 muy -= gy0
                 
@@ -450,9 +452,22 @@ class ProfileGalaxy(object):
                 #print('gx0,gy0', gx0,gy0)
                 yi,yo = get_overlapping_region(-gy0, -gy0+mh-1, 0, gh-1)
                 xi,xo = get_overlapping_region(-gx0, -gx0+mw-1, 0, gw-1)
+                #print('Overlaps: y', yo,yi, 'x', xo,xi)
                 # shifted
                 shG = np.zeros((mh,mw), G.dtype)
                 shG[yo,xo] = G[yi,xi]
+
+                if debug_ps is not None:
+                    import pylab as plt
+                    plt.clf()
+                    plt.subplot(1,2,1)
+                    plt.imshow(shG, interpolation='nearest', origin='lower')
+                    plt.title('shG')
+                    plt.subplot(1,2,2)
+                    plt.imshow(G, interpolation='nearest', origin='lower')
+                    plt.title('G')
+                    debug_ps.savefig()
+
                 G = shG
             if gh > mh or gw > mw:
                 G = G[:mh,:mw]

@@ -145,7 +145,8 @@ class GalaxyTest(unittest.TestCase):
             24., 24., modelMask=ModelMask(0, 0, 50, 50))
         print('PSF patch:', psfpatch)
         tim.psf = PixelizedPSF(psfpatch.patch[:49,:49])
-
+        pixpsf = tim.psf
+        
         # No modelmask
         p4 = gal1.getModelPatch(tim)
         mod4 = np.zeros((H,W), np.float32)
@@ -196,7 +197,8 @@ class GalaxyTest(unittest.TestCase):
 
         # Test a HybridPSF
         tim.psf = HybridPixelizedPSF(tim.psf)
-
+        hybridpsf = tim.psf
+        
         # Slightly outside the ModelMask
         gal1.pos = PixPos(20., 25.)
         p8 = gal1.getModelPatch(tim, modelMask=mm)
@@ -441,6 +443,75 @@ class GalaxyTest(unittest.TestCase):
         # print('SAD:', np.sum(np.abs(mod20 - target)))
         # self.assertTrue(np.sum(np.abs(mod20 - target)) < 1e-5)
 
+
+        # A galaxy that will wrap around
+        from tractor.ellipses import EllipseE
+        mmX = ModelMask(20, 20, 60, 60)
+        shapeX = EllipseE(20., 0.7, 0.7)
+        tim.psf = pixpsf
+        gal6 = DevGalaxy(pos0, bright, shapeX)
+
+        p21 = gal6.getModelPatch(tim, modelMask=mmX)
+        mod21 = np.zeros((H,W), np.float32)
+        p21.addTo(mod21)
+        
+        if ps is not None:
+            plt.clf()
+            plt.imshow(mod21, interpolation='nearest', origin='lower')
+            plt.colorbar()
+            plt.title('Pixelized PSF')
+            ps.savefig()
+
+            
+        tim.psf = hybridpsf
+            
+        p22 = gal6.getModelPatch(tim, modelMask=mmX)
+        mod22 = np.zeros((H,W), np.float32)
+        p22.addTo(mod22)
+
+        # Horizontal slice through the middle of the galaxy
+        m21 = mod21[49, :]
+        m22 = mod22[49, :]
+        
+        if ps is not None:
+            plt.clf()
+            plt.imshow(mod22, interpolation='nearest', origin='lower')
+            plt.colorbar()
+            plt.title('Hybrid PSF')
+            ps.savefig()
+
+            #print('m22', m22)
+            
+            plt.clf()
+            plt.plot(m21, 'r-')
+            plt.plot(m22, 'b-')
+            plt.yscale('symlog', linthreshy=1e-8)
+            ps.savefig()
+
+        imx = np.argmax(m22)
+        diff = np.diff(m22[:imx+1])
+        # Assert monotonic up to the peak (from the left)
+        # (low-level jitter/wrap-around is allowed)
+        self.assertTrue(np.all(np.logical_or(np.abs(diff) < 1e-9,
+                                             diff > 0)))
+
+        diff = np.diff(m22[imx:])
+        # Assert monotonic decreasing after to the peak
+        # (low-level jitter/wrap-around is allowed)
+        self.assertTrue(np.all(np.logical_or(np.abs(diff) < 1e-9,
+                                             diff < 0)))
+
+
+        # Assert that wrap-around exists for PixelizedPsf model
+        
+        diff = np.diff(m21[:imx+1])
+        self.assertFalse(np.all(np.logical_or(np.abs(diff) < 1e-9, diff > 0)))
+
+        diff = np.diff(m21[imx:])
+        self.assertFalse(np.all(np.logical_or(np.abs(diff) < 1e-9, diff < 0)))
+
+        
+            
         
 if __name__ == '__main__':
     import sys
