@@ -22,6 +22,13 @@ class ModelMask(object):
         else:
             raise ValueError('Wrong number of arguments')
 
+    def __str__(self):
+        s = ('ModelMask: origin (%i,%i), w=%i, h=%i' %
+             (self.x0, self.y0, self.w, self.h))
+        if self.mask is None:
+            return s
+        return s + ', has mask'
+
     @staticmethod
     def fromExtent(x0,x1,y0,y1):
         return ModelMask(x0, y0, x1-x0, y1-y0)
