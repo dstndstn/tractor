@@ -501,7 +501,6 @@ class GalaxyTest(unittest.TestCase):
         self.assertTrue(np.all(np.logical_or(np.abs(diff) < 1e-9,
                                              diff < 0)))
 
-
         # Assert that wrap-around exists for PixelizedPsf model
         
         diff = np.diff(m21[:imx+1])

@@ -40,12 +40,10 @@ class EllipseE(ParamList):
     def __init__(self, *args, **kwargs):
         super(EllipseE, self).__init__(*args, **kwargs)
         self.stepsizes = [0.01]*3
-        self.lowers[0] = 0.
-        self.lowers[1] = -1.
-        self.uppers[1] =  1.
-        self.lowers[2] = -1.
-        self.uppers[2] =  1.
-    
+        # Parameter limits
+        self.lowers = [0., -1., -1.]
+        self.uppers = [None, 1., 1.]
+
     @staticmethod
     def fromEllipseESoft(esoft, maxe=0.999999):
         re = esoft.re
@@ -183,12 +181,8 @@ class EllipseESoft(EllipseE):
         super(EllipseESoft, self).__init__(*args, **kwargs)
         # Have to override this because the superclass has parameter limits,
         # but this class does not.
-        self.lowers[0] = None
-        self.lowers[1] = None
-        self.lowers[2] = None
-        self.uppers[0] = None
-        self.uppers[1] = None
-        self.uppers[2] = None
+        self.lowers = [None, None, None]
+        self.uppers = [None, None, None]
         
     @staticmethod
     def fromEllipseE(ell, maxe=0.999999):
