@@ -57,7 +57,7 @@ script:
     # - ls
     # - echo $HOME
     # - ls -al $HOME
-    # - export PYTHONPATH=${PYTHONPATH}:$(pwd)
+    - export PYTHONPATH=${PYTHONPATH}:$(pwd)
     # - echo "$PYTHONPATH"
     # - ls -l
     # - python -c "import sys; print '\n'.join(sys.path)"
