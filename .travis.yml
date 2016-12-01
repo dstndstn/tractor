@@ -28,19 +28,18 @@ compiler:
   - gcc
 #  - clang
 
-
 before_script:
     - export NETPBM_INC="-I$(pwd)"
     - export WCSLIB_INC="-I/usr/include/wcslib-4.8.3"
     - export WCSLIB_LIB="-lwcs"
     - export SYSTEM_GSL=yes
-    - pkg-config --exists gsl
-    - pkg-config --modversion gsl
-    - ls /usr/include/wcslib*
-    - pwd
-    - echo $HOME
-    - ls $HOME
-    - ls $HOME/astrometry.net
+    # - pkg-config --exists gsl
+    # - pkg-config --modversion gsl
+    # - ls /usr/include/wcslib*
+    # - pwd
+    # - echo $HOME
+    # - ls $HOME
+    # - ls $HOME/astrometry.net
     - if [ ! -d "$HOME/astrometry.net" ]; then (cd $HOME; git clone https://github.com/dstndstn/astrometry.net.git; cd astrometry.net; ln -sf /usr/include netpbm; make && make py); fi
     - (cd $HOME/astrometry.net && git pull && make && make py) || (rm -Rf $HOME/astrometry.net && cd $HOME && git clone https://github.com/dstndstn/astrometry.net.git && cd astrometry.net && make && make py)
     - ln -s $HOME/astrometry.net astrometry
@@ -54,17 +53,17 @@ before_script:
 #    - ln -s $HOME/fitsio/lib/python/fitsio .
 
 script:
-    - pwd
-    - ls
-    - echo $HOME
-    - ls -al $HOME
-    - export PYTHONPATH=${PYTHONPATH}:$(pwd)
-    - echo "$PYTHONPATH"
-    - ls -l
-    - python -c "import sys; print '\n'.join(sys.path)"
-    - python -c "import numpy; print numpy.__file__"
-    - which fitsverify
-    - pwd
+    # - pwd
+    # - ls
+    # - echo $HOME
+    # - ls -al $HOME
+    # - export PYTHONPATH=${PYTHONPATH}:$(pwd)
+    # - echo "$PYTHONPATH"
+    # - ls -l
+    # - python -c "import sys; print '\n'.join(sys.path)"
+    # - python -c "import numpy; print numpy.__file__"
+    # - which fitsverify
+    # - pwd
     - make
     - make doc
     - coverage erase
