@@ -64,7 +64,7 @@ script:
     # - python -c "import numpy; print numpy.__file__"
     # - which fitsverify
     # - pwd
-    - python -c "import fitsio; print fitsio.__file__"
+    # - python -c "import fitsio; print fitsio.__file__"
     - make
     - make doc
     - coverage erase
