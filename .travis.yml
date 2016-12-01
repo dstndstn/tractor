@@ -76,7 +76,6 @@ script:
     - coverage run -a examples/tractor-sdss-synth.py --roi 0 100 0 100 --run 1000 --camcol 1 --field 100 --band r --sdss-dir test/data-sdss --const-invvar --no-flipbook
 
 after_success:
-    #- coveralls debug
     - coveralls
 
 addons:
