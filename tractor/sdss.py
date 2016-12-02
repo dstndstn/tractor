@@ -750,7 +750,7 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
     info.update(roi=roi)
     x0,x1,y0,y1 = roi
 
-    # Mysterious half-pixel shift.  asTrans pixel coordinates?
+    # Half-pixel shift for asTrans pixel coordinates.
     wcs.setX0Y0(x0 + 0.5, y0 + 0.5)
 
     if nanomaggies:
