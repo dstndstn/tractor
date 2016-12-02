@@ -20,7 +20,9 @@ install:
    - pip install --user matplotlib==1.5.1
    - pip install --user numpydoc
    - pip install --user coveralls
-   - pip install --user fitsio
+   # fitsio master version
+   - pip install --upgrade git+https://github.com/esheldon/fitsio.git#egg=fitsio
+   # - pip install --user fitsio
    - ls ~/.local
 
 language: c
