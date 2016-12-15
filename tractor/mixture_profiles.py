@@ -446,7 +446,7 @@ def functional_test_patch_maker(fn, psf=None):
 
     if psf is not None:
         exp_mixture = exp_mixture.convolve(psf)
-    pa = [int(x) for x in [posmin[0], posmax[0], posmin[1], posmax[1]]]
+    pa = [int(x) for x in [posmin[0], posmax[0]+1, posmin[1], posmax[1]+1]]
     exp_mix_patch = mixture_to_patch(exp_mixture, *pa)
     exp_mix_patch = exp_mix_patch.patch
     exp_patch = model_to_patch('exp', scale, posmin, posmax)
@@ -482,8 +482,22 @@ def functional_test_patch_maker(fn, psf=None):
     plt.savefig(fn)
 
 if __name__ == '__main__':
-    # functional test: c_gauss_2d_approx
 
+    functional_test_circular_mixtures()
+    psfamp = np.array([0.7,0.2,0.1])
+    psfmean = np.zeros((3,2))
+    psfvar = np.zeros((3,2,2))
+    psfvar[0,0,0] = 1.2**2
+    psfvar[0,1,1] = psfvar[0,0,0]
+    psfvar[1,0,0] = 2.4**2
+    psfvar[1,1,1] = psfvar[1,0,0]
+    psfvar[2,0,0] = 3.6**2
+    psfvar[2,1,1] = psfvar[2,0,0]
+    psf = MixtureOfGaussians(psfamp, psfmean, psfvar)
+    functional_test_patch_maker('test_patch.png')
+    functional_test_patch_maker('test_psf_patch.png', psf=psf)
+
+    # functional test: c_gauss_2d_approx
     from mix import c_gauss_2d_approx, c_gauss_2d_grid, c_gauss_2d_approx2, c_gauss_2d_approx3
 
     from astrometry.util.plotutils import PlotSequence
@@ -651,20 +665,5 @@ if __name__ == '__main__':
         #   ps.savefig()
         
 
-    import sys
-    sys.exit(0)
 
 
-    # functional_test_circular_mixtures()
-    psfamp = np.array([0.7,0.2,0.1])
-    psfmean = np.zeros((3,2))
-    psfvar = np.zeros((3,2,2))
-    psfvar[0,0,0] = 1.2**2
-    psfvar[0,1,1] = psfvar[0,0,0]
-    psfvar[1,0,0] = 2.4**2
-    psfvar[1,1,1] = psfvar[1,0,0]
-    psfvar[2,0,0] = 3.6**2
-    psfvar[2,1,1] = psfvar[2,0,0]
-    psf = MixtureOfGaussians(psfamp, psfmean, psfvar)
-    functional_test_patch_maker('test_patch.png')
-    functional_test_patch_maker('test_psf_patch.png', psf=psf)
