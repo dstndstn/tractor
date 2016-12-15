@@ -17,7 +17,8 @@ from unwise import (unwise_tile_wcs, unwise_tiles_touching_wcs,
 def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None,
                       unwise_dir='.',
                       use_ceres=True, ceres_block=8,
-                      save_fits=False, ps=None):
+                      save_fits=False, ps=None,
+                      psf_broadening=None):
     '''
     Given a list of tractor sources *cat*
     and a list of unWISE tiles *tiles* (a fits_table with RA,Dec,coadd_id)
@@ -65,6 +66,27 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None,
             if tim is None:
                 print('Actually, no overlap with tile', tile.coadd_id)
                 continue
+
+            if psf_broadening is not None:
+                # psf_broadening is a factor by which the PSF FWHMs
+                # should be scaled; the PSF is a little wider
+                # post-reactivation.
+                psf = tim.getPsf()
+                from tractor import GaussianMixturePSF
+                if isinstance(psf, GaussianMixturePSF):
+                    #
+                    print('Broadening PSF: from', psf)
+                    p0 = psf.getParams()
+                    #print('Params:', p0)
+                    pnames = psf.getParamNames()
+                    #print('Param names:', pnames)
+                    p1 = [p * psf_broadening**2 if 'var' in name else p
+                          for (p,name) in zip(p0, pnames)]
+                    #print('Broadened:', p1)
+                    psf.setParams(p1)
+                    print('Broadened PSF:', psf)
+                else:
+                    print('WARNING: cannot apply psf_broadening to WISE PSF of type', type(psf))
             
             print('Read image with shape', tim.shape)
             
@@ -130,7 +152,7 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None,
             tractor.freezeParamsRecursive('*')
             tractor.thawPathsTo(wanyband)
 
-            print(tractor)
+            #print(tractor)
             
             kwa = dict(fitstat_extras=[('pronexp', [tim.nims])])
             t0 = Time()
