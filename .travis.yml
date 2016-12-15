@@ -72,6 +72,7 @@ script:
     - coverage run -a test/test_sdss.py
     - coverage run -a test/test_tractor.py
     - coverage run -a test/test_galaxy.py
+    - coverage run -a tractor/mixture_profiles.py
     #- coverage run -a examples/tractor-sdss-synth.py --roi 100 200 100 200 --no-flipbook
     - coverage run -a examples/tractor-sdss-synth.py --roi 0 100 0 100 --run 1000 --camcol 1 --field 100 --band r --sdss-dir test/data-sdss --const-invvar --no-flipbook
 
