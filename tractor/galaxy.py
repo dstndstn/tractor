@@ -346,7 +346,7 @@ class ProfileGalaxy(object):
                 if py > y1:
                     neardy = py - y1
                 nearest = np.hypot(neardx, neardy)
-                print('Nearest corner:', nearest, 'vs radius', self.getRadius())
+                #print('Nearest corner:', nearest, 'vs radius', self.getRadius())
                 if nearest > self.getRadius():
                     return None
                 # how far is the furthest point from the source center?
