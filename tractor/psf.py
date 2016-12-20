@@ -533,7 +533,7 @@ class HybridPixelizedPSF(HybridPSF):
         return self.gauss.getMixtureOfGaussians(**kwargs)
 
     def getShifted(self, dx, dy):
-        pix = self.pix.shifted(dx, dy)
+        pix = self.pix.getShifted(dx, dy)
         return HybridPixelizedPSF(pix, self.gauss)
     
     def constantPsfAt(self, x, y):
