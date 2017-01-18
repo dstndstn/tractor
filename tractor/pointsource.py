@@ -95,10 +95,6 @@ class PointSource(MultiParams, SingleProfileSource):
         if px + r < 0 or px - r > W or py + r < 0 or py - r > H:
             return None
 
-        ## ??
-        if modelMask is None:
-            modelMask = ModelMask(0, 0, W, H)
-
         patch = psf.getPointSourcePatch(px, py, minval=minval,
                                         radius=self.fixedRadius,
                                         derivs=derivs,
