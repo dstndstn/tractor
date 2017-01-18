@@ -25,7 +25,7 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None,
     runs forced photometry, returning a FITS table the same length as *cat*.
     '''
 
-    # HACKery
+    # Severely limit sizes of models
     for src in cat:
         if isinstance(src, PointSource):
             src.fixedRadius = 10
@@ -152,8 +152,6 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None,
             tractor.freezeParamsRecursive('*')
             tractor.thawPathsTo(wanyband)
 
-            #print(tractor)
-            
             kwa = dict(fitstat_extras=[('pronexp', [tim.nims])])
             t0 = Time()
 
@@ -161,7 +159,7 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None,
                 minsb=minsb, mindlnp=1., sky=fitsky, fitstats=True, 
                 variance=True, shared_params=False,
                 wantims=wantims, **kwa)
-            print('That took', Time()-t0)
+            print('unWISE forced photometry took', Time()-t0)
 
             if use_ceres:
                 term = R.ceres_status['termination']
