@@ -27,7 +27,7 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None,
 
     # HACKery
     for src in cat:
-        if isinstance(cat, PointSource):
+        if isinstance(src, PointSource):
             src.fixedRadius = 10
         else:
             src.halfsize = 10

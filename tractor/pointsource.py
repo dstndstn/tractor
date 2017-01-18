@@ -64,6 +64,13 @@ class PointSource(MultiParams, SingleProfileSource):
         # if not None, minradius determines the minimum size of unit-flux
         # models
         self.minRadius = None
+
+    def copy(self):
+        c = super(PointSource, self).copy()
+        c.fixedRadius = self.fixedRadius
+        c.minRadius = self.minRadius
+        return c
+
     @staticmethod
     def getNamedParams():
         return dict(pos=0, brightness=1)
