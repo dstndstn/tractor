@@ -98,7 +98,7 @@ class PointSource(MultiParams, SingleProfileSource):
         clipExtent = None
         if modelMask is None:
             # max extent
-            clipExtent = [0,0,W,H]
+            clipExtent = [0,W,0,H]
 
         patch = psf.getPointSourcePatch(px, py, minval=minval,
                                         radius=self.fixedRadius,

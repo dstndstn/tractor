@@ -333,6 +333,9 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
                             derivs=False, minradius=None, modelMask=None,
                             clipExtent=None,
                             **kwargs):
+        # clipExtent: [xl,xh, yl,yh] to avoid rendering a model that extends
+        # outside the image bounds.
+        # 
         if modelMask is not None:
             if modelMask.mask is None:
                 return self.mog.evaluate_grid(modelMask.x0, modelMask.x1,
