@@ -331,6 +331,7 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
     # returns a Patch object.
     def getPointSourcePatch(self, px, py, minval=0., radius=None,
                             derivs=False, minradius=None, modelMask=None,
+                            clipExtent=None,
                             **kwargs):
         if modelMask is not None:
             if modelMask.mask is None:
@@ -341,6 +342,20 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
                 return self.mog.evaluate_grid_masked(modelMask.x0, modelMask.y0,
                                                      modelMask.mask, px, py,
                                                      derivs=derivs, **kwargs)
+
+        def get_extent(px, py, rr, clipExtent):
+            x0 = int(np.floor(px - rr))
+            x1 = int(np.ceil (px + rr)) + 1
+            y0 = int(np.floor(py - rr))
+            y1 = int(np.ceil (py + rr)) + 1
+            if clipExtent is not None:
+                [xl,xh,yl,yh] = clipExtent
+                # clip
+                x0 = max(x0, xl)
+                x1 = min(x1, xh)
+                y0 = max(y0, yl)
+                y1 = min(y1, yh)
+            return x0,x1,y0,y1
 
         # Yuck!
 
@@ -362,22 +377,8 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
                         r = max(r, np.sqrt(r2))
                 rr = int(np.ceil(r))
 
-            x0 = int(np.floor(px - rr))
-            x1 = int(np.ceil (px + rr)) + 1
-            y0 = int(np.floor(py - rr))
-            y1 = int(np.ceil (py + rr)) + 1
-
-            if extent is not None:
-                [xl,xh,yl,yh] = extent
-                # clip
-                x0 = max(x0, xl)
-                x1 = min(x1, xh)
-                y0 = max(y0, yl)
-                y1 = min(y1, yh)
-
-            if x0 >= x1:
-                return None
-            if y0 >= y1:
+            x0,x1,y0,y1 = get_extent(px, py, rr, clipExtent)
+            if x0 >= x1 or y0 >= y1:
                 return None
 
             kwa = {}
@@ -391,8 +392,10 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
             r = self.getRadius()
         else:
             r = radius
-        x0,x1 = int(np.floor(px-r)), int(np.ceil(px+r)) + 1
-        y0,y1 = int(np.floor(py-r)), int(np.ceil(py+r)) + 1
+
+        x0,x1,y0,y1 = get_extent(px, py, r, clipExtent)
+        if x0 >= x1 or y0 >= y1:
+            return None
         return self.mog.evaluate_grid(x0, x1, y0, y1, px, py)
 
     def __str__(self):
