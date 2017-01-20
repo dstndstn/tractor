@@ -71,10 +71,9 @@ class Optimizer(object):
                 roi = rois[i]
                 y0 = roi[0].start
                 x0 = roi[1].start
-                subwcs = img.wcs.shift(x0, y0)
-                subimg = Image(data=img.data[roi], inverr=img.inverr[roi],
-                               psf=img.psf, wcs=subwcs, sky=img.sky,
-                               photocal=img.photocal, name=img.name)
+                y1 = roi[0].stop
+                x1 = roi[1].stop
+                subimg = img.subimage(x0, x1, y0, y1)
                 subimgs.append(subimg)
             imlist = subimgs
         else:
@@ -124,7 +123,7 @@ class Optimizer(object):
         if variance:
             # Inverse variance
             t0 = Time()
-            result.IV = self._get_iv(sky, skyvariance, Nsky, skyderivs, srcs,
+            result.IV = self._get_iv(sky, skyvariance, Nsky, skyderivs, Nsourceparams,
                                      imlist, umodels, scales)
             logverb('forced phot: variance:', Time()-t0)
 
@@ -141,11 +140,13 @@ class Optimizer(object):
         return result
 
     def _get_umodels(self, tractor, srcs, imgs, minsb, rois):
-        #
         # Here we build up the "umodels" nested list, which has shape
-        # (if it were a numpy array) of (len(images), len(srcs))
-        # where each element is None, or a Patch with the unit-flux model
-        # of that source in that image.
+        # (if it were a numpy array) of (len(images), len(Nsrcparams))
+        # where each element is None, or a Patch with the unit-flux
+        # model of that source in that image.
+        #
+        # For sources that have a single brightness param, Nsrcparams
+        # = Nsources.
         #
         umodels = []
         umodtosource = {}
@@ -355,13 +356,15 @@ class Optimizer(object):
 
         return fs
 
-    def _get_iv(self, sky, skyvariance, Nsky, skyderivs, srcs,
+    def _get_iv(self, sky, skyvariance, Nsky, skyderivs, Nsourceparams,
                 imlist, umodels, scales):
         if sky and skyvariance:
-            NS = Nsky
+            pass
         else:
-            NS = 0
-        IV = np.zeros(len(srcs) + NS)
+            Nsky = 0
+
+        IV = np.zeros(Nsky + Nsourceparams)
+        # sky derivs first
         if sky and skyvariance:
             for di,(dsky,tim) in enumerate(skyderivs):
                 ie = tim.getInvError()
@@ -372,6 +375,8 @@ class Optimizer(object):
                     dsky.addTo(mm)
                     dchi2 = np.sum((mm * ie)**2)
                 IV[di] = dchi2
+
+        # source params next
         for i,(tim,umods,scale) in enumerate(zip(imlist, umodels, scales)):
             mm = np.zeros(tim.shape)
             ie = tim.getInvError()
@@ -384,7 +389,7 @@ class Optimizer(object):
                 uh,uw = um.shape
                 slc = slice(y0, y0+uh), slice(x0,x0+uw)
                 dchi2 = np.sum((mm[slc] * scale * ie[slc]) ** 2)
-                IV[NS + ui] += dchi2
+                IV[Nsky + ui] += dchi2
                 mm[slc] = 0.
         return IV
     

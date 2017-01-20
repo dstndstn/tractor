@@ -28,8 +28,8 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
     A PSF model based on an image postage stamp, which will be
     sinc-shifted to subpixel positions.
 
-    Galaxies will be rendering using FFT convolution.
-    
+    Galaxies will be rendered using FFT convolution.
+
     FIXME -- currently this class claims to have no params.
     '''
 
