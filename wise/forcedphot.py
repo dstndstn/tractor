@@ -214,6 +214,8 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None,
             flux_invvars[srci] = IV[:len(srci)].astype(np.float32)
             if hasattr(tim, 'mjdmin') and hasattr(tim, 'mjdmax'):
                 mjd[srci] = (tim.mjdmin + tim.mjdmax)/2.
+            if fs is None:
+                continue
             for k in fskeys:
                 x = getattr(fs, k)
                 # fitstats are returned only for un-frozen sources
