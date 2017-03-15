@@ -68,6 +68,9 @@ WISE_INSTALL := __init__.py allwisecat.py forcedphot.py unwise.py wise_psf.py \
 	wisecat.py \
 	allsky-atlas.fits wise-psf-avg.fits
 
+UTILS_INSTALL_DIR := $(PY_INSTALL_DIR)/utils
+UTILS_INSTALL := __init__.py cachetest.py debugpool.py pooltest.py profile-stats.py stats.py
+
 CERES_INSTALL := ceres.py _ceres.so
 
 install:
@@ -82,6 +85,11 @@ install:
 	@for x in $(WISE_INSTALL); do \
 		echo cp wise/$$x '$(WISE_INSTALL_DIR)/'$$x; \
 		cp wise/$$x '$(WISE_INSTALL_DIR)/'$$x; \
+	done
+	mkdir -p $(UTILS_INSTALL_DIR)
+	@for x in $(UTILS_INSTALL); do \
+		echo cp utils/$$x '$(UTILS_INSTALL_DIR)/'$$x; \
+		cp utils/$$x '$(UTILS_INSTALL_DIR)/'$$x; \
 	done
 
 install-ceres:
