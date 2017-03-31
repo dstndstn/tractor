@@ -84,21 +84,8 @@ static PyObject* mixture_profile_fourier_transform(
         return NULL;
     }
 
-    NV = PyArray_DIM(np_v, 0);
-    NW = PyArray_DIM(np_w, 0);
-
-    dims[0] = NW;
-    dims[1] = NV;
-    np_F = PyArray_SimpleNew(2, dims, NPY_COMPLEX128);
-    f = PyArray_DATA(np_F);
-    amps = PyArray_DATA(np_amps);
     means = PyArray_DATA(np_means);
-    vars = PyArray_DATA(np_vars);
-    vv = PyArray_DATA(np_v);
-    ww = PyArray_DATA(np_w);
-
-    memset(f, 0, 2*NV*NW*sizeof(double));
-
+    
     for (k=0; k<K; k++) {
         if ((means[k*D] != means[0]) ||
             (means[k*D+1] != means[1])) {
@@ -109,6 +96,30 @@ static PyObject* mixture_profile_fourier_transform(
 
     double mu0 = means[0];
     double mu1 = means[1];
+
+    int zeromean = (mu0 == 0.) && (mu1 == 0.);
+
+    NV = PyArray_DIM(np_v, 0);
+    NW = PyArray_DIM(np_w, 0);
+
+    dims[0] = NW;
+    dims[1] = NV;
+
+    if (zeromean)
+        np_F = PyArray_SimpleNew(2, dims, NPY_DOUBLE);
+    else
+        np_F = PyArray_SimpleNew(2, dims, NPY_COMPLEX128);
+    f = PyArray_DATA(np_F);
+    amps = PyArray_DATA(np_amps);
+    vars = PyArray_DATA(np_vars);
+    vv = PyArray_DATA(np_v);
+    ww = PyArray_DATA(np_w);
+
+    if (zeromean)
+        memset(f, 0, NV*NW*sizeof(double));
+    else
+        memset(f, 0, 2*NV*NW*sizeof(double));
+
     double* ff = f;
     for (j=0; j<NW; j++) {
         for (i=0; i<NV; i++) {
@@ -130,11 +141,16 @@ static PyObject* mixture_profile_fourier_transform(
                                                   2.*b*vv[i]*ww[j] +
                                                   d *  ww[j]*ww[j]));
             }
-            double angle = -2. * M_PI * (mu0 * vv[i] + mu1 * ww[j]);
-            *ff = s * cos(angle);
-            ff++;
-            *ff = s * sin(angle);
-            ff++;
+            if (zeromean) {
+                *ff = s;
+                ff++;
+            } else {
+                double angle = -2. * M_PI * (mu0 * vv[i] + mu1 * ww[j]);
+                *ff = s * cos(angle);
+                ff++;
+                *ff = s * sin(angle);
+                ff++;
+            }
         }
     }
     return np_F;

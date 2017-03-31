@@ -171,12 +171,14 @@ class MixtureOfGaussians(object):
             a = self.var[k, 0, 0]
             b = self.var[k, 0, 1]
             d = self.var[k, 1, 1]
-            F = (np.exp(-2. * np.pi**2 *
-                        (a * v[np.newaxis,:]**2 +
-                         d * w[:,np.newaxis]**2 +
-                         2*b*v[np.newaxis,:]*w[:,np.newaxis]))
-                         * np.exp(-2.*np.pi* 1j *(mu[0]*v[np.newaxis,:] +
-                                                  mu[1]*w[:,np.newaxis])))
+
+            F = np.exp(-2. * np.pi**2 *
+                       (a * v[np.newaxis,:]**2 +
+                        d * w[:,np.newaxis]**2 +
+                        2*b*v[np.newaxis,:]*w[:,np.newaxis]))
+            if mu[0] != 0. or mu[1] != 0.:
+                F *= np.exp(-2.*np.pi* 1j *(mu[0]*v[np.newaxis,:] +
+                                            mu[1]*w[:,np.newaxis]))
 
             if Fsum is None:
                 Fsum = amp * F
