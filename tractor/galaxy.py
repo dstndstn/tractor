@@ -397,6 +397,8 @@ class ProfileGalaxy(object):
             # How much padding on the PSF image?
             psfmargin = cx - psfw/2
 
+            print('mux,muy', mux,muy, 'margin', psfmargin)
+            
             gx0 = gy0 = 0
             if abs(mux) >= psfmargin or abs(muy) >= psfmargin:
                 # Wrap-around is possible (likely).  Compute a shifted image
@@ -416,7 +418,8 @@ class ProfileGalaxy(object):
             mux = dx - ix0
             muy = dy - iy0
 
-        amix = self._getAffineProfile(img, mux, muy)
+        #amix = self._getAffineProfile(img, mux, muy)
+        amix = self._getAffineProfile(img, 0., 0.)
         fftmix = amix
         mogmix = None
         
@@ -428,13 +431,14 @@ class ProfileGalaxy(object):
             # Terms that will wrap-around significantly...
             I = (np.sqrt(vv) * nsigma > pW)
             if np.sum(I):
-                #print('Evaluating', np.sum(I), 'terms as MoGs')
+                print('Evaluating', np.sum(I), 'terms as MoGs')
                 # Yuck, re-evaluate affine profile using 'px,py' vs 'mux,muy'
                 gmix = self._getAffineProfile(img, px, py)
                 mogmix = mp.MixtureOfGaussians(gmix.amp[I], gmix.mean[I,:],
                                                gmix.var[I,:,:])
             I = np.logical_not(I)
             if np.sum(I):
+                print('Evaluating', np.sum(I), 'terms with FFT')
                 fftmix = mp.MixtureOfGaussians(amix.amp[I], amix.mean[I,:],
                                                amix.var[I,:,:])
             else:
@@ -443,6 +447,58 @@ class ProfileGalaxy(object):
         if fftmix is not None:
             Fsum = fftmix.getFourierTransform(v, w)
             G = np.fft.irfft2(Fsum * P, s=(pH,pW))
+            G = G.astype(np.float32)
+
+            # from astrometry.util.util import lanczos3_interpolate
+            # ix = int(np.round(mux))
+            # iy = int(np.round(muy))
+            # xx,yy = np.meshgrid(np.arange(pW), np.arange(pH))
+            # xx = xx.ravel().astype(np.int32)
+            # yy = yy.ravel().astype(np.int32)
+            # LG = np.zeros(len(xx), np.float32)
+            # dx = (ix - mux + xx).astype(np.float32)
+            # dy = (iy - muy + yy).astype(np.float32)
+            # print('ix,iy', ix,iy)
+            # print('dx,dy', dx,dy)
+            # print('G', G.shape, G.dtype)
+            # print('LG', LG.shape, LG.dtype)
+            # lanczos3_interpolate(ix+xx, iy+yy, dx, dy, [LG], [G])
+
+            from astrometry.util.miscutils import lanczos_filter
+            from scipy.ndimage.filters import correlate1d
+            L = 3
+            ix = int(np.round(mux))
+            iy = int(np.round(muy))
+            dx = mux - ix
+            dy = muy - iy
+            Lx = lanczos_filter(L, np.arange(-L, L+1) + dx)
+            Ly = lanczos_filter(L, np.arange(-L, L+1) + dy)
+            # Normalize the Lanczos interpolants (preserve flux)
+            Lx /= Lx.sum()
+            Ly /= Ly.sum()
+            sx      = correlate1d(G,  Lx, axis=1, mode='constant')
+            shifted = correlate1d(sx, Ly, axis=0, mode='constant')
+
+            print('ix,iy', ix,iy)
+
+            if ix == 0 and iy == 0:
+                G = shifted
+            else:
+                if ix >= 0:
+                    six = slice(0, pW-ix)
+                    sox = slice(ix, pW)
+                else:
+                    six = slice(-ix, pW)
+                    sox = slice(0, pW+ix)
+                if iy >= 0:
+                    siy = slice(0, pH-iy)
+                    soy = slice(iy, pH)
+                else:
+                    siy = slice(-iy, pH)
+                    soy = slice(0, pH+iy)
+                G[:,:] = 0
+                G[soy,sox] = shifted[siy,six]
+            
         else:
             G = np.zeros((pH,pW), np.float32)
         

@@ -16,7 +16,7 @@ import numpy as np
 from astrometry.util.ttime import Time
 
 from .utils import MultiParams, _isint, get_class_from_name
-from .patch import Patch
+from .patch import Patch, ModelMask
 from .image import Image
 
 def logverb(*args):
@@ -392,7 +392,6 @@ class Tractor(MultiParams):
 
     def getModelPatch(self, img, src, **kwargs):
         mask = self._getModelMaskFor(img, src)
-
         # HACK -- assume no mask -> no overlap
         if self.expectModelMasks and mask is None:
             return None

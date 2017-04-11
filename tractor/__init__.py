@@ -32,7 +32,7 @@ __all__ = [
     'ParamsWrapper',
     #'GaussianPriors',
     # engine
-    'Patch', 'Image', 'Images',
+    'Patch', 'ModelMask', 'Image', 'Images',
     'Catalog', 'Tractor',
     # psfex
     'VaryingGaussianPSF', 'PsfEx',
