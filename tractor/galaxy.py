@@ -13,6 +13,7 @@ from the SDSS /Photo/ software; we use multi-Gaussian approximations
 of these.
 """
 from __future__ import print_function
+from __future__ import division
 
 import numpy as np
 
@@ -295,6 +296,8 @@ class ProfileGalaxy(object):
             if mm is None:
                 mm = modelMask
             # now convolve with the PSF, analytically
+            # (note that the psf's center is *not* set to px,py; that's just
+            #  the position to use for spatially-varying PSFs)
             psfmix = psf.getMixtureOfGaussians(px=px, py=py)
             cmix = amix.convolve(psfmix)
             if mm is None:
@@ -388,28 +391,15 @@ class ProfileGalaxy(object):
             # the Patch we return *must* have this origin.
             ix0 = x0
             iy0 = y0
-            # Put the difference into the galaxy FFT.
+            # the difference that we have to handle by shifting the model image
             mux = dx - ix0
             muy = dy - iy0
-            # ASSUME square PSF
-            assert(pH == pW)
-            psfh,psfw = psf.shape
-            # How much padding on the PSF image?
-            psfmargin = cx - psfw/2
-
-            print('mux,muy', mux,muy, 'margin', psfmargin)
-            
-            gx0 = gy0 = 0
-            if abs(mux) >= psfmargin or abs(muy) >= psfmargin:
-                # Wrap-around is possible (likely).  Compute a shifted image
-                # and then copy it into the result.
-                gx0 = int(np.round(mux))
-                gy0 = int(np.round(muy))
-                # print('Wrap-around possible/likely:', mux, muy,
-                #       'vs margin', psfmargin, '-> shift by', gx0,gy0)
-                mux -= gx0
-                muy -= gy0
-                
+            # we will handle the integer portion by computing a shifted image
+            # and copying it into the result
+            sx = int(np.round(mux))
+            sy = int(np.round(muy))
+            mux -= sx
+            muy -= sy
         else:
             # Put the integer portion of the offset into Patch x0,y0
             ix0 = int(np.round(dx))
@@ -418,7 +408,10 @@ class ProfileGalaxy(object):
             mux = dx - ix0
             muy = dy - iy0
 
-        #amix = self._getAffineProfile(img, mux, muy)
+        # At this point, mux,muy are both in [-0.5, 0.5]
+        assert(np.abs(mux) <= 0.5)
+        assert(np.abs(muy) <= 0.5)
+            
         amix = self._getAffineProfile(img, 0., 0.)
         fftmix = amix
         mogmix = None
@@ -452,48 +445,21 @@ class ProfileGalaxy(object):
             from astrometry.util.miscutils import lanczos_filter
             from scipy.ndimage.filters import correlate1d
             L = 3
-            ix = int(np.round(mux))
-            iy = int(np.round(muy))
-            dx = mux - ix
-            dy = muy - iy
-            Lx = lanczos_filter(L, np.arange(-L, L+1) + dx)
-            Ly = lanczos_filter(L, np.arange(-L, L+1) + dy)
+            Lx = lanczos_filter(L, np.arange(-L, L+1) + mux)
+            Ly = lanczos_filter(L, np.arange(-L, L+1) + muy)
             # Normalize the Lanczos interpolants (preserve flux)
             Lx /= Lx.sum()
             Ly /= Ly.sum()
-            sx      = correlate1d(G,  Lx, axis=1, mode='constant')
-            shifted = correlate1d(sx, Ly, axis=0, mode='constant')
-
-            print('ix,iy', ix,iy)
-
-            if ix == 0 and iy == 0:
-                G = shifted
-            else:
-                if ix >= 0:
-                    six = slice(0, pW-ix)
-                    sox = slice(ix, pW)
-                else:
-                    six = slice(-ix, pW)
-                    sox = slice(0, pW+ix)
-                if iy >= 0:
-                    siy = slice(0, pH-iy)
-                    soy = slice(iy, pH)
-                else:
-                    siy = slice(-iy, pH)
-                    soy = slice(0, pH+iy)
-                G[:,:] = 0
-                G[soy,sox] = shifted[siy,six]
-            
+            cx = correlate1d(G,  Lx, axis=1, mode='constant')
+            G  = correlate1d(cx, Ly, axis=0, mode='constant')
         else:
             G = np.zeros((pH,pW), np.float32)
         
         if modelMask is not None:
             gh,gw = G.shape
-            if gx0 != 0 or gy0 != 0:
-                #print('gx0,gy0', gx0,gy0)
-                yi,yo = get_overlapping_region(-gy0, -gy0+mh-1, 0, gh-1)
-                xi,xo = get_overlapping_region(-gx0, -gx0+mw-1, 0, gw-1)
-                #print('Overlaps: y', yo,yi, 'x', xo,xi)
+            if sx != 0 or sy != 0:
+                yi,yo = get_overlapping_region(-sy, -sy+mh-1, 0, gh-1)
+                xi,xo = get_overlapping_region(-sx, -sx+mw-1, 0, gw-1)
                 # shifted
                 shG = np.zeros((mh,mw), G.dtype)
                 shG[yo,xo] = G[yi,xi]
