@@ -432,10 +432,9 @@ class ProfileGalaxy(object):
             I = (np.sqrt(vv) * nsigma > pW)
             if np.sum(I):
                 print('Evaluating', np.sum(I), 'terms as MoGs')
-                # Yuck, re-evaluate affine profile using 'px,py' vs 'mux,muy'
-                gmix = self._getAffineProfile(img, px, py)
-                mogmix = mp.MixtureOfGaussians(gmix.amp[I], gmix.mean[I,:],
-                                               gmix.var[I,:,:])
+                mogmix = mp.MixtureOfGaussians(amix.amp[I],
+                                               amix.mean[I,:] + np.array([px,py])[:,np.newaxis],
+                                               amix.var[I,:,:])
             I = np.logical_not(I)
             if np.sum(I):
                 print('Evaluating', np.sum(I), 'terms with FFT')
@@ -447,23 +446,9 @@ class ProfileGalaxy(object):
         if fftmix is not None:
             Fsum = fftmix.getFourierTransform(v, w)
             G = np.fft.irfft2(Fsum * P, s=(pH,pW))
-            G = G.astype(np.float32)
 
-            # from astrometry.util.util import lanczos3_interpolate
-            # ix = int(np.round(mux))
-            # iy = int(np.round(muy))
-            # xx,yy = np.meshgrid(np.arange(pW), np.arange(pH))
-            # xx = xx.ravel().astype(np.int32)
-            # yy = yy.ravel().astype(np.int32)
-            # LG = np.zeros(len(xx), np.float32)
-            # dx = (ix - mux + xx).astype(np.float32)
-            # dy = (iy - muy + yy).astype(np.float32)
-            # print('ix,iy', ix,iy)
-            # print('dx,dy', dx,dy)
-            # print('G', G.shape, G.dtype)
-            # print('LG', LG.shape, LG.dtype)
-            # lanczos3_interpolate(ix+xx, iy+yy, dx, dy, [LG], [G])
-
+            # Lanczos-3 interpolation in ~ the same way we do for
+            # pixelized PSFs.
             from astrometry.util.miscutils import lanczos_filter
             from scipy.ndimage.filters import correlate1d
             L = 3
