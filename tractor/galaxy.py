@@ -443,6 +443,7 @@ class ProfileGalaxy(object):
                 fftmix = None
 
         if fftmix is not None:
+            print('fftmix; mux,muy=', mux,muy)
             Fsum = fftmix.getFourierTransform(v, w)
             G = np.fft.irfft2(Fsum * P, s=(pH,pW))
 
@@ -454,14 +455,18 @@ class ProfileGalaxy(object):
             # pixelized PSFs.
             from astrometry.util.miscutils import lanczos_filter
             from scipy.ndimage.filters import correlate1d
-            L = 3
+            #L = 3
+            L = fft_lanczos_order
             Lx = lanczos_filter(L, np.arange(-L, L+1) + mux)
             Ly = lanczos_filter(L, np.arange(-L, L+1) + muy)
             # Normalize the Lanczos interpolants (preserve flux)
             Lx /= Lx.sum()
             Ly /= Ly.sum()
+            print('Lx centroid', np.sum(Lx * (np.arange(-L,L+1))))
+            print('Ly centroid', np.sum(Ly * (np.arange(-L,L+1))))
             cx = correlate1d(G,  Lx, axis=1, mode='constant')
-            G  = correlate1d(cx, Ly, axis=0, mode='constant')
+            correlate1d(cx, Ly, axis=0, mode='constant', output=G)
+            del cx
         else:
             G = np.zeros((pH,pW), np.float32)
         
@@ -513,6 +518,8 @@ class ProfileGalaxy(object):
             
         return Patch(ix0, iy0, G)
 
+fft_lanczos_order = 3
+    
 def _fourier_galaxy_debug_plots(G, shG, xi,yi,xo,yo, P, Fsum,
                                 pW,pH, psf):
     import pylab as plt
