@@ -301,6 +301,7 @@ class ProfileGalaxy(object):
             psfmix = psf.getMixtureOfGaussians(px=px, py=py)
             cmix = amix.convolve(psfmix)
             if mm is None:
+                #print('Mixture to patch: amix', amix, 'psfmix', psfmix, 'cmix', cmix)
                 return mp.mixture_to_patch(cmix, x0, x1, y0, y1, minval)
             # The convolved mixture *already* has the px,py offset added
             # (via px,py to amix) so set px,py=0,0 in this call.
@@ -389,8 +390,6 @@ class ProfileGalaxy(object):
 
         P,(cx,cy),(pH,pW),(v,w) = psf.getFourierTransform(px, py, halfsize)
 
-        print('FFT size', pH,pW)
-        
         dx = px - cx
         dy = py - cy
         if modelMask is not None:
@@ -481,99 +480,8 @@ class ProfileGalaxy(object):
                 # print('yo,xo,', yo,xo)
 
                 if debug_ps is not None:
-                    import pylab as plt
-                    mx = G.max()
-                    ima = dict(vmin=np.log10(mx)-6,
-                               vmax=np.log10(mx),
-                               interpolation='nearest', origin='lower')
-                    plt.clf()
-                    plt.subplot(1,2,1)
-                    #plt.imshow(shG, interpolation='nearest', origin='lower')
-                    plt.imshow(np.log10(shG), **ima)
-                    ax = plt.axis()
-                    plt.plot([xo.start,xo.start,xo.stop-1,xo.stop-1,xo.start],
-                             [yo.start,yo.stop-1,yo.stop-1,yo.start,yo.start],
-                             'r-')
-                    plt.axis(ax)
-                    plt.title('shG')
-                    plt.subplot(1,2,2)
-                    #plt.imshow(G, interpolation='nearest', origin='lower')
-                    plt.imshow(np.log10(G), **ima)
-                    ax = plt.axis()
-                    plt.plot([xi.start,xi.start,xi.stop-1,xi.stop-1,xi.start],
-                             [yi.start,yi.stop-1,yi.stop-1,yi.start,yi.start],
-                             'r-')
-                    plt.axis(ax)
-                    plt.title('G')
-                    debug_ps.savefig()
-
-                    def plot_real_imag(F, name):
-                        plt.clf()
-                        plt.subplot(2,2,1)
-                        print(name,'real range', F.real.min(), F.real.max())
-                        mx = np.abs(F.real).max()
-                        plt.imshow(np.log10(np.abs(F.real)),
-                                   interpolation='nearest', origin='lower')
-                        plt.xticks([]); plt.yticks([])
-                        plt.colorbar()
-                        plt.title('log(abs(%s.real))' % name)
-                        plt.subplot(2,2,3)
-                        plt.imshow(np.sign(F.real),
-                                   vmin=-1, vmax=1,
-                                   interpolation='nearest', origin='lower', cmap='RdBu')
-                        plt.xticks([]); plt.yticks([])
-                        plt.title('sign(%s.real)' % name)
-                        print(name,'imag range', F.imag.min(), F.imag.max())
-                        plt.subplot(2,2,2)
-                        mx = np.abs(F.imag).max()
-                        plt.imshow(np.log10(np.abs(F.imag)),
-                                   interpolation='nearest', origin='lower')
-                        plt.xticks([]); plt.yticks([])
-                        plt.colorbar()
-                        plt.title('log(abs(%s.imag))' % name)
-                        plt.subplot(2,2,4)
-                        plt.imshow(np.sign(F.imag),
-                                   vmin=-1, vmax=1,
-                                   interpolation='nearest', origin='lower', cmap='RdBu')
-                        plt.xticks([]); plt.yticks([])
-                        plt.title('sign(%s.imag)' % name)
-                    
-                    plot_real_imag(P, 'PSF')
-                    debug_ps.savefig()
-                    plot_real_imag(Fsum, 'FFT(Galaxy)')
-                    debug_ps.savefig()
-                    plot_real_imag(P * Fsum, 'FFT(PSF * Galaxy)')
-                    debug_ps.savefig()
-
-                    # What kind of artifacts do we get from the iFFT(FFT(PSF)) - PSF ?
-                    p = np.fft.irfft2(P, s=(pH,pW))
-                    plt.clf()
-                    plt.subplot(1,3,1)
-                    # ASSUME PixelizedPSF
-                    pad,cx,cy = psf._padInImage(pW,pH)
-                    plt.imshow(pad, interpolation='nearest', origin='lower')
-                    plt.subplot(1,3,2)
-                    plt.imshow(p, interpolation='nearest', origin='lower')
-                    plt.subplot(1,3,3)
-                    plt.imshow(pad - p, interpolation='nearest', origin='lower')
-                    plt.colorbar()
-                    debug_ps.savefig()
-                    
-                    # plt.clf()
-                    # plt.subplot(1,2,1)
-                    # mx = np.abs(P).max()
-                    # plt.imshow(np.log10(np.abs(P)),
-                    #            interpolation='nearest', origin='lower')
-                    # plt.xticks([]); plt.yticks([])
-                    # plt.colorbar()
-                    # plt.title('log(abs(FFT(PSF)))')
-                    # plt.subplot(1,2,2)
-                    # plt.imshow(np.arctan2(P.imag, P.real),
-                    #            vmin=-np.pi, vmax=np.pi,
-                    #            interpolation='nearest', origin='lower', cmap='RdBu')
-                    # plt.xticks([]); plt.yticks([])
-                    # plt.title('phase(FFT(PSF))')
-                    # debug_ps.savefig()
+                    _fourier_galaxy_debug_plots(G, shG, xi,yi,xo,yo, P, Fsum,
+                                                pW,pH, psf)
 
                 G = shG
             if gh > mh or gw > mw:
@@ -604,6 +512,102 @@ class ProfileGalaxy(object):
             G += mogpatch.patch
             
         return Patch(ix0, iy0, G)
+
+def _fourier_galaxy_debug_plots(G, shG, xi,yi,xo,yo, P, Fsum,
+                                pW,pH, psf):
+    import pylab as plt
+    mx = G.max()
+    ima = dict(vmin=np.log10(mx)-6,
+               vmax=np.log10(mx),
+               interpolation='nearest', origin='lower')
+    plt.clf()
+    plt.subplot(1,2,1)
+    #plt.imshow(shG, interpolation='nearest', origin='lower')
+    plt.imshow(np.log10(shG), **ima)
+    ax = plt.axis()
+    plt.plot([xo.start,xo.start,xo.stop-1,xo.stop-1,xo.start],
+             [yo.start,yo.stop-1,yo.stop-1,yo.start,yo.start],
+             'r-')
+    plt.axis(ax)
+    plt.title('shG')
+    plt.subplot(1,2,2)
+    #plt.imshow(G, interpolation='nearest', origin='lower')
+    plt.imshow(np.log10(G), **ima)
+    ax = plt.axis()
+    plt.plot([xi.start,xi.start,xi.stop-1,xi.stop-1,xi.start],
+             [yi.start,yi.stop-1,yi.stop-1,yi.start,yi.start],
+             'r-')
+    plt.axis(ax)
+    plt.title('G')
+    debug_ps.savefig()
+
+    def plot_real_imag(F, name):
+        plt.clf()
+        plt.subplot(2,2,1)
+        print(name,'real range', F.real.min(), F.real.max())
+        mx = np.abs(F.real).max()
+        plt.imshow(np.log10(np.abs(F.real)),
+                   interpolation='nearest', origin='lower')
+        plt.xticks([]); plt.yticks([])
+        plt.colorbar()
+        plt.title('log(abs(%s.real))' % name)
+        plt.subplot(2,2,3)
+        plt.imshow(np.sign(F.real),
+                   vmin=-1, vmax=1,
+                   interpolation='nearest', origin='lower', cmap='RdBu')
+        plt.xticks([]); plt.yticks([])
+        plt.title('sign(%s.real)' % name)
+        print(name,'imag range', F.imag.min(), F.imag.max())
+        plt.subplot(2,2,2)
+        mx = np.abs(F.imag).max()
+        plt.imshow(np.log10(np.abs(F.imag)),
+                   interpolation='nearest', origin='lower')
+        plt.xticks([]); plt.yticks([])
+        plt.colorbar()
+        plt.title('log(abs(%s.imag))' % name)
+        plt.subplot(2,2,4)
+        plt.imshow(np.sign(F.imag),
+                   vmin=-1, vmax=1,
+                   interpolation='nearest', origin='lower', cmap='RdBu')
+        plt.xticks([]); plt.yticks([])
+        plt.title('sign(%s.imag)' % name)
+    
+    plot_real_imag(P, 'PSF')
+    debug_ps.savefig()
+    plot_real_imag(Fsum, 'FFT(Galaxy)')
+    debug_ps.savefig()
+    plot_real_imag(P * Fsum, 'FFT(PSF * Galaxy)')
+    debug_ps.savefig()
+
+    # What kind of artifacts do we get from the iFFT(FFT(PSF)) - PSF ?
+    p = np.fft.irfft2(P, s=(pH,pW))
+    plt.clf()
+    plt.subplot(1,3,1)
+    # ASSUME PixelizedPSF
+    pad,cx,cy = psf._padInImage(pW,pH)
+    plt.imshow(pad, interpolation='nearest', origin='lower')
+    plt.subplot(1,3,2)
+    plt.imshow(p, interpolation='nearest', origin='lower')
+    plt.subplot(1,3,3)
+    plt.imshow(pad - p, interpolation='nearest', origin='lower')
+    plt.colorbar()
+    debug_ps.savefig()
+    
+    # plt.clf()
+    # plt.subplot(1,2,1)
+    # mx = np.abs(P).max()
+    # plt.imshow(np.log10(np.abs(P)),
+    #            interpolation='nearest', origin='lower')
+    # plt.xticks([]); plt.yticks([])
+    # plt.colorbar()
+    # plt.title('log(abs(FFT(PSF)))')
+    # plt.subplot(1,2,2)
+    # plt.imshow(np.arctan2(P.imag, P.real),
+    #            vmin=-np.pi, vmax=np.pi,
+    #            interpolation='nearest', origin='lower', cmap='RdBu')
+    # plt.xticks([]); plt.yticks([])
+    # plt.title('phase(FFT(PSF))')
+    # debug_ps.savefig()
 
 class HoggGalaxy(ProfileGalaxy, Galaxy):
 

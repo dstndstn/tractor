@@ -88,11 +88,16 @@ class GalaxyTest(unittest.TestCase):
         p1.addTo(mod)
         print('Mod sum:', mod.sum())
 
+        mh,mw = mod.shape
+        xx,yy = np.meshgrid(np.arange(mw), np.arange(mh))
+        print('mod centroid:', np.sum(xx*mod)/np.sum(mod), np.sum(yy*mod)/np.sum(mod))
+        
         self.assertTrue(np.abs(mod.sum() - 100.) < 1e-3)
 
         if ps is not None:
             plt.clf()
             plt.imshow(mod, interpolation='nearest', origin='lower')
+            plt.title('mod')
             plt.colorbar()
             ps.savefig()
 
@@ -113,12 +118,13 @@ class GalaxyTest(unittest.TestCase):
             plt.clf()
             plt.imshow(mod2, interpolation='nearest', origin='lower')
             plt.colorbar()
-            plt.title('Exp')
+            plt.title('Exp (mod2)')
             ps.savefig()
 
             plt.clf()
             plt.imshow(mod2-mod, interpolation='nearest', origin='lower')
             plt.colorbar()
+            plt.title('mod2 - mod')
             ps.savefig()
         
         print('Diff between mods:', np.abs(mod - mod2).max())
@@ -139,6 +145,19 @@ class GalaxyTest(unittest.TestCase):
         print('Diff between mods:', np.abs(mod3 - mod).max())
         self.assertTrue(np.abs(mod3 - mod).max() < 1e-6)
 
+        if ps is not None:
+            plt.clf()
+            plt.imshow(mod3, interpolation='nearest', origin='lower')
+            plt.colorbar()
+            plt.title('mod3')
+            ps.savefig()
+
+            plt.clf()
+            plt.imshow(mod3-mod, interpolation='nearest', origin='lower')
+            plt.colorbar()
+            plt.title('mod3 - mod')
+            ps.savefig()
+        
         # Test with a PixelizedPSF (FFT method), created from the Gaussian PSF
         # image (so we can check consistency)
         psfpatch = tim.psf.getPointSourcePatch(
@@ -152,6 +171,23 @@ class GalaxyTest(unittest.TestCase):
         mod4 = np.zeros((H,W), np.float32)
         p4.addTo(mod4)
         print('Patch:', p4)
+
+        print('mod4 centroid:', np.sum(xx*mod4)/np.sum(mod4), np.sum(yy*mod4)/np.sum(mod4))
+
+        if ps is not None:
+            plt.clf()
+            plt.imshow(mod4, interpolation='nearest', origin='lower')
+            plt.colorbar()
+            plt.title('mod4')
+            ps.savefig()
+
+            plt.clf()
+            plt.imshow(mod4-mod, interpolation='nearest', origin='lower')
+            plt.colorbar()
+            plt.title('mod4 - mod')
+            ps.savefig()
+
+
         # These assertions are fairly arbitrary...
         self.assertEqual(p4.x0, 6)
         self.assertEqual(p4.y0, 7)
