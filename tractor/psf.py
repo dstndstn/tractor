@@ -87,7 +87,8 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         from astrometry.util.miscutils import get_overlapping_region
 
         img = self.getImage(px, py)
-
+        assert(np.all(np.isfinite(img)))
+        
         H,W = img.shape
         ix = int(np.round(px))
         iy = int(np.round(py))
@@ -124,6 +125,7 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         if modelMask is None:
             sx      = correlate1d(img, Lx, axis=1, mode='constant')
             shifted = correlate1d(sx,  Ly, axis=0, mode='constant')
+            assert(np.all(np.isfinite(shifted)))
             return Patch(x0, y0, shifted)
 
         #
@@ -136,8 +138,10 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         mm[yo,xo] = img[yi,xi]
 
         sx = correlate1d(mm, Lx, axis=1, mode='constant')
-        correlate1d(sx, Ly, axis=0, mode='constant', output=mm)
-        return Patch(mx0, my0, mm[padding:-padding, padding:-padding])
+        mm = correlate1d(sx, Ly, axis=0, mode='constant')
+        mm = mm[padding:-padding, padding:-padding]
+        assert(np.all(np.isfinite(mm)))
+        return Patch(mx0, my0, mm)
 
     def getFourierTransformSize(self, radius):
         # Next power-of-two size

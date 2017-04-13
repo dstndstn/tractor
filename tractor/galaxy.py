@@ -430,20 +430,20 @@ class ProfileGalaxy(object):
             # Terms that will wrap-around significantly...
             I = (np.sqrt(vv) * nsigma > pW)
             if np.sum(I):
-                print('Evaluating', np.sum(I), 'terms as MoGs')
+                #print('Evaluating', np.sum(I), 'terms as MoGs')
                 mogmix = mp.MixtureOfGaussians(amix.amp[I],
                                                amix.mean[I,:] + np.array([px,py])[:,np.newaxis],
                                                amix.var[I,:,:])
             I = np.logical_not(I)
             if np.sum(I):
-                print('Evaluating', np.sum(I), 'terms with FFT')
+                #print('Evaluating', np.sum(I), 'terms with FFT')
                 fftmix = mp.MixtureOfGaussians(amix.amp[I], amix.mean[I,:],
                                                amix.var[I,:,:])
             else:
                 fftmix = None
 
         if fftmix is not None:
-            print('fftmix; mux,muy=', mux,muy)
+            #print('fftmix; mux,muy=', mux,muy)
             Fsum = fftmix.getFourierTransform(v, w)
             G = np.fft.irfft2(Fsum * P, s=(pH,pW))
 
@@ -462,10 +462,10 @@ class ProfileGalaxy(object):
             # Normalize the Lanczos interpolants (preserve flux)
             Lx /= Lx.sum()
             Ly /= Ly.sum()
-            print('Lx centroid', np.sum(Lx * (np.arange(-L,L+1))))
-            print('Ly centroid', np.sum(Ly * (np.arange(-L,L+1))))
+            #print('Lx centroid', np.sum(Lx * (np.arange(-L,L+1))))
+            #print('Ly centroid', np.sum(Ly * (np.arange(-L,L+1))))
             cx = correlate1d(G,  Lx, axis=1, mode='constant')
-            correlate1d(cx, Ly, axis=0, mode='constant', output=G)
+            G  = correlate1d(cx, Ly, axis=0, mode='constant')
             del cx
         else:
             G = np.zeros((pH,pW), np.float32)
