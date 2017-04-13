@@ -1,4 +1,5 @@
 from __future__ import print_function
+from __future__ import division
 import numpy as np
 from astrometry.util.miscutils import lanczos_filter
 
@@ -92,8 +93,8 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         iy = int(np.round(py))
         dx = px - ix
         dy = py - iy
-        x0 = ix - W/2
-        y0 = iy - H/2
+        x0 = ix - W//2
+        y0 = iy - H//2
 
         if modelMask is not None:
             mh,mw = modelMask.shape
@@ -159,22 +160,22 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         subimg = img
 
         if H >= ph:
-            y0 = (H - ph) / 2
-            cy = y0 + ph/2
+            y0 = (H - ph) // 2
+            cy = y0 + ph//2
         else:
             y0 = 0
-            cut = (ph - H) / 2
+            cut = (ph - H) // 2
             subimg = subimg[cut:cut+H, :]
-            cy = ph/2 - cut
+            cy = ph//2 - cut
 
         if W >= pw:
-            x0 = (W - pw) / 2
-            cx = x0 + pw/2
+            x0 = (W - pw) // 2
+            cx = x0 + pw//2
         else:
             x0 = 0
-            cut = (pw - W) / 2
+            cut = (pw - W) // 2
             subimg = subimg[:, cut:cut+W]
-            cx = pw/2 - cut
+            cx = pw//2 - cut
         sh,sw = subimg.shape
 
         pad = np.zeros((H, W), img.dtype)
@@ -232,7 +233,7 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
             amp, mean, var = args
         else:
             assert(len(args) % 6 == 0)
-            K = len(args) / 6
+            K = len(args) // 6
             amp  = np.array(args[:K])
             mean = np.array(args[K:3*K]).reshape((K,2))
             args = args[3*K:]
@@ -292,7 +293,7 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
             raise RuntimeError('Failed to create %s from FITS header: expected '
                                'factor of 6 parameters, got %i' % 
                                (str(clazz), len(params)))
-        K = len(params) / 6
+        K = len(params) // 6
         psf = clazz(np.zeros(K), np.zeros((K,2)), np.zeros((K,2,2)))
         psf.setParams(params)
         return psf
@@ -438,7 +439,7 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
             self.mog.mean.ravel()[i] = p
             return old
         i -= K*2
-        j = i / 3
+        j = i // 3
         k = i % 3
         if k in [0,1]:
             old = self.mog.var[j,k,k]
@@ -471,7 +472,7 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
         stamp = stamp.copy()
         
         if xy0 is None:
-            xm, ym = -(stamp.shape[1]/2), -(stamp.shape[0]/2)
+            xm, ym = -(stamp.shape[1]//2), -(stamp.shape[0]//2)
         else:
             xm, ym = xy0
 
@@ -480,7 +481,7 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
             tim = Image(data=stamp, invvar=1e6*np.ones_like(stamp),
                         psf=tpsf)
             h,w = tim.shape
-            src = PointSource(PixPos(w/2, h/2), Flux(1.))
+            src = PointSource(PixPos(w//2, h//2), Flux(1.))
             tr = Tractor([tim],[src])
             tr.freezeParam('catalog')
             tim.freezeAllBut('psf')
@@ -587,7 +588,7 @@ class GaussianMixtureEllipsePSF(GaussianMixturePSF):
         else:
             from .ellipses import EllipseESoft
             assert(len(args) % 6 == 0)
-            K = len(args) / 6
+            K = len(args) // 6
             amp  = np.array(args[:K])
             mean = np.array(args[K:3*K]).reshape((K,2))
             args = args[3*K:]
@@ -676,7 +677,7 @@ class GaussianMixtureEllipsePSF(GaussianMixturePSF):
             psf.setAllParams(P0)
         tim = Image(data=stamp, invvar=1e6*np.ones_like(stamp), psf=psf)
         H,W = stamp.shape
-        src = PointSource(PixPos(W/2, H/2), Flux(1.))
+        src = PointSource(PixPos(W//2, H//2), Flux(1.))
         tr = Tractor([tim],[src])
         tr.freezeParam('catalog')
         tim.freezeAllBut('psf')
