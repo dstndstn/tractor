@@ -230,8 +230,7 @@ class GalaxyTest(unittest.TestCase):
         #self.assertTrue(np.abs(mod4 - mod).max() < 1e-6)
         self.assertTrue(np.abs(mod4 - mod).max() < 2e-3)
 
-        #origmod = mod.copy()
-        #origpos = gal1.pos.copy()
+        import tractor.galaxy
         
         if ps is not None:
             #pp = [49.0, 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 49.8, 49.9, 50.]
@@ -240,7 +239,6 @@ class GalaxyTest(unittest.TestCase):
             plt.clf()
             
             for L in [3,5,7]:
-                import tractor.galaxy
                 tractor.galaxy.fft_lanczos_order = L
                 CX = []
                 pp = np.arange(49, 50.1, 0.1)
@@ -307,8 +305,6 @@ class GalaxyTest(unittest.TestCase):
             
                                     
         tractor.galaxy.fft_lanczos_order = 3
-        #mod[:,:] = origmod
-        #gal1.pos = origpos
             
         # Test with ModelMask with "mm"
         p5 = gal1.getModelPatch(tim, modelMask=mm)
