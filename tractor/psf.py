@@ -120,27 +120,24 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         # Normalize the Lanczos interpolants (preserve flux)
         Lx /= Lx.sum()
         Ly /= Ly.sum()
-        sx      = correlate1d(img, Lx, axis=1, mode='constant')
-        shifted = correlate1d(sx,  Ly, axis=0, mode='constant')
+
         if modelMask is None:
+            sx      = correlate1d(img, Lx, axis=1, mode='constant')
+            shifted = correlate1d(sx,  Ly, axis=0, mode='constant')
             return Patch(x0, y0, shifted)
 
-        # Pad or clip to modelMask size
-        mm = np.zeros((mh,mw), shifted.dtype)
-        yo = y0 - my0
-        yi = 0
-        ny = min(y0+H, my0+mh) - max(y0, my0)
-        if yo < 0:
-            yi = -yo
-            yo = 0
-        xo = x0 - mx0
-        xi = 0
-        nx = min(x0+W, mx0+mw) - max(x0, mx0)
-        if xo < 0:
-            xi = -xo
-            xo = 0
-        mm[yo:yo+ny, xo:xo+nx] = shifted[yi:yi+ny, xi:xi+nx]
-        return Patch(mx0, my0, mm)
+        #
+        padding = L
+        # Create a modelMask + padding sized stamp and insert PSF image into it
+        mm = np.zeros((mh+2*padding, mw+2*padding), img.dtype)
+
+        yi,yo = get_overlapping_region(my0-y0-padding, my0-y0+mh-1+padding, 0, H-1)
+        xi,xo = get_overlapping_region(mx0-x0-padding, mx0-x0+mw-1+padding, 0, W-1)
+        mm[yo,xo] = img[yi,xi]
+
+        sx = correlate1d(mm, Lx, axis=1, mode='constant')
+        correlate1d(sx, Ly, axis=0, mode='constant', output=mm)
+        return Patch(mx0, my0, mm[padding:-padding, padding:-padding])
 
     def getFourierTransformSize(self, radius):
         # Next power-of-two size
