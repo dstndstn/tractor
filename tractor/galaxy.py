@@ -336,7 +336,7 @@ class ProfileGalaxy(object):
             halfsize = max(halfsize, max(max(px+1, mw-px), max(py+1, mh-py)))
             psfh,psfw = psf.shape
             halfsize = max(halfsize, max(psfw/2., psfh/2.))
-            print('Halfsize:', halfsize)
+            #print('Halfsize:', halfsize)
             
             # is the source center outside the modelMask?
             sourceOut = (px < x0 or px > x1-1 or py < y0 or py > y1-1)
@@ -432,7 +432,7 @@ class ProfileGalaxy(object):
             if np.sum(I):
                 #print('Evaluating', np.sum(I), 'terms as MoGs')
                 mogmix = mp.MixtureOfGaussians(amix.amp[I],
-                                               amix.mean[I,:] + np.array([px,py])[:,np.newaxis],
+                                               amix.mean[I,:] + np.array([px,py])[np.newaxis,:],
                                                amix.var[I,:,:])
             I = np.logical_not(I)
             if np.sum(I):
