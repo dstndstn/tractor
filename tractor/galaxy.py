@@ -334,7 +334,7 @@ class ProfileGalaxy(object):
             # How far from the source center to furthest modelMask edge?
             ## FIXME -- add 1 for Lanczos margin?
             halfsize = max(halfsize, max(max(1+px-x0, 1+x1-px),
-                                         max(1+py-y0, 1+y1-px)))
+                                         max(1+py-y0, 1+y1-py)))
             psfh,psfw = psf.shape
             halfsize = max(halfsize, max(psfw/2., psfh/2.))
             #print('Halfsize:', halfsize)
