@@ -56,7 +56,7 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None,
         flux_invvars = np.zeros(Nsrcs, np.float32)
         fitstats = dict([(k, np.zeros(Nsrcs, np.float32)) for k in fskeys])
         nexp = np.zeros(Nsrcs, np.int16)
-        mjd = np.zeros(Nsrcs, np.float32)
+        mjd = np.zeros(Nsrcs, np.float64)
 
         for tile in tiles:
             print('Reading tile', tile.coadd_id)
