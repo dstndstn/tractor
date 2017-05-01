@@ -3,7 +3,7 @@ import numpy as np
 
 from .utils import MultiParams
 from .patch import ModelMask
-import ducks
+from tractor import ducks
 
 class BasicSource(ducks.Source):
     def getPosition(self):
