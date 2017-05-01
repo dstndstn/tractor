@@ -2,8 +2,8 @@ from distutils.core import setup, Extension
 from distutils.command.build_ext import *
 from distutils.dist import Distribution
 
-from numpy.distutils.misc_util import get_numpy_include_dirs
-numpy_inc = get_numpy_include_dirs()
+import numpy as np
+numpy_inc = [np.get_include()]
 
 import sys
 from subprocess import check_output
@@ -17,9 +17,7 @@ if eigen_inc is None:
 inc = eigen_inc.split()
     
 ceres_inc = os.environ.get('CERES_INC', None)
-
 ceres_lib = os.environ.get('CERES_LIB', None)
-
 if ceres_inc is not None:
     inc.append(ceres_inc)
 
@@ -68,7 +66,6 @@ key = '--with-ceres'
 if key in sys.argv:
     sys.argv.remove(key)
     mods.append(module_ceres)
-
 
 setup(
     distclass=MyDistribution,
