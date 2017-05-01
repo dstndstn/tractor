@@ -2,7 +2,7 @@ from __future__ import print_function
 import numpy as np
 
 from .utils import BaseParams, ParamList, MultiParams, ArithmeticParams
-import ducks
+from tractor import ducks
 
 class NullWCS(BaseParams, ducks.WCS):
     '''
