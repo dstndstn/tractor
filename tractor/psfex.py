@@ -179,7 +179,7 @@ class PsfExModel(object):
             self.sampling = hdr.get('PSF_SAMP')
             #print('PsfEx sampling:', self.sampling)
             # number of terms in polynomial
-            ne = (degree + 1) * (degree + 2) / 2
+            ne = (degree + 1) * (degree + 2) // 2
             assert(hdr['PSFAXIS3'] == ne)
             assert(len(ims.shape) == 3)
             assert(ims.shape[0] == ne)
@@ -203,7 +203,7 @@ class PsfExModel(object):
         hdr['POLGRP2'] = 1
         hdr['POLNGRP' ] = 1
         # number of terms in polynomial
-        ne = (self.degree + 1) * (self.degree + 2) / 2
+        ne = (self.degree + 1) * (self.degree + 2) // 2
         hdr['PSFAXIS3'] = ne
         hdr['POLZERO1'] = self.x0
         hdr['POLZERO2'] = self.y0
@@ -265,7 +265,7 @@ class PsfExModel(object):
                 k = d - j
                 amp = dx**j * dy**k
                 # PSFEx manual pg. 111 ?
-                ii = j + (self.degree+1) * k - (k * (k-1))/ 2
+                ii = j + (self.degree+1) * k - (k * (k-1)) // 2
                 #print('getPolynomialTerms: j=', j, 'k=', k, 'd=', d, 'ii=', ii)
                 # It goes: order 0, order 1, order 2, ...
                 # and then j=0, j=1, ...
@@ -295,7 +295,7 @@ class PsfExModel(object):
             from scipy.ndimage.interpolation import affine_transform
             ny,nx = psf.shape
             spsf = affine_transform(psf, [1./self.sampling]*2,
-                                    offset=nx/2 * (self.sampling - 1.))
+                                    offset=nx//2 * (self.sampling - 1.))
             return spsf
             
         return psf
@@ -313,7 +313,7 @@ class PsfExModel(object):
         if stampsize is not None:
             H,W = self.shape
             assert(H == W)
-            cut = max(0, (H - stampsize) / 2)
+            cut = max(0, (H - stampsize) // 2)
 
         ima = dict(interpolation='nearest', origin='lower')
         if autoscale:
@@ -352,7 +352,7 @@ class PsfExModel(object):
         if stampsize is not None:
             H,W = self.shape
             assert(H == W)
-            cut = max(0, (H - stampsize) / 2)
+            cut = max(0, (H - stampsize) // 2)
 
         nil,xpows,ypows = self.polynomials(0., 0., powers=True)
         plt.clf()
@@ -660,8 +660,8 @@ class CachingPsfEx(PsfEx):
 
     def psfAt(self, x, y):
         # Center of rounding cell:
-        cx = int(x / self.rounding) * self.rounding + self.rounding/2
-        cy = int(y / self.rounding) * self.rounding + self.rounding/2
+        cx = int(x / self.rounding) * self.rounding + self.rounding//2
+        cy = int(y / self.rounding) * self.rounding + self.rounding//2
         key = (cx,cy)
         mog = self.cache.get(key, None)
         if mog is not None:

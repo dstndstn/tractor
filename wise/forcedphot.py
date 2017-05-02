@@ -11,8 +11,8 @@ from tractor.ellipses import EllipseE
 from astrometry.util.fits import fits_table
 from astrometry.util.ttime import Time
 
-from unwise import (unwise_tile_wcs, unwise_tiles_touching_wcs,
-                    get_unwise_tractor_image)
+from .unwise import (unwise_tile_wcs, unwise_tiles_touching_wcs,
+                     get_unwise_tractor_image)
 
 def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None,
                       unwise_dir='.',

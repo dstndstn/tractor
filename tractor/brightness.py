@@ -37,7 +37,7 @@ class MultiBandBrightness(ParamList, ducks.Brightness):
         '''
         keys = kwargs.pop('order', None)
         if keys is None:
-            keys = kwargs.keys()
+            keys = list(kwargs.keys())
             keys.sort()
         assert(len(kwargs) == len(keys))
         assert(set(kwargs.keys()) == set(keys))

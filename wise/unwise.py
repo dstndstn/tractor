@@ -7,7 +7,8 @@ from astrometry.util.util import Tan
 from astrometry.util.starutil_numpy import degrees_between
 from astrometry.util.miscutils import polygons_intersect
 from astrometry.util.fits import fits_table
-from tractor import *
+from tractor import (ConstantFitsWcs, interpret_roi, GaussianMixturePSF,
+                     ConstantSky, LinearPhotoCal)
 
 def unwise_tile_wcs(ra, dec, W=2048, H=2048, pixscale=2.75):
     '''
