@@ -76,7 +76,7 @@ setup(
     packages=['tractor', 'wise'],
     ext_modules = mods,
     # data_files=[('lib/python/wise', ['wise/wise-psf-avg.fits'])],
-    package_data={'wise':['wise-psf-avg.fits']},
+    package_data={'wise':['wise-psf-avg.fits', 'allsky-atlas.fits']},
     package_dir={'wise':'wise', 'tractor':'tractor'},
     url="http://theTractor.org/",
     license="GPLv2",

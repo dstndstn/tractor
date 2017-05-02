@@ -55,7 +55,7 @@ class CeresOptimizer(Optimizer):
                    dynamic_scale=True,
                    dlnp = 1e-3, max_iterations=0, print_progress=True,
                    priors=False, bounds=False, **nil):
-        from ceres import ceres_opt
+        from .ceres import ceres_opt
 
         pp = tractor.getParams()
         if len(pp) == 0:
