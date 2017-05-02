@@ -1771,8 +1771,8 @@ if __name__ == '__main__':
 
     forcedphot()
 
-    from astrometry.util.fits import *
-    from astrometry.libkd.spherematch import *
+    from astrometry.util.fits import fits_table
+    from astrometry.libkd.spherematch import match_radec
     import pylab as plt
 
     T1 = fits_table('cs82data/cas-primary-DR8.fits')
