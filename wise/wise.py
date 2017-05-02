@@ -754,7 +754,7 @@ def plot_unmatched():
         for run,c,f,ra,dec in RCF:
             print('  ',run,c,f, 'at', ra,dec)
     
-        from astrometry.blind.plotstuff import *
+        from astrometry.blind.plotstuff import PlotSequence
         plot = Plotstuff(rdw=(r,d, 10), size=(1000,1000), outformat='png')
         plot.color = 'white'
         plot.alpha = 0.5
