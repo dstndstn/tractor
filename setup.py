@@ -62,10 +62,12 @@ class MyDistribution(Distribution):
 # an extra command-line arg!
 
 mods = [module_mix, module_em]
+pymods = ['tractor.mix', 'tractor.emfit']
 key = '--with-ceres'
 if key in sys.argv:
     sys.argv.remove(key)
     mods.append(module_ceres)
+    pymods.append('tractor.ceres')
 
 setup(
     distclass=MyDistribution,
@@ -75,7 +77,8 @@ setup(
     author_email="dstndstn@gmail.com",
     packages=['tractor', 'wise'],
     ext_modules = mods,
-    # data_files=[('lib/python/wise', ['wise/wise-psf-avg.fits'])],
+    py_modules = pymods,
+# data_files=[('lib/python/wise', ['wise/wise-psf-avg.fits'])],
     package_data={'wise':['wise-psf-avg.fits', 'allsky-atlas.fits']},
     package_dir={'wise':'wise', 'tractor':'tractor'},
     url="http://theTractor.org/",

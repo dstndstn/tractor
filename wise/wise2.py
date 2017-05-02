@@ -390,7 +390,8 @@ def coadd():
 		coadd_free(co)
 	
 
-def _read_l1b((fn)):
+def _read_l1b(args):
+    (fn,) = args
 	return wise.read_wise_level1b(fn.replace('-int-1b.fits',''),
 								  nanomaggies=True, mask_gz=True, unc_gz=True,
 								  sipwcs=True, constantInvvar=True)
