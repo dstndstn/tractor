@@ -2,6 +2,9 @@ from distutils.core import setup, Extension
 from distutils.command.build_ext import *
 from distutils.dist import Distribution
 
+# import sys
+# py3 = (sys.version_info[0] >= 3)
+
 # from http://stackoverflow.com/questions/12491328/python-distutils-not-include-the-swig-generated-module
 from distutils.command.build import build
 class CustomBuild(build):
@@ -22,6 +25,8 @@ eigen_inc = os.environ.get('EIGEN_INC', None)
 if eigen_inc is None:
     try:
         eigen_inc = check_output(['pkg-config', '--cflags', 'eigen3']).strip()
+        # py3
+        eigen_inc = eigen_inc.decode()
     except:
         eigen_inc = ''
 inc = eigen_inc.split()
