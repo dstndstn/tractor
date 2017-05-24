@@ -179,10 +179,8 @@ static int em_fit_1d_samples_reg(PyObject* np_x,
             wsum[k] = 0;
             for (i=0; i<N; i++) {
                 double wi = Z[i*K + k];
-                double d;
                 mean[k*D + 0] += wi * X[i];
-                d = 
-                    wsum[k] += wi;
+                wsum[k] += wi;
             }
             mean[k*D + 0] /= wsum[k];
             //printf("wsum[%i] = %g\n", k, wsum[k]);
