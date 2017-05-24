@@ -1,15 +1,21 @@
+'''
+This little example script shows how to create some galaxies and
+render them into a model image.
+'''
 from __future__ import print_function
+if __name__ == '__main__':
+    import matplotlib
+    matplotlib.use('Agg')
 import numpy as np
 
 from astrometry.util.util import Tan
-
 from tractor import (GaussianMixturePSF, ConstantFitsWcs, LinearPhotoCal,
                      ConstantSky, Image, NanoMaggies, PointSource,
                      RaDecPos, Catalog, Tractor)
 from tractor.galaxy import ExpGalaxy, DevGalaxy, FixedCompositeGalaxy, GalaxyShape
 
 if __name__ == '__main__':
-
+    
     # image size
     W,H = 50,50
     # fake pixel data
@@ -87,14 +93,13 @@ if __name__ == '__main__':
     lnp = -0.5 * ((model - data)**2 * iv).sum()
     print('Logprob:', lnp)
 
-    
-
     # plot model image
     import pylab as plt
     mod = tr.getModelImage(0)
     #print 'Mod', mod.min(), mod.max()
     plt.clf()
-    plt.imshow(mod, interpolation='nearest', origin='lower', vmin=0, vmax=10.)
+    plt.imshow(mod, interpolation='nearest', origin='lower',
+               vmin=0, vmax=10.)
     plt.colorbar()
     plt.title('model')
     plt.savefig('mod.png')

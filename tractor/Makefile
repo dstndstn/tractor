@@ -48,7 +48,7 @@ _emfit.so: emfit.i emfit2.c setup-emfit.py
 
 
 
-NUMPY_INC := $(shell python -c "from numpy.distutils.misc_util import get_numpy_include_dirs as d; print ' '.join('-I'+x for x in d())")
+NUMPY_INC := $(shell python -c "from __future__ import print_function; from numpy.distutils.misc_util import get_numpy_include_dirs as d; print(' '.join('-I'+x for x in d()))")
 
 PYMOD_LIB ?= -L$(shell python-config --prefix)/lib $(shell python-config --libs)
 PYMOD_INC ?= $(shell python-config --includes)
