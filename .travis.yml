@@ -41,6 +41,9 @@ before_script:
 
 script:
     - export PYTHONPATH=${PYTHONPATH}:$HOME/astrometry.net
+    - python setup.py build_ext --inplace
+    - find . -name "*.so"
+    # ??
     - python setup.py install
     - make doc
     - echo $PYTHONPATH
