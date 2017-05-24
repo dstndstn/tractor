@@ -830,9 +830,9 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
         mypsf = PixelizedPSF(klpsf)
         
     elif psf == 'kl-gm':
-        from emfit import em_fit_2d
-        from fitpsf import em_init_params
-        
+        from tractor.emfit import em_fit_2d
+        from tractor.fitpsf import em_init_params
+
         # Create Gaussian mixture model PSF approximation.
         klpsf = psfield.getPsfAtPoints(bandnum, x0+W/2, y0+H/2)
         S = klpsf.shape[0]
