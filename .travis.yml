@@ -4,67 +4,43 @@
 # http://docs.travis-ci.com/user/migrating-from-legacy/?utm_source=legacy-notice&utm_medium=banner&utm_campaign=legacy-upgrade
 sudo: false
 
-# Use these APT packages once they are white-listed:
+# Default environment is Ubuntu 12.04.5 LTS "precise"
+# which is pretty old.
+# "trusty" is Ubuntu 14.04.5 LTS
+dist: trusty
 
-# python-mock:
-# https://github.com/travis-ci/apt-package-whitelist/issues/1081
-
-# python-pyfits:
-# https://github.com/travis-ci/apt-package-whitelist/issues/1082
-
-# python-numpydoc -- not available until Ubuntu 14.04 trusty
-# (currently Travis-CI uses 12.x precise)
+# python versions to test against...
+language: python
+python:
+  - "2.7"
+  - "3.6"
 
 install:
-   - pip install --user numpy==1.11.0
-   - pip install --user matplotlib==1.5.1
-   - pip install --user numpydoc
-   - pip install --user coveralls
-   - pip install --user fitsio
-   - ls ~/.local
-
-language: c
-compiler:
-  - gcc
-#  - clang
+    - pip install numpy
+    - pip install scipy
+    - pip install matplotlib
+    - pip install numpydoc
+    #- pip install astropy
+    #- pip install photutils
+    - pip install Sphinx
+    - pip install coveralls
+    - pip install fitsio
+    # fitsio master version?
+    # - pip install --no-deps --upgrade git+https://github.com/esheldon/fitsio.git#egg=fitsio
 
 before_script:
-    - export NETPBM_INC="-I$(pwd)"
-    - export WCSLIB_INC="-I/usr/include/wcslib-4.8.3"
+    - export WCSLIB_INC="-I/usr/include/wcslib-4.20"
     - export WCSLIB_LIB="-lwcs"
     - export SYSTEM_GSL=yes
-    # - pkg-config --exists gsl
-    # - pkg-config --modversion gsl
-    # - ls /usr/include/wcslib*
-    # - pwd
-    # - echo $HOME
-    # - ls $HOME
-    # - ls $HOME/astrometry.net
+    - export NETPBM_INC="-I$(pwd)"
+
     - if [ ! -d "$HOME/astrometry.net" ]; then (cd $HOME; git clone https://github.com/dstndstn/astrometry.net.git; cd astrometry.net; ln -sf /usr/include netpbm; make && make py); fi
     - (cd $HOME/astrometry.net && git pull && make && make py) || (rm -Rf $HOME/astrometry.net && cd $HOME && git clone https://github.com/dstndstn/astrometry.net.git && cd astrometry.net && make && make py)
     - ln -s $HOME/astrometry.net astrometry
     - export PATH=${PATH}:~/astrometry.net/blind/
 
-# Clean Astrometry.net cache?
-#    - (cd $HOME; rm -R astrometry.net; git clone https://github.com/dstndstn/astrometry.net.git; cd astrometry.net; ln -sf /usr/include netpbm)
-
-#    - if [ ! -d "$HOME/fitsio-git" ]; then (cd $HOME; git clone https://github.com/esheldon/fitsio.git fitsio-git); fi
-#    - (cd $HOME/fitsio-git && python setup.py install --home $HOME/fitsio)
-#    - ln -s $HOME/fitsio/lib/python/fitsio .
-
 script:
-    # - pwd
-    # - ls
-    # - echo $HOME
-    # - ls -al $HOME
-    - export PYTHONPATH=${PYTHONPATH}:$(pwd)
-    # - echo "$PYTHONPATH"
-    # - ls -l
-    # - python -c "import sys; print '\n'.join(sys.path)"
-    # - python -c "import numpy; print numpy.__file__"
-    # - which fitsverify
-    # - pwd
-    # - python -c "import fitsio; print fitsio.__file__"
+    - export PYTHONPATH=${PYTHONPATH}:$(pwd)/py:$HOME/astrometry.net
     - make
     - make doc
     - coverage erase
@@ -73,8 +49,8 @@ script:
     - coverage run -a test/test_tractor.py
     - coverage run -a test/test_galaxy.py
     - coverage run -a tractor/mixture_profiles.py
-    #- coverage run -a examples/tractor-sdss-synth.py --roi 100 200 100 200 --no-flipbook
     - coverage run -a examples/tractor-sdss-synth.py --roi 0 100 0 100 --run 1000 --camcol 1 --field 100 --band r --sdss-dir test/data-sdss --const-invvar --no-flipbook
+    - coverage run -a examples/mini.py
 
 after_success:
     - coveralls
@@ -90,15 +66,19 @@ addons:
     - swig
     - gsl-bin
     - libgsl0-dev
-    - python-sphinx
-    - sphinx-common
-    - python-scipy
-    - python-tk
 
-#    - python-matplotlib
-#    - python-numpy
-#    - python-mock
-#    - python-numpydoc
+cache:
+  directories:
+  - $HOME/astrometry.net
+
+# python-mock:
+# https://github.com/travis-ci/apt-package-whitelist/issues/1081
+
+# python-pyfits:
+# https://github.com/travis-ci/apt-package-whitelist/issues/1082
+
+# python-numpydoc -- not available until Ubuntu 14.04 trusty
+# (currently Travis-CI uses 12.x precise)
 
 cache:
   directories:
@@ -106,6 +86,3 @@ cache:
   - $HOME/astrometry.net
   # pip install --local goes here:
   - $HOME/.local
-
-
-#  - $HOME/fitsio-git
