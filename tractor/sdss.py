@@ -844,7 +844,7 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
         # HIDEOUS HACK
         II = np.maximum(II, 0)
         #print('Multi-Gaussian PSF fit...')
-        xm,ym = -(S/2), -(S/2)
+        xm,ym = -(S//2), -(S//2)
         if savepsfimg is not None:
             plt.clf()
             plt.imshow(II, interpolation='nearest', origin='lower')
