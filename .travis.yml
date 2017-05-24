@@ -28,17 +28,25 @@ install:
     # fitsio master version?
     # - pip install --no-deps --upgrade git+https://github.com/esheldon/fitsio.git#egg=fitsio
 
-before_script:
     - export WCSLIB_INC="-I/usr/include/wcslib-4.20"
     - export WCSLIB_LIB="-lwcs"
     - export SYSTEM_GSL=yes
     - export NETPBM_INC="-I$(pwd)"
+    - pip install --no-deps --upgrade git+https://github.com/dstndstn/astrometry.net
+    - python -c "import astrometry; print(astrometry.__file__)"
+    #- export PATH=${PATH}:~/astrometry.net/blind/
 
-    - if [ ! -d "$HOME/astrometry.net" ]; then (cd $HOME; git clone https://github.com/dstndstn/astrometry.net.git; cd astrometry.net; ln -sf /usr/include netpbm; make && make py); fi
-    - (cd $HOME/astrometry.net && git pull && make && make py) || (rm -Rf $HOME/astrometry.net && cd $HOME && git clone https://github.com/dstndstn/astrometry.net.git && cd astrometry.net && make && make py)
-    - ln -s $HOME/astrometry.net astrometry
-    # for fitsverify, required in some tests
-    - export PATH=${PATH}:~/astrometry.net/blind/
+before_script:
+    # - export WCSLIB_INC="-I/usr/include/wcslib-4.20"
+    # - export WCSLIB_LIB="-lwcs"
+    # - export SYSTEM_GSL=yes
+    # - export NETPBM_INC="-I$(pwd)"
+    # 
+    # - if [ ! -d "$HOME/astrometry.net" ]; then (cd $HOME; git clone https://github.com/dstndstn/astrometry.net.git; cd astrometry.net; ln -sf /usr/include netpbm; make && make py); fi
+    # - (cd $HOME/astrometry.net && git pull && make && make py) || (rm -Rf $HOME/astrometry.net && cd $HOME && git clone https://github.com/dstndstn/astrometry.net.git && cd astrometry.net && make && make py)
+    # - ln -s $HOME/astrometry.net astrometry
+    # # for fitsverify, required in some tests
+    # - export PATH=${PATH}:~/astrometry.net/blind/
 
 script:
     - export PYTHONPATH=${PYTHONPATH}:$HOME/astrometry.net
