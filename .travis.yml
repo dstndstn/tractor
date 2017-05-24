@@ -37,7 +37,8 @@ before_script:
     - if [ ! -d "$HOME/astrometry.net" ]; then (cd $HOME; git clone https://github.com/dstndstn/astrometry.net.git; cd astrometry.net; ln -sf /usr/include netpbm; make && make py); fi
     - (cd $HOME/astrometry.net && git pull && make && make py) || (rm -Rf $HOME/astrometry.net && cd $HOME && git clone https://github.com/dstndstn/astrometry.net.git && cd astrometry.net && make && make py)
     - ln -s $HOME/astrometry.net astrometry
-    #- export PATH=${PATH}:~/astrometry.net/blind/
+    # for fitsverify, required in some tests
+    - export PATH=${PATH}:~/astrometry.net/blind/
 
 script:
     - export PYTHONPATH=${PYTHONPATH}:$HOME/astrometry.net
@@ -51,13 +52,18 @@ script:
     - python -c "import tractor; print(tractor.__file__)"
     - python -c "import tractor.emfit; print(tractor.emfit.__file__)"
     - coverage erase
-    - coverage run test/test_psfex.py
-    - coverage run -a test/test_sdss.py
-    - coverage run -a test/test_tractor.py
-    - coverage run -a test/test_galaxy.py
-    - coverage run -a tractor/mixture_profiles.py
-    - coverage run -a examples/tractor-sdss-synth.py --roi 0 100 0 100 --run 1000 --camcol 1 --field 100 --band r --sdss-dir test/data-sdss --const-invvar --no-flipbook
-    - coverage run -a examples/mini.py
+    # Tell coverage where to write its results, for when we (cd ...; coverage) below.
+    - export COVERAGE_FILE=$(pwd)/.coverage
+    # does this hit the installed version rather than in-place?
+    - (cd test; python -c "import tractor.emfit; print(tractor.emfit.__file__)")
+    - (cd test; coverage run test_psfex.py)
+    - (cd test; coverage run -a test_sdss.py)
+    - (cd test; coverage run -a test_tractor.py)
+    - (cd test; coverage run -a test_galaxy.py)
+    - (cd tractor; coverage run -a mixture_profiles.py)
+    - export SDSS_DATA=$(pwd)/test/data-sdss
+    - (cd examples; coverage run -a tractor-sdss-synth.py --roi 0 100 0 100 --run 1000 --camcol 1 --field 100 --band r --sdss-dir $(SDSS_DATA) --const-invvar --no-flipbook)
+    - (cd examples; coverage run -a mini.py)
 
 after_success:
     - coveralls
