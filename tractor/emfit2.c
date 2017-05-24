@@ -22,7 +22,7 @@ static int em_fit_2d_reg2(PyObject* np_img, int x0, int y0,
     double* var;
     double* img;
 
-    double psky;
+    double psky = 0.;
     double skyamp;
     double imgsum;
 
