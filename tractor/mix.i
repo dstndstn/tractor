@@ -185,7 +185,7 @@ static int get_np(PyObject* ob_amp,
         Py_INCREF(dtype);
         *np_yderiv = PyArray_FromAny(ob_yderiv, dtype, 2, 2, reqout, NULL);
     }
-    if (ob_mask != Py_None) {
+    if (ob_mask && ob_mask != Py_None) {
         btype = PyArray_DescrFromType(PyArray_BOOL);
         Py_INCREF(btype);
         *np_mask = PyArray_FromAny(ob_mask, btype, 2, 2, req, NULL);
@@ -196,7 +196,7 @@ static int get_np(PyObject* ob_amp,
     if (!*np_amp || !*np_mean || !*np_var || !*np_result ||
         ((ob_xderiv != Py_None) && !*np_xderiv) ||
         ((ob_yderiv != Py_None) && !*np_yderiv) ||
-        ((ob_mask   != Py_None) && !*np_mask)) {
+        (ob_mask && (ob_mask != Py_None) && !*np_mask)) {
         if (!*np_amp) {
             ERR("amp wasn't the type expected");
             Py_DECREF(dtype);
@@ -221,7 +221,7 @@ static int get_np(PyObject* ob_amp,
             ERR("yderiv wasn't the type expected");
             Py_DECREF(dtype);
         }
-        if ((ob_mask != Py_None) && !*np_mask) {
+        if (ob_mask && (ob_mask != Py_None) && !*np_mask) {
             ERR("mask wasn't the type expected");
             Py_DECREF(btype);
         }
@@ -264,7 +264,7 @@ static int get_np(PyObject* ob_amp,
             return 1;
         }
     }
-    if (np_mask && *np_mask) {
+    if (ob_mask && np_mask && *np_mask) {
         if ((PyArray_DIM(*np_mask, 0) != NY) ||
             (PyArray_DIM(*np_mask, 1) != NX)) {
             ERR("np_mask must be size NY x NX (%i x %i), got %i x %i",

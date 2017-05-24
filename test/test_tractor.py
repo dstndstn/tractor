@@ -124,6 +124,6 @@ class TractorTest(unittest.TestCase):
         self.assertTrue(np.abs(star.getBrightness().getValue() - trueflux)
                         < 5.)
 
-        
 if __name__ == '__main__':
     unittest.main()
+

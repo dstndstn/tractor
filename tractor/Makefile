@@ -41,6 +41,7 @@ mix.py _mix.so: mix.i approx3.c gauss_masked.c setup-mix.py
 # 	python setup-emfit.py build --force --build-base build --build-platlib build/lib
 # 	cp build/lib/_emfit.so $@
 
+# ugh, this doesn't work in py3 because the .so files have platform names in them...
 _emfit.so: emfit.i emfit2.c setup-emfit.py
 	python setup-emfit.py build --force --build-base build --build-platlib build/lib
 	cp build/lib/_emfit.so $@
