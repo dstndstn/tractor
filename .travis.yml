@@ -37,12 +37,16 @@ before_script:
     - if [ ! -d "$HOME/astrometry.net" ]; then (cd $HOME; git clone https://github.com/dstndstn/astrometry.net.git; cd astrometry.net; ln -sf /usr/include netpbm; make && make py); fi
     - (cd $HOME/astrometry.net && git pull && make && make py) || (rm -Rf $HOME/astrometry.net && cd $HOME && git clone https://github.com/dstndstn/astrometry.net.git && cd astrometry.net && make && make py)
     - ln -s $HOME/astrometry.net astrometry
-    - export PATH=${PATH}:~/astrometry.net/blind/
+    #- export PATH=${PATH}:~/astrometry.net/blind/
 
 script:
-    - export PYTHONPATH=${PYTHONPATH}:$(pwd)/py:$HOME/astrometry.net
+    - export PYTHONPATH=${PYTHONPATH}:$HOME/astrometry.net
     - python setup.py install
     - make doc
+    - echo $PYTHONPATH
+    - python -c "import sys; print(sys.path)"
+    - python -c "import tractor; print(tractor.__file__)"
+    - python -c "import tractor.emfit; print(tractor.emfit.__file__)"
     - coverage erase
     - coverage run test/test_psfex.py
     - coverage run -a test/test_sdss.py
