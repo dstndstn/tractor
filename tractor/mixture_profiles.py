@@ -635,7 +635,7 @@ if __name__ == '__main__':
         result3 = np.zeros((H, W))
         xderiv, yderiv, mask = None, None, None
         xc,yc = int(mean[0,0] + dx), int(mean[0,1] + dy)
-        args = (x0, x1, y0, y1, dx, dy, minval, amp, mean, var, result3, xderiv, yderiv, mask, xc, yc, minradius)
+        args = (x0, x1, y0, y1, dx, dy, minval, amp, mean, var, result3, xderiv, yderiv, xc, yc, minradius)
         print('args (approx3):', args)
         rtn = c_gauss_2d_approx3(*args)
         if rtn == -1:
