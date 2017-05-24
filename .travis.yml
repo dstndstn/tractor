@@ -62,7 +62,7 @@ script:
     - (cd test; coverage run -a test_galaxy.py)
     - (cd tractor; coverage run -a mixture_profiles.py)
     - export SDSS_DATA=$(pwd)/test/data-sdss
-    - (cd examples; coverage run -a tractor-sdss-synth.py --roi 0 100 0 100 --run 1000 --camcol 1 --field 100 --band r --sdss-dir $(SDSS_DATA) --const-invvar --no-flipbook)
+    - (cd examples; coverage run -a tractor-sdss-synth.py --roi 0 100 0 100 --run 1000 --camcol 1 --field 100 --band r --sdss-dir ${SDSS_DATA} --const-invvar --no-flipbook)
     - (cd examples; coverage run -a mini.py)
 
 after_success:
