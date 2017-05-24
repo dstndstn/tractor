@@ -42,15 +42,15 @@ before_script:
 
 script:
     - export PYTHONPATH=${PYTHONPATH}:$HOME/astrometry.net
-    - python setup.py build_ext --inplace
-    - find . -name "*.so"
+    #- python setup.py build_ext --inplace
+    #- find . -name "*.so"
     # ??
     - python setup.py install
     - make doc
     - echo $PYTHONPATH
-    - python -c "import sys; print(sys.path)"
-    - python -c "import tractor; print(tractor.__file__)"
-    - python -c "import tractor.emfit; print(tractor.emfit.__file__)"
+    #- python -c "import sys; print(sys.path)"
+    #- python -c "import tractor; print(tractor.__file__)"
+    #- python -c "import tractor.emfit; print(tractor.emfit.__file__)"
     - coverage erase
     # Tell coverage where to write its results, for when we (cd ...; coverage) below.
     - export COVERAGE_FILE=$(pwd)/.coverage
