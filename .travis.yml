@@ -41,7 +41,7 @@ before_script:
 
 script:
     - export PYTHONPATH=${PYTHONPATH}:$(pwd)/py:$HOME/astrometry.net
-    - make
+    - python setup.py install
     - make doc
     - coverage erase
     - coverage run test/test_psfex.py
