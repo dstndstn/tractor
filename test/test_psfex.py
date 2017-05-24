@@ -93,7 +93,7 @@ class PsfExTest(unittest.TestCase):
         print('Pixpsf centroid:', cenx,ceny)
         print('shape:', ph,pw)
         
-        dx,dy = cenx - pw/2, ceny - ph/2
+        dx,dy = cenx - pw//2, ceny - ph//2
         print('dx,dy', dx,dy)
         
         # gpsf = GaussianMixturePSF.fromStamp(im, N=1)

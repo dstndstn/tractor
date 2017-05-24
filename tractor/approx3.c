@@ -35,7 +35,7 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
     //(within this function, we use inclusive coords, but increment
     // sx1,sy1 just before returning).
 
-    int nexp0 = n_exp;
+    //int nexp0 = n_exp;
 
     double *amp, *mean, *var, *result;
     double *xderiv=NULL, *yderiv=NULL;

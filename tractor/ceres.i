@@ -20,6 +20,7 @@
 
 %{
 #include "ceres/ceres.h"
+#include "ceres/version.h"
 #include "ceres/normal_prior.h"
 #include <vector>
 #include <Eigen/Core>
@@ -406,10 +407,20 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
             (tractor, i, nparams, np_params);
         CostFunction* cost = NULL;
         if (numeric) {
+#if CERES_VERSION_MINOR >= 12
+            ceres::NumericDiffOptions numopts;
+            numopts.relative_step_size = numeric_stepsize;
+            
+            ceres::DynamicNumericDiffCostFunction<NumericDiffImageCost>* dyncost = 
+                new ceres::DynamicNumericDiffCostFunction<NumericDiffImageCost>
+                (new NumericDiffImageCost(icf), ceres::TAKE_OWNERSHIP,
+                 numopts);
+#else
             ceres::DynamicNumericDiffCostFunction<NumericDiffImageCost>* dyncost = 
                 new ceres::DynamicNumericDiffCostFunction<NumericDiffImageCost>
                 (new NumericDiffImageCost(icf), ceres::TAKE_OWNERSHIP,
                  numeric_stepsize);
+#endif
             for (i=0; i<nparams; i++)
                 dyncost->AddParameterBlock(1);
             dyncost->SetNumResiduals(icf->nPix());
@@ -539,7 +550,8 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
     options.minimizer_progress_to_stdout = print_progress;
     options.linear_solver_type = ceres::SPARSE_SCHUR;
     options.jacobi_scaling = scale_columns;
-    options.numeric_derivative_relative_step_size = numeric_stepsize;
+    // not in ceres-solver 1.12.0?
+    //options.numeric_derivative_relative_step_size = numeric_stepsize;
     if (max_iterations) {
         options.max_num_iterations = max_iterations;
     }

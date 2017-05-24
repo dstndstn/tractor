@@ -196,7 +196,7 @@ static int em_fit_2d_reg2(PyObject* np_img, int x0, int y0,
 
                 if (*imgcursor <= 0) {
                     // sky
-                    skyamp += abs(*imgcursor);
+                    skyamp += fabs(*imgcursor);
                     continue;
                 }
                 // E step
