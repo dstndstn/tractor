@@ -9,15 +9,11 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
                               PyObject* ob_result,
                               PyObject* ob_xderiv,
                               PyObject* ob_yderiv,
-                              PyObject* ob_mask,
                               int xc, int yc,
                               int minradius,
                               int* sx0, int* sx1, int* sy0, int* sy1) {
 
     // [x0,x1), [y0,y1)
-    //
-    // ob_mask: numpy array, shape (y1-y0, x1-x0), boolean: which
-    // pixels to evaluate.
     //
     // ob_xderiv: if not NULL, result array for x derivative
     // ob_yderiv: if not NULL, result array for y derivative
@@ -39,12 +35,11 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
 
     double *amp, *mean, *var, *result;
     double *xderiv=NULL, *yderiv=NULL;
-    uint8_t* mask=NULL;
     const int D=2;
     int K, k;
     int rtn = -1;
     PyObject *np_amp=NULL, *np_mean=NULL, *np_var=NULL, *np_result=NULL;
-    PyObject *np_xderiv=NULL, *np_yderiv=NULL, *np_mask=NULL;
+    PyObject *np_xderiv=NULL, *np_yderiv=NULL;
     double tpd;
     int W,H;
     int R;
@@ -56,9 +51,9 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
     tpd = pow(2.*M_PI, D);
 
     if (get_np(ob_amp, ob_mean, ob_var, ob_result, ob_xderiv, ob_yderiv,
-               ob_mask, W, H,
+               NULL, W, H,
                &K, &np_amp, &np_mean, &np_var, &np_result, &np_xderiv, &np_yderiv,
-               &np_mask, NULL)) {
+               NULL, NULL)) {
         printf("get_np failed\n");
         goto bailout;
     }
@@ -71,9 +66,6 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
         xderiv = PyArray_DATA(np_xderiv);
     if (np_yderiv)
         yderiv = PyArray_DATA(np_yderiv);
-    if (np_mask)
-        mask   = PyArray_DATA(np_mask);
-
     {
         double II[3*K];
         double VV[3*K];
@@ -460,7 +452,6 @@ bailout:
     Py_XDECREF(np_result);
     Py_XDECREF(np_xderiv);
     Py_XDECREF(np_yderiv);
-    Py_XDECREF(np_mask);
 
     //printf("N exp calls: %i\n", n_exp - nexp0);
 

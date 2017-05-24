@@ -332,7 +332,7 @@ class MixtureOfGaussians(object):
         from tractor.mix import c_gauss_2d_approx3
 
         result = np.zeros((y1-y0, x1-x0))
-        xderiv = yderiv = mask = None
+        xderiv = yderiv = None
         if derivs:
             xderiv = np.zeros_like(result)
             yderiv = np.zeros_like(result)
@@ -350,7 +350,7 @@ class MixtureOfGaussians(object):
                 int(x0), int(x1), int(y0), int(y1),
                 float(fx), float(fy), float(minval),
                 self.amp, self.mean, self.var,
-                result, xderiv, yderiv, mask,
+                result, xderiv, yderiv,
                 cx, cy, int(minradius))
         except:
             print('failure calling c_gauss_2d_approx3:')
