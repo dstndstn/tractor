@@ -49,54 +49,29 @@ script:
     # Coverage doesn't seem to like measuring the coverage of
     # installed code (or, at least, we haven't told it we care about
     # the installed code in .coveragerc), so try to run w/ code in
-    # current dir.
-
-    - pwd
-    - python -c "import tractor.emfit; print(tractor.emfit.__file__)"
+    # current dir.  Also need to ensure that CWD is ahead of the
+    # installed code in PYTHONPATH.
     - export PYTHONPATH=$(pwd):${PYTHONPATH}
-    - export COVERAGE_FILE=$(pwd)/.coverage
+    #- export COVERAGE_FILE=$(pwd)/.coverage
     #- export COVERAGE_RC=$(pwd)/.coveragerc
-    - export COVERAGE_PROCESS_START=$(pwd)/.coveragerc
-    #- coverage run --rcfile ${COVERAGE_RC} test/test_psfex.py
+    #- export COVERAGE_PROCESS_START=$(pwd)/.coveragerc
     - coverage run test/test_psfex.py
-    - coverage report
-    #- coverage run --rcfile ${COVERAGE_RC} -a test/test_sdss.py
+    #- coverage report
     - coverage run -a test/test_sdss.py
-    - coverage report
-    #- coverage run --rcfile ${COVERAGE_RC} -a test/test_tractor.py
+    #- coverage report
     - coverage run -a test/test_tractor.py
-    - coverage report
-    #- coverage run --rcfile ${COVERAGE_RC} -a test/test_galaxy.py
+    #- coverage report
     - coverage run -a test/test_galaxy.py
-    - coverage report
-    #- coverage run --rcfile ${COVERAGE_RC} -a tractor/mixture_profiles.py
+    #- coverage report
     - coverage run -a tractor/mixture_profiles.py
-    - coverage report
+    #- coverage report
     - export SDSS_DATA=$(pwd)/test/data-sdss
-    #- coverage run --rcfile ${COVERAGE_RC} -a examples/tractor-sdss-synth.py --roi 0 100 0 100 --run 1000 --camcol 1 --field 100 --band r --sdss-dir ${SDSS_DATA} --const-invvar --no-flipbook
     - coverage run -a examples/tractor-sdss-synth.py --roi 0 100 0 100 --run 1000 --camcol 1 --field 100 --band r --sdss-dir ${SDSS_DATA} --const-invvar --no-flipbook
-    - coverage report
-    #- coverage run --rcfile ${COVERAGE_RC} -a examples/mini.py
+    #- coverage report
     - coverage run -a examples/mini.py
-    - coverage report
-    #- coverage run --rcfile ${COVERAGE_RC} -a examples/decam-refit.py
+    #- coverage report
     - coverage run -a examples/decam-refit.py
     - coverage report
-
-    # # Tell coverage where to write its results, for when we (cd ...; coverage) below.
-    # - export COVERAGE_FILE=$(pwd)/.coverage
-    # # And where to find its .coveragerc file
-    # - export COVERAGE_RC=$(pwd)/.coveragerc
-    # - (cd test; python -c "import tractor.emfit; print(tractor.emfit.__file__)")
-    # - (cd test; coverage run --rcfile ${COVERAGE_RC} test_psfex.py)
-    # - (cd test; coverage run --rcfile ${COVERAGE_RC} -a test_sdss.py)
-    # - (cd test; coverage run --rcfile ${COVERAGE_RC} -a test_tractor.py)
-    # - (cd test; coverage run --rcfile ${COVERAGE_RC} -a test_galaxy.py)
-    # - (cd tractor; coverage run --rcfile ${COVERAGE_RC} -a mixture_profiles.py)
-    # - export SDSS_DATA=$(pwd)/test/data-sdss
-    # - (cd examples; coverage run --rcfile ${COVERAGE_RC} -a tractor-sdss-synth.py --roi 0 100 0 100 --run 1000 --camcol 1 --field 100 --band r --sdss-dir ${SDSS_DATA} --const-invvar --no-flipbook)
-    # - (cd examples; coverage run --rcfile ${COVERAGE_RC} -a mini.py)
-    # - (cd examples; coverage run --rcfile ${COVERAGE_RC} -a decam-refit.py)
 
 after_success:
     - coveralls
