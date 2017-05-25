@@ -35,11 +35,12 @@ install:
     - pip install -v --no-deps --upgrade git+https://github.com/dstndstn/astrometry.net
     - python -c "import astrometry; print(astrometry.__file__)"
     #- export PATH=${PATH}:~/astrometry.net/blind/
-    - python -c "import os; import astrometry; d=os.dirname; print(d(d(d(d(d(astrometry.__file__))))))"
+    - python -c "import os; import astrometry; d=os.path.dirname; print(d(d(d(d(d(astrometry.__file__))))))"
     - export PATH=${PATH}:~/virtualenv/python*/bin
     - echo $PATH
     - ls ~/virtualenv/
     - ls ~/virtualenv/python*
+    - which fitsverify
 
 before_script:
     # - export WCSLIB_INC="-I/usr/include/wcslib-4.20"
