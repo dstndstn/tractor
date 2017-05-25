@@ -35,6 +35,7 @@ install:
     - pip install --no-deps --upgrade git+https://github.com/dstndstn/astrometry.net
     - python -c "import astrometry; print(astrometry.__file__)"
     #- export PATH=${PATH}:~/astrometry.net/blind/
+    - export PATH=${PATH}:~/virtualenv/python2.7.12/bin
 
 before_script:
     # - export WCSLIB_INC="-I/usr/include/wcslib-4.20"
