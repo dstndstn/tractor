@@ -36,10 +36,11 @@ install:
     - python -c "import astrometry; print(astrometry.__file__)"
     #- export PATH=${PATH}:~/astrometry.net/blind/
     - python -c "import os; import astrometry; d=os.path.dirname; print(d(d(d(d(d(astrometry.__file__))))))"
-    - export PATH=${PATH}:~/virtualenv/python*/bin
+    #- export PATH=${PATH}:~/virtualenv/python*/bin
     - echo $PATH
     - ls ~/virtualenv/
     - ls ~/virtualenv/python*
+    - ls ~/virtualenv/python*/bin
     - which fitsverify
 
 before_script:
