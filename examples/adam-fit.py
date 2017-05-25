@@ -19,7 +19,7 @@ from tractor.galaxy import *
 
 # Assumes one image.
 def save(idstr, tractor, zr):
-    mod = tractor.getModelImages()[0]
+    mod = tractor.getModelImage(0)
 
     synthfn = 'synth-%s.fits' % idstr
     print('Writing synthetic image to', synthfn)
@@ -116,16 +116,15 @@ if __name__ == '__main__':
 
     timg,info = st.get_tractor_image_dr9(run, camcol, field, bandname,
                                          roi=roi)
-    sources = st.get_tractor_sources(run, camcol, field, bandname,
+    sources = st.get_tractor_sources_dr9(run, camcol, field, bandname,
                                      roi=roi)
 
     wcs = timg.getWcs()
     for source in sources:
-        x,y = wcs.positionToPixel(source, source.getPosition())
+        x,y = wcs.positionToPixel(source.getPosition(), src=source)
         print('  (%.2f, %.2f):' % (x+x0,y+y0), source)
 
-    tractor = st.SDSSTractor([timg])
-    tractor.addSources(sources)
+    tractor = Tractor([timg], sources)
 
     lnlorig = tractor.getLogLikelihood()
     zr = np.array([-5.,+20.]) * info['skysig']
@@ -148,8 +147,11 @@ if __name__ == '__main__':
     # optimize original SDSS source (at fixed complexity)
     nsteps = 200
     mndl = 0. # 0 for machine precision
-    tractor.optimizeCatalogLoop(nsteps=nsteps, mindlnprob=mndl,
-                                srcs=[gal,], sky=False)
+
+    tractor.freezeParam('images')
+    tractor.catalog.freezeAllBut(mini)
+    
+    tractor.optimize_loop(steps=nsteps, mindlnprob=mndl)
     lnlopt = tractor.getLogLikelihood()
     galopt = gal.copy()
     save(sdssprefix+'-opt', tractor, zr)
@@ -166,19 +168,20 @@ if __name__ == '__main__':
     shape1 = galorig.shape.copy()
     shape1.re = 1. / 30.
     shape2 = galorig.shape.copy()
+    bright = galorig.brightness
     newsrc1 = [
-        PointSource(rd1.copy(), 0.5 * galorig.flux),
-        ExpGalaxy(rd1.copy(), 0.5 * galorig.flux, shape1.copy()),
-        DevGalaxy(rd1.copy(), 0.5 * galorig.flux, shape1.copy()),
-        CompositeGalaxy(rd1.copy(), 0.25 * galorig.flux, shape1.copy(),
-                        0.25 * galorig.flux, shape1.copy()),
+        PointSource(rd1.copy(), bright.copy() * 0.5),
+        ExpGalaxy(rd1.copy(), bright.copy() * 0.5, shape1.copy()),
+        DevGalaxy(rd1.copy(), bright.copy() * 0.5, shape1.copy()),
+        CompositeGalaxy(rd1.copy(), bright.copy() * 0.25, shape1.copy(),
+                        bright.copy() * 0.25, shape1.copy()),
         ]
     newsrc2 = [ 
-        PointSource(rd2.copy(), 0.5 * galorig.flux),
-        ExpGalaxy(rd2.copy(), 0.5 * galorig.flux, shape2.copy()),
-        DevGalaxy(rd2.copy(), 0.5 * galorig.flux, shape2.copy()),
-        CompositeGalaxy(rd2.copy(), 0.25 * galorig.flux, shape2.copy(),
-                        0.25 * galorig.flux, shape2.copy()),
+        PointSource(rd2.copy(), bright.copy() * 0.5),
+        ExpGalaxy(rd2.copy(), bright.copy() * 0.5, shape2.copy()),
+        DevGalaxy(rd2.copy(), bright.copy() * 0.5, shape2.copy()),
+        CompositeGalaxy(rd2.copy(), bright.copy() * 0.25, shape2.copy(),
+                        bright.copy() * 0.25, shape2.copy()),
         ]
 
     # loop over source models, optimizing each in turn
@@ -196,18 +199,21 @@ if __name__ == '__main__':
             print(' ', ns1)
             print(' ', ns2)
             # pin source positions
-            ns1.pinParam('pos')
-            ns2.pinParam('pos')
+            ns1.freezeParam('pos')
+            ns2.freezeParam('pos')
             # optimize fluxes and shapes
             #D = tractor.getAllDerivs(srcs=[ns1,ns2], sky=False)
             #print D
             #for k in range(10):
             #   tractor.optimizeCatalogAtFixedComplexityStep(srcs=[ns1,ns2],
             #                                                sky=False)
-            tractor.optimizeCatalogLoop(nsteps=nsteps, mindlnprob=mndl,
-                                        srcs=[ns1,ns2], sky=False)
-            assert(ns1.pos == rd1)
-            assert(ns2.pos == rd2)
+            tractor.catalog.freezeAllBut(ns1,ns2)
+
+            print('Fitting:')
+            tractor.printThawedParams()
+
+            tractor.optimize_loop(steps=nsteps, mindlnprob=mndl,
+                                  shared_params=False)
 
             lnls[i, j] = tractor.getLogLikelihood()
             # make some freaky plots
