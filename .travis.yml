@@ -53,6 +53,7 @@ script:
 
     - pwd
     - python -c "import tractor.emfit; print(tractor.emfit.__file__)"
+    - export PYTHONPATH=$(pwd):${PYTHONPATH}
     - export COVERAGE_FILE=$(pwd)/.coverage
     #- export COVERAGE_RC=$(pwd)/.coveragerc
     - export COVERAGE_PROCESS_START=$(pwd)/.coveragerc
