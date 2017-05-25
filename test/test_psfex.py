@@ -8,6 +8,9 @@ from tractor import *
 from tractor.galaxy import ExpGalaxy, disable_galaxy_cache
 from tractor.psfex import PixelizedPsfEx, PsfExModel
 
+import tractor
+print('Tractor:', tractor.__file__)
+
 #from astrometry.util.plotutils import PlotSequence
 #ps = PlotSequence('test-psfex')
 ps = None
