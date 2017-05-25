@@ -46,17 +46,19 @@ script:
     - coverage erase
     # Tell coverage where to write its results, for when we (cd ...; coverage) below.
     - export COVERAGE_FILE=$(pwd)/.coverage
+    # And where to find its .coveragerc file
+    - export COVERAGE_RC=$(pwd)/.coveragerc
     # does this hit the installed version rather than in-place?
     - (cd test; python -c "import tractor.emfit; print(tractor.emfit.__file__)")
-    - (cd test; coverage run test_psfex.py)
-    - (cd test; coverage run -a test_sdss.py)
-    - (cd test; coverage run -a test_tractor.py)
-    - (cd test; coverage run -a test_galaxy.py)
-    - (cd tractor; coverage run -a mixture_profiles.py)
+    - (cd test; coverage --rcfile ${COVERAGE_RC} run test_psfex.py)
+    - (cd test; coverage --rcfile ${COVERAGE_RC} run -a test_sdss.py)
+    - (cd test; coverage --rcfile ${COVERAGE_RC} run -a test_tractor.py)
+    - (cd test; coverage --rcfile ${COVERAGE_RC} run -a test_galaxy.py)
+    - (cd tractor; coverage --rcfile ${COVERAGE_RC} run -a mixture_profiles.py)
     - export SDSS_DATA=$(pwd)/test/data-sdss
-    - (cd examples; coverage run -a tractor-sdss-synth.py --roi 0 100 0 100 --run 1000 --camcol 1 --field 100 --band r --sdss-dir ${SDSS_DATA} --const-invvar --no-flipbook)
-    - (cd examples; coverage run -a mini.py)
-    - (cd examples; coverage run -a decam-refit.py)
+    - (cd examples; coverage --rcfile ${COVERAGE_RC} run -a tractor-sdss-synth.py --roi 0 100 0 100 --run 1000 --camcol 1 --field 100 --band r --sdss-dir ${SDSS_DATA} --const-invvar --no-flipbook)
+    - (cd examples; coverage --rcfile ${COVERAGE_RC} run -a mini.py)
+    - (cd examples; coverage --rcfile ${COVERAGE_RC} run -a decam-refit.py)
 
 after_success:
     - coveralls
