@@ -32,10 +32,14 @@ install:
     - export WCSLIB_LIB="-lwcs"
     - export SYSTEM_GSL=yes
     - export NETPBM_INC="-I$(pwd)"
-    - pip install --no-deps --upgrade git+https://github.com/dstndstn/astrometry.net
+    - pip install -v --no-deps --upgrade git+https://github.com/dstndstn/astrometry.net
     - python -c "import astrometry; print(astrometry.__file__)"
     #- export PATH=${PATH}:~/astrometry.net/blind/
-    - export PATH=${PATH}:~/virtualenv/python2.7.12/bin
+    - python -c "import os; import astrometry; d=os.dirname; print(d(d(d(d(d(astrometry.__file__))))))"
+    - export PATH=${PATH}:~/virtualenv/python*/bin
+    - echo $PATH
+    - ls ~/virtualenv/
+    - ls ~/virtualenv/python*
 
 before_script:
     # - export WCSLIB_INC="-I/usr/include/wcslib-4.20"
