@@ -289,13 +289,18 @@ class PsfExModel(object):
         #print('Evaluating PsfEx at', x,y)
         for term,base in zip(self.polynomials(x,y), self.psfbases):
             #print('  polynomial', term, 'x base w/ range', base.min(), base.max())
+            #print('get PsfEx model at', (x,y), 'amp', term)
+            #print('basis image sum:', np.sum(base))
             psf += term * base
+
+        #print('PsfEx model sum:', np.sum(psf))
 
         if nativeScale and self.sampling != 1:
             from scipy.ndimage.interpolation import affine_transform
             ny,nx = psf.shape
             spsf = affine_transform(psf, [1./self.sampling]*2,
                                     offset=nx/2 * (self.sampling - 1.))
+            #print('NativeScale and sampling:', self.sampling)
             return spsf
             
         return psf
@@ -419,6 +424,7 @@ class PixelizedPsfEx(PixelizedPSF):
         self.psfex.shift(dx, dy)
 
     def constantPsfAt(self, x, y):
+        #print('ConstantPsfAt', (x,y))
         pix = self.psfex.at(x, y)
         return PixelizedPSF(pix)
 
@@ -442,7 +448,11 @@ class PixelizedPsfEx(PixelizedPSF):
             for i in range(nb):
                 pad,cx,cy = self._padInImage(sz,sz, img=bases[i,:,:])
                 shape = pad.shape
+                #print('  basis image size:', bases[i,:,:].shape, 'padded to', shape)
+
+                #print('  sum of basis image:', np.sum(bases[i,:,:]), np.sum(pad))
                 P = np.fft.rfft2(pad)
+                #print('  sum of inverse-Fourier-transformed image:', np.sum(np.fft.irfft2(P, s=shape)))
                 fftbases.append(P)
             H,W = shape
             v = np.fft.rfftfreq(W)
@@ -452,7 +462,10 @@ class PixelizedPsfEx(PixelizedPSF):
         # Now sum the bases by the polynomial coefficients
         sumfft = np.zeros(fftbases[0].shape, fftbases[0].dtype)
         for amp,base in zip(self.psfex.polynomials(px, py), fftbases):
+            #print('getFourierTransform: px,py', (px,py), 'amp', amp)
             sumfft += amp * base
+            #print('sum of inverse Fourier transform of component:', np.sum(np.fft.irfft2(amp * base, s=shape)))
+        #print('sum of inverse Fourier transform of PSF:', np.sum(np.fft.irfft2(sumfft, s=shape)))
         return sumfft, (cx,cy), shape, (v,w)
 
 

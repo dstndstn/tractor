@@ -389,7 +389,14 @@ class ProfileGalaxy(object):
                 return Patch(x0, y0,
                              bigmodel.patch[boffy:boffy+mh, boffx:boffx+mw])
 
+
+        # print('Getting Fourier transform of PSF at', px,py)
+        # print('Tim shape:', img.shape)
         P,(cx,cy),(pH,pW),(v,w) = psf.getFourierTransform(px, py, halfsize)
+
+        preal = np.fft.irfft2(P, s=(pH,pW))
+        # print('Sum of inverse-Fourier-transformed PSF model:', preal.sum())
+        
 
         dx = px - cx
         dy = py - cy
@@ -418,11 +425,13 @@ class ProfileGalaxy(object):
         # At this point, mux,muy are both in [-0.5, 0.5]
         assert(np.abs(mux) <= 0.5)
         assert(np.abs(muy) <= 0.5)
-            
+
         amix = self._getAffineProfile(img, 0., 0.)
         fftmix = amix
         mogmix = None
-        
+
+        #print('Galaxy affine profile:', amix)
+
         if hybrid:
             # Split "amix" into terms that we will evaluate using MoG
             # vs FFT.
@@ -431,13 +440,17 @@ class ProfileGalaxy(object):
             # Terms that will wrap-around significantly...
             I = (np.sqrt(vv) * nsigma > pW)
             if np.sum(I):
-                #print('Evaluating', np.sum(I), 'terms as MoGs')
+                # print('Evaluating', np.sum(I), 'terms as MoGs')
                 mogmix = mp.MixtureOfGaussians(amix.amp[I],
                                                amix.mean[I,:] + np.array([px,py])[np.newaxis,:],
                                                amix.var[I,:,:])
             I = np.logical_not(I)
             if np.sum(I):
-                #print('Evaluating', np.sum(I), 'terms with FFT')
+                # print('Evaluating', np.sum(I), 'terms with FFT')
+
+                #print('Terms:',
+                #      mp.MixtureOfGaussians(amix.amp[I], amix.mean[I,:], amix.var[I,:,:]))
+                                      
                 fftmix = mp.MixtureOfGaussians(amix.amp[I], amix.mean[I,:],
                                                amix.var[I,:,:])
             else:
@@ -446,12 +459,13 @@ class ProfileGalaxy(object):
         if fftmix is not None:
             #print('fftmix; mux,muy=', mux,muy)
             Fsum = fftmix.getFourierTransform(v, w)
+            # print('inverse Fourier-transforming into result size:', pH,pW)
             G = np.fft.irfft2(Fsum * P, s=(pH,pW))
 
             # FIXME -- we could try to be sneaky and Lanczos-interp
             # after cutting G down to nearly its final size... tricky
             # tho
-            
+
             # Lanczos-3 interpolation in ~ the same way we do for
             # pixelized PSFs.
             from astrometry.util.miscutils import lanczos_filter
@@ -465,9 +479,13 @@ class ProfileGalaxy(object):
             Ly /= Ly.sum()
             #print('Lx centroid', np.sum(Lx * (np.arange(-L,L+1))))
             #print('Ly centroid', np.sum(Ly * (np.arange(-L,L+1))))
+
+            #print('kernels:', Lx, Ly)
+
             cx = correlate1d(G,  Lx, axis=1, mode='constant')
             G  = correlate1d(cx, Ly, axis=0, mode='constant')
             del cx
+
         else:
             G = np.zeros((pH,pW), np.float32)
         
@@ -587,19 +605,38 @@ def _fourier_galaxy_debug_plots(G, shG, xi,yi,xo,yo, P, Fsum,
     plot_real_imag(P * Fsum, 'FFT(PSF * Galaxy)')
     debug_ps.savefig()
 
-    # What kind of artifacts do we get from the iFFT(FFT(PSF)) - PSF ?
-    p = np.fft.irfft2(P, s=(pH,pW))
     plt.clf()
+    p = np.fft.irfft2(P, s=(pH,pW))
+    ax = plt.axis([pW//2-7, pW//2+7, pH//2-7, pH//2+7])
     plt.subplot(1,3,1)
-    # ASSUME PixelizedPSF
-    pad,cx,cy = psf._padInImage(pW,pH)
-    plt.imshow(pad, interpolation='nearest', origin='lower')
-    plt.subplot(1,3,2)
     plt.imshow(p, interpolation='nearest', origin='lower')
+    plt.axis(ax)
+    plt.title('psf (real space)')
+    # This is in the corners...
+    g = np.fft.irfft2(Fsum, s=(pH,pW))
+    plt.subplot(1,3,2)
+    plt.imshow(g, interpolation='nearest', origin='lower')
+    plt.title('galaxy (real space)')
+    c = np.fft.irfft2(Fsum * P, s=(pH,pW))
     plt.subplot(1,3,3)
-    plt.imshow(pad - p, interpolation='nearest', origin='lower')
-    plt.colorbar()
+    plt.imshow(c, interpolation='nearest', origin='lower')
+    plt.axis(ax)
+    plt.title('convolved (real space)')
     debug_ps.savefig()
+
+    # # What kind of artifacts do we get from the iFFT(FFT(PSF)) - PSF ?
+    # p = np.fft.irfft2(P, s=(pH,pW))
+    # plt.clf()
+    # plt.subplot(1,3,1)
+    # # ASSUME PixelizedPSF
+    # pad,cx,cy = psf._padInImage(pW,pH)
+    # plt.imshow(pad, interpolation='nearest', origin='lower')
+    # plt.subplot(1,3,2)
+    # plt.imshow(p, interpolation='nearest', origin='lower')
+    # plt.subplot(1,3,3)
+    # plt.imshow(pad - p, interpolation='nearest', origin='lower')
+    # plt.colorbar()
+    # debug_ps.savefig()
     
     # plt.clf()
     # plt.subplot(1,2,1)
@@ -631,7 +668,9 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
         '''
         # shift and squash
         cd = img.getWcs().cdAtPixel(px, py)
+        #print('CD matrix at pixel:', cd)
         galmix = self.getProfile()
+        #print('Galaxy mixture model:', galmix)
         Tinv = np.linalg.inv(self.shape.getTensor(cd))
         amix = galmix.apply_affine(np.array([px,py]), Tinv.T)
         amix.symmetrize()
