@@ -519,7 +519,7 @@ class HybridPixelizedPSF(HybridPSF):
     This class wraps a PixelizedPSF model, adding a Gaussian approximation
     model.
     '''
-    def __init__(self, pix, gauss=None, N=2):
+    def __init__(self, pix, gauss=None, N=2, cx=0., cy=0.):
         '''
         Create a new hybrid PSF model using the given PixelizedPSF
         model *pix* and Gaussian approximation *gauss*.
@@ -530,7 +530,8 @@ class HybridPixelizedPSF(HybridPSF):
         super(HybridPixelizedPSF, self).__init__()
         self.pix = pix
         if gauss is None:
-            gauss = GaussianMixturePSF.fromStamp(pix.getImage(0.,0.), N=N)
+            gauss = GaussianMixturePSF.fromStamp(pix.getImage(cx, cy), N=N)
+        #print('Fit Gaussian PSF model:', gauss)
         self.gauss = gauss
 
     def __str__(self):
