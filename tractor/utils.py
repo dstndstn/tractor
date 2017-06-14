@@ -348,7 +348,7 @@ class NamedParams(object):
         return {}
 
     def __new__(cl, *args, **kwargs):
-        self = super(NamedParams,cl).__new__(cl, *args, **kwargs)
+        self = super(NamedParams,cl).__new__(cl) #, *args, **kwargs)
         self.namedparams = {}
         self.paramnames = {}
         named = self.getNamedParams()
@@ -522,7 +522,7 @@ class NamedParams(object):
     def thawParam(self, paramname):
         if _isint(paramname):
             i = paramname
-        elif isinstance(paramname, basestring):
+        elif isinstance(paramname, str): #basestring):
             i = self.getNamedParamIndex(paramname)
             assert(i is not None)
         else:

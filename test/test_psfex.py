@@ -8,6 +8,9 @@ from tractor import *
 from tractor.galaxy import ExpGalaxy, disable_galaxy_cache
 from tractor.psfex import PixelizedPsfEx, PsfExModel
 
+import tractor
+print('Tractor:', tractor.__file__)
+
 #from astrometry.util.plotutils import PlotSequence
 #ps = PlotSequence('test-psfex')
 ps = None
@@ -93,7 +96,7 @@ class PsfExTest(unittest.TestCase):
         print('Pixpsf centroid:', cenx,ceny)
         print('shape:', ph,pw)
         
-        dx,dy = cenx - pw/2, ceny - ph/2
+        dx,dy = cenx - pw//2, ceny - ph//2
         print('dx,dy', dx,dy)
         
         # gpsf = GaussianMixturePSF.fromStamp(im, N=1)

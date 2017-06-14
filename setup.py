@@ -2,6 +2,19 @@ from distutils.core import setup, Extension
 from distutils.command.build_ext import *
 from distutils.dist import Distribution
 
+# import sys
+# py3 = (sys.version_info[0] >= 3)
+
+# from http://stackoverflow.com/questions/12491328/python-distutils-not-include-the-swig-generated-module
+from distutils.command.build import build
+class CustomBuild(build):
+    sub_commands = [
+        ('build_ext', build.has_ext_modules),
+        ('build_py', build.has_pure_modules),
+        ('build_clib', build.has_c_libraries),
+        ('build_scripts', build.has_scripts),
+    ]
+
 import numpy as np
 numpy_inc = [np.get_include()]
 
@@ -12,6 +25,8 @@ eigen_inc = os.environ.get('EIGEN_INC', None)
 if eigen_inc is None:
     try:
         eigen_inc = check_output(['pkg-config', '--cflags', 'eigen3']).strip()
+        # py3
+        eigen_inc = eigen_inc.decode()
     except:
         eigen_inc = ''
 inc = eigen_inc.split()
@@ -62,21 +77,25 @@ class MyDistribution(Distribution):
 # an extra command-line arg!
 
 mods = [module_mix, module_em]
+pymods = ['tractor.mix', 'tractor.emfit']
 key = '--with-ceres'
 if key in sys.argv:
     sys.argv.remove(key)
     mods.append(module_ceres)
+    pymods.append('tractor.ceres')
 
 setup(
     distclass=MyDistribution,
+    cmdclass={'build': CustomBuild},
     name="tractor",
     version="git",
     author="Dustin Lang (UToronto) and David W. Hogg (NYU)",
     author_email="dstndstn@gmail.com",
     packages=['tractor', 'wise'],
     ext_modules = mods,
-    # data_files=[('lib/python/wise', ['wise/wise-psf-avg.fits'])],
-    package_data={'wise':['wise-psf-avg.fits']},
+# py_modules = pymods,
+# data_files=[('lib/python/wise', ['wise/wise-psf-avg.fits'])],
+    package_data={'wise':['wise-psf-avg.fits', 'allsky-atlas.fits']},
     package_dir={'wise':'wise', 'tractor':'tractor'},
     url="http://theTractor.org/",
     license="GPLv2",

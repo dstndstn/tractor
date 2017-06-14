@@ -7,6 +7,7 @@ from .motion import *
 from .psfex import *
 from .ellipses import *
 from .imageutils import *
+from .galaxy import *
 
 __all__ = [
     # modules
@@ -40,4 +41,8 @@ __all__ = [
     'EllipseE', 'EllipseESoft',
     # imageutils
     'interpret_roi',
+    # galaxy
+    'GalaxyShape', 'Galaxy', 'ProfileGalaxy', 'GaussianGalaxy',
+    'ExpGalaxy', 'DevGalaxy', 'FracDev', 'SoftenedFracDev',
+    'FixedCompositeGalaxy', 'CompositeGalaxy',
     ]

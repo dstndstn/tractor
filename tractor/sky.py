@@ -1,6 +1,6 @@
 from .utils import BaseParams, ScalarParam
 from .patch import Patch
-import ducks
+from tractor import ducks
 
 class NullSky(BaseParams, ducks.Sky):
     '''

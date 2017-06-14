@@ -2,7 +2,7 @@ from __future__ import print_function
 import numpy as np
 
 from .utils import BaseParams, ParamList, MultiParams, ArithmeticParams
-import ducks
+from tractor import ducks
 
 class NullWCS(BaseParams, ducks.WCS):
     '''
@@ -345,7 +345,7 @@ class PixPos(ParamList):
         return dict(x=0, y=1)
     def __init__(self, *args):
         super(PixPos, self).__init__(*args)
-        self.stepsize = [0.1, 0.1]
+        self.stepsizes = [0.1, 0.1]
     def __str__(self):
         return 'pixel (%.2f, %.2f)' % (self.x, self.y)
     def getDimension(self):

@@ -177,8 +177,8 @@ class MixtureOfGaussians(object):
                         d * w[:,np.newaxis]**2 +
                         2*b*v[np.newaxis,:]*w[:,np.newaxis]))
             if mu[0] != 0. or mu[1] != 0.:
-                F *= np.exp(-2.*np.pi* 1j *(mu[0]*v[np.newaxis,:] +
-                                            mu[1]*w[:,np.newaxis]))
+                F = F * np.exp(-2.*np.pi* 1j *(mu[0]*v[np.newaxis,:] +
+                                               mu[1]*w[:,np.newaxis]))
 
             if Fsum is None:
                 Fsum = amp * F
@@ -222,7 +222,7 @@ class MixtureOfGaussians(object):
         return result
 
     def evaluate_2(self, pos):
-        from mix import c_gauss_2d
+        from tractor.mix import c_gauss_2d
         if pos.size == self.D:
             pos = np.reshape(pos, (1, self.D))
         (N, D) = pos.shape
@@ -239,7 +239,7 @@ class MixtureOfGaussians(object):
         [y0,y1): (int) Y values to evaluate
         (cx,cy): (float) pixel center of the MoG
         '''
-        from mix import c_gauss_2d_grid
+        from tractor.mix import c_gauss_2d_grid
         assert(self.D == 2)
         result = np.zeros((y1-y0, x1-x0))
         rtn = c_gauss_2d_grid(int(x0), int(x1), int(y0), int(y1), cx, cy,
@@ -258,7 +258,7 @@ class MixtureOfGaussians(object):
 
         Returns: numpy array of shape (y1-y0, x1-x0)
         '''
-        from mix import c_gauss_2d_approx2
+        from tractor.mix import c_gauss_2d_approx2
         assert(self.D == 2)
 
         result = np.zeros((y1-y0, x1-x0))
@@ -273,7 +273,7 @@ class MixtureOfGaussians(object):
         '''
         mask: np array of booleans (NOT Patch object!)
         '''
-        from mix import c_gauss_2d_masked
+        from tractor.mix import c_gauss_2d_masked
 
         h,w = mask.shape
         result = np.zeros((h,w), np.float32)
@@ -329,10 +329,10 @@ class MixtureOfGaussians(object):
         
         Unlike evaluate_grid_approx, returns a Patch object.
         '''
-        from mix import c_gauss_2d_approx3
+        from tractor.mix import c_gauss_2d_approx3
 
         result = np.zeros((y1-y0, x1-x0))
-        xderiv = yderiv = mask = None
+        xderiv = yderiv = None
         if derivs:
             xderiv = np.zeros_like(result)
             yderiv = np.zeros_like(result)
@@ -350,7 +350,7 @@ class MixtureOfGaussians(object):
                 int(x0), int(x1), int(y0), int(y1),
                 float(fx), float(fy), float(minval),
                 self.amp, self.mean, self.var,
-                result, xderiv, yderiv, mask,
+                result, xderiv, yderiv,
                 cx, cy, int(minradius))
         except:
             print('failure calling c_gauss_2d_approx3:')
@@ -500,7 +500,7 @@ if __name__ == '__main__':
     functional_test_patch_maker('test_psf_patch.png', psf=psf)
 
     # functional test: c_gauss_2d_approx
-    from mix import c_gauss_2d_approx, c_gauss_2d_grid, c_gauss_2d_approx2, c_gauss_2d_approx3
+    from tractor.mix import c_gauss_2d_approx, c_gauss_2d_grid, c_gauss_2d_approx2, c_gauss_2d_approx3
 
     from astrometry.util.plotutils import PlotSequence
     ps = PlotSequence('approx')
@@ -635,7 +635,7 @@ if __name__ == '__main__':
         result3 = np.zeros((H, W))
         xderiv, yderiv, mask = None, None, None
         xc,yc = int(mean[0,0] + dx), int(mean[0,1] + dy)
-        args = (x0, x1, y0, y1, dx, dy, minval, amp, mean, var, result3, xderiv, yderiv, mask, xc, yc, minradius)
+        args = (x0, x1, y0, y1, dx, dy, minval, amp, mean, var, result3, xderiv, yderiv, xc, yc, minradius)
         print('args (approx3):', args)
         rtn = c_gauss_2d_approx3(*args)
         if rtn == -1:

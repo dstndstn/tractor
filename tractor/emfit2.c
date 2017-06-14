@@ -6,7 +6,7 @@ static int em_fit_2d_reg2(PyObject* np_img, int x0, int y0,
                           int steps,
                           double approx,
                           double* p_skyamp) {
-    npy_intp N, K, k;
+    npy_intp K, k;
     npy_intp NX, NY;
     const npy_intp D = 2;
     int step;
@@ -22,7 +22,7 @@ static int em_fit_2d_reg2(PyObject* np_img, int x0, int y0,
     double* var;
     double* img;
 
-    double psky;
+    double psky = 0.;
     double skyamp;
     double imgsum;
 
@@ -80,7 +80,7 @@ static int em_fit_2d_reg2(PyObject* np_img, int x0, int y0,
     }
     NY = PyArray_DIM(np_img, 0);
     NX = PyArray_DIM(np_img, 1);
-    N = NX*NY;
+    //N = NX*NY;
 
     amp  = PyArray_DATA(np_amp);
     mean = PyArray_DATA(np_mean);
@@ -196,7 +196,7 @@ static int em_fit_2d_reg2(PyObject* np_img, int x0, int y0,
 
                 if (*imgcursor <= 0) {
                     // sky
-                    skyamp += abs(*imgcursor);
+                    skyamp += fabs(*imgcursor);
                     continue;
                 }
                 // E step
@@ -254,7 +254,7 @@ static int em_fit_2d_reg2(PyObject* np_img, int x0, int y0,
         psky = skyamp / (NX*NY);
     }
 
-    printf("Number of exp calls: %i\n", nexp);
+    //printf("Number of exp calls: %i\n", nexp);
 
     result = 0;
         

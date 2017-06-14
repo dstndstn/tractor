@@ -3,7 +3,7 @@ import numpy as np
 
 from .utils import MultiParams
 from .patch import ModelMask
-import ducks
+from tractor import ducks
 
 class BasicSource(ducks.Source):
     def getPosition(self):
@@ -191,14 +191,23 @@ class PointSource(MultiParams, SingleProfileSource):
                 psteps = pos.getStepSizes(img)
                 pvals = pos.getParams()
                 for i,pstep in enumerate(psteps):
+                    pdiff = pstep
+                    p0 = patch0
                     oldval = pos.setParam(i, pvals[i] + pstep)
                     patchx = self.getUnitFluxModelPatch(img, minval=minval,
                                                         modelMask=modelMask)
+                    if getattr(pos, 'symmetric_derivs', False):
+                        pos.setParam(i, pvals[i] - pstep)
+                        patchmx = self.getUnitFluxModelPatch(img, minval=minval,
+                                                             modelMask=modelMask)
+                        p0 = patchmx
+                        pdiff = pstep*2
+
                     pos.setParam(i, oldval)
                     if patchx is None:
                         dx = patch0 * (-1 * counts0 / pstep)
                     else:
-                        dx = (patchx - patch0) * (counts0 / pstep)
+                        dx = (patchx - p0) * (counts0 / pdiff)
                     dx.setName('d(ptsrc)/d(pos%i)' % i)
                     derivs.append(dx)
 

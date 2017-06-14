@@ -8,10 +8,12 @@
 #include <assert.h>
 #include <sys/param.h>
 
-static int n_exp = 0;
-static int n_expf = 0;
-static int n_finf = 0;
-static int n_fnan = 0;
+/*
+ static int n_exp = 0;
+ static int n_expf = 0;
+ static int n_finf = 0;
+ static int n_fnan = 0;
+ */
 
 static double eval_g(double I[3], double dx, double dy) {
     double dsq = (I[0] * dx * dx +
@@ -20,7 +22,7 @@ static double eval_g(double I[3], double dx, double dy) {
     if (dsq < -100)
         // ~ 1e-44
         return 0.0;
-    n_exp++;
+    //n_exp++;
     return exp(dsq);
 }
 
@@ -65,7 +67,7 @@ static double eval_all_dxy(int K, double* scales, double* I, double* means,
             continue;
         if (!isfinite(dsq))
             continue;
-        n_exp++;
+        //n_exp++;
         G = scales[k] * exp(dsq);
         r += G;
         // The negative sign here is because we want the derivatives
@@ -125,7 +127,7 @@ static double eval_all_dxy_f(int K, float* scales, float* I, float* means,
             continue;
         }*/
 
-        n_expf++;
+        //n_expf++;
         G = scales[k] * expf(dsq);
         r += G;
         // The negative sign here is because we want the derivatives
@@ -183,7 +185,7 @@ static int get_np(PyObject* ob_amp,
         Py_INCREF(dtype);
         *np_yderiv = PyArray_FromAny(ob_yderiv, dtype, 2, 2, reqout, NULL);
     }
-    if (ob_mask != Py_None) {
+    if (ob_mask && ob_mask != Py_None) {
         btype = PyArray_DescrFromType(PyArray_BOOL);
         Py_INCREF(btype);
         *np_mask = PyArray_FromAny(ob_mask, btype, 2, 2, req, NULL);
@@ -194,7 +196,7 @@ static int get_np(PyObject* ob_amp,
     if (!*np_amp || !*np_mean || !*np_var || !*np_result ||
         ((ob_xderiv != Py_None) && !*np_xderiv) ||
         ((ob_yderiv != Py_None) && !*np_yderiv) ||
-        ((ob_mask   != Py_None) && !*np_mask)) {
+        (ob_mask && (ob_mask != Py_None) && !*np_mask)) {
         if (!*np_amp) {
             ERR("amp wasn't the type expected");
             Py_DECREF(dtype);
@@ -219,7 +221,7 @@ static int get_np(PyObject* ob_amp,
             ERR("yderiv wasn't the type expected");
             Py_DECREF(dtype);
         }
-        if ((ob_mask != Py_None) && !*np_mask) {
+        if (ob_mask && (ob_mask != Py_None) && !*np_mask) {
             ERR("mask wasn't the type expected");
             Py_DECREF(btype);
         }
@@ -262,7 +264,7 @@ static int get_np(PyObject* ob_amp,
             return 1;
         }
     }
-    if (np_mask && *np_mask) {
+    if (ob_mask && np_mask && *np_mask) {
         if ((PyArray_DIM(*np_mask, 0) != NY) ||
             (PyArray_DIM(*np_mask, 1) != NX)) {
             ERR("np_mask must be size NY x NX (%i x %i), got %i x %i",
@@ -1065,7 +1067,6 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
                               PyObject* ob_result,
                               PyObject* ob_xderiv,
                               PyObject* ob_yderiv,
-                              PyObject* ob_mask,
                               int xc, int yc,
                               int minradius,
                               int* p_sx0, int* p_sx1, int* p_sy0, int* p_sy1

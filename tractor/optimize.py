@@ -31,7 +31,7 @@ class Optimizer(object):
                           negfluxval=None,
                           **kwargs
                           ):
-        from basics import LinearPhotoCal, ShiftedWcs
+        from tractor.basics import LinearPhotoCal, ShiftedWcs
 
         result = OptResult()
 

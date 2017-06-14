@@ -1,5 +1,6 @@
 from __future__ import print_function
 from __future__ import division
+
 import numpy as np
 from astrometry.util.miscutils import lanczos_filter
 
@@ -12,14 +13,6 @@ from .patch import Patch
 from .utils import BaseParams, ParamList, MultiParams
 from . import mixture_profiles as mp
 from . import ducks
-
-# class VaryingPsfMixin(ducks.ImageCalibration):
-#     def getShifted(self, x0, y0):
-#         return ShiftedPsf(self, x0, y0)
-# 
-# class ConstantPsfMixin(ducks.ImageCalibration):
-#     def getShifted(self, x0, y0):
-#         return self
 
 class HybridPSF(object):
     pass
@@ -464,8 +457,8 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
 
         optional xy0 = int x0,y0 origin of stamp.
         '''
-        from emfit import em_fit_2d, em_fit_2d_reg
-        from fitpsf import em_init_params
+        from .emfit import em_fit_2d, em_fit_2d_reg
+        from .fitpsf import em_init_params
         if P0 is not None:
             w,mu,var = P0
         else:
@@ -495,7 +488,7 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
             return tpsf
                 
         elif v2:
-            from emfit import em_fit_2d_reg2
+            from .emfit import em_fit_2d_reg2
             print('stamp sum:', np.sum(stamp))
             #stamp *= 1000.
             ok,skyamp = em_fit_2d_reg2(stamp, xm, ym, w, mu, var, alpha,

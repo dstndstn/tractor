@@ -734,7 +734,8 @@ def get_sip_subwcs(wcs, extent):
     (x0, x1, y0, y1) = extent
     return wcs.get_subimage(int(x0), int(y0), int(x1-x0), int(y1-y0))
 
-def _resample_one((tim, mod, targetwcs, spline)):
+def _resample_one(argl):
+    (tim, mod, targetwcs, spline) = args
     print('Resampling', tim.name)
     wcs2 = get_sip_subwcs(tim.getWcs().wcs, tim.extent)
     try:
@@ -814,7 +815,8 @@ def _resample_one((tim, mod, targetwcs, spline)):
     d.npix2 = np.sum(iv > 0)
     return d
 
-def _resample_mod((tim, mod, targetwcs, spline)):
+def _resample_mod(args):
+    (tim, mod, targetwcs, spline) = args
     W,H = targetwcs.get_width(), targetwcs.get_height()
     wcs2 = get_sip_subwcs(tim.getWcs().wcs, tim.extent)
     Lorder = 3
@@ -831,7 +833,8 @@ def _resample_mod((tim, mod, targetwcs, spline)):
     ww = w * (iv > 0)
     return rmod,ww
 
-def _rev_resample_mask((tim, mask, targetwcs)):
+def _rev_resample_mask(args):
+    (tim, mask, targetwcs) = args
     if mask is None:
         return None
     wcs2 = get_sip_subwcs(tim.getWcs().wcs, tim.extent)

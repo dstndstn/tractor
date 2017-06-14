@@ -1,10 +1,10 @@
 import numpy as np
 from tractor import RaDecPos
 
-def interpret_roi(wcs, (H,W), roi=None, roiradecsize=None, roiradecbox=None,
+def interpret_roi(wcs, imgshape, roi=None, roiradecsize=None, roiradecbox=None,
                   **kwargs):
     '''
-    (H,W): full image size
+    imgshape = (H,W): full image size
 
     If not None, roi = (x0, x1, y0, y1) defines a region-of-interest
     in the image, in zero-indexed pixel coordinates.  x1,y1 are
@@ -17,11 +17,11 @@ def interpret_roi(wcs, (H,W), roi=None, roiradecsize=None, roiradecbox=None,
     "roiradecbox" = (ra0, ra1, dec0, dec1) indicates that you
     want to grab a ROI containing the given RA,Dec ranges.
     '''
-
+    (H,W) = imgshape
     if roiradecsize is not None:
         ra,dec,S = roiradecsize
         fxc,fyc = wcs.positionToPixel(RaDecPos(ra,dec))
-        xc,yc = [int(np.round(p)) for p in fxc,fyc]
+        xc,yc = [int(np.round(p)) for p in (fxc,fyc)]
 
         roi = [np.clip(xc-S, 0, W),
                np.clip(xc+S+1, 0, W),

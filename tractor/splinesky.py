@@ -1,8 +1,8 @@
 from __future__ import print_function
 import numpy as np
 import scipy.interpolate as interp
-from utils import *
-import ducks
+from tractor.utils import *
+from tractor import ducks
 
 class SplineSky(ParamList, ducks.ImageCalibration):
 
@@ -12,14 +12,14 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         mask: True to use pixel.  None for no masking.
         '''
         H,W = image.shape
-        halfbox = gridsize / 2
+        halfbox = gridsize // 2
 
-        nx = int(np.round(W / float(halfbox))) + 2
-        x0 = int((W - (nx-2) * halfbox) / 2)
+        nx = int(np.round(W // float(halfbox))) + 2
+        x0 = int((W - (nx-2) * halfbox) // 2)
         xgrid = x0 + (halfbox * (np.arange(nx) - 0.5)).astype(int)
 
-        ny = int(np.round(H / float(halfbox))) + 2
-        y0 = int((H - (ny-2) * halfbox) / 2)
+        ny = int(np.round(H // float(halfbox))) + 2
+        y0 = int((H - (ny-2) * halfbox) // 2)
         ygrid = y0 + (halfbox * (np.arange(ny) - 0.5)).astype(int)
 
         # Compute medians in grid cells
@@ -194,7 +194,7 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         #print 'NX', NX
         for i in self.getThawedParamIndices():
             ix = i % self.W
-            iy = i / self.W
+            iy = i // self.W
             derivs.append(False)
         return derivs
 

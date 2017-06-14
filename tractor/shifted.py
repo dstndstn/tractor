@@ -1,6 +1,6 @@
 from __future__ import print_function
 from .utils import BaseParams
-import ducks
+from tractor import ducks
     
 # class SubImage(Image):
 #   def __init__(self, im, roi,

@@ -4,77 +4,74 @@
 # http://docs.travis-ci.com/user/migrating-from-legacy/?utm_source=legacy-notice&utm_medium=banner&utm_campaign=legacy-upgrade
 sudo: false
 
-# Use these APT packages once they are white-listed:
+# Default environment is Ubuntu 12.04.5 LTS "precise"
+# which is pretty old.
+# "trusty" is Ubuntu 14.04.5 LTS
+dist: trusty
 
-# python-mock:
-# https://github.com/travis-ci/apt-package-whitelist/issues/1081
-
-# python-pyfits:
-# https://github.com/travis-ci/apt-package-whitelist/issues/1082
-
-# python-numpydoc -- not available until Ubuntu 14.04 trusty
-# (currently Travis-CI uses 12.x precise)
+# python versions to test against...
+language: python
+python:
+  - "2.7"
+  - "3.6"
 
 install:
-   - pip install --user numpy==1.11.0
-   - pip install --user matplotlib==1.5.1
-   - pip install --user numpydoc
-   - pip install --user coveralls
-   - pip install --user fitsio
-   - ls ~/.local
+    - pip install numpy
+    - pip install scipy
+    - pip install matplotlib
+    - pip install numpydoc
+    - pip install Sphinx
+    - pip install coveralls
+    - pip install fitsio
+    # fitsio master version?
+    # - pip install --no-deps --upgrade git+https://github.com/esheldon/fitsio.git#egg=fitsio
 
-language: c
-compiler:
-  - gcc
-#  - clang
-
-before_script:
-    - export NETPBM_INC="-I$(pwd)"
-    - export WCSLIB_INC="-I/usr/include/wcslib-4.8.3"
+    - export WCSLIB_INC="-I/usr/include/wcslib-4.20"
     - export WCSLIB_LIB="-lwcs"
     - export SYSTEM_GSL=yes
-    # - pkg-config --exists gsl
-    # - pkg-config --modversion gsl
-    # - ls /usr/include/wcslib*
-    # - pwd
-    # - echo $HOME
-    # - ls $HOME
-    # - ls $HOME/astrometry.net
-    - if [ ! -d "$HOME/astrometry.net" ]; then (cd $HOME; git clone https://github.com/dstndstn/astrometry.net.git; cd astrometry.net; ln -sf /usr/include netpbm; make && make py); fi
-    - (cd $HOME/astrometry.net && git pull && make && make py) || (rm -Rf $HOME/astrometry.net && cd $HOME && git clone https://github.com/dstndstn/astrometry.net.git && cd astrometry.net && make && make py)
-    - ln -s $HOME/astrometry.net astrometry
-    - export PATH=${PATH}:~/astrometry.net/blind/
-
-# Clean Astrometry.net cache?
-#    - (cd $HOME; rm -R astrometry.net; git clone https://github.com/dstndstn/astrometry.net.git; cd astrometry.net; ln -sf /usr/include netpbm)
-
-#    - if [ ! -d "$HOME/fitsio-git" ]; then (cd $HOME; git clone https://github.com/esheldon/fitsio.git fitsio-git); fi
-#    - (cd $HOME/fitsio-git && python setup.py install --home $HOME/fitsio)
-#    - ln -s $HOME/fitsio/lib/python/fitsio .
+    - export NETPBM_INC="-I$(pwd)"
+    - pip install -v --no-deps --upgrade git+https://github.com/dstndstn/astrometry.net
+    # - python -c "import astrometry; print(astrometry.__file__)"
+    # - python -c "import os; import astrometry; d=os.path.dirname; print(d(d(d(d(d(astrometry.__file__))))))"
+    # - echo $PATH
+    # - ls ~/virtualenv/
+    # - ls ~/virtualenv/python*
+    # - ls ~/virtualenv/python*/bin
+    # - which fitsverify
 
 script:
-    # - pwd
-    # - ls
-    # - echo $HOME
-    # - ls -al $HOME
-    - export PYTHONPATH=${PYTHONPATH}:$(pwd)
-    # - echo "$PYTHONPATH"
-    # - ls -l
-    # - python -c "import sys; print '\n'.join(sys.path)"
-    # - python -c "import numpy; print numpy.__file__"
-    # - which fitsverify
-    # - pwd
-    # - python -c "import fitsio; print fitsio.__file__"
-    - make
+    - python setup.py install
+    - python setup.py build_ext --inplace
     - make doc
+    - echo $PYTHONPATH
     - coverage erase
+
+    # Coverage doesn't seem to like measuring the coverage of
+    # installed code (or, at least, we haven't told it we care about
+    # the installed code in .coveragerc), so try to run w/ code in
+    # current dir.  Also need to ensure that CWD is ahead of the
+    # installed code in PYTHONPATH.
+    - export PYTHONPATH=$(pwd):${PYTHONPATH}
+    #- export COVERAGE_FILE=$(pwd)/.coverage
+    #- export COVERAGE_RC=$(pwd)/.coveragerc
+    #- export COVERAGE_PROCESS_START=$(pwd)/.coveragerc
     - coverage run test/test_psfex.py
+    #- coverage report
     - coverage run -a test/test_sdss.py
+    #- coverage report
     - coverage run -a test/test_tractor.py
+    #- coverage report
     - coverage run -a test/test_galaxy.py
+    #- coverage report
     - coverage run -a tractor/mixture_profiles.py
-    #- coverage run -a examples/tractor-sdss-synth.py --roi 100 200 100 200 --no-flipbook
-    - coverage run -a examples/tractor-sdss-synth.py --roi 0 100 0 100 --run 1000 --camcol 1 --field 100 --band r --sdss-dir test/data-sdss --const-invvar --no-flipbook
+    #- coverage report
+    - export SDSS_DATA=$(pwd)/test/data-sdss
+    - coverage run -a examples/tractor-sdss-synth.py --roi 0 100 0 100 --run 1000 --camcol 1 --field 100 --band r --sdss-dir ${SDSS_DATA} --const-invvar --no-flipbook
+    #- coverage report
+    - coverage run -a examples/mini.py
+    #- coverage report
+    - coverage run -a examples/decam-refit.py
+    - coverage report
 
 after_success:
     - coveralls
@@ -90,22 +87,9 @@ addons:
     - swig
     - gsl-bin
     - libgsl0-dev
-    - python-sphinx
-    - sphinx-common
-    - python-scipy
-    - python-tk
-
-#    - python-matplotlib
-#    - python-numpy
-#    - python-mock
-#    - python-numpydoc
 
 cache:
   directories:
   - $HOME/cache/.pip
-  - $HOME/astrometry.net
   # pip install --local goes here:
   - $HOME/.local
-
-
-#  - $HOME/fitsio-git

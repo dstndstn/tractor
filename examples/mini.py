@@ -1,15 +1,21 @@
+'''
+This little example script shows how to create some galaxies and
+render them into a model image.
+'''
 from __future__ import print_function
+if __name__ == '__main__':
+    import matplotlib
+    matplotlib.use('Agg')
 import numpy as np
 
 from astrometry.util.util import Tan
-
-from tractor.galaxy import *
-from tractor.engine import *
-from tractor.basics import *
-
+from tractor import (GaussianMixturePSF, ConstantFitsWcs, LinearPhotoCal,
+                     ConstantSky, Image, NanoMaggies, PointSource,
+                     RaDecPos, Catalog, Tractor)
+from tractor.galaxy import ExpGalaxy, DevGalaxy, FixedCompositeGalaxy, GalaxyShape
 
 if __name__ == '__main__':
-
+    
     # image size
     W,H = 50,50
     # fake pixel data
@@ -26,8 +32,8 @@ if __name__ == '__main__':
     ra,dec = 90.,0.
     # pixel scale 1 arcsecond per pixel
     pscale = 1. / 3600.
-    wcs = FitsWcs(Tan(ra, dec, (1.+W)/2., (1.+H)/2.,
-                      pscale, 0., 0., pscale, W, H))
+    wcs = ConstantFitsWcs(Tan(ra, dec, (1.+W)/2., (1.+H)/2.,
+                              pscale, 0., 0., pscale, W, H))
 
     # an arbitrary name for this image's bandpass; if we used Flux
     # rather than NanoMaggies as the brightness class we wouldn't need this
@@ -40,7 +46,7 @@ if __name__ == '__main__':
     sky = ConstantSky(0.)
     
     # Create tractor.Image object
-    tim = Image(data, iv, psf, wcs, sky, photocal)
+    tim = Image(data, iv, psf=psf, wcs=wcs, sky=sky, photocal=photocal)
 
     def brightness(x):
         return NanoMaggies(**{band: x})
@@ -87,14 +93,13 @@ if __name__ == '__main__':
     lnp = -0.5 * ((model - data)**2 * iv).sum()
     print('Logprob:', lnp)
 
-    
-
     # plot model image
     import pylab as plt
     mod = tr.getModelImage(0)
     #print 'Mod', mod.min(), mod.max()
     plt.clf()
-    plt.imshow(mod, interpolation='nearest', origin='lower', vmin=0, vmax=10.)
+    plt.imshow(mod, interpolation='nearest', origin='lower',
+               vmin=0, vmax=10.)
     plt.colorbar()
     plt.title('model')
     plt.savefig('mod.png')

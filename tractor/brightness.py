@@ -1,6 +1,6 @@
 import numpy as np
 from .utils import ScalarParam, ParamList, BaseParams, getClassName
-import ducks
+from tractor import ducks
 
 class Mag(ScalarParam):
     '''
@@ -37,7 +37,7 @@ class MultiBandBrightness(ParamList, ducks.Brightness):
         '''
         keys = kwargs.pop('order', None)
         if keys is None:
-            keys = kwargs.keys()
+            keys = list(kwargs.keys())
             keys.sort()
         assert(len(kwargs) == len(keys))
         assert(set(kwargs.keys()) == set(keys))
