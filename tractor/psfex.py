@@ -158,8 +158,13 @@ class PsfExModel(object):
     '''
     An object representing a PsfEx PSF model.
     '''
-    def __init__(self, fn=None, ext=1):
-         if fn is not None:
+    def __init__(self, fn=None, ext=1, Ti=None):
+        '''
+        If *fn* is not None, reads a PsfEx file from the given filename and *ext*.
+
+        Else if *Ti* is not None, reads from one row of a merged PsfEx table.
+        '''
+        if fn is not None:
             from astrometry.util.fits import fits_table
             T = fits_table(fn, ext=ext)
             ims = T.psf_mask[0]
@@ -190,6 +195,31 @@ class PsfExModel(object):
             bh,bw = self.psfbases[0].shape
             self.radius = (bh+1)/2.
             self.x0,self.y0 = x0,y0
+
+        elif Ti is not None:
+            self.sampling = Ti.psf_samp
+            degree = Ti.poldeg1
+            # PSF distortion bases are polynomials of x,y
+            assert(Ti.polname1.strip() == 'X_IMAGE')
+            assert(Ti.polname2.strip() == 'Y_IMAGE')
+            assert(Ti.polgrp1 == 1)
+            assert(Ti.polgrp2 == 1)
+            assert(Ti.polngrp == 1)
+            self.x0 = Ti.polzero1
+            self.y0 = Ti.polzero2
+            self.xscale = Ti.polscal1
+            self.yscale = Ti.polscal2
+            self.degree = degree
+            # number of terms in polynomial
+            ne = (degree + 1) * (degree + 2) / 2
+            assert(Ti.psfaxis3 == ne)
+            ims = Ti.psf_mask
+            assert(len(ims.shape) == 3)
+            assert(ims.shape[0] == ne)
+            self.psfbases = ims
+            bh,bw = self.psfbases[0].shape
+            self.radius = (bh+1)/2.
+
 
     def writeto(self, fn):
         from astrometry.util.fits import fits_table

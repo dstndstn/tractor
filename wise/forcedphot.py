@@ -176,12 +176,15 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None,
             IV,fs = R.IV, R.fitstats
 
             if save_fits:
+                import fitsio
                 (dat,mod,ie,chi,roi) = ims1[0]
+                wcshdr = fitsio.FITSHDR()
+                tim.wcs.wcs.add_to_header(wcshdr)
 
                 tag = 'fit-%s-w%i' % (tile.coadd_id, band)
-                fitsio.write('%s-data.fits' % tag, dat, clobber=True)
-                fitsio.write('%s-mod.fits' % tag,  mod, clobber=True)
-                fitsio.write('%s-chi.fits' % tag,  chi, clobber=True)
+                fitsio.write('%s-data.fits' % tag, dat, clobber=True, header=wcshdr)
+                fitsio.write('%s-mod.fits' % tag,  mod, clobber=True, header=wcshdr)
+                fitsio.write('%s-chi.fits' % tag,  chi, clobber=True, header=wcshdr)
 
             if ps:
                 tag = '%s W%i' % (tile.coadd_id, band)
