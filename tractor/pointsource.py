@@ -39,10 +39,15 @@ class SingleProfileSource(BasicSource):
         minval = minsb / counts
         upatch = self.getUnitFluxModelPatch(img, minval=minval,
                                             modelMask=modelMask)
+
         if upatch is None:
             return None
         if upatch.patch is not None:
             assert(np.all(np.isfinite(upatch.patch)))
+
+        #print('getModelPatch: unit-patch sum', np.sum(upatch.patch), 'counts', counts,
+        #      'scaled sum:', np.sum(upatch.patch * counts))
+
         p = upatch * counts
         if p.patch is not None:
             assert(np.all(np.isfinite(p.patch)))

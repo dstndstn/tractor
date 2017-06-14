@@ -1,4 +1,5 @@
 from __future__ import print_function
+from __future__ import division
 
 import numpy as np
 from astrometry.util.miscutils import lanczos_filter
@@ -12,14 +13,6 @@ from .patch import Patch
 from .utils import BaseParams, ParamList, MultiParams
 from . import mixture_profiles as mp
 from . import ducks
-
-# class VaryingPsfMixin(ducks.ImageCalibration):
-#     def getShifted(self, x0, y0):
-#         return ShiftedPsf(self, x0, y0)
-# 
-# class ConstantPsfMixin(ducks.ImageCalibration):
-#     def getShifted(self, x0, y0):
-#         return self
 
 class HybridPSF(object):
     pass
@@ -87,7 +80,8 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         from astrometry.util.miscutils import get_overlapping_region
 
         img = self.getImage(px, py)
-
+        assert(np.all(np.isfinite(img)))
+        
         H,W = img.shape
         ix = int(np.round(px))
         iy = int(np.round(py))
@@ -120,26 +114,26 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         # Normalize the Lanczos interpolants (preserve flux)
         Lx /= Lx.sum()
         Ly /= Ly.sum()
-        sx      = correlate1d(img, Lx, axis=1, mode='constant')
-        shifted = correlate1d(sx,  Ly, axis=0, mode='constant')
+
         if modelMask is None:
+            sx      = correlate1d(img, Lx, axis=1, mode='constant')
+            shifted = correlate1d(sx,  Ly, axis=0, mode='constant')
+            assert(np.all(np.isfinite(shifted)))
             return Patch(x0, y0, shifted)
 
-        # Pad or clip to modelMask size
-        mm = np.zeros((mh,mw), shifted.dtype)
-        yo = y0 - my0
-        yi = 0
-        ny = min(y0+H, my0+mh) - max(y0, my0)
-        if yo < 0:
-            yi = -yo
-            yo = 0
-        xo = x0 - mx0
-        xi = 0
-        nx = min(x0+W, mx0+mw) - max(x0, mx0)
-        if xo < 0:
-            xi = -xo
-            xo = 0
-        mm[yo:yo+ny, xo:xo+nx] = shifted[yi:yi+ny, xi:xi+nx]
+        #
+        padding = L
+        # Create a modelMask + padding sized stamp and insert PSF image into it
+        mm = np.zeros((mh+2*padding, mw+2*padding), img.dtype)
+
+        yi,yo = get_overlapping_region(my0-y0-padding, my0-y0+mh-1+padding, 0, H-1)
+        xi,xo = get_overlapping_region(mx0-x0-padding, mx0-x0+mw-1+padding, 0, W-1)
+        mm[yo,xo] = img[yi,xi]
+
+        sx = correlate1d(mm, Lx, axis=1, mode='constant')
+        mm = correlate1d(sx, Ly, axis=0, mode='constant')
+        mm = mm[padding:-padding, padding:-padding]
+        assert(np.all(np.isfinite(mm)))
         return Patch(mx0, my0, mm)
 
     def getFourierTransformSize(self, radius):
@@ -518,7 +512,7 @@ class HybridPixelizedPSF(HybridPSF):
     This class wraps a PixelizedPSF model, adding a Gaussian approximation
     model.
     '''
-    def __init__(self, pix, gauss=None, N=2):
+    def __init__(self, pix, gauss=None, N=2, cx=0., cy=0.):
         '''
         Create a new hybrid PSF model using the given PixelizedPSF
         model *pix* and Gaussian approximation *gauss*.
@@ -529,7 +523,8 @@ class HybridPixelizedPSF(HybridPSF):
         super(HybridPixelizedPSF, self).__init__()
         self.pix = pix
         if gauss is None:
-            gauss = GaussianMixturePSF.fromStamp(pix.getImage(0.,0.), N=N)
+            gauss = GaussianMixturePSF.fromStamp(pix.getImage(cx, cy), N=N)
+        #print('Fit Gaussian PSF model:', gauss)
         self.gauss = gauss
 
     def __str__(self):

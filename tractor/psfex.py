@@ -158,8 +158,13 @@ class PsfExModel(object):
     '''
     An object representing a PsfEx PSF model.
     '''
-    def __init__(self, fn=None, ext=1):
-         if fn is not None:
+    def __init__(self, fn=None, ext=1, Ti=None):
+        '''
+        If *fn* is not None, reads a PsfEx file from the given filename and *ext*.
+
+        Else if *Ti* is not None, reads from one row of a merged PsfEx table.
+        '''
+        if fn is not None:
             from astrometry.util.fits import fits_table
             T = fits_table(fn, ext=ext)
             ims = T.psf_mask[0]
@@ -190,6 +195,31 @@ class PsfExModel(object):
             bh,bw = self.psfbases[0].shape
             self.radius = (bh+1)/2.
             self.x0,self.y0 = x0,y0
+
+        elif Ti is not None:
+            self.sampling = Ti.psf_samp
+            degree = Ti.poldeg1
+            # PSF distortion bases are polynomials of x,y
+            assert(Ti.polname1.strip() == 'X_IMAGE')
+            assert(Ti.polname2.strip() == 'Y_IMAGE')
+            assert(Ti.polgrp1 == 1)
+            assert(Ti.polgrp2 == 1)
+            assert(Ti.polngrp == 1)
+            self.x0 = Ti.polzero1
+            self.y0 = Ti.polzero2
+            self.xscale = Ti.polscal1
+            self.yscale = Ti.polscal2
+            self.degree = degree
+            # number of terms in polynomial
+            ne = (degree + 1) * (degree + 2) / 2
+            assert(Ti.psfaxis3 == ne)
+            ims = Ti.psf_mask
+            assert(len(ims.shape) == 3)
+            assert(ims.shape[0] == ne)
+            self.psfbases = ims
+            bh,bw = self.psfbases[0].shape
+            self.radius = (bh+1)/2.
+
 
     def writeto(self, fn):
         from astrometry.util.fits import fits_table
@@ -289,6 +319,8 @@ class PsfExModel(object):
         #print('Evaluating PsfEx at', x,y)
         for term,base in zip(self.polynomials(x,y), self.psfbases):
             #print('  polynomial', term, 'x base w/ range', base.min(), base.max())
+            #print('get PsfEx model at', (x,y), 'amp', term)
+            #print('basis image sum:', np.sum(base))
             psf += term * base
 
         if nativeScale and self.sampling != 1:
@@ -419,6 +451,7 @@ class PixelizedPsfEx(PixelizedPSF):
         self.psfex.shift(dx, dy)
 
     def constantPsfAt(self, x, y):
+        #print('ConstantPsfAt', (x,y))
         pix = self.psfex.at(x, y)
         return PixelizedPSF(pix)
 
@@ -442,7 +475,11 @@ class PixelizedPsfEx(PixelizedPSF):
             for i in range(nb):
                 pad,cx,cy = self._padInImage(sz,sz, img=bases[i,:,:])
                 shape = pad.shape
+                #print('  basis image size:', bases[i,:,:].shape, 'padded to', shape)
+
+                #print('  sum of basis image:', np.sum(bases[i,:,:]), np.sum(pad))
                 P = np.fft.rfft2(pad)
+                #print('  sum of inverse-Fourier-transformed image:', np.sum(np.fft.irfft2(P, s=shape)))
                 fftbases.append(P)
             H,W = shape
             v = np.fft.rfftfreq(W)
@@ -452,7 +489,10 @@ class PixelizedPsfEx(PixelizedPSF):
         # Now sum the bases by the polynomial coefficients
         sumfft = np.zeros(fftbases[0].shape, fftbases[0].dtype)
         for amp,base in zip(self.psfex.polynomials(px, py), fftbases):
+            #print('getFourierTransform: px,py', (px,py), 'amp', amp)
             sumfft += amp * base
+            #print('sum of inverse Fourier transform of component:', np.sum(np.fft.irfft2(amp * base, s=shape)))
+        #print('sum of inverse Fourier transform of PSF:', np.sum(np.fft.irfft2(sumfft, s=shape)))
         return sumfft, (cx,cy), shape, (v,w)
 
 

@@ -21,16 +21,20 @@ class GalaxyTest(unittest.TestCase):
         if ps is not None:
             import pylab as plt
 
-        #pos = RaDecPos(0., 1.)
         pos = PixPos(49.5, 50.)
         pos0 = pos
         bright = NanoMaggies(g=1., r=2.)
         shape = GalaxyShape(2., 0.5, 45.)
 
+        #psf = GaussianMixturePSF(1., 0., 0., 4., 4., 0.)
+        psf = GaussianMixturePSF(1., 0., 0., 6., 6., -1.)
+        #psf = GaussianMixturePSF(1., 0., 0., 9., 9., -1.)
+        #psf = GaussianMixturePSF(1., 0., 0., 16., 16., -1.)
+
         H,W = 100,100
         tim = Image(data=np.zeros((H,W), np.float32),
                     inverr=np.ones((H,W), np.float32),
-                    psf=GaussianMixturePSF(1., 0., 0., 4., 4., 0.),
+                    psf=psf,
                     photocal=LinearPhotoCal(1., band='r'),
             )
 
@@ -88,14 +92,70 @@ class GalaxyTest(unittest.TestCase):
         p1.addTo(mod)
         print('Mod sum:', mod.sum())
 
+        mh,mw = mod.shape
+        xx,yy = np.meshgrid(np.arange(mw), np.arange(mh))
+        cx,cy = np.sum(xx*mod)/np.sum(mod), np.sum(yy*mod)/np.sum(mod)
+        mxx = np.sum((xx-cx)**2*mod)/np.sum(mod)
+        myy = np.sum((yy-cy)**2*mod)/np.sum(mod)
+        mxy = np.sum((xx-cx)*(yy-cy)*mod)/np.sum(mod)
+        print('mod centroid:', cx,cy)
+        print('moments:', mxx,myy,mxy)
+        
         self.assertTrue(np.abs(mod.sum() - 100.) < 1e-3)
 
         if ps is not None:
             plt.clf()
             plt.imshow(mod, interpolation='nearest', origin='lower')
+            plt.title('mod')
             plt.colorbar()
             ps.savefig()
 
+        def show_model(modN, mod, name):
+            plt.clf()
+            sy,sx = slice(40,60),slice(40,60)
+            plt.subplot(2,3,1)
+            plt.imshow(modN[sy,sx], interpolation='nearest', origin='lower')
+            plt.colorbar()
+            plt.title(name)
+
+            if mod is not None:
+                plt.subplot(2,3,2)
+                plt.imshow(mod[sy,sx], interpolation='nearest', origin='lower')
+                plt.colorbar()
+                plt.title('mod')
+
+                plt.subplot(2,3,3)
+                mx = np.abs(modN-mod).max()
+                plt.imshow((modN-mod)[sy,sx],
+                           interpolation='nearest', origin='lower', vmin=-mx,vmax=mx)
+                plt.colorbar()
+                plt.title('%s - mod' % name)
+            
+                plt.subplot(2,3,6)
+                plt.imshow(modN-mod, interpolation='nearest', origin='lower')
+                plt.colorbar()
+                plt.title('%s - mod' % name)
+
+            plt.subplot(2,3,4)
+            mx = modN.max()
+            plt.imshow(np.log10(modN),
+                       vmin=np.log10(mx)-6,
+                       vmax=np.log10(mx),
+                       interpolation='nearest', origin='lower')
+            plt.colorbar()
+            plt.title('log %s' % name)
+
+            if mod is not None:
+                plt.subplot(2,3,5)
+                plt.imshow(np.log10(mod),
+                           vmin=np.log10(mx)-6,
+                           vmax=np.log10(mx),
+                           interpolation='nearest', origin='lower')
+                plt.colorbar()
+                plt.title('log mod')
+            ps.savefig()
+
+            
         # Test with ModelMask
         mm = ModelMask(25, 25, 50, 50)
         p2 = gal1.getModelPatch(tim, modelMask=mm)
@@ -110,16 +170,7 @@ class GalaxyTest(unittest.TestCase):
         self.assertTrue(np.abs(mod2.sum() - 100.) < 1e-3)
 
         if ps is not None:
-            plt.clf()
-            plt.imshow(mod2, interpolation='nearest', origin='lower')
-            plt.colorbar()
-            plt.title('Exp')
-            ps.savefig()
-
-            plt.clf()
-            plt.imshow(mod2-mod, interpolation='nearest', origin='lower')
-            plt.colorbar()
-            ps.savefig()
+            show_model(mod2, mod, 'mod2')
         
         print('Diff between mods:', np.abs(mod - mod2).max())
         self.assertTrue(np.abs(mod - mod2).max() < 1e-6)
@@ -139,6 +190,9 @@ class GalaxyTest(unittest.TestCase):
         print('Diff between mods:', np.abs(mod3 - mod).max())
         self.assertTrue(np.abs(mod3 - mod).max() < 1e-6)
 
+        if ps is not None:
+            show_model(mod3, mod, 'mod3')
+        
         # Test with a PixelizedPSF (FFT method), created from the Gaussian PSF
         # image (so we can check consistency)
         psfpatch = tim.psf.getPointSourcePatch(
@@ -148,10 +202,23 @@ class GalaxyTest(unittest.TestCase):
         pixpsf = tim.psf
         
         # No modelmask
+        print()
+        print('Rendering mod4')
         p4 = gal1.getModelPatch(tim)
         mod4 = np.zeros((H,W), np.float32)
         p4.addTo(mod4)
         print('Patch:', p4)
+
+        cx,cy = np.sum(xx*mod4)/np.sum(mod4), np.sum(yy*mod4)/np.sum(mod4)
+        mxx = np.sum((xx-cx)**2*mod4)/np.sum(mod4)
+        myy = np.sum((yy-cy)**2*mod4)/np.sum(mod4)
+        mxy = np.sum((xx-cx)*(yy-cy)*mod4)/np.sum(mod4)
+        print('mod centroid:', cx,cy)
+        print('moments:', mxx,myy,mxy)
+
+        if ps is not None:
+            show_model(mod4, mod, 'mod4')
+
         # These assertions are fairly arbitrary...
         self.assertEqual(p4.x0, 6)
         self.assertEqual(p4.y0, 7)
@@ -160,13 +227,94 @@ class GalaxyTest(unittest.TestCase):
         print('Mod sum:', mod4.sum())
         self.assertTrue(np.abs(mod4.sum() - 100.) < 1e-3)
         print('Diff between mods:', np.abs(mod4 - mod).max())
-        self.assertTrue(np.abs(mod4 - mod).max() < 1e-6)
+        #self.assertTrue(np.abs(mod4 - mod).max() < 1e-6)
+        self.assertTrue(np.abs(mod4 - mod).max() < 2e-3)
 
+        import tractor.galaxy
+        
+        if ps is not None:
+            #pp = [49.0, 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 49.8, 49.9, 50.]
+            #pp = np.arange(48, 51, 0.1)
+
+            plt.clf()
+            
+            for L in [3,5,7]:
+                tractor.galaxy.fft_lanczos_order = L
+                CX = []
+                pp = np.arange(49, 50.1, 0.1)
+                gal1copy = gal1.copy()
+                for p in pp:
+                    gal1copy.pos = PixPos(p, 50.)
+                    tim.psf = psf
+                    newmod = np.zeros((H,W), np.float32)
+                    p1 = gal1copy.getModelPatch(tim)
+                    p1.addTo(newmod)
+                    #mod[:,:] = newmod
+        
+                    tim.psf = pixpsf
+                    modX = np.zeros((H,W), np.float32)
+                    p1 = gal1copy.getModelPatch(tim)
+                    p1.addTo(modX)
+        
+                    print('p=', p)
+                    cx,cy = np.sum(xx*modX)/np.sum(modX), np.sum(yy*modX)/np.sum(modX)
+                    mxx = np.sum((xx-cx)**2*modX)/np.sum(modX)
+                    myy = np.sum((yy-cy)**2*modX)/np.sum(modX)
+                    mxy = np.sum((xx-cx)*(yy-cy)*modX)/np.sum(modX)
+                    print('mod centroid:', cx,cy)
+                    print('moments:', mxx,myy,mxy)
+                    CX.append(cx)
+
+                plt.plot(pp, np.array(CX)-np.array(pp), '-',
+                         label='Lanczos-%i' % L)
+
+
+                #show_model(modX, newmod, 'mod4(%.1f)' % p)
+
+                # plt.clf()
+                # plt.subplot(2,1,1)
+                # plt.plot(mod[H/2,:], 'k-')
+                # plt.plot(modX[H/2,:], 'r-')
+                # plt.subplot(2,1,2)
+                # plt.plot(modX[H/2,:] - mod[H/2,:], 'r-')
+                # plt.suptitle('mod4(%.1f)' % p)
+                # ps.savefig()
+
+            # plt.clf()
+            # plt.plot(pp, CX, 'b-')
+            # plt.plot(pp, pp, 'k-', alpha=0.25)
+            # plt.xlabel('Pixel position')
+            # plt.ylabel('Centroid')
+            # plt.title('Lanczos-3 interpolation of galaxy profile')
+            # ps.savefig()
+
+            plt.axhline(0, color='k', alpha=0.25)
+            plt.xlabel('Pixel position')
+            plt.ylabel('Centroid - Pixel position')
+            plt.title('Lanczos interpolation of galaxy profile')
+            plt.legend(loc='upper left')
+            ps.savefig()
+            
+            from astrometry.util.miscutils import lanczos_filter
+            plt.clf()
+            xx = np.linspace(-(7+1), 7+1, 300)
+            for L in [3,5,7]:
+                plt.plot(xx, lanczos_filter(L, xx), '-', label='Lancoz-%i' % L)
+            plt.title('Lanczos')
+            ps.savefig()
+            
+                                    
+        tractor.galaxy.fft_lanczos_order = 3
+            
         # Test with ModelMask with "mm"
         p5 = gal1.getModelPatch(tim, modelMask=mm)
         mod5 = np.zeros((H,W), np.float32)
         p5.addTo(mod5)
         print('Patch:', p5)
+
+        if ps is not None:
+            show_model(mod5, mod, 'mod5')
+
         self.assertEqual(p5.x0, 25)
         self.assertEqual(p5.y0, 25)
         self.assertEqual(p5.shape, (50,50))
@@ -174,7 +322,8 @@ class GalaxyTest(unittest.TestCase):
         print('Mod sum:', mod5.sum())
         self.assertTrue(np.abs(mod5.sum() - 100.) < 1e-3)
         print('Diff between mods:', np.abs(mod5 - mod).max())
-        self.assertTrue(np.abs(mod5 - mod).max() < 1e-6)
+        #self.assertTrue(np.abs(mod5 - mod).max() < 1e-6)
+        self.assertTrue(np.abs(mod5 - mod).max() < 2e-3)
 
         # Test with a source center outside the ModelMask.
         # Way outside the ModelMask -> model is None
@@ -188,12 +337,17 @@ class GalaxyTest(unittest.TestCase):
         mod7 = np.zeros((H,W), np.float32)
         p7.addTo(mod7)
         print('Patch:', p7)
+
+        if ps is not None:
+            show_model(mod7, mod, 'mod7')
+
         self.assertEqual(p7.x0, 25)
         self.assertEqual(p7.y0, 25)
         self.assertEqual(p7.shape, (50,50))
         print('patch sum:', p7.patch.sum())
         print('Mod sum:', mod7.sum())
-        self.assertTrue(np.abs(mod7.sum() - 1.362) < 1e-3)
+        #self.assertTrue(np.abs(mod7.sum() - 1.362) < 1e-3)
+        self.assertTrue(np.abs(mod7.sum() - 1.963) < 1e-3)
 
         # Test a HybridPSF
         tim.psf = HybridPixelizedPSF(tim.psf)
@@ -205,12 +359,17 @@ class GalaxyTest(unittest.TestCase):
         mod8 = np.zeros((H,W), np.float32)
         p8.addTo(mod8)
         print('Patch:', p8)
+
+        if ps is not None:
+            show_model(mod8, mod, 'mod8')
+
         self.assertEqual(p8.x0, 25)
         self.assertEqual(p8.y0, 25)
         self.assertEqual(p8.shape, (50,50))
         print('patch sum:', p8.patch.sum())
         print('Mod sum:', mod8.sum())
-        self.assertTrue(np.abs(mod8.sum() - 1.362) < 1e-3)
+        #self.assertTrue(np.abs(mod8.sum() - 1.362) < 1e-3)
+        self.assertTrue(np.abs(mod7.sum() - 1.963) < 1e-3)
 
         if ps is not None:
             plt.clf()
@@ -232,11 +391,16 @@ class GalaxyTest(unittest.TestCase):
         mod9 = np.zeros((H,W), np.float32)
         p9.addTo(mod9)
         print('Patch:', p9)
+
+        if ps is not None:
+            show_model(mod9, None, 'mod9')
+
         #self.assertEqual(p8.x0, 25)
         #self.assertEqual(p8.y0, 25)
         #self.assertEqual(p8.shape, (50,50))
         print('Mod sum:', mod9.sum())
-        self.assertTrue(np.abs(mod9.sum() - 96.98) < 1e-2)
+        #self.assertTrue(np.abs(mod9.sum() - 96.98) < 1e-2)
+        self.assertTrue(np.abs(mod9.sum() - 94.33) < 1e-2)
 
         # Zero outside (0,50),(0,50)
         self.assertEqual(np.sum(np.abs(mod9[50:,:])), 0.)
@@ -308,7 +472,8 @@ class GalaxyTest(unittest.TestCase):
         shapeExp = shape
         shapeDev = shape2
 
-        modExp = mod2
+        #modExp = mod2
+        modExp = mod4
         modDev = mod12
         
         # Set FracDev = 0 --> equals gal1 in patch2.
@@ -321,9 +486,14 @@ class GalaxyTest(unittest.TestCase):
         print('Patch:', p13)
         print('patch sum:', p13.patch.sum())
         print('Mod sum:', mod13.sum())
+
+        if ps is not None:
+            show_model(mod13, modExp, 'mod13')
+
         self.assertTrue(np.abs(mod13.sum() - 100.00) < 1e-2)
         print('SAD:', np.sum(np.abs(mod13 - modExp)))
-        self.assertTrue(np.sum(np.abs(mod13 - modExp)) < 1e-8)
+        #self.assertTrue(np.sum(np.abs(mod13 - modExp)) < 1e-8)
+        self.assertTrue(np.sum(np.abs(mod13 - modExp)) < 1e-5)
 
         # Set FracDev = 1 --> equals gal2 in patch12.
         gal3.fracDev.setValue(1.)
@@ -335,7 +505,8 @@ class GalaxyTest(unittest.TestCase):
         print('Mod sum:', mod14.sum())
         self.assertTrue(np.abs(mod14.sum() - 99.95) < 1e-2)
         print('SAD:', np.sum(np.abs(mod14 - modDev)))
-        self.assertTrue(np.sum(np.abs(mod14 - modDev)) < 1e-8)
+        #self.assertTrue(np.sum(np.abs(mod14 - modDev)) < 1e-8)
+        self.assertTrue(np.sum(np.abs(mod14 - modDev)) < 1e-5)
 
         # Set FracDev = 0.5 --> equals mean
         gal3.fracDev = SoftenedFracDev(0.5)

@@ -13,6 +13,7 @@ from the SDSS /Photo/ software; we use multi-Gaussian approximations
 of these.
 """
 from __future__ import print_function
+from __future__ import division
 
 import numpy as np
 
@@ -295,9 +296,12 @@ class ProfileGalaxy(object):
             if mm is None:
                 mm = modelMask
             # now convolve with the PSF, analytically
+            # (note that the psf's center is *not* set to px,py; that's just
+            #  the position to use for spatially-varying PSFs)
             psfmix = psf.getMixtureOfGaussians(px=px, py=py)
             cmix = amix.convolve(psfmix)
             if mm is None:
+                #print('Mixture to patch: amix', amix, 'psfmix', psfmix, 'cmix', cmix)
                 return mp.mixture_to_patch(cmix, x0, x1, y0, y1, minval)
             # The convolved mixture *already* has the px,py offset added
             # (via px,py to amix) so set px,py=0,0 in this call.
@@ -326,6 +330,15 @@ class ProfileGalaxy(object):
             x1 = x0 + mw
             y1 = y0 + mh
 
+            halfsize = max(mh/2., mw/2.)
+            # How far from the source center to furthest modelMask edge?
+            ## FIXME -- add 1 for Lanczos margin?
+            halfsize = max(halfsize, max(max(1+px-x0, 1+x1-px),
+                                         max(1+py-y0, 1+y1-py)))
+            psfh,psfw = psf.shape
+            halfsize = max(halfsize, max(psfw/2., psfh/2.))
+            #print('Halfsize:', halfsize)
+            
             # is the source center outside the modelMask?
             sourceOut = (px < x0 or px > x1-1 or py < y0 or py > y1-1)
             # print('mh,mw', mh,mw, 'sourceout?', sourceOut)
@@ -375,12 +388,15 @@ class ProfileGalaxy(object):
                     img, px, py, minval, modelMask=bigMask)
                 return Patch(x0, y0,
                              bigmodel.patch[boffy:boffy+mh, boffx:boffx+mw])
-            
-            halfsize = max(mh/2., mw/2.)
-            psfh,psfw = psf.shape
-            halfsize = max(halfsize, max(psfw/2., psfh/2.))
 
+
+        # print('Getting Fourier transform of PSF at', px,py)
+        # print('Tim shape:', img.shape)
         P,(cx,cy),(pH,pW),(v,w) = psf.getFourierTransform(px, py, halfsize)
+
+        preal = np.fft.irfft2(P, s=(pH,pW))
+        # print('Sum of inverse-Fourier-transformed PSF model:', preal.sum())
+        
 
         dx = px - cx
         dy = py - cy
@@ -388,38 +404,34 @@ class ProfileGalaxy(object):
             # the Patch we return *must* have this origin.
             ix0 = x0
             iy0 = y0
-            # Put the difference into the galaxy FFT.
+            # the difference that we have to handle by shifting the model image
             mux = dx - ix0
             muy = dy - iy0
-            # ASSUME square PSF
-            assert(pH == pW)
-            psfh,psfw = psf.shape
-            # How much padding on the PSF image?
-            psfmargin = cx - psfw/2
-
-            gx0 = gy0 = 0
-            if abs(mux) >= psfmargin or abs(muy) >= psfmargin:
-                # Wrap-around is possible (likely).  Compute a shifted image
-                # and then copy it into the result.
-                gx0 = int(np.round(mux))
-                gy0 = int(np.round(muy))
-                # print('Wrap-around possible/likely:', mux, muy,
-                #       'vs margin', psfmargin, '-> shift by', gx0,gy0)
-                mux -= gx0
-                muy -= gy0
-                
+            # we will handle the integer portion by computing a shifted image
+            # and copying it into the result
+            sx = int(np.round(mux))
+            sy = int(np.round(muy))
+            # the subpixel portion will be handled with a Lanczos interpolation
+            mux -= sx
+            muy -= sy
         else:
             # Put the integer portion of the offset into Patch x0,y0
             ix0 = int(np.round(dx))
             iy0 = int(np.round(dy))
-            # Put the subpixel portion into the galaxy FFT.
+            # the subpixel portion will be handled with a Lanczos interpolation
             mux = dx - ix0
             muy = dy - iy0
 
-        amix = self._getAffineProfile(img, mux, muy)
+        # At this point, mux,muy are both in [-0.5, 0.5]
+        assert(np.abs(mux) <= 0.5)
+        assert(np.abs(muy) <= 0.5)
+
+        amix = self._getAffineProfile(img, 0., 0.)
         fftmix = amix
         mogmix = None
-        
+
+        #print('Galaxy affine profile:', amix)
+
         if hybrid:
             # Split "amix" into terms that we will evaluate using MoG
             # vs FFT.
@@ -428,45 +440,72 @@ class ProfileGalaxy(object):
             # Terms that will wrap-around significantly...
             I = (np.sqrt(vv) * nsigma > pW)
             if np.sum(I):
-                #print('Evaluating', np.sum(I), 'terms as MoGs')
-                # Yuck, re-evaluate affine profile using 'px,py' vs 'mux,muy'
-                gmix = self._getAffineProfile(img, px, py)
-                mogmix = mp.MixtureOfGaussians(gmix.amp[I], gmix.mean[I,:],
-                                               gmix.var[I,:,:])
+                # print('Evaluating', np.sum(I), 'terms as MoGs')
+                mogmix = mp.MixtureOfGaussians(amix.amp[I],
+                                               amix.mean[I,:] + np.array([px,py])[np.newaxis,:],
+                                               amix.var[I,:,:])
             I = np.logical_not(I)
             if np.sum(I):
+                # print('Evaluating', np.sum(I), 'terms with FFT')
+
+                #print('Terms:',
+                #      mp.MixtureOfGaussians(amix.amp[I], amix.mean[I,:], amix.var[I,:,:]))
+                                      
                 fftmix = mp.MixtureOfGaussians(amix.amp[I], amix.mean[I,:],
                                                amix.var[I,:,:])
             else:
                 fftmix = None
 
         if fftmix is not None:
+            #print('fftmix; mux,muy=', mux,muy)
             Fsum = fftmix.getFourierTransform(v, w)
+            # print('inverse Fourier-transforming into result size:', pH,pW)
             G = np.fft.irfft2(Fsum * P, s=(pH,pW))
+
+            # FIXME -- we could try to be sneaky and Lanczos-interp
+            # after cutting G down to nearly its final size... tricky
+            # tho
+
+            # Lanczos-3 interpolation in ~ the same way we do for
+            # pixelized PSFs.
+            from astrometry.util.miscutils import lanczos_filter
+            from scipy.ndimage.filters import correlate1d
+            #L = 3
+            L = fft_lanczos_order
+            Lx = lanczos_filter(L, np.arange(-L, L+1) + mux)
+            Ly = lanczos_filter(L, np.arange(-L, L+1) + muy)
+            # Normalize the Lanczos interpolants (preserve flux)
+            Lx /= Lx.sum()
+            Ly /= Ly.sum()
+            #print('Lx centroid', np.sum(Lx * (np.arange(-L,L+1))))
+            #print('Ly centroid', np.sum(Ly * (np.arange(-L,L+1))))
+
+            #print('kernels:', Lx, Ly)
+
+            cx = correlate1d(G,  Lx, axis=1, mode='constant')
+            G  = correlate1d(cx, Ly, axis=0, mode='constant')
+            del cx
+
         else:
             G = np.zeros((pH,pW), np.float32)
         
         if modelMask is not None:
             gh,gw = G.shape
-            if gx0 != 0 or gy0 != 0:
-                #print('gx0,gy0', gx0,gy0)
-                yi,yo = get_overlapping_region(-gy0, -gy0+mh-1, 0, gh-1)
-                xi,xo = get_overlapping_region(-gx0, -gx0+mw-1, 0, gw-1)
-                #print('Overlaps: y', yo,yi, 'x', xo,xi)
+            if sx != 0 or sy != 0:
+                yi,yo = get_overlapping_region(-sy, -sy+mh-1, 0, gh-1)
+                xi,xo = get_overlapping_region(-sx, -sx+mw-1, 0, gw-1)
                 # shifted
+                ### FIXME -- are yo,xo always the whole image?  If so, optimize
                 shG = np.zeros((mh,mw), G.dtype)
                 shG[yo,xo] = G[yi,xi]
+                
+                # print('shift:', (sx,sy), 'mm', (mw,mh), 'g', (gw,gh))
+                # print('yi,xi,', yi,xi)
+                # print('yo,xo,', yo,xo)
 
                 if debug_ps is not None:
-                    import pylab as plt
-                    plt.clf()
-                    plt.subplot(1,2,1)
-                    plt.imshow(shG, interpolation='nearest', origin='lower')
-                    plt.title('shG')
-                    plt.subplot(1,2,2)
-                    plt.imshow(G, interpolation='nearest', origin='lower')
-                    plt.title('G')
-                    debug_ps.savefig()
+                    _fourier_galaxy_debug_plots(G, shG, xi,yi,xo,yo, P, Fsum,
+                                                pW,pH, psf)
 
                 G = shG
             if gh > mh or gw > mw:
@@ -498,6 +537,123 @@ class ProfileGalaxy(object):
             
         return Patch(ix0, iy0, G)
 
+fft_lanczos_order = 3
+    
+def _fourier_galaxy_debug_plots(G, shG, xi,yi,xo,yo, P, Fsum,
+                                pW,pH, psf):
+    import pylab as plt
+    mx = G.max()
+    ima = dict(vmin=np.log10(mx)-6,
+               vmax=np.log10(mx),
+               interpolation='nearest', origin='lower')
+    plt.clf()
+    plt.subplot(1,2,1)
+    #plt.imshow(shG, interpolation='nearest', origin='lower')
+    plt.imshow(np.log10(shG), **ima)
+    ax = plt.axis()
+    plt.plot([xo.start,xo.start,xo.stop-1,xo.stop-1,xo.start],
+             [yo.start,yo.stop-1,yo.stop-1,yo.start,yo.start],
+             'r-')
+    plt.axis(ax)
+    plt.title('shG')
+    plt.subplot(1,2,2)
+    #plt.imshow(G, interpolation='nearest', origin='lower')
+    plt.imshow(np.log10(G), **ima)
+    ax = plt.axis()
+    plt.plot([xi.start,xi.start,xi.stop-1,xi.stop-1,xi.start],
+             [yi.start,yi.stop-1,yi.stop-1,yi.start,yi.start],
+             'r-')
+    plt.axis(ax)
+    plt.title('G')
+    debug_ps.savefig()
+
+    def plot_real_imag(F, name):
+        plt.clf()
+        plt.subplot(2,2,1)
+        print(name,'real range', F.real.min(), F.real.max())
+        mx = np.abs(F.real).max()
+        plt.imshow(np.log10(np.abs(F.real)),
+                   interpolation='nearest', origin='lower')
+        plt.xticks([]); plt.yticks([])
+        plt.colorbar()
+        plt.title('log(abs(%s.real))' % name)
+        plt.subplot(2,2,3)
+        plt.imshow(np.sign(F.real),
+                   vmin=-1, vmax=1,
+                   interpolation='nearest', origin='lower', cmap='RdBu')
+        plt.xticks([]); plt.yticks([])
+        plt.title('sign(%s.real)' % name)
+        print(name,'imag range', F.imag.min(), F.imag.max())
+        plt.subplot(2,2,2)
+        mx = np.abs(F.imag).max()
+        plt.imshow(np.log10(np.abs(F.imag)),
+                   interpolation='nearest', origin='lower')
+        plt.xticks([]); plt.yticks([])
+        plt.colorbar()
+        plt.title('log(abs(%s.imag))' % name)
+        plt.subplot(2,2,4)
+        plt.imshow(np.sign(F.imag),
+                   vmin=-1, vmax=1,
+                   interpolation='nearest', origin='lower', cmap='RdBu')
+        plt.xticks([]); plt.yticks([])
+        plt.title('sign(%s.imag)' % name)
+    
+    plot_real_imag(P, 'PSF')
+    debug_ps.savefig()
+    plot_real_imag(Fsum, 'FFT(Galaxy)')
+    debug_ps.savefig()
+    plot_real_imag(P * Fsum, 'FFT(PSF * Galaxy)')
+    debug_ps.savefig()
+
+    plt.clf()
+    p = np.fft.irfft2(P, s=(pH,pW))
+    ax = plt.axis([pW//2-7, pW//2+7, pH//2-7, pH//2+7])
+    plt.subplot(1,3,1)
+    plt.imshow(p, interpolation='nearest', origin='lower')
+    plt.axis(ax)
+    plt.title('psf (real space)')
+    # This is in the corners...
+    g = np.fft.irfft2(Fsum, s=(pH,pW))
+    plt.subplot(1,3,2)
+    plt.imshow(g, interpolation='nearest', origin='lower')
+    plt.title('galaxy (real space)')
+    c = np.fft.irfft2(Fsum * P, s=(pH,pW))
+    plt.subplot(1,3,3)
+    plt.imshow(c, interpolation='nearest', origin='lower')
+    plt.axis(ax)
+    plt.title('convolved (real space)')
+    debug_ps.savefig()
+
+    # # What kind of artifacts do we get from the iFFT(FFT(PSF)) - PSF ?
+    # p = np.fft.irfft2(P, s=(pH,pW))
+    # plt.clf()
+    # plt.subplot(1,3,1)
+    # # ASSUME PixelizedPSF
+    # pad,cx,cy = psf._padInImage(pW,pH)
+    # plt.imshow(pad, interpolation='nearest', origin='lower')
+    # plt.subplot(1,3,2)
+    # plt.imshow(p, interpolation='nearest', origin='lower')
+    # plt.subplot(1,3,3)
+    # plt.imshow(pad - p, interpolation='nearest', origin='lower')
+    # plt.colorbar()
+    # debug_ps.savefig()
+    
+    # plt.clf()
+    # plt.subplot(1,2,1)
+    # mx = np.abs(P).max()
+    # plt.imshow(np.log10(np.abs(P)),
+    #            interpolation='nearest', origin='lower')
+    # plt.xticks([]); plt.yticks([])
+    # plt.colorbar()
+    # plt.title('log(abs(FFT(PSF)))')
+    # plt.subplot(1,2,2)
+    # plt.imshow(np.arctan2(P.imag, P.real),
+    #            vmin=-np.pi, vmax=np.pi,
+    #            interpolation='nearest', origin='lower', cmap='RdBu')
+    # plt.xticks([]); plt.yticks([])
+    # plt.title('phase(FFT(PSF))')
+    # debug_ps.savefig()
+
 class HoggGalaxy(ProfileGalaxy, Galaxy):
 
     def getName(self):
@@ -512,7 +668,9 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
         '''
         # shift and squash
         cd = img.getWcs().cdAtPixel(px, py)
+        #print('CD matrix at pixel:', cd)
         galmix = self.getProfile()
+        #print('Galaxy mixture model:', galmix)
         Tinv = np.linalg.inv(self.shape.getTensor(cd))
         amix = galmix.apply_affine(np.array([px,py]), Tinv.T)
         amix.symmetrize()
