@@ -202,6 +202,9 @@ if __name__ == '__main__':
 
     else:
 
+        # The "MogProfile" call here takes a list of amplitudes (they
+        # get normalized), followed by a list of variances.
+
         moggal = EllipticalMogGalaxy(gal.pos.copy(), gal.brightness.copy(),
                                      EllipseE(1., 0., 0.),
                                      MogProfile(1.0, 1.0, 1.0,
