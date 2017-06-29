@@ -16,7 +16,7 @@ class MogGalaxy(HoggGalaxy):
         return self.mog.mog
 
     def getRadius(self):
-        return 5. * np.sqrt(np.max(self.mog.mog.var))
+        return 5. * np.sqrt(np.max(self.mog.mog.var))*3600.
 
     def _getAffineProfile(self, img, px, py):
         ''' Returns a MixtureOfGaussians profile that has been
@@ -52,7 +52,7 @@ if __name__ == '__main__':
     # Create a plain Exp galaxy to generate a postage stamp that we'll try to fit with
     # the MogGalaxy model.
     gal = ExpGalaxy(PixPos(w//2, h//2), Flux(1000.),
-                    EllipseE(5., 0.5, 0.3))
+                    EllipseE(10., 0.5, 0.3))
 
     # Get the model
     tractor = Tractor([tim], [gal])
@@ -77,7 +77,7 @@ if __name__ == '__main__':
         [0.1, 0., 0., 0.1 ],
         [1.,  0., 0., 1.0 ],
         ])
-    var *= 16.
+    var *= 64.
     var = var.reshape((-1,2,2))
     # ~ arcsec -> degrees
     var /= 3600.**2
@@ -124,7 +124,17 @@ if __name__ == '__main__':
 
         # Plot the model as we're optimizing...
         mod = tractor.getModelImage(0)
+        chi = (tim.getImage() - mod) * tim.getInvError()
         plt.clf()
+        plt.subplot(1,2,1)
         plt.imshow(mod, interpolation='nearest', origin='lower')
+        plt.title('Model')
+        plt.subplot(1,2,2)
+        mx = np.abs(chi).max()
+        plt.imshow(chi, interpolation='nearest', origin='lower',
+                   vmin=-mx, vmax=mx)
+        plt.colorbar()
+        plt.title('Chi residuals')
+        plt.suptitle('MoG model after optimization step %i' % step)
         plt.savefig('mod-o%02i.png' % step)
         
