@@ -1,7 +1,11 @@
 from __future__ import print_function
 from tractor.galaxy import HoggGalaxy
-from tractor.utils import MogParams
+from tractor.utils import MogParams, ParamList
+from tractor.mixture_profiles import MixtureOfGaussians
 import numpy as np
+
+#################### First way -- expose the mixture-of-Gaussians directly,
+#################### allowing them to be fit in general.
 
 class MogGalaxy(HoggGalaxy):
     '''
@@ -37,11 +41,111 @@ class MyMogParams(MogParams):
         ss = [0.01]*K + [0.01]*K*2 + list((0.01 * vv).repeat(3))
         return list(self._getLiquidArray(ss))
 
+#################### (end of first way)
+
+#################### Second way -- fit the radial profile as MoG, but keep
+#################### the elliptical 2-d shape
+
+class EllipticalMogGalaxy(HoggGalaxy):
+    '''
+    A galaxy model that is still based on an elliptical radial profile
+    but allows the radial profile to be fit as a Mixture of Gaussians.
+    '''
+    @staticmethod
+    def getNamedParams():
+        return dict(pos=0, brightness=1, shape=2, profile=3)
+
+    nre = 5.
+
+    def getName(self):
+        return 'EllipticalMogGalaxy'
+
+    def getProfile(self):
+        return self.profile.getMog()
+
+    def getParamDerivatives(self, img, modelMask=None):
+        derivs = super(EllipticalMogGalaxy, self).getParamDerivatives(img, modelMask=modelMask)
+
+        pos0 = self.getPosition()
+        (px0,py0) = img.getWcs().positionToPixel(pos0, self)
+        counts = img.getPhotoCal().brightnessToCounts(self.brightness)
+        patch0 = self.getUnitFluxModelPatch(img, px0, py0,
+                                            modelMask=modelMask)
+        if patch0 is None:
+            return [None] * self.numberOfParams()
+
+        # derivatives wrt MoG componets... this is boilerplate-ish
+        psteps = self.profile.getStepSizes()
+        if not self.isParamFrozen('profile'):
+            pnames = self.profile.getParamNames()
+            oldvals = self.profile.getParams()
+            if counts == 0:
+                derivs.extend([None] * len(oldvals))
+                psteps = []
+            for i,pstep in enumerate(psteps):
+                oldval = self.profile.setParam(i, oldvals[i]+pstep)
+                patchx = self.getUnitFluxModelPatch(
+                    img, px0, py0, modelMask=modelMask)
+                self.profile.setParam(i, oldval)
+                if patchx is None:
+                    continue
+                dx = (patchx - patch0) * (counts / pstep)
+                dx.setName('d(%s)/d(%s)' % (self.dname, pnames[i]))
+                derivs.append(dx)
+        return derivs
+
+class MogProfile(ParamList):
+    def __init__(self, *args):
+        K = len(args) / 2
+        ## HACK -- internally, keep stddevs rather than variances (to avoid negatives?)
+        # OR work in log-variances?
+        args = np.array(args)
+        #args[K:] = np.sqrt(args[K:])
+        args[K:] = np.log10(args[K:])
+        super(MogProfile, self).__init__(*args)
+        self.K = self.numberOfParams() / 2
+        self._set_param_names(self.K)
+
+    def getMog(self):
+        p = self.getAllParams()
+        K = len(p) / 2
+        assert(K == self.K)
+        amps = np.array(p[:K])
+        # ??
+        amps /= np.sum(amps)
+        # log-variance
+        var = 10.**np.array(p[K:])
+
+        if hasattr(self, 'mog'):
+            assert(self.mog.K == K)
+            self.mog.amp[:] = amps
+            self.mog.var[:,0,0] = self.mog.var[:,1,1] = var
+        else:
+            vv = np.zeros((K,2,2))
+            vv[:,0,0] = vv[:,1,1] = var
+            self.mog = MixtureOfGaussians(amps, np.zeros((K,2)), vv)
+        return self.mog
+
+    def _set_param_names(self, K):
+        names = {}
+        for k in range(K):
+            names['amp%i' % k] = k
+            #names['var%i' % k] = k+K
+            names['logvar%i' % k] = k+K
+        self.addNamedParams(**names)
+
+    def getStepSizes(self):
+        '''Set step sizes when taking derivatives of the parameters of the mixture of Gaussians.'''
+        return [0.01]*self.K*2
+
+#################### (end of second way)
+
+    
 if __name__ == '__main__':
     h,w = 100,100
     from tractor.galaxy import ExpGalaxy
     from tractor import Image, GaussianMixturePSF, LinearPhotoCal
-    from tractor import PixPos, Flux, EllipseE, Tractor
+    from tractor import PixPos, Flux, EllipseE, Tractor, ModelMask
     import pylab as plt
 
     # Create a Tractor Image that works in pixel space (WCS not specified).
@@ -82,9 +186,27 @@ if __name__ == '__main__':
     # ~ arcsec -> degrees
     var /= 3600.**2
 
-    # Create the MoG galaxy object
-    moggal = MogGalaxy(gal.pos.copy(), gal.brightness.copy(),
-                       MyMogParams(amp, mean, var))
+    if False:
+        # Create the MoG galaxy object
+        moggal = MogGalaxy(gal.pos.copy(), gal.brightness.copy(),
+                           MyMogParams(amp, mean, var))
+        # Freeze the MoG means -- The overall mean is degenerate with
+        # galaxy position.
+        K = moggal.mog.mog.K
+        for i in range(K):
+            moggal.mog.freezeParam('meanx%i' % i)
+            moggal.mog.freezeParam('meany%i' % i)
+
+        # Freeze the galaxy brightness -- otherwise it's degenerate with MoG amplitudes.
+        moggal.freezeParam('brightness')
+
+    else:
+
+        moggal = EllipticalMogGalaxy(gal.pos.copy(), gal.brightness.copy(),
+                                     EllipseE(1., 0., 0.),
+                                     MogProfile(1.0, 1.0, 1.0,
+                                                1.0, 4.0, 9.0))
+
     # Create a Tractor object that will fit the "moggal" given its appearance in "tim".
     tractor = Tractor([tim], [moggal])
 
@@ -102,20 +224,27 @@ if __name__ == '__main__':
     # Don't fit any of the image calibration params
     tractor.freezeParam('images')
 
-    # Freeze the MoG means -- The overall mean is degenerate with
-    # galaxy position.
-    K = moggal.mog.mog.K
-    for i in range(K):
-        moggal.mog.freezeParam('meanx%i' % i)
-        moggal.mog.freezeParam('meany%i' % i)
-    # Freeze the galaxy brightness -- otherwise it's degenerate with MoG amplitudes.
-    moggal.freezeParam('brightness')
-    
+    # Plot the parameter derivatives
+    derivs = moggal.getParamDerivatives(tim, modelMask=ModelMask(0,0,w,h))
+    for i,p in enumerate(moggal.getParamNames()):
+        print('Param', p, 'derivative:', derivs[i])
+        if derivs[i] is None:
+            continue
+        plt.clf()
+        plt.imshow(derivs[i].patch, interpolation='nearest', origin='lower')
+        plt.title('MoG galaxy derivative for parameter %s' % p)
+        plt.savefig('deriv-%02i.png' % i)
+
+    # import sys
+    # import logging
+    # lvl = logging.DEBUG
+    # logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
+
     # Optimize the model.
-    for step in range(20):
+    for step in range(50):
         print('Tractor params:')
         tractor.printThawedParams()
-        dlnp,X,alpha = tractor.optimize()
+        dlnp,X,alpha = tractor.optimize(damp=1.)
         print('dlnp', dlnp)
         print('galaxy:', moggal)
         #print('Mog', moggal.mog.getParams())
