@@ -1134,7 +1134,7 @@ class MultiParams(BaseParams, NamedParams):
             vA.extend(v)
             pb.extend(b)
             mub.extend(m)
-            
+
             c0 += s.numberOfParams()
             r0 += listmax(r,-1) + 1
 
@@ -1181,7 +1181,7 @@ class MogParams(ParamList):
 
         MogParams(a0,a1,a2, mx0,my0,mx1,my1,mx2,my2,
                   vxx0,vyy0,vxy0, vxx1,vyy1,vxy1, vxx2,vyy2,vxy2)
-        
+
         amp:  np array (size K) of Gaussian amplitudes
         mean: np array (size K,2) of means
         var:  np array (size K,2,2) of variances
@@ -1208,6 +1208,13 @@ class MogParams(ParamList):
         # drop the ParamList storage
         del self.vals
         self._set_param_names(K)
+
+    def getLogPrior(self):
+        # No negative variances allowed!
+        if np.any(np.logical_or(self.mog.var[:,0,0] < 0.,
+                                self.mog.var[:,1,1] < 0.)):
+            return -np.inf
+        return 0.
 
     def _set_param_names(self, K):
         # ordering: A0, A1, ... Ak, mux0, muy0, mux1, muy1, mux2, muy2, ...
