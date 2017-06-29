@@ -676,6 +676,8 @@ class ParamList(GaussianPriorsMixin, NamedParams, BaseParams):
         return self.vals[i]
     def _getThings(self):
         return self.vals
+    def _setThings(self, vals):
+        self.vals = vals
     def _numberOfThings(self):
         return len(self.vals)
     
@@ -1163,3 +1165,102 @@ class NpArrayParams(ParamList):
     def __getstate__(self): return self.__dict__
     def __setstate__(self, d): self.__dict__.update(d)
 
+
+class MogParams(ParamList):
+    '''
+    A class that wraps a mixture_profile.MixtureOfGaussians class as a
+    Params object.
+
+    NOTE that this only works for 2-D Gaussians at present.
+    '''
+    def __init__(self, *args):
+        '''
+        MogParams(amp, mean, var)
+
+        or
+
+        MogParams(a0,a1,a2, mx0,my0,mx1,my1,mx2,my2,
+                  vxx0,vyy0,vxy0, vxx1,vyy1,vxy1, vxx2,vyy2,vxy2)
+        
+        amp:  np array (size K) of Gaussian amplitudes
+        mean: np array (size K,2) of means
+        var:  np array (size K,2,2) of variances
+        '''
+        from tractor import mixture_profiles as mp
+
+        if len(args) == 3:
+            amp, mean, var = args
+        else:
+            assert(len(args) % 6 == 0)
+            K = len(args) // 6
+            amp  = np.array(args[:K])
+            mean = np.array(args[K:3*K]).reshape((K,2))
+            args = args[3*K:]
+            var  = np.zeros((K,2,2))
+            var[:,0,0] = args[::3]
+            var[:,1,1] = args[1::3]
+            var[:,0,1] = var[:,1,0] = args[2::3]
+
+        self.mog = mp.MixtureOfGaussians(amp, mean, var)
+        K = self.mog.K
+        assert(self.mog.D == 2)
+        super(MogParams, self).__init__()
+        # drop the ParamList storage
+        del self.vals
+        self._set_param_names(K)
+
+    def _set_param_names(self, K):
+        # ordering: A0, A1, ... Ak, mux0, muy0, mux1, muy1, mux2, muy2, ...
+        #   var0xx,var0yy,var0xy, var1xx, var1yy, var1xy
+        names = {}
+        for k in range(K):
+            names['amp%i'%k] = k
+            names['meanx%i'%k] = K+(k*2)
+            names['meany%i'%k] = K+(k*2)+1
+            names['varxx%i'%k] = K*3 + (k*3)
+            names['varyy%i'%k] = K*3 + (k*3)+1
+            names['varxy%i'%k] = K*3 + (k*3)+2
+        # print 'Setting param names:', names
+        self.addNamedParams(**names)
+
+    def _numberOfThings(self):
+        K = self.mog.K
+        return K * (1 + 2 + 3)
+    def _getThings(self):
+        p = list(self.mog.amp) + list(self.mog.mean.ravel())
+        for v in self.mog.var:
+            p += (v[0,0], v[1,1], v[0,1])
+        return p
+    def _getThing(self, i):
+        return self._getThings()[i]
+    def _setThings(self, p):
+        K = self.mog.K
+        self.mog.amp = np.atleast_1d(p[:K])
+        pp = p[K:]
+        self.mog.mean = np.atleast_2d(pp[:K*2]).reshape(K,2)
+        pp = pp[K*2:]
+        self.mog.var[:,0,0] = pp[::3]
+        self.mog.var[:,1,1] = pp[1::3]
+        self.mog.var[:,0,1] = self.mog.var[:,1,0] = pp[2::3]
+    def _setThing(self, i, p):
+        K = self.mog.K
+        if i < K:
+            old = self.mog.amp[i]
+            self.mog.amp[i] = p
+            return old
+        i -= K
+        if i < K*2:
+            old = self.mog.mean.ravel()[i]
+            self.mog.mean.ravel()[i] = p
+            return old
+        i -= K*2
+        j = i // 3
+        k = i % 3
+        if k in [0,1]:
+            old = self.mog.var[j,k,k]
+            self.mog.var[j,k,k] = p
+            return old
+        old = self.mog.var[j,0,1]
+        self.mog.var[j,0,1] = p
+        self.mog.var[j,1,0] = p
+        return old

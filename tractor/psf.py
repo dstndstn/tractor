@@ -10,7 +10,7 @@ from .wcs import PixPos
 from .brightness import Flux
 from .engine import Tractor
 from .patch import Patch
-from .utils import BaseParams, ParamList, MultiParams
+from .utils import BaseParams, ParamList, MultiParams, MogParams
 from . import mixture_profiles as mp
 from . import ducks
 
@@ -205,7 +205,7 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         self.fftcache[sz] = rtn
         return rtn
 
-class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
+class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
     '''
     A PSF model that is a mixture of general 2-D Gaussians
     (characterized by amplitude, mean, covariance)
@@ -223,29 +223,11 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
         mean: np array (size K,2) of means
         var:  np array (size K,2,2) of variances
         '''
-        if len(args) == 3:
-            amp, mean, var = args
-        else:
-            assert(len(args) % 6 == 0)
-            K = len(args) // 6
-            amp  = np.array(args[:K])
-            mean = np.array(args[K:3*K]).reshape((K,2))
-            args = args[3*K:]
-            var  = np.zeros((K,2,2))
-            var[:,0,0] = args[::3]
-            var[:,1,1] = args[1::3]
-            var[:,0,1] = var[:,1,0] = args[2::3]
-
-        self.mog = mp.MixtureOfGaussians(amp, mean, var)
+        super(GaussianMixturePSF, self).__init__(*args)
         assert(self.mog.D == 2)
         self.radius = 25
-        super(GaussianMixturePSF, self).__init__()
-
-        del self.vals
-        
         K = self.mog.K
         self.stepsizes = [0.01]*K + [0.01]*(K*2) + [0.1]*(K*3)
-        self._set_param_names(K)
 
     def getShifted(self, x0, y0):
         # not spatially varying
@@ -253,20 +235,6 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
     def constantPsfAt(self, x, y):
         return self
     
-    def _set_param_names(self, K):
-        # ordering: A0, A1, ... Ak, mux0, muy0, mux1, muy1, mux2, muy2, ...
-        #   var0xx,var0yy,var0xy, var1xx, var1yy, var1xy
-        names = {}
-        for k in range(K):
-            names['amp%i'%k] = k
-            names['meanx%i'%k] = K+(k*2)
-            names['meany%i'%k] = K+(k*2)+1
-            names['varxx%i'%k] = K*3 + (k*3)
-            names['varyy%i'%k] = K*3 + (k*3)+1
-            names['varxy%i'%k] = K*3 + (k*3)+2
-        # print 'Setting param names:', names
-        self.addNamedParams(**names)
-
     def mogAt(self, x, y):
         return self
         
@@ -401,48 +369,6 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
             'GaussianMixturePSF: amps=' + str(tuple(self.mog.amp.ravel())) +
             ', means=' + str(tuple(self.mog.mean.ravel())) +
             ', var=' + str(tuple(self.mog.var.ravel())))
-
-    def _numberOfThings(self):
-        K = self.mog.K
-        return K * (1 + 2 + 3)
-    def _getThings(self):
-        p = list(self.mog.amp) + list(self.mog.mean.ravel())
-        for v in self.mog.var:
-            p += (v[0,0], v[1,1], v[0,1])
-        return p
-    def _getThing(self, i):
-        return self._getThings()[i]
-    def _setThings(self, p):
-        K = self.mog.K
-        self.mog.amp = np.atleast_1d(p[:K])
-        pp = p[K:]
-        self.mog.mean = np.atleast_2d(pp[:K*2]).reshape(K,2)
-        pp = pp[K*2:]
-        self.mog.var[:,0,0] = pp[::3]
-        self.mog.var[:,1,1] = pp[1::3]
-        self.mog.var[:,0,1] = self.mog.var[:,1,0] = pp[2::3]
-    def _setThing(self, i, p):
-        K = self.mog.K
-        if i < K:
-            old = self.mog.amp[i]
-            self.mog.amp[i] = p
-            return old
-        i -= K
-        if i < K*2:
-            old = self.mog.mean.ravel()[i]
-            self.mog.mean.ravel()[i] = p
-            return old
-        i -= K*2
-        j = i // 3
-        k = i % 3
-        if k in [0,1]:
-            old = self.mog.var[j,k,k]
-            self.mog.var[j,k,k] = p
-            return old
-        old = self.mog.var[j,0,1]
-        self.mog.var[j,0,1] = p
-        self.mog.var[j,1,0] = p
-        return old
 
     @staticmethod
     def fromStamp(stamp, N=3, P0=None, xy0=None, alpha=0.,
