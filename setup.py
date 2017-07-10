@@ -58,6 +58,14 @@ module_mix = Extension('tractor._mix',
 #extra_compile_args=['-O0','-g'],
 #extra_link_args=['-O0', '-g'],
 
+module_fourier = Extension('tractor._mp_fourier',
+                       sources = ['tractor/mp_fourier.i'],
+                       include_dirs = numpy_inc,
+                       extra_objects = [],
+                       undef_macros=['NDEBUG'],
+    )
+
+
 module_em = Extension('tractor._emfit',
                       sources = ['tractor/emfit.i' ],
                       include_dirs = numpy_inc,
@@ -76,8 +84,8 @@ class MyDistribution(Distribution):
 ## Distutils is so awkward to work with that THIS is the easiest way to add
 # an extra command-line arg!
 
-mods = [module_mix, module_em]
-pymods = ['tractor.mix', 'tractor.emfit']
+mods = [module_mix, module_em, module_fourier]
+pymods = ['tractor.mix', 'tractor.emfit', 'tractor.mp_fourier']
 key = '--with-ceres'
 if key in sys.argv:
     sys.argv.remove(key)

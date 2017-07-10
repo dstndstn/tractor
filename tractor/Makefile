@@ -14,11 +14,14 @@ mix: _mix.so mix.py
 emfit: _emfit.so emfit.py
 .PHONY: emfit
 
+PYTHON ?= python
+PYTHON_CONFIG ?= python-config
+
 mp_fourier.py mp_fourier_wrap.c: mp_fourier.i
 	swig -python -I. mp_fourier.i
 
 _mp_fourier.so: mp_fourier_wrap.c setup-mpf.py
-	python setup-mpf.py build --force --build-base build --build-platlib build/lib
+	$(PYTHON) setup-mpf.py build --force --build-base build --build-platlib build/lib
 	cp build/lib/_mp_fourier.so $@
 
 
@@ -30,7 +33,7 @@ _mp_fourier.so: mp_fourier_wrap.c setup-mpf.py
 # 	cp build/lib/_mix.so $@
 
 mix.py _mix.so: mix.i approx3.c gauss_masked.c setup-mix.py
-	python setup-mix.py build --force --build-base build --build-platlib build/lib
+	$(PYTHON) setup-mix.py build --force --build-base build --build-platlib build/lib
 	cp build/lib/_mix.so $@
 
 
@@ -43,16 +46,16 @@ mix.py _mix.so: mix.i approx3.c gauss_masked.c setup-mix.py
 
 # ugh, this doesn't work in py3 because the .so files have platform names in them...
 _emfit.so: emfit.i emfit2.c setup-emfit.py
-	python setup-emfit.py build --force --build-base build --build-platlib build/lib
+	$(PYTHON) setup-emfit.py build --force --build-base build --build-platlib build/lib
 	cp build/lib/_emfit.so $@
 
 
 
 
-NUMPY_INC := $(shell python -c "from __future__ import print_function; from numpy.distutils.misc_util import get_numpy_include_dirs as d; print(' '.join('-I'+x for x in d()))")
+NUMPY_INC := $(shell $(PYTHON) -c "from __future__ import print_function; from numpy.distutils.misc_util import get_numpy_include_dirs as d; print(' '.join('-I'+x for x in d()))")
 
-PYMOD_LIB ?= -L$(shell python-config --prefix)/lib $(shell python-config --libs)
-PYMOD_INC ?= $(shell python-config --includes)
+PYMOD_LIB ?= -L$(shell $(PYTHON_CONFIG) --prefix)/lib $(shell $(PYTHON_CONFIG) --libs)
+PYMOD_INC ?= $(shell $(PYTHON_CONFIG) --includes)
 
 EIGEN_INC ?= $(shell pkg-config --cflags eigen3)
 

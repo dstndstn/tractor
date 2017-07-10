@@ -1,5 +1,11 @@
 #include <Python.h>
 
+#if PY_MAJOR_VERSION >= 3
+#define IS_PY3K
+#define PyInt_FromLong PyLong_FromLong
+#define PyInt_AsLong   PyLong_AsLong
+#endif
+
 // http://docs.scipy.org/doc/numpy/reference/c-api.array.html#import_array
 #define PY_ARRAY_UNIQUE_SYMBOL tractorceres_ARRAY_API
 #define NO_IMPORT_ARRAY
@@ -253,7 +259,11 @@ bool ImageCostFunction::_Evaluate(double const* const* parameters,
      */
 
     // Call _tractor.setParams(_np_params)
+#if defined(IS_PY3K)
+    PyObject* setparams = PyUnicode_FromString("setParams");
+#else
     PyObject* setparams = PyString_FromString((char*)"setParams");
+#endif
     PyObject* ret = PyObject_CallMethodObjArgs(_tractor, setparams,
                                                _np_params, NULL);
     Py_DECREF(setparams);
