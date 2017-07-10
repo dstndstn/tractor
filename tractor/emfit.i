@@ -3,6 +3,7 @@
 %include <typemaps.i>
 
 %{
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/arrayobject.h>
 #include <math.h>
 #include <assert.h>
@@ -28,10 +29,10 @@
 
 // _reg: Inverse-Wishart prior on variance (with hard-coded
 // variance prior I), with strength alpha.
-static int em_fit_1d_samples_reg(PyObject* np_x,
-                                 PyObject* np_amp,
-                                 PyObject* np_mean,
-                                 PyObject* np_var,
+static int em_fit_1d_samples_reg(PyObject* po_x,
+                                 PyObject* po_amp,
+                                 PyObject* po_mean,
+                                 PyObject* po_var,
                                  double alpha,
                                  int steps) {
     npy_intp i, N, K, k;
@@ -42,9 +43,11 @@ static int em_fit_1d_samples_reg(PyObject* np_x,
     double tpd;
     int result;
 
-    PyArray_Descr* dtype = PyArray_DescrFromType(PyArray_DOUBLE);
-    int req = NPY_C_CONTIGUOUS | NPY_ALIGNED;
-    int reqout = req | NPY_WRITEABLE | NPY_UPDATEIFCOPY;
+    PyArray_Descr* dtype = PyArray_DescrFromType(NPY_DOUBLE);
+    int req = NPY_ARRAY_C_CONTIGUOUS | NPY_ARRAY_ALIGNED;
+    int reqout = req | NPY_ARRAY_WRITEABLE | NPY_ARRAY_UPDATEIFCOPY;
+
+    PyArrayObject *np_x, *np_amp, *np_mean, *np_var;
 
     double* amp;
     double* mean;
@@ -54,14 +57,14 @@ static int em_fit_1d_samples_reg(PyObject* np_x,
     tpd = pow(2.*M_PI, D);
 
     Py_INCREF(dtype);
-    np_x = PyArray_FromAny(np_x, dtype, 1, 1, req, NULL);
+    np_x = (PyArrayObject*)PyArray_FromAny(po_x, dtype, 1, 1, req, NULL);
     if (!np_x) {
         ERR("x wasn't the type expected");
         Py_DECREF(dtype);
         return -1;
     }
     Py_INCREF(dtype);
-    np_amp = PyArray_FromAny(np_amp, dtype, 1, 1, reqout, NULL);
+    np_amp = (PyArrayObject*)PyArray_FromAny(po_amp, dtype, 1, 1, reqout, NULL);
     if (!np_amp) {
         ERR("amp wasn't the type expected");
         Py_DECREF(np_x);
@@ -69,7 +72,7 @@ static int em_fit_1d_samples_reg(PyObject* np_x,
         return -1;
     }
     Py_INCREF(dtype);
-    np_mean = PyArray_FromAny(np_mean, dtype, 1, 1, reqout, NULL);
+    np_mean = (PyArrayObject*)PyArray_FromAny(po_mean, dtype, 1, 1, reqout, NULL);
     if (!np_mean) {
         ERR("mean wasn't the type expected");
         Py_DECREF(np_x);
@@ -78,7 +81,7 @@ static int em_fit_1d_samples_reg(PyObject* np_x,
         return -1;
     }
     Py_INCREF(dtype);
-    np_var = PyArray_FromAny(np_var, dtype, 1, 1, reqout, NULL);
+    np_var = (PyArrayObject*)PyArray_FromAny(po_var, dtype, 1, 1, reqout, NULL);
     if (!np_var) {
         ERR("var wasn't the type expected");
         Py_DECREF(np_x);
@@ -243,10 +246,10 @@ static int em_fit_1d_samples(PyObject* np_x,
 
 // _reg: Inverse-Wishart prior on variance (with hard-coded
 // variance prior I), with strength alpha.
-static int em_fit_2d_reg(PyObject* np_img, int x0, int y0,
-                         PyObject* np_amp,
-                         PyObject* np_mean,
-                         PyObject* np_var,
+static int em_fit_2d_reg(PyObject* po_img, int x0, int y0,
+                         PyObject* po_amp,
+                         PyObject* po_mean,
+                         PyObject* po_var,
                          double alpha,
                          int steps) {
     npy_intp i, N, K, k;
@@ -259,9 +262,11 @@ static int em_fit_2d_reg(PyObject* np_img, int x0, int y0,
     double tpd;
     int result;
 
-    PyArray_Descr* dtype = PyArray_DescrFromType(PyArray_DOUBLE);
-    int req = NPY_C_CONTIGUOUS | NPY_ALIGNED;
-    int reqout = req | NPY_WRITEABLE | NPY_UPDATEIFCOPY;
+    PyArray_Descr* dtype = PyArray_DescrFromType(NPY_DOUBLE);
+    int req = NPY_ARRAY_C_CONTIGUOUS | NPY_ARRAY_ALIGNED;
+    int reqout = req | NPY_ARRAY_WRITEABLE | NPY_ARRAY_UPDATEIFCOPY;
+
+    PyArrayObject *np_img, *np_amp, *np_mean, *np_var;
 
     double* amp;
     double* mean;
@@ -271,14 +276,14 @@ static int em_fit_2d_reg(PyObject* np_img, int x0, int y0,
     tpd = pow(2.*M_PI, D);
 
     Py_INCREF(dtype);
-    np_img = PyArray_FromAny(np_img, dtype, 2, 2, req, NULL);
+    np_img = (PyArrayObject*)PyArray_FromAny(po_img, dtype, 2, 2, req, NULL);
     if (!np_img) {
         ERR("img wasn't the type expected");
         Py_DECREF(dtype);
         return -1;
     }
     Py_INCREF(dtype);
-    np_amp = PyArray_FromAny(np_amp, dtype, 1, 1, reqout, NULL);
+    np_amp = (PyArrayObject*)PyArray_FromAny(po_amp, dtype, 1, 1, reqout, NULL);
     if (!np_amp) {
         ERR("amp wasn't the type expected");
         Py_DECREF(np_img);
@@ -286,7 +291,7 @@ static int em_fit_2d_reg(PyObject* np_img, int x0, int y0,
         return -1;
     }
     Py_INCREF(dtype);
-    np_mean = PyArray_FromAny(np_mean, dtype, 2, 2, reqout, NULL);
+    np_mean = (PyArrayObject*)PyArray_FromAny(po_mean, dtype, 2, 2, reqout, NULL);
     if (!np_mean) {
         ERR("mean wasn't the type expected");
         Py_DECREF(np_img);
@@ -295,7 +300,7 @@ static int em_fit_2d_reg(PyObject* np_img, int x0, int y0,
         return -1;
     }
     Py_INCREF(dtype);
-    np_var = PyArray_FromAny(np_var, dtype, 3, 3, reqout, NULL);
+    np_var = (PyArrayObject*)PyArray_FromAny(po_var, dtype, 3, 3, reqout, NULL);
     if (!np_var) {
         ERR("var wasn't the type expected");
         Py_DECREF(np_img);

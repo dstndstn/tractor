@@ -58,7 +58,8 @@ class ImageCostFunction : public CostFunction {
  public:
     virtual ~ImageCostFunction();
 
-    ImageCostFunction(PyObject* tractor, int imagei, int nparams, PyObject* np_params);
+    ImageCostFunction(PyObject* tractor, int imagei, int nparams,
+                      PyArrayObject* np_params);
 
     virtual bool Evaluate(double const* const* parameters,
                           double* residuals,
@@ -80,5 +81,5 @@ class ImageCostFunction : public CostFunction {
     int _nparams;
     int _W;
     int _H;
-    PyObject* _np_params;
+    PyArrayObject* _np_params;
 };

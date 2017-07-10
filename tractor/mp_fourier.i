@@ -2,6 +2,7 @@
 
 %{
 #define _GNU_SOURCE 1
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/arrayobject.h>
 #include <math.h>
 #include <assert.h>
@@ -19,11 +20,11 @@
 #endif
 
 static PyObject* mixture_profile_fourier_transform(
-    PyObject* np_amps,
-    PyObject* np_means,
-    PyObject* np_vars,
-    PyObject* np_v,
-    PyObject* np_w
+    PyObject* po_amps,
+    PyObject* po_means,
+    PyObject* po_vars,
+    PyObject* po_v,
+    PyObject* po_w
     ) {
 
     npy_intp K, NW,NV;
@@ -34,13 +35,21 @@ static PyObject* mixture_profile_fourier_transform(
     double* f;
     npy_intp dims[2];
 
-    if (!PyArray_Check(np_amps) || !PyArray_Check(np_means) ||
-        !PyArray_Check(np_vars) || !PyArray_Check(np_v) ||
-        !PyArray_Check(np_w)) {
+    PyArrayObject *np_amps, *np_means, *np_vars, *np_v, *np_w;
+    
+    if (!PyArray_Check(po_amps) || !PyArray_Check(po_means) ||
+        !PyArray_Check(po_vars) || !PyArray_Check(po_v) ||
+        !PyArray_Check(po_w)) {
         PyErr_SetString(PyExc_ValueError, "Expected numpy arrays");
         return NULL;
     }
 
+    np_amps = (PyArrayObject*)po_amps;
+    np_means = (PyArrayObject*)po_means;
+    np_vars = (PyArrayObject*)po_vars;
+    np_v = (PyArrayObject*)po_v;
+    np_w = (PyArrayObject*)po_w;
+    
     if ((PyArray_TYPE(np_amps) != NPY_DOUBLE) ||
         (PyArray_TYPE(np_means ) != NPY_DOUBLE) ||
         (PyArray_TYPE(np_vars) != NPY_DOUBLE) ||
@@ -109,7 +118,7 @@ static PyObject* mixture_profile_fourier_transform(
         np_F = PyArray_SimpleNew(2, dims, NPY_DOUBLE);
     else
         np_F = PyArray_SimpleNew(2, dims, NPY_COMPLEX128);
-    f = PyArray_DATA(np_F);
+    f = PyArray_DATA((PyArrayObject*)np_F);
     amps = PyArray_DATA(np_amps);
     vars = PyArray_DATA(np_vars);
     vv = PyArray_DATA(np_v);

@@ -9,6 +9,7 @@
 // http://docs.scipy.org/doc/numpy/reference/c-api.array.html#import_array
 #define PY_ARRAY_UNIQUE_SYMBOL tractorceres_ARRAY_API
 #define NO_IMPORT_ARRAY
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/arrayobject.h>
 
 #include <stdio.h>
@@ -183,7 +184,7 @@ template class ForcedPhotCostFunction<double>;
 
 ImageCostFunction::ImageCostFunction(PyObject* tractor,
                                      int imagei, int nparams,
-                                     PyObject* np_params) :
+                                     PyArrayObject* np_params) :
     _tractor(tractor), _imagei(imagei), _image(NULL),
     _npix(0), _nparams(nparams), _W(0), _H(0), _np_params(np_params) {
 
@@ -273,10 +274,10 @@ bool ImageCostFunction::_Evaluate(double const* const* parameters,
     }
 
     // Get residuals (chi image)
-    PyObject* np_chi;
+    PyArrayObject* np_chi;
     //printf("Calling getChiImage(%i)\n", _imagei);
-    np_chi = PyObject_CallMethod(_tractor, (char*)"getChiImage",
-                                 (char*)"i", _imagei);
+    np_chi = (PyArrayObject*)PyObject_CallMethod(
+        _tractor, (char*)"getChiImage", (char*)"i", _imagei);
     if (!np_chi) {
         printf("getChiImage() failed\n");
         return false;
@@ -341,7 +342,7 @@ bool ImageCostFunction::_Evaluate(double const* const* parameters,
 
         int x0 = PyInt_AsLong(PyTuple_GetItem(deriv, 1));
         int y0 = PyInt_AsLong(PyTuple_GetItem(deriv, 2));
-        PyObject* np_deriv = PyTuple_GetItem(deriv, 3);
+        PyArrayObject* np_deriv = (PyArrayObject*)PyTuple_GetItem(deriv, 3);
         if (!PyArray_Check(np_deriv)) {
             printf("Expected third element of allderivs element %i to be an array\n",
 		   ideriv);

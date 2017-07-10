@@ -4,6 +4,7 @@
 
 %{
 #define PY_ARRAY_UNIQUE_SYMBOL tractorceres_ARRAY_API
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/arrayobject.h>
 
 #include <Python.h>
@@ -52,13 +53,13 @@ static PyObject* real_ceres_forced_phot(PyObject* blocks,
        sources: [ (index, x0, y0, np_img), ... ]
      */
     npy_intp Nblocks;
-	assert(PyList_Check(blocks));
+    assert(PyList_Check(blocks));
     Nblocks = PyList_Size(blocks);
     //printf("N blocks: %i\n", (int)Nblocks);
     assert(PyArray_Check(np_fluxes));
     assert(PyArray_TYPE(np_fluxes) == NPY_DOUBLE);
     int Nfluxes = (int)PyArray_Size(np_fluxes);
-    double* realfluxes = (double*)PyArray_DATA(np_fluxes);
+    double* realfluxes = (double*)PyArray_DATA((PyArrayObject*)np_fluxes);
     T* mod0data;
     Problem problem;
     int totaldatapix = 0;
@@ -77,7 +78,7 @@ static PyObject* real_ceres_forced_phot(PyObject* blocks,
         PyObject* srclist;
         PyObject* obj;
         int x0, y0;
-        PyObject *img, *mod0, *ierr;
+        PyArrayObject *img, *mod0, *ierr;
         int w, h;
         int Nsources;
 
@@ -92,12 +93,12 @@ static PyObject* real_ceres_forced_phot(PyObject* blocks,
         assert(PyTuple_Size(obj) == 5);
         x0 = PyInt_AsLong(PyTuple_GET_ITEM(obj, 0));
         y0 = PyInt_AsLong(PyTuple_GET_ITEM(obj, 1));
-        img   = PyTuple_GET_ITEM(obj, 2);
+        img = (PyArrayObject*)PyTuple_GET_ITEM(obj, 2);
         assert(PyArray_Check(img));
         h = PyArray_DIM(img, 0);
         w = PyArray_DIM(img, 1);
-        mod0  = PyTuple_GET_ITEM(obj, 3);
-        if (mod0 == Py_None) {
+        mod0 = (PyArrayObject*)PyTuple_GET_ITEM(obj, 3);
+        if ((PyObject*)mod0 == Py_None) {
             mod0data = NULL;
         } else {
             assert(PyArray_Check(mod0));
@@ -106,7 +107,7 @@ static PyObject* real_ceres_forced_phot(PyObject* blocks,
             assert(PyArray_TYPE(mod0) == npy_type);
             mod0data = (T*)PyArray_DATA(mod0);
         }
-        ierr  = PyTuple_GET_ITEM(obj, 4);
+        ierr = (PyArrayObject*)PyTuple_GET_ITEM(obj, 4);
         assert(PyArray_Check(ierr));
         assert(PyArray_DIM(ierr, 0) == h);
         assert(PyArray_DIM(ierr, 1) == w);
@@ -124,7 +125,7 @@ static PyObject* real_ceres_forced_phot(PyObject* blocks,
         int nderivpix = 0;
         for (int j=0; j<Nsources; j++) {
             int index, uh, uw;
-            PyObject* uimg;
+            PyArrayObject* uimg;
             obj = PyList_GET_ITEM(srclist, j);
             assert(PyTuple_Check(obj));
             assert(PyTuple_Size(obj) == 4);
@@ -136,7 +137,7 @@ static PyObject* real_ceres_forced_phot(PyObject* blocks,
             assert(index < Nfluxes);
             x0 = PyInt_AsLong(PyTuple_GET_ITEM(obj, 1));
             y0 = PyInt_AsLong(PyTuple_GET_ITEM(obj, 2));
-            uimg = PyTuple_GET_ITEM(obj, 3);
+            uimg = (PyArrayObject*)PyTuple_GET_ITEM(obj, 3);
             assert(PyArray_Check(uimg));
             uh = PyArray_DIM(uimg, 0);
             uw = PyArray_DIM(uimg, 1);
@@ -291,8 +292,8 @@ static PyObject* ceres_forced_phot(PyObject* blocks,
     obj = PyTuple_GET_ITEM(block, 0);
     assert(PyTuple_Check(obj));
     assert(PyTuple_Size(obj) == 5);
-    PyObject* img;
-    img   = PyTuple_GET_ITEM(obj, 2);
+    PyArrayObject* img;
+    img = (PyArrayObject*)PyTuple_GET_ITEM(obj, 2);
     assert(PyArray_Check(img));
 
     if (PyArray_TYPE(img) == NPY_FLOAT) {
@@ -355,7 +356,8 @@ protected:
 
 
 static PyObject* ceres_opt(PyObject* tractor, int nims,
-                           PyObject* np_params, PyObject* np_variance,
+                           PyArrayObject* np_params,
+                           PyArrayObject* np_variance,
                            int scale_columns,
                            int numeric,
                            float numeric_stepsize,
@@ -396,10 +398,10 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
         printf("ceres_opt: wrong type for params variable\n");
         return NULL;
     }
-    nparams = (int)PyArray_Size(np_params);
+    nparams = (int)PyArray_SIZE(np_params);
     params = (double*)PyArray_DATA(np_params);
 
-    get_variance = (np_variance != Py_None);
+    get_variance = ((PyObject*)np_variance != Py_None);
 
     //printf("ceres_opt, nims %i, nparams %i, get_variance %i\n",
     //       nims, nparams, get_variance);
@@ -580,7 +582,7 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
             printf("ceres_opt: wrong type for variance variable\n");
             return NULL;
         }
-        if (PyArray_Size(np_variance) != PyArray_Size(np_params)) {
+        if (PyArray_SIZE(np_variance) != PyArray_SIZE(np_params)) {
             printf("ceres_opt: wrong size for variance variable\n");
             return NULL;
         }
