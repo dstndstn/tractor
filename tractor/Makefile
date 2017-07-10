@@ -1,55 +1,32 @@
 all: mix ceres mpf
 
-ceres: _ceres.so ceres.py
+PYTHON ?= python
+PYTHON_CONFIG ?= python-config
+PYTHON_SO_EXT ?= $(shell $(PYTHON) -c "from distutils import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX') or sysconfig.get_config_var('SO'))")
+
+ceres: _ceres$(PYTHON_SO_EXT) ceres.py
 .PHONY: ceres
 
 mpf: mp_fourier
 .PHONY: mpf
-mp_fourier: _mp_fourier.so mp_fourier.py
+
+mp_fourier: _mp_fourier$(PYTHON_SO_EXT) mp_fourier.py
 .PHONY: mp_fourier
 
-mix: _mix.so mix.py
+mix: _mix$(PYTHON_SO_EXT) mix.py
 .PHONY: mix
 
-emfit: _emfit.so emfit.py
+emfit: _emfit$(PYTHON_SO_EXT) emfit.py
 .PHONY: emfit
 
-PYTHON ?= python
-PYTHON_CONFIG ?= python-config
+_mp_fourier$(PYTHON_SO_EXT): mp_fourier.i setup-mpf.py
+	$(PYTHON) setup-mpf.py build_ext --inplace
 
-mp_fourier.py mp_fourier_wrap.c: mp_fourier.i
-	swig -python -I. mp_fourier.i
+mix.py _mix$(PYTHON_SO_EXT): mix.i approx3.c gauss_masked.c setup-mix.py
+	$(PYTHON) setup-mix.py build_ext --inplace
 
-_mp_fourier.so: mp_fourier_wrap.c setup-mpf.py
-	$(PYTHON) setup-mpf.py build --force --build-base build --build-platlib build/lib
-	cp build/lib/_mp_fourier.so $@
-
-
-# mix.py mix_wrap.c: mix.i
-# 	swig -python -I. mix.i
-# 
-# _mix.so: mix_wrap.c setup-mix.py
-# 	python setup-mix.py build --force --build-base build --build-platlib build/lib
-# 	cp build/lib/_mix.so $@
-
-mix.py _mix.so: mix.i approx3.c gauss_masked.c setup-mix.py
-	$(PYTHON) setup-mix.py build --force --build-base build --build-platlib build/lib
-	cp build/lib/_mix.so $@
-
-
-# emfit.py emfit_wrap.c: emfit.i
-# 	swig -python -I. emfit.i
-# 
-# _emfit.so: emfit_wrap.c setup-emfit.py
-# 	python setup-emfit.py build --force --build-base build --build-platlib build/lib
-# 	cp build/lib/_emfit.so $@
-
-# ugh, this doesn't work in py3 because the .so files have platform names in them...
-_emfit.so: emfit.i emfit2.c setup-emfit.py
-	$(PYTHON) setup-emfit.py build --force --build-base build --build-platlib build/lib
-	cp build/lib/_emfit.so $@
-
-
+_emfit$(PYTHON_SO_EXT): emfit.i emfit2.c setup-emfit.py
+	$(PYTHON) setup-emfit.py build_ext --inplace
 
 
 NUMPY_INC := $(shell $(PYTHON) -c "from __future__ import print_function; from numpy.distutils.misc_util import get_numpy_include_dirs as d; print(' '.join('-I'+x for x in d()))")
@@ -153,9 +130,8 @@ CXXLINKFLAGS ?=
 
 CERES_EXTRA_LIB ?=
 
-_ceres.so: ceres.i ceres-tractor.h ceres-tractor.cc
+_ceres$(PYTHON_SO_EXT): ceres.i ceres-tractor.h ceres-tractor.cc
 	swig -python -c++ $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $<
 	g++ $(CXXFLAGS) -c ceres_wrap.cxx $(PYMOD_INC) $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $(GLOG_INC) $(GFLAGS_INC)
 	g++ $(CXXFLAGS) -c ceres-tractor.cc $(PYMOD_INC) $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $(GLOG_INC) $(GFLAGS_INC)
-	g++ $(CXXFLAGS) $(CXXLINKFLAGS) -o _ceres.so -shared ceres_wrap.o ceres-tractor.o $(CERES_LIB) $(PYMOD_LIB) $(CERES_EXTRA_LIB)
-
+	g++ $(CXXFLAGS) $(CXXLINKFLAGS) -o $@ -shared ceres_wrap.o ceres-tractor.o $(CERES_LIB) $(PYMOD_LIB) $(CERES_EXTRA_LIB)

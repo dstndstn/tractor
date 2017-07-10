@@ -3,7 +3,6 @@ from numpy.distutils.misc_util import get_numpy_include_dirs
 
 numpy_inc = get_numpy_include_dirs()
 
-#sources = ['emfit_wrap.c' ],
 c_swig_module = Extension('_emfit',
                           sources = ['emfit.i'],
                           include_dirs = numpy_inc,

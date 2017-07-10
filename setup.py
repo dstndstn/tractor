@@ -65,7 +65,6 @@ module_fourier = Extension('tractor._mp_fourier',
                        undef_macros=['NDEBUG'],
     )
 
-
 module_em = Extension('tractor._emfit',
                       sources = ['tractor/emfit.i' ],
                       include_dirs = numpy_inc,

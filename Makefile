@@ -48,6 +48,10 @@ _callgrind.so: callgrind.i
 refcnt: _refcnt.so refcnt.py
 .PHONY: refcnt
 
+PYTHON ?= python
+
+PYTHON_SO_EXT ?= $(shell $(PYTHON) -c "from distutils import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX') or sysconfig.get_config_var('SO'))")
+
 INSTALL_DIR ?= /usr/local/tractor
 
 PY_INSTALL_DIR ?= $(INSTALL_DIR)/lib/python
@@ -61,14 +65,16 @@ TRACTOR_INSTALL := __init__.py basics.py brightness.py cache.py \
 	sdss.py sersic.py sfd.py shifted.py sky.py source_extractor.py \
 	splinesky.py tractortime.py utils.py wcs.py \
 	optimize.py lsqr_optimizer.py ceres_optimizer.py \
-	mix.py _mix.so emfit.py _emfit.so mp_fourier.py _mp_fourier.so
+	mix.py _mix$(PYTHON_SO_EXT) \
+	emfit.py _emfit$(PYTHON_SO_EXT) \
+	mp_fourier.py _mp_fourier$(PYTHON_SO_EXT)
 
 WISE_INSTALL_DIR := $(PY_INSTALL_DIR)/wise
 WISE_INSTALL := __init__.py allwisecat.py forcedphot.py unwise.py wise_psf.py \
 	wisecat.py \
 	allsky-atlas.fits wise-psf-avg.fits
 
-CERES_INSTALL := ceres.py _ceres.so
+CERES_INSTALL := ceres.py _ceres$(PYTHON_SO_EXT)
 
 install:
 	-($(MAKE) ceres && $(MAKE) install-ceres)
