@@ -3,6 +3,7 @@
 %include <typemaps.i>
 
 %{
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/arrayobject.h>
 #include <math.h>
 #include <assert.h>
@@ -154,41 +155,41 @@ static int get_np(PyObject* ob_amp,
                   PyObject* ob_mask,
                   int NX, int NY,
                   int* K,
-                  PyObject **np_amp,
-                  PyObject **np_mean,
-                  PyObject **np_var,
-                  PyObject **np_result,
-                  PyObject **np_xderiv,
-                  PyObject **np_yderiv,
-                  PyObject **np_mask,
+                  PyArrayObject **np_amp,
+                  PyArrayObject **np_mean,
+                  PyArrayObject **np_var,
+                  PyArrayObject **np_result,
+                  PyArrayObject **np_xderiv,
+                  PyArrayObject **np_yderiv,
+                  PyArrayObject **np_mask,
                   PyArray_Descr* dtype) {
     PyArray_Descr* btype = NULL;
-    int req = NPY_C_CONTIGUOUS | NPY_ALIGNED;
-    int reqout = req | NPY_WRITEABLE | NPY_UPDATEIFCOPY;
+    int req = NPY_ARRAY_C_CONTIGUOUS | NPY_ARRAY_ALIGNED;
+    int reqout = req | NPY_ARRAY_WRITEABLE | NPY_ARRAY_UPDATEIFCOPY;
     const int D = 2;
     if (!dtype)
-        dtype = PyArray_DescrFromType(PyArray_DOUBLE);
+        dtype = PyArray_DescrFromType(NPY_DOUBLE);
 
     Py_INCREF(dtype);
     Py_INCREF(dtype);
     Py_INCREF(dtype);
     Py_INCREF(dtype);
-    *np_amp = PyArray_FromAny(ob_amp, dtype, 1, 1, req, NULL);
-    *np_mean = PyArray_FromAny(ob_mean, dtype, 2, 2, req, NULL);
-    *np_var = PyArray_FromAny(ob_var, dtype, 3, 3, req, NULL);
-    *np_result = PyArray_FromAny(ob_result, dtype, 2, 2, reqout, NULL);
+    *np_amp    = (PyArrayObject*)PyArray_FromAny(ob_amp,    dtype, 1, 1, req, NULL);
+    *np_mean   = (PyArrayObject*)PyArray_FromAny(ob_mean,   dtype, 2, 2, req, NULL);
+    *np_var    = (PyArrayObject*)PyArray_FromAny(ob_var,    dtype, 3, 3, req, NULL);
+    *np_result = (PyArrayObject*)PyArray_FromAny(ob_result, dtype, 2, 2, reqout, NULL);
     if (ob_xderiv != Py_None) {
         Py_INCREF(dtype);
-        *np_xderiv = PyArray_FromAny(ob_xderiv, dtype, 2, 2, reqout, NULL);
+        *np_xderiv = (PyArrayObject*)PyArray_FromAny(ob_xderiv, dtype, 2, 2, reqout, NULL);
     }
     if (ob_yderiv != Py_None) {
         Py_INCREF(dtype);
-        *np_yderiv = PyArray_FromAny(ob_yderiv, dtype, 2, 2, reqout, NULL);
+        *np_yderiv = (PyArrayObject*)PyArray_FromAny(ob_yderiv, dtype, 2, 2, reqout, NULL);
     }
     if (ob_mask && ob_mask != Py_None) {
-        btype = PyArray_DescrFromType(PyArray_BOOL);
+        btype = PyArray_DescrFromType(NPY_BOOL);
         Py_INCREF(btype);
-        *np_mask = PyArray_FromAny(ob_mask, btype, 2, 2, req, NULL);
+        *np_mask = (PyArrayObject*)PyArray_FromAny(ob_mask, btype, 2, 2, req, NULL);
         Py_CLEAR(btype);
     }
     Py_DECREF(dtype);
@@ -299,11 +300,11 @@ static int c_gauss_2d(PyObject* ob_pos, PyObject* ob_amp,
     int i, N, d, K, k;
     const int D = 2;
     double *pos, *amp, *mean, *var, *result;
-    PyArray_Descr* dtype = PyArray_DescrFromType(PyArray_DOUBLE);
-    int req = NPY_C_CONTIGUOUS | NPY_ALIGNED;
-    int reqout = req | NPY_WRITEABLE | NPY_UPDATEIFCOPY;
+    PyArray_Descr* dtype = PyArray_DescrFromType(NPY_DOUBLE);
+    int req = NPY_ARRAY_C_CONTIGUOUS | NPY_ARRAY_ALIGNED;
+    int reqout = req | NPY_ARRAY_WRITEABLE | NPY_ARRAY_UPDATEIFCOPY;
     double tpd;
-    PyObject *np_pos=NULL, *np_amp=NULL, *np_mean=NULL, *np_var=NULL, *np_result=NULL;
+    PyArrayObject *np_pos=NULL, *np_amp=NULL, *np_mean=NULL, *np_var=NULL, *np_result=NULL;
     double *scale=NULL, *ivar=NULL;
     int rtn = -1;
 
@@ -314,11 +315,11 @@ static int c_gauss_2d(PyObject* ob_pos, PyObject* ob_amp,
     Py_INCREF(dtype);
     Py_INCREF(dtype);
     Py_INCREF(dtype);
-    np_pos = PyArray_FromAny(ob_pos, dtype, 2, 2, req, NULL);
-    np_amp = PyArray_FromAny(ob_amp, dtype, 1, 1, req, NULL);
-    np_mean = PyArray_FromAny(ob_mean, dtype, 2, 2, req, NULL);
-    np_var = PyArray_FromAny(ob_var, dtype, 3, 3, req, NULL);
-    np_result = PyArray_FromAny(ob_result, dtype, 1, 1, reqout, NULL);
+    np_pos = (PyArrayObject*)PyArray_FromAny(ob_pos, dtype, 2, 2, req, NULL);
+    np_amp = (PyArrayObject*)PyArray_FromAny(ob_amp, dtype, 1, 1, req, NULL);
+    np_mean = (PyArrayObject*)PyArray_FromAny(ob_mean, dtype, 2, 2, req, NULL);
+    np_var = (PyArrayObject*)PyArray_FromAny(ob_var, dtype, 3, 3, req, NULL);
+    np_result = (PyArrayObject*)PyArray_FromAny(ob_result, dtype, 1, 1, reqout, NULL);
     Py_CLEAR(dtype);
 
     if (!(np_pos && np_amp && np_mean && np_var && np_result)) {
@@ -428,7 +429,7 @@ static int c_gauss_2d_grid(int x0, int x1, int y0, int y1, double fx, double fy,
     const int D = 2;
     double *amp, *mean, *var, *result;
     double tpd;
-    PyObject *np_amp=NULL, *np_mean=NULL, *np_var=NULL, *np_result=NULL;
+    PyArrayObject *np_amp=NULL, *np_mean=NULL, *np_var=NULL, *np_result=NULL;
     int rtn = -1;
     int NX = x1 - x0;
     int NY = y1 - y0;
@@ -503,7 +504,7 @@ static int c_gauss_2d_approx(int x0, int x1, int y0, int y1,
     const int D=2;
     int K, k;
     int rtn = -1;
-    PyObject *np_amp=NULL, *np_mean=NULL, *np_var=NULL, *np_result=NULL;
+    PyArrayObject *np_amp=NULL, *np_mean=NULL, *np_var=NULL, *np_result=NULL;
     double tpd;
     int W,H;
     W = x1 - x0;
@@ -625,7 +626,7 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
     const int D=2;
     int K, k;
     int rtn = -1;
-    PyObject *np_amp=NULL, *np_mean=NULL, *np_var=NULL, *np_result=NULL;
+    PyArrayObject *np_amp=NULL, *np_mean=NULL, *np_var=NULL, *np_result=NULL;
     double tpd;
     int W,H;
     double *II = NULL;

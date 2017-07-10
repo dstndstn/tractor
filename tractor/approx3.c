@@ -38,8 +38,7 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
     const int D=2;
     int K, k;
     int rtn = -1;
-    PyObject *np_amp=NULL, *np_mean=NULL, *np_var=NULL, *np_result=NULL;
-    PyObject *np_xderiv=NULL, *np_yderiv=NULL;
+    PyArrayObject *np_amp=NULL, *np_mean=NULL, *np_var=NULL, *np_result=NULL, *np_xderiv=NULL, *np_yderiv=NULL;
     double tpd;
     int W,H;
     int R;

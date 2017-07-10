@@ -26,12 +26,12 @@ static int c_gauss_2d_masked(int x0, int y0, int W, int H,
     uint8_t* mask=NULL;
     const int D=2;
     int K, k;
-    PyObject *np_amp=NULL, *np_mean=NULL, *np_var=NULL, *np_result=NULL;
-    PyObject *np_xderiv=NULL, *np_yderiv=NULL, *np_mask=NULL;
+    PyArrayObject *np_amp=NULL, *np_mean=NULL, *np_var=NULL, *np_result=NULL,
+        *np_xderiv=NULL, *np_yderiv=NULL, *np_mask=NULL;
     float tpd;
     float *pxd = NULL, *pyd = NULL;
     int rtn = -1;
-    PyArray_Descr* ftype = PyArray_DescrFromType(PyArray_FLOAT32);
+    PyArray_Descr* ftype = PyArray_DescrFromType(NPY_FLOAT32);
 
     tpd = pow(2.*M_PI, D);
 
