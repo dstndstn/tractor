@@ -170,17 +170,26 @@ class PsfExModel(object):
             ims = T.psf_mask[0]
             #print('Got', ims.shape, 'PSF images')
             hdr = T.get_header()
-            # PSF distortion bases are polynomials of x,y
-            assert(hdr['POLNAME1'].strip() == 'X_IMAGE')
-            assert(hdr['POLNAME2'].strip() == 'Y_IMAGE')
-            assert(hdr['POLGRP1'] == 1)
-            assert(hdr['POLGRP2'] == 1)
-            assert(hdr['POLNGRP' ] == 1)
-            x0     = hdr.get('POLZERO1')
-            xscale = hdr.get('POLSCAL1')
-            y0     = hdr.get('POLZERO2')
-            yscale = hdr.get('POLSCAL2')
-            degree = hdr.get('POLDEG1')
+
+            ngrp = hdr['POLNGRP']
+            assert(ngrp in [0, 1])
+            if ngrp == 0:
+                # Constant PSF.
+                degree = 0
+                x0 = y0 = 0.
+                xscale = yscale = 1.
+            else:
+                assert(hdr['POLNGRP' ] == 1)
+                # PSF distortion bases are polynomials of x,y
+                assert(hdr['POLNAME1'].strip() == 'X_IMAGE')
+                assert(hdr['POLNAME2'].strip() == 'Y_IMAGE')
+                assert(hdr['POLGRP1'] == 1)
+                assert(hdr['POLGRP2'] == 1)
+                x0     = hdr.get('POLZERO1')
+                xscale = hdr.get('POLSCAL1')
+                y0     = hdr.get('POLZERO2')
+                yscale = hdr.get('POLSCAL2')
+                degree = hdr.get('POLDEG1')
             self.sampling = hdr.get('PSF_SAMP')
             #print('PsfEx sampling:', self.sampling)
             # number of terms in polynomial
