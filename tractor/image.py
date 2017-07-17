@@ -1,6 +1,6 @@
 from __future__ import print_function
 import numpy as np
-from .utils import MultiParams, _isint, listmax, get_class_from_name
+from tractor.utils import MultiParams, _isint, listmax, get_class_from_name
 
 class Image(MultiParams):
     '''
@@ -46,13 +46,13 @@ class Image(MultiParams):
 
         # Fill in defaults, if necessary.
         if wcs is None:
-            from .basics import NullWCS
+            from tractor.basics import NullWCS
             wcs = NullWCS()
         if sky is None:
-            from .basics import NullSky
+            from tractor.basics import NullSky
             sky = NullSky()
         if photocal is None:
-            from .basics import NullPhotoCal
+            from tractor.basics import NullPhotoCal
             photocal = NullPhotoCal()
 
         # acceptable approximation level when rendering this model

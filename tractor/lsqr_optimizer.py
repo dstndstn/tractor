@@ -1,9 +1,9 @@
 from __future__ import print_function
 import numpy as np
 from astrometry.util.ttime import Time
-from .engine import logverb, isverbose, logmsg
-from .optimize import Optimizer
-from .utils import listmax
+from tractor.engine import logverb, isverbose, logmsg
+from tractor.optimize import Optimizer
+from tractor.utils import listmax
 
 class LsqrOptimizer(Optimizer):
 
@@ -464,7 +464,6 @@ class LsqrOptimizer(Optimizer):
             X = tractor.getLogPriorDerivatives()
             if X is not None:
                 rA,cA,vA,pb,mub = X
-
                 sprows.extend([ri + Nrows for ri in rA])
                 spcols.extend(cA)
                 spvals.extend([vi / colscales[ci] for vi,ci in zip(vA,cA)])

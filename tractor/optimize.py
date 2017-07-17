@@ -1,7 +1,7 @@
 from __future__ import print_function
 import numpy as np
 from astrometry.util.ttime import Time
-from .engine import logverb, OptResult, logmsg
+from tractor.engine import logverb, OptResult, logmsg
 
 class Optimizer(object):
     def optimize(self, tractor, alphas=None, damp=0, priors=True,
@@ -67,7 +67,7 @@ class Optimizer(object):
         subimgs = []
         if rois is not None:
             for i,img in enumerate(imgs):
-                from .image import Image
+                from tractor.image import Image
                 roi = rois[i]
                 y0 = roi[0].start
                 x0 = roi[1].start

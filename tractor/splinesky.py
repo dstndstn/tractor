@@ -1,7 +1,7 @@
 from __future__ import print_function
 import numpy as np
 import scipy.interpolate as interp
-from tractor.utils import *
+from tractor.utils import ParamList
 from tractor import ducks
 
 class SplineSky(ParamList, ducks.ImageCalibration):
@@ -181,7 +181,7 @@ class SplineSky(ParamList, ducks.ImageCalibration):
 
         #print 'log prior chi: returning', len(rA), 'sets of terms'
 
-        return (rA, cA, vA, pb)
+        return (rA, cA, vA, pb, mub)
 
     def getParamDerivatives(self, *args):
         derivs = []

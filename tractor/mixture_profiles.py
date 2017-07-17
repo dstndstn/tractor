@@ -9,7 +9,7 @@ import numpy as np
 #import scipy.spatial.distance as scp
 
 try:
-    from . import mp_fourier
+    from tractor import mp_fourier
 except:
     mp_fourier = None
 

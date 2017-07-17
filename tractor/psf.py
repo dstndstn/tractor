@@ -4,15 +4,15 @@ from __future__ import division
 import numpy as np
 from astrometry.util.miscutils import lanczos_filter
 
-from .image import Image
-from .pointsource import PointSource
-from .wcs import PixPos
-from .brightness import Flux
-from .engine import Tractor
-from .patch import Patch
-from .utils import BaseParams, ParamList, MultiParams, MogParams
-from . import mixture_profiles as mp
-from . import ducks
+from tractor.image import Image
+from tractor.pointsource import PointSource
+from tractor.wcs import PixPos
+from tractor.brightness import Flux
+from tractor.engine import Tractor
+from tractor.patch import Patch
+from tractor.utils import BaseParams, ParamList, MultiParams, MogParams
+from tractor import mixture_profiles as mp
+from tractor import ducks
 
 class HybridPSF(object):
     pass
@@ -383,8 +383,8 @@ class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
 
         optional xy0 = int x0,y0 origin of stamp.
         '''
-        from .emfit import em_fit_2d, em_fit_2d_reg
-        from .fitpsf import em_init_params
+        from tractor.emfit import em_fit_2d, em_fit_2d_reg
+        from tractor.fitpsf import em_init_params
         if P0 is not None:
             w,mu,var = P0
         else:
@@ -414,7 +414,7 @@ class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
             return tpsf
                 
         elif v2:
-            from .emfit import em_fit_2d_reg2
+            from tractor.emfit import em_fit_2d_reg2
             print('stamp sum:', np.sum(stamp))
             #stamp *= 1000.
             ok,skyamp = em_fit_2d_reg2(stamp, xm, ym, w, mu, var, alpha,
@@ -507,7 +507,7 @@ class GaussianMixtureEllipsePSF(GaussianMixturePSF):
         if len(args) == 3:
             amp, mean, ell = args
         else:
-            from .ellipses import EllipseESoft
+            from tractor.ellipses import EllipseESoft
             assert(len(args) % 6 == 0)
             K = len(args) // 6
             amp  = np.array(args[:K])
@@ -589,7 +589,7 @@ class GaussianMixtureEllipsePSF(GaussianMixturePSF):
 
         (parameters of a GaussianMixtureEllipsePSF)
         '''
-        from .ellipses import EllipseESoft
+        from tractor.ellipses import EllipseESoft
         w = np.ones(N) / float(N)
         mu = np.zeros((N,2))
         ell = [EllipseESoft(np.log(2*r), 0., 0.) for r in range(1, N+1)]

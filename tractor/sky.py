@@ -1,5 +1,5 @@
-from .utils import BaseParams, ScalarParam
-from .patch import Patch
+from tractor.utils import BaseParams, ScalarParam
+from tractor.patch import Patch
 from tractor import ducks
 
 class NullSky(BaseParams, ducks.Sky):

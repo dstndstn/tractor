@@ -1,5 +1,5 @@
 import numpy as np
-from .utils import ScalarParam, ParamList, BaseParams, getClassName
+from tractor.utils import ScalarParam, ParamList, BaseParams, getClassName
 from tractor import ducks
 
 class Mag(ScalarParam):

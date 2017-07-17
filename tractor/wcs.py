@@ -1,7 +1,7 @@
 from __future__ import print_function
 import numpy as np
 
-from .utils import BaseParams, ParamList, MultiParams, ArithmeticParams
+from tractor.utils import BaseParams, ParamList, MultiParams, ArithmeticParams
 from tractor import ducks
 
 class NullWCS(BaseParams, ducks.WCS):
@@ -86,8 +86,6 @@ class WcslibWcs(BaseParams, ducks.ImageCalibration):
         anwcs_print_stdout(self.wcs)
 
     def pixel_scale(self):
-        #from astrometry.util.util import anwcs_pixel_scale
-        #return anwcs_pixel_scale(self.wcs)
         cd = self.cdAtPixel(self.x0, self.y0)
         return np.sqrt(np.abs(cd[0,0]*cd[1,1] - cd[0,1]*cd[1,0])) * 3600.
 
@@ -159,7 +157,7 @@ class ConstantFitsWcs(ParamList, ducks.ImageCalibration):
         return copy
         
     def __str__(self):
-        from .utils import getClassName
+        from tractor.utils import getClassName
         return ('%s: x0,y0 %.3f,%.3f, WCS ' % (getClassName(self), self.x0,self.y0)
                 + str(self.wcs))
 

@@ -13,18 +13,18 @@ Magnitudes, (RA,Dec) positions, FITS WCS, and so on.
 
 import numpy as np
 
-from .image import Image
-from .patch import Patch
-from .utils import *
-from . import mixture_profiles as mp
+from tractor.image import Image
+from tractor.patch import Patch
+from tractor.utils import MultiParams
+from tractor import mixture_profiles as mp
 
-from .tractortime import TAITime
-from .psf import PixelizedPSF, GaussianMixturePSF, GaussianMixtureEllipsePSF, NCircularGaussianPSF
-from .wcs import NullWCS, WcslibWcs, ConstantFitsWcs, TanWcs, PixPos, RaDecPos
-from .sky import NullSky, ConstantSky
-from .brightness import Mag, Flux, Mags, Fluxes, NanoMaggies, FluxesPhotoCal, MagsPhotoCal, NullPhotoCal, LinearPhotoCal
-from .pointsource import BasicSource, SingleProfileSource, PointSource
-from .shifted import ParamsWrapper, ShiftedPsf, ScaledPhotoCal, ScaledWcs, ShiftedWcs
+from tractor.tractortime import TAITime
+from tractor.psf import PixelizedPSF, GaussianMixturePSF, GaussianMixtureEllipsePSF, NCircularGaussianPSF
+from tractor.wcs import NullWCS, WcslibWcs, ConstantFitsWcs, TanWcs, PixPos, RaDecPos
+from tractor.sky import NullSky, ConstantSky
+from tractor.brightness import Mag, Flux, Mags, Fluxes, NanoMaggies, FluxesPhotoCal, MagsPhotoCal, NullPhotoCal, LinearPhotoCal
+from tractor.pointsource import BasicSource, SingleProfileSource, PointSource
+from tractor.shifted import ParamsWrapper, ShiftedPsf, ScaledPhotoCal, ScaledWcs, ShiftedWcs
 
 class TractorWCSWrapper(object):
     '''

@@ -1,5 +1,5 @@
 from __future__ import print_function
-from .utils import BaseParams
+from tractor.utils import BaseParams
 from tractor import ducks
     
 # class SubImage(Image):

@@ -15,9 +15,9 @@ import numpy as np
 
 from astrometry.util.ttime import Time
 
-from .utils import MultiParams, _isint, get_class_from_name
-from .patch import Patch, ModelMask
-from .image import Image
+from tractor.utils import MultiParams, _isint, get_class_from_name
+from tractor.patch import Patch, ModelMask
+from tractor.image import Image
 
 def logverb(*args):
     msg = ' '.join([str(x) for x in args])

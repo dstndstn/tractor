@@ -1,8 +1,8 @@
 from __future__ import print_function
 import numpy as np
 
-from .utils import MultiParams
-from .patch import ModelMask
+from tractor.utils import MultiParams
+from tractor.patch import ModelMask
 from tractor import ducks
 
 class BasicSource(ducks.Source):

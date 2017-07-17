@@ -4,8 +4,8 @@ from collections import Counter
 
 from astrometry.util.ttime import Time
 
-from .engine import logverb
-from .optimize import Optimizer
+from tractor.engine import logverb
+from tractor.optimize import Optimizer
 
 class CeresOptimizer(Optimizer):
 
@@ -55,7 +55,7 @@ class CeresOptimizer(Optimizer):
                    dynamic_scale=True,
                    dlnp = 1e-3, max_iterations=0, print_progress=True,
                    priors=False, bounds=False, **nil):
-        from .ceres import ceres_opt
+        from tractor.ceres import ceres_opt
 
         pp = tractor.getParams()
         if len(pp) == 0:
@@ -218,7 +218,7 @@ class CeresOptimizer(Optimizer):
         negfluxval: when 'nonneg' is set, the flux value to give sources that went
         negative in an unconstrained fit.
         '''
-        from ceres import ceres_forced_phot
+        from tractor.ceres import ceres_forced_phot
 
         t0 = Time()
         blocks = []

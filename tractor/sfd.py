@@ -5,8 +5,8 @@ import numpy as np
 
 import fitsio
 
-from astrometry.util.starutil_numpy import *
-from astrometry.util.util import *
+from astrometry.util.starutil_numpy import radectolb
+from astrometry.util.util import anwcs_t
 
 class SFDMap(object):
     # These come from Schlafly & Finkbeiner, arxiv 1012.4804v2, Table 6, Rv=3.1

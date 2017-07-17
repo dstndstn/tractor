@@ -2,10 +2,10 @@ from __future__ import print_function
 
 import numpy as np
 
-from .basics import *
-from .utils import *
-from . import mixture_profiles as mp
-from . import ducks
+from tractor.utils import MultiParams, getClassName
+from tractor.psf import GaussianMixturePSF, PixelizedPSF
+from tractor import mixture_profiles as mp
+from tractor import ducks
 
 from astrometry.util.fits import fits_table
 
@@ -34,6 +34,7 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
         self.savesplinedata = False
 
     def getShifted(self, x0, y0):
+        from tractor.shifted import ShiftedPsf
         return ShiftedPsf(self, x0, y0)
         
     def __str__(self):
