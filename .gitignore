@@ -6,11 +6,15 @@ tractor/*.pyc
 tractor/*.so
 tractor/build/
 tractor/ceres_wrap.cxx
+tractor/ceres_wrap.cpp
 tractor/ceres_wrap.o
+tractor/ceres.py
 tractor/emfit.py
 tractor/emfit_wrap.c
 tractor/mix.py
 tractor/mix_wrap.c
+tractor/mp_fourier.py
+tractor/mp_fourier_wrap.c
 doc/_build/
 html/
 astrometry
