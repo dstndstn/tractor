@@ -735,6 +735,9 @@ class ParamList(GaussianPriorsMixin, NamedParams, BaseParams):
             rtn = self.pl.getParam(self.i)
             self.i += 1
             return rtn
+        # py3
+        __next__ = next
+
     def __iter__(self):
         return ParamList.ParamListIter(self)
 
