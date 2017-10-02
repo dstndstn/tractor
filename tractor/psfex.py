@@ -205,16 +205,18 @@ class PsfExModel(object):
             bh,bw = self.psfbases[0].shape
             self.radius = (bh+1)/2.
             self.x0,self.y0 = x0,y0
+            self.fwhm = hdr.get('PSF_FWHM')
 
         elif Ti is not None:
             self.sampling = Ti.psf_samp
             degree = Ti.poldeg1
             # PSF distortion bases are polynomials of x,y
-            assert(Ti.polname1.strip() == 'X_IMAGE')
-            assert(Ti.polname2.strip() == 'Y_IMAGE')
-            assert(Ti.polgrp1 == 1)
-            assert(Ti.polgrp2 == 1)
-            assert(Ti.polngrp == 1)
+            if degree > 0:
+                assert(Ti.polname1.strip() == 'X_IMAGE')
+                assert(Ti.polname2.strip() == 'Y_IMAGE')
+                assert(Ti.polgrp1 == 1)
+                assert(Ti.polgrp2 == 1)
+                assert(Ti.polngrp == 1)
             self.x0 = Ti.polzero1
             self.y0 = Ti.polzero2
             self.xscale = Ti.polscal1
@@ -229,7 +231,7 @@ class PsfExModel(object):
             self.psfbases = ims
             bh,bw = self.psfbases[0].shape
             self.radius = (bh+1)/2.
-
+            self.fwhm = Ti.psf_fwhm
 
     def writeto(self, fn):
         from astrometry.util.fits import fits_table
@@ -251,6 +253,7 @@ class PsfExModel(object):
         hdr['POLSCAL2'] = self.yscale
         hdr['POLDEG1'] = self.degree
         hdr['PSF_SAMP'] = self.sampling
+        hdr['PSF_FWHM'] = self.fwhm
         T.writeto(fn, header=hdr)
         
     @property
@@ -427,6 +430,7 @@ class PixelizedPsfEx(PixelizedPSF):
         if psfex is not None:
             self.psfex = psfex
         #print('PsfEx x0,y0', self.psfex.x0, self.psfex.y0)
+        self.fwhm = self.psfex.fwhm
         # meh
         self.fn = fn
         self.ext = ext
