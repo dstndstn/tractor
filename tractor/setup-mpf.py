@@ -12,7 +12,7 @@ c_swig_module = Extension('_mp_fourier',
 my_swig_mod = Extension('_c_mp_fourier',
                         sources=['c_mp_fourier.i'],
                         include_dirs=numpy_inc,
-                        extra_compile_args=['-g', '-O0'],
+                        extra_compile_args=['-g'],
                         extra_link_args=['-g'])
 
 setup(name = 'Gaussian mixtures -- Fourier transform',

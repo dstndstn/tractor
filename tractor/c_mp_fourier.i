@@ -40,7 +40,6 @@ static void mixture_profile_fourier_transform(double *amps, int amps_len,
                                               double *w, int w_len,
                                               double *out, int out_dim1, int out_dim2)
 {
-    // const int D = 2;
     const double twopisquare = -2. * M_PI * M_PI;
 
     int K = amps_len;
@@ -48,67 +47,27 @@ static void mixture_profile_fourier_transform(double *amps, int amps_len,
     int NW = w_len;
     int i, j, k;
 
-    // assert(means_dim1 == K);
-    // assert(means_dim2 == D);
-    // assert(vars_dim1 == K);
-    // assert(vars_dim2 == D);
-    // assert(vars_dim3 == D);
-
-    // for (k = 0; k < K; k++) {
-    //     if ((means[k*D] != means[0]) ||
-    //         (means[k*D+1] != means[1])) {
-    //         PyErr_SetString(PyExc_ValueError, "Assume all means are equal");
-    //         return NULL;
-    //     }
-    // }
-
-    double mu0 = means[0];
-    double mu1 = means[1];
-
-    int zeromean = (mu0 == 0.) && (mu1 == 0.);
-
-    // TODO: Handle complex out
-
-    if (zeromean) {
-        // out = (double*)malloc(sizeof(double) * NW * NV);
-    }
-    // else {
-    //     out = new std::complex<double>[NW * NV];
-    // }
-    
-    double* ff = out;
+    double *s = (double*)malloc(sizeof(double) * NV);
 
     for (j = 0; j < NW; j++) {
         for (i = 0; i < NV; i++) {
-            double s = 0;
-            double* V = vars;
+            s[i] = 0;
             for (k = 0; k < K; k++) {
                 double a, b, d;
-                a = *V;
-                V++;
-                b = *V;
-                V++;
-                // skip c
-                V++;
-                d = *V;
-                V++;
+                int offset = k * 4;
 
-                s += amps[k] * exp(twopisquare * (a *  v[i] * v[i] +
+                a = vars[offset];
+                b = vars[offset + 1];
+                d = vars[offset + 3];
+
+                s[i] += amps[k] * exp(twopisquare * (a *  v[i] * v[i] +
                                                   2. * b * v[i] * w[j] +
                                                   d * w[j] * w[j]));
             }
-            if (zeromean) {
-                *ff = s;
-                ff++;
-            } else {
-                double angle = -2. * M_PI * (mu0 * v[i] + mu1 * w[j]);
-                *ff = s * cos(angle);
-                ff++;
-                *ff = s * sin(angle);
-                ff++;
-            }
+            out[NV * j + i] = s[i];
         }
     }
+    free(s);
     return;
 }
 
