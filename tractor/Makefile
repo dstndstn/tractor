@@ -7,11 +7,14 @@ PYTHON_SO_EXT ?= $(shell $(PYTHON) -c "from distutils import sysconfig; print(sy
 ceres: _ceres$(PYTHON_SO_EXT) ceres.py
 .PHONY: ceres
 
-mpf: mp_fourier
+mpf: mp_fourier c_mp_fourier
 .PHONY: mpf
 
 mp_fourier: _mp_fourier$(PYTHON_SO_EXT) mp_fourier.py
 .PHONY: mp_fourier
+
+c_mp_fourier: _c_mp_fourier$(PYTHON_SO_EXT) c_mp_fourier.py
+.PHONY: c_mp_fourier
 
 mix: _mix$(PYTHON_SO_EXT) mix.py
 .PHONY: mix
@@ -20,6 +23,9 @@ emfit: _emfit$(PYTHON_SO_EXT) emfit.py
 .PHONY: emfit
 
 _mp_fourier$(PYTHON_SO_EXT): mp_fourier.i setup-mpf.py
+	$(PYTHON) setup-mpf.py build_ext --inplace
+
+_c_mp_fourier$(PYTHON_SO_EXT): c_mp_fourier.i setup-mpf.py
 	$(PYTHON) setup-mpf.py build_ext --inplace
 
 mix.py _mix$(PYTHON_SO_EXT): mix.i approx3.c gauss_masked.c setup-mix.py
