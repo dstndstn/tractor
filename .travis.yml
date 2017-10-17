@@ -74,7 +74,7 @@ script:
     #- coverage report
     - coverage run -a examples/decam-refit.py
     - coverage report
-    - pycodestyle --show-source tractor/ wise/
+    - pycodestyle --show-source tractor/ wise/ || true
 
 after_success:
     - coveralls
