@@ -19,12 +19,18 @@ from tractor.utils import MultiParams
 from tractor import mixture_profiles as mp
 
 from tractor.tractortime import TAITime
-from tractor.psf import PixelizedPSF, GaussianMixturePSF, GaussianMixtureEllipsePSF, NCircularGaussianPSF
-from tractor.wcs import NullWCS, WcslibWcs, ConstantFitsWcs, TanWcs, PixPos, RaDecPos
+from tractor.psf import (PixelizedPSF, GaussianMixturePSF,
+                         GaussianMixtureEllipsePSF, NCircularGaussianPSF)
+from tractor.wcs import (NullWCS, WcslibWcs, ConstantFitsWcs, TanWcs,
+                         PixPos, RaDecPos)
 from tractor.sky import NullSky, ConstantSky
-from tractor.brightness import Mag, Flux, Mags, Fluxes, NanoMaggies, FluxesPhotoCal, MagsPhotoCal, NullPhotoCal, LinearPhotoCal
+from tractor.brightness import (Mag, Flux, Mags, Fluxes, NanoMaggies,
+                                FluxesPhotoCal, MagsPhotoCal, NullPhotoCal,
+                                LinearPhotoCal)
 from tractor.pointsource import BasicSource, SingleProfileSource, PointSource
-from tractor.shifted import ParamsWrapper, ShiftedPsf, ScaledPhotoCal, ScaledWcs, ShiftedWcs
+from tractor.shifted import (ParamsWrapper, ShiftedPsf, ScaledPhotoCal,
+                             ScaledWcs, ShiftedWcs)
+
 
 class TractorWCSWrapper(object):
     '''
@@ -37,19 +43,21 @@ class TractorWCSWrapper(object):
         self.imageh = h
         self.x0 = x0
         self.y0 = y0
+
     def pixelxy2radec(self, x, y):
         # FITS pixels x,y
         rd = self.wcs.pixelToPosition(x+self.x0-1, y+self.y0-1)
         return rd.ra, rd.dec
+
     def radec2pixelxy(self, ra, dec):
         # Vectorized?
         if hasattr(ra, '__len__') or hasattr(dec, '__len__'):
             try:
                 b = np.broadcast(ra, dec)
                 ok = np.ones(b.shape, bool)
-                x  = np.zeros(b.shape)
-                y  = np.zeros(b.shape)
-                rd = RaDecPos(0.,0.)
+                x = np.zeros(b.shape)
+                y = np.zeros(b.shape)
+                rd = RaDecPos(0., 0.)
                 for i,(r,d) in enumerate(b):
                     rd.ra = r
                     rd.dec = d
