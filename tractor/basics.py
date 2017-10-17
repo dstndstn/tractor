@@ -37,6 +37,7 @@ class TractorWCSWrapper(object):
     Wraps a Tractor WCS object to look like an
     astrometry.util.util.Tan/Sip object.
     '''
+
     def __init__(self, wcs, w, h, x0=0, y0=0):
         self.wcs = wcs
         self.imagew = w
@@ -46,7 +47,7 @@ class TractorWCSWrapper(object):
 
     def pixelxy2radec(self, x, y):
         # FITS pixels x,y
-        rd = self.wcs.pixelToPosition(x+self.x0-1, y+self.y0-1)
+        rd = self.wcs.pixelToPosition(x + self.x0 - 1, y + self.y0 - 1)
         return rd.ra, rd.dec
 
     def radec2pixelxy(self, ra, dec):
@@ -58,20 +59,20 @@ class TractorWCSWrapper(object):
                 x = np.zeros(b.shape)
                 y = np.zeros(b.shape)
                 rd = RaDecPos(0., 0.)
-                for i,(r,d) in enumerate(b):
+                for i, (r, d) in enumerate(b):
                     rd.ra = r
                     rd.dec = d
-                    xi,yi = self.wcs.positionToPixel(rd)
+                    xi, yi = self.wcs.positionToPixel(rd)
                     x.flat[i] = xi
                     y.flat[i] = yi
                 x += 1 - self.x0
                 y += 1 - self.y0
-                return ok,x,y
+                return ok, x, y
             except:
                 pass
-            
-        x,y = self.wcs.positionToPixel(RaDecPos(ra, dec))
-        return True, x-self.x0+1, y-self.y0+1
+
+        x, y = self.wcs.positionToPixel(RaDecPos(ra, dec))
+        return True, x - self.x0 + 1, y - self.y0 + 1
 
 
 def getParamTypeTree(param):
@@ -79,5 +80,3 @@ def getParamTypeTree(param):
     if isinstance(param, MultiParams):
         return [mytype] + [getParamTypeTree(s) for s in param._getActiveSubs()]
     return [mytype]
-
-

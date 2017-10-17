@@ -45,4 +45,4 @@ __all__ = [
     'GalaxyShape', 'Galaxy', 'ProfileGalaxy', 'GaussianGalaxy',
     'ExpGalaxy', 'DevGalaxy', 'FracDev', 'SoftenedFracDev',
     'FixedCompositeGalaxy', 'CompositeGalaxy',
-    ]
+]

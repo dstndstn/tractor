@@ -7,9 +7,9 @@ from tractor.emfit import em_fit_1d_samples
 import numpy as np
 from tractor.fitpsf import em_init_params
 
-mus   = np.array([1.77, 3.7] )
-stds = np.array([3.9, 1.]   )
-amps  = np.array([ 0.8, 0.2 ])
+mus = np.array([1.77, 3.7])
+stds = np.array([3.9, 1.])
+amps = np.array([0.8, 0.2])
 
 N = 1000
 
@@ -37,21 +37,21 @@ for i in range(3):
     print('std', np.sqrt(vv), stds)
 
 plt.clf()
-n,b,p = plt.hist(X, 50, histtype='step', color='b')
-B = (b[1]-b[0])
-lo,hi = plt.xlim()
+n, b, p = plt.hist(X, 50, histtype='step', color='b')
+B = (b[1] - b[0])
+lo, hi = plt.xlim()
 xx = np.linspace(lo, hi, 500)
-gtrue = [a * N*B / (np.sqrt(2.*np.pi) * s) * 
-         np.exp(-0.5 * (xx-m)**2/s**2)
-         for (a,m,s) in zip(amps, mus, stds)]
-plt.plot(xx, gtrue[0]+gtrue[1], 'b-', lw=2, alpha=0.5)
+gtrue = [a * N * B / (np.sqrt(2. * np.pi) * s) *
+         np.exp(-0.5 * (xx - m)**2 / s**2)
+         for (a, m, s) in zip(amps, mus, stds)]
+plt.plot(xx, gtrue[0] + gtrue[1], 'b-', lw=2, alpha=0.5)
 plt.plot(xx, gtrue[0], 'b-', lw=2, alpha=0.5)
 plt.plot(xx, gtrue[1], 'b-', lw=2, alpha=0.5)
 
-gfit = [a * N*B / (np.sqrt(2.*np.pi) * s) * 
-        np.exp(-0.5 * (xx-m)**2/s**2)
-        for (a,m,s) in zip(ww, mm, np.sqrt(vv))]
-plt.plot(xx, gfit[0]+gfit[1], 'r-', lw=2, alpha=0.5)
+gfit = [a * N * B / (np.sqrt(2. * np.pi) * s) *
+        np.exp(-0.5 * (xx - m)**2 / s**2)
+        for (a, m, s) in zip(ww, mm, np.sqrt(vv))]
+plt.plot(xx, gfit[0] + gfit[1], 'r-', lw=2, alpha=0.5)
 plt.plot(xx, gfit[0], 'r-', lw=2, alpha=0.5)
 plt.plot(xx, gfit[1], 'r-', lw=2, alpha=0.5)
 

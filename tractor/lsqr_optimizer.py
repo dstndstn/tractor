@@ -5,6 +5,7 @@ from tractor.engine import logverb, isverbose, logmsg
 from tractor.optimize import Optimizer
 from tractor.utils import listmax
 
+
 class LsqrOptimizer(Optimizer):
 
     def _optimize_forcedphot_core(
@@ -14,7 +15,7 @@ class LsqrOptimizer(Optimizer):
             negfluxval=None, rois=None, priors=None, sky=None,
             justims0=None, subimgs=None, damp=None, alphas=None,
             Nsky=None, mindlnp=None, shared_params=None):
-    
+
         # print(len(umodels), 'umodels, lengths', [len(x) for x in umodels])
         if len(umodels) == 0:
             return
@@ -23,12 +24,12 @@ class LsqrOptimizer(Optimizer):
 
         t0 = Time()
         derivs = [[] for i in range(Nsourceparams)]
-        for i,(tim,umods,scale) in enumerate(zip(imlist, umodels, scales)):
-            for um,dd in zip(umods, derivs):
+        for i, (tim, umods, scale) in enumerate(zip(imlist, umodels, scales)):
+            for um, dd in zip(umods, derivs):
                 if um is None:
                     continue
                 dd.append((um * scale, tim))
-        logverb('forced phot: derivs', Time()-t0)
+        logverb('forced phot: derivs', Time() - t0)
         if sky:
             # Sky derivatives are part of the image derivatives, so go
             # first in the derivative list.
@@ -60,7 +61,7 @@ class LsqrOptimizer(Optimizer):
         chis0 = None
         quitNow = False
 
-        ## FIXME -- this should depend on the PhotoCal scalings!
+        # FIXME -- this should depend on the PhotoCal scalings!
         damp0 = 1e-3
         damping = damp
 
@@ -75,11 +76,12 @@ class LsqrOptimizer(Optimizer):
 
             if lnp0 is None:
                 t0 = Time()
-                lnp0,chis0,ims0 = self._lnp_for_update(
+                lnp0, chis0, ims0 = self._lnp_for_update(
                     tractor,
                     mod0, imgs, umodels, None, None, p0, rois, scales,
                     None, None, priors, sky, minFlux)
-                logverb('forced phot: initial lnp = ', lnp0, 'took', Time()-t0)
+                logverb('forced phot: initial lnp = ',
+                        lnp0, 'took', Time() - t0)
                 assert(np.isfinite(lnp0))
 
             if justims0:
@@ -108,7 +110,7 @@ class LsqrOptimizer(Optimizer):
                                         priors=priors,
                                         scale_columns=False, chiImages=chis0,
                                         shared_params=shared_params)
-            topt = Time()-t0
+            topt = Time() - t0
             logverb('forced phot: opt:', topt)
             #print('forced phot: update', X)
             if rois is not None:
@@ -117,8 +119,8 @@ class LsqrOptimizer(Optimizer):
             if len(X) == 0:
                 print('Error getting update direction')
                 break
-            
-            ## tryUpdates():
+
+            # tryUpdates():
             if alphas is None:
                 # 1/1024 to 1 in factors of 2, + sqrt(2.) + 2.
                 alphas = np.append(2.**np.arange(-10, 1), [np.sqrt(2.), 2.])
@@ -142,7 +144,7 @@ class LsqrOptimizer(Optimizer):
                 print('Some too-negative fluxes requested:')
                 print('Fluxes:', p0)
                 print('Update:', X)
-                print('Total :', p0+X)
+                print('Total :', p0 + X)
                 print('MinFlux:', minFlux)
                 if damp == 0.0:
                     damping = damp0
@@ -157,15 +159,15 @@ class LsqrOptimizer(Optimizer):
 
             for alpha in alphas:
                 t0 = Time()
-                lnp,chis,ims = self._lnp_for_update(
+                lnp, chis, ims = self._lnp_for_update(
                     tractor,
                     mod0, imgs, umodels, X, alpha, p0, rois, scales,
                     p0sky, Xsky, priors, sky, minFlux)
                 logverb('Forced phot: stepped with alpha', alpha,
-                        'for lnp', lnp, ', dlnp', lnp-lnp0)
-                logverb('Took', Time()-t0)
+                        'for lnp', lnp, ', dlnp', lnp - lnp0)
+                logverb('Took', Time() - t0)
                 if lnp < (lnpBest - 1.):
-                    logverb('lnp', lnp, '< lnpBest-1', lnpBest-1.)
+                    logverb('lnp', lnp, '< lnpBest-1', lnpBest - 1.)
                     break
                 if not np.isfinite(lnp):
                     break
@@ -178,14 +180,15 @@ class LsqrOptimizer(Optimizer):
             if alphaBest is not None:
                 # Clamp fluxes up to zero
                 if minFlux is not None:
-                    pa = [max(minFlux, p + alphaBest * d) for p,d in zip(p0, X)]
+                    pa = [max(minFlux, p + alphaBest * d)
+                          for p, d in zip(p0, X)]
                 else:
-                    pa = [p + alphaBest * d for p,d in zip(p0, X)]
+                    pa = [p + alphaBest * d for p, d in zip(p0, X)]
                 tractor.catalog.setParams(pa)
 
                 if sky:
-                    tractor.images.setParams([p + alpha * d for p,d
-                                           in zip(p0sky, Xsky)])
+                    tractor.images.setParams([p + alpha * d for p, d
+                                              in zip(p0sky, Xsky)])
 
                 dlogprob = lnpBest - lnp0
                 alpha = alphaBest
@@ -199,7 +202,7 @@ class LsqrOptimizer(Optimizer):
                 dlogprob = 0.
                 alpha = 0.
 
-                ### ??
+                # ??
                 if sky:
                     # Revert -- recall that we change params while probing in
                     # lnpForUpdate()
@@ -216,48 +219,48 @@ class LsqrOptimizer(Optimizer):
                 break
         result.ims0 = ims0
         result.ims1 = imsBest
-    
+
     def _lnp_for_update(self, tractor, mod0, imgs, umodels, X, alpha, p0, rois,
                         scales, p0sky, Xsky, priors, sky, minFlux):
         if X is None:
             pa = p0
         else:
-            pa = [p + alpha * d for p,d in zip(p0, X)]
+            pa = [p + alpha * d for p, d in zip(p0, X)]
         if Xsky is not None:
-            tractor.images.setParams([p + alpha * d for p,d in zip(p0sky, Xsky)])
+            tractor.images.setParams(
+                [p + alpha * d for p, d in zip(p0sky, Xsky)])
 
         lnp = 0.
         if priors:
             lnp += tractor.getLogPrior()
             if not np.isfinite(lnp):
                 return lnp, None, None
-            
+
         # Recall that "umodels" is a full matrix (shape (Nimage,
         # Nsrcs)) of patches, so we just go through each image,
         # ignoring None entries and building up model images from
         # the scaled unit-flux patches.
-        
+
         ims = self._getims(pa, imgs, umodels, mod0, scales, sky, minFlux, rois)
         chisq = 0.
         chis = []
-        for nil,nil,nil,chi,roi in ims:
+        for nil, nil, nil, chi, roi in ims:
             chis.append(chi)
             chisq += (chi.astype(np.float64)**2).sum()
         lnp += -0.5 * chisq
         return lnp, chis, ims
 
-    
     def optimize(self, tractor, alphas=None, damp=0, priors=True,
                  scale_columns=True,
                  shared_params=True, variance=False, just_variance=False,
                  **nil):
-        logverb(tractor.getName()+': Finding derivs...')
+        logverb(tractor.getName() + ': Finding derivs...')
         t0 = Time()
         allderivs = tractor.getDerivs()
-        tderivs = Time()-t0
+        tderivs = Time() - t0
         #print(Time() - t0)
         #print('allderivs:', allderivs)
-        #for d in allderivs:
+        # for d in allderivs:
         #   for (p,im) in d:
         #       print('patch mean', np.mean(p.patch))
         logverb('Finding optimal update direction...')
@@ -273,11 +276,11 @@ class LsqrOptimizer(Optimizer):
         if variance:
             if len(X) == 0:
                 return 0, X, 0, None
-            X,var = X
+            X, var = X
             if just_variance:
                 return var
         #print(Time() - t0)
-        topt = Time()-t0
+        topt = Time() - t0
         #print('X:', X)
         if len(X) == 0:
             return 0, X, 0.
@@ -287,7 +290,7 @@ class LsqrOptimizer(Optimizer):
         (dlogprob, alpha) = self.tryUpdates(tractor, X, alphas=alphas)
         tstep = Time() - t0
         logverb('Finished opt2.')
-        logverb('  alpha =',alpha)
+        logverb('  alpha =', alpha)
         logverb('  Tderiv', tderivs)
         logverb('  Topt  ', topt)
         logverb('  Tstep ', tstep)
@@ -298,14 +301,14 @@ class LsqrOptimizer(Optimizer):
     def optimize_loop(self, tractor, dchisq=0., steps=50, **kwargs):
         R = {}
         for step in range(steps):
-            dlnp,X,alpha = self.optimize(tractor, **kwargs)
-            #print('Opt step: dlnp', dlnp,
+            dlnp, X, alpha = self.optimize(tractor, **kwargs)
+            # print('Opt step: dlnp', dlnp,
             #      ', '.join([str(src) for src in tractor.getCatalog()]))
             if dlnp <= dchisq:
                 break
         R.update(steps=step)
         return R
-    
+
     def getUpdateDirection(self, tractor, allderivs, damp=0., priors=True,
                            scale_columns=True, scales_only=False,
                            chiImages=None, variance=False,
@@ -349,12 +352,12 @@ class LsqrOptimizer(Optimizer):
             tractor.setParams(np.arange(len(p0)))
             p1 = tractor.getParams()
             tractor.setParams(p0)
-            U,I = np.unique(p1, return_inverse=True)
+            U, I = np.unique(p1, return_inverse=True)
             logverb(len(p0), 'params;', len(U), 'unique')
             paramindexmap = I
             #print('paramindexmap:', paramindexmap)
             #print('p1:', p1)
-            
+
         # Build the sparse matrix of derivatives:
         sprows = []
         spcols = []
@@ -364,7 +367,7 @@ class LsqrOptimizer(Optimizer):
         imgoffs = {}
         nextrow = 0
         for param in allderivs:
-            for deriv,img in param:
+            for deriv, img in param:
                 if img in imgoffs:
                     continue
                 imgoffs[img] = nextrow
@@ -375,7 +378,7 @@ class LsqrOptimizer(Optimizer):
         Ncols = len(allderivs)
 
         # FIXME -- shared_params should share colscales!
-        
+
         colscales = np.ones(len(allderivs))
         for col, param in enumerate(allderivs):
             RR = []
@@ -383,7 +386,7 @@ class LsqrOptimizer(Optimizer):
             WW = []
             for (deriv, img) in param:
                 inverrs = img.getInvError()
-                (H,W) = img.shape
+                (H, W) = img.shape
                 row0 = imgoffs[img]
                 deriv.clipTo(W, H)
                 pix = deriv.getPixelIndices(img)
@@ -403,7 +406,7 @@ class LsqrOptimizer(Optimizer):
                 vals = dimg.flat[nz]
                 w = inverrs[deriv.getSlice(img)].flat[nz]
                 assert(vals.shape == w.shape)
-                #if not scales_only:
+                # if not scales_only:
                 RR.append(rows)
                 VV.append(vals)
                 WW.append(w)
@@ -417,12 +420,13 @@ class LsqrOptimizer(Optimizer):
             vals = VV * WW
 
             # shouldn't be necessary since we check len(nz)>0 above
-            #if len(vals) == 0:
+            # if len(vals) == 0:
             #   continue
             mx = np.max(np.abs(vals))
             if mx == 0:
                 logmsg('mx == 0:', len(np.flatnonzero(VV)), 'of', len(VV), 'non-zero derivatives,',
-                       len(np.flatnonzero(WW)), 'of', len(WW), 'non-zero weights;',
+                       len(np.flatnonzero(WW)), 'of', len(
+                           WW), 'non-zero weights;',
                        len(np.flatnonzero(vals)), 'non-zero products')
                 continue
             # MAGIC number: near-zero matrix elements -> 0
@@ -441,7 +445,7 @@ class LsqrOptimizer(Optimizer):
             spcols.append(col)
             #c = np.empty_like(rows)
             #c[:] = col
-            #spcols.append(c)
+            # spcols.append(c)
             if scale_columns:
                 if scale == 0.:
                     spvals.append(vals)
@@ -449,7 +453,7 @@ class LsqrOptimizer(Optimizer):
                     spvals.append(vals / scale)
             else:
                 spvals.append(vals)
-                
+
         if scales_only:
             return colscales
 
@@ -463,14 +467,15 @@ class LsqrOptimizer(Optimizer):
             # not convinced it's worth the effort right now.
             X = tractor.getLogPriorDerivatives()
             if X is not None:
-                rA,cA,vA,pb,mub = X
+                rA, cA, vA, pb, mub = X
                 sprows.extend([ri + Nrows for ri in rA])
                 spcols.extend(cA)
-                spvals.extend([vi / colscales[ci] for vi,ci in zip(vA,cA)])
+                spvals.extend([vi / colscales[ci] for vi, ci in zip(vA, cA)])
                 oldnrows = Nrows
                 nr = listmax(rA, -1) + 1
                 Nrows += nr
-                logverb('Nrows was %i, added %i rows of priors => %i' % (oldnrows, nr, Nrows))
+                logverb('Nrows was %i, added %i rows of priors => %i' %
+                        (oldnrows, nr, Nrows))
                 # if len(cA) == 0:
                 #     Ncols = 0
                 # else:
@@ -488,14 +493,14 @@ class LsqrOptimizer(Optimizer):
         # many rows are in each chunk.
         spcols = np.array(spcols)
         nrowspercol = np.array([len(x) for x in sprows])
-        
+
         if shared_params:
             # Apply shared parameter map
             #print('Before applying shared parameter map:')
             #print('spcols:', len(spcols), 'elements')
             #print('  ', len(set(spcols)), 'unique')
             spcols = paramindexmap[spcols]
-            #print('After:')
+            # print('After:')
             #print('spcols:', len(spcols), 'elements')
             #print('  ', len(set(spcols)), 'unique')
             Ncols = np.max(spcols) + 1
@@ -511,13 +516,13 @@ class LsqrOptimizer(Optimizer):
 
         chimap = {}
         if chiImages is not None:
-            for img,chi in zip(tractor.getImages(), chiImages):
+            for img, chi in zip(tractor.getImages(), chiImages):
                 chimap[img] = chi
 
-        ## FIXME -- could compute just chi ROIs here.
-                
+        # FIXME -- could compute just chi ROIs here.
+
         # iterating this way avoids setting the elements more than once
-        for img,row0 in imgoffs.items():
+        for img, row0 in imgoffs.items():
             chi = chimap.get(img, None)
             if chi is None:
                 #print('computing chi image')
@@ -525,11 +530,11 @@ class LsqrOptimizer(Optimizer):
             chi = chi.ravel()
             NP = len(chi)
             # we haven't touched these pix before
-            assert(np.all(b[row0 : row0 + NP] == 0))
+            assert(np.all(b[row0: row0 + NP] == 0))
             assert(np.all(np.isfinite(chi)))
             #print('Setting [%i:%i) from chi img' % (row0, row0+NP))
-            b[row0 : row0 + NP] = chi
-        ###### Zero out unused rows -- FIXME, is this useful??
+            b[row0: row0 + NP] = chi
+        # Zero out unused rows -- FIXME, is this useful??
         # print('Nrows', Nrows, 'vs len(urows)', len(urows))
         # bnz = np.zeros(Nrows)
         # bnz[urows] = b[urows]
@@ -546,14 +551,14 @@ class LsqrOptimizer(Optimizer):
             return None
         assert(np.all(np.isfinite(spvals)))
 
-        sprows = np.hstack(sprows) # hogg's lovin' hstack *again* here
+        sprows = np.hstack(sprows)  # hogg's lovin' hstack *again* here
         assert(len(sprows) == len(spvals))
-            
+
         # For LSQR, expand 'spcols' to be the same length as 'sprows'.
         cc = np.empty(len(sprows))
         i = 0
-        for c,n in zip(spcols, nrowspercol):
-            cc[i : i+n] = c
+        for c, n in zip(spcols, nrowspercol):
+            cc[i: i + n] = c
             i += n
         spcols = cc
         assert(i == len(sprows))
@@ -568,8 +573,9 @@ class LsqrOptimizer(Optimizer):
             return []
         logverb('  Max row:', urows[-1])
         logverb('  Max column:', ucols[-1])
-        logverb('  Sparsity factor (possible elements / filled elements):', float(len(urows) * len(ucols)) / float(len(sprows)))
-        
+        logverb('  Sparsity factor (possible elements / filled elements):',
+                float(len(urows) * len(ucols)) / float(len(sprows)))
+
         # FIXME -- does it make LSQR faster if we remap the row and column
         # indices so that no rows/cols are empty?
 
@@ -588,7 +594,7 @@ class LsqrOptimizer(Optimizer):
 
         # Run lsqr()
         logverb('LSQR: %i cols (%i unique), %i elements' %
-               (Ncols, len(ucols), len(spvals)-1))
+                (Ncols, len(ucols), len(spvals) - 1))
 
         # print('A matrix:')
         # print(A.todense())
@@ -625,17 +631,20 @@ class LsqrOptimizer(Optimizer):
         # print('  arnorm =', arnorm)
         # print('  xnorm =', xnorm)
         # print('  var =', var)
-        
+
         logverb('scaled  X=', X)
         X = np.array(X)
 
         if shared_params:
             # Unapply shared parameter map -- result is duplicated
             # result elements.
-            logverb('shared_params: before, X len', len(X), 'with', np.count_nonzero(X), 'non-zero entries')
-            logverb('paramindexmap: len', len(paramindexmap), 'range', paramindexmap.min(), paramindexmap.max())
+            logverb('shared_params: before, X len', len(X), 'with',
+                    np.count_nonzero(X), 'non-zero entries')
+            logverb('paramindexmap: len', len(paramindexmap),
+                    'range', paramindexmap.min(), paramindexmap.max())
             X = X[paramindexmap]
-            logverb('shared_params: after, X len', len(X), 'with', np.count_nonzero(X), 'non-zero entries')
+            logverb('shared_params: after, X len', len(X), 'with',
+                    np.count_nonzero(X), 'non-zero entries')
 
         if scale_columns:
             X[colscales > 0] /= colscales[colscales > 0]
@@ -645,10 +654,10 @@ class LsqrOptimizer(Optimizer):
             if shared_params:
                 # Unapply shared parameter map.
                 var = var[paramindexmap]
-            
+
             if scale_columns:
                 var[colscales > 0] /= colscales[colscales > 0]**2
-            return X,var
+            return X, var
 
         return X
 
@@ -658,4 +667,3 @@ class LsqrOptimizer(Optimizer):
     #     print('Finding column scales...')
     #     s = self.getUpdateDirection(allderivs, scales_only=True)
     #     return s
-

@@ -4,6 +4,7 @@ from astrometry.util.starutil_numpy import datetomjd, J2000
 
 from tractor.utils import ScalarParam, ArithmeticParams
 
+
 class TAITime(ScalarParam, ArithmeticParams):
     '''
     This is TAI as used in the SDSS 'frame' headers; eg
@@ -16,7 +17,7 @@ class TAITime(ScalarParam, ArithmeticParams):
 
     MJD = TAI/(24*3600)
     '''
-    equinox = 53084.28 # mjd
+    equinox = 53084.28  # mjd
     daysperyear = 365.25
 
     mjd2k = datetomjd(J2000)
@@ -30,20 +31,18 @@ class TAITime(ScalarParam, ArithmeticParams):
         super(TAITime, self).__init__(t)
 
     def toMjd(self):
-        return self.getValue() / (24.*3600.)
+        return self.getValue() / (24. * 3600.)
 
     def getSunTheta(self):
         mjd = self.toMjd()
         th = 2. * np.pi * (mjd - TAITime.equinox) / TAITime.daysperyear
-        th = np.fmod(th, 2.*np.pi)
+        th = np.fmod(th, 2. * np.pi)
         return th
 
     def toYears(self):
         ''' years since Nov 17, 1858 ?'''
-        return float(self.getValue() / (24.*3600. * TAITime.daysperyear))
+        return float(self.getValue() / (24. * 3600. * TAITime.daysperyear))
 
     def toYear(self):
         ''' to proper year '''
         return self.toYears() - TAITime(None, mjd=TAITime.mjd2k).toYears() + 2000.0
-
-

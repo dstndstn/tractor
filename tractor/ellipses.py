@@ -10,6 +10,7 @@ import numpy as np
 
 from tractor import ParamList
 
+
 class EllipseE(ParamList):
     '''
     Ellipse parameterization with r, e1, e2.
@@ -39,7 +40,7 @@ class EllipseE(ParamList):
 
     def __init__(self, *args, **kwargs):
         super(EllipseE, self).__init__(*args, **kwargs)
-        self.stepsizes = [0.01]*3
+        self.stepsizes = [0.01] * 3
         # Parameter limits
         self.lowers = [0., -1., -1.]
         self.uppers = [None, 1., 1.]
@@ -55,21 +56,21 @@ class EllipseE(ParamList):
 
     @staticmethod
     def fromRAbPhi(r, ba, phi):
-        ab = 1./ba
+        ab = 1. / ba
         e = (ab - 1) / (ab + 1)
-        angle = np.deg2rad(2.*(-phi))
+        angle = np.deg2rad(2. * (-phi))
         e1 = e * np.cos(angle)
         e2 = e * np.sin(angle)
         return EllipseE(r, e1, e2)
 
     @staticmethod
     def fromCovariance(cov):
-        u,s,v = np.linalg.svd(cov)
+        u, s, v = np.linalg.svd(cov)
         r = np.sqrt(s[0])
         ab = np.sqrt(s[1] / s[0])
-        theta = np.rad2deg(np.arctan2(u[0,0], u[0,1]))
+        theta = np.rad2deg(np.arctan2(u[0, 0], u[0, 1]))
         return EllipseE.fromRAbPhi(r, ab, -theta)
-    
+
     @property
     def e(self):
         return np.hypot(self.e1, self.e2)
@@ -83,15 +84,16 @@ class EllipseE(ParamList):
 
     def __repr__(self):
         return 're=%g, e1=%g, e2=%g' % (self.re, self.e1, self.e2)
+
     def __str__(self):
         return self.getName() + ': ' + repr(self)
 
     def getAllStepSizes(self, *args, **kwargs):
         # re
         # e1,e2: step toward e=0
-        ss = [ 0.01,
-               0.01 if self.e1 <= 0 else -0.01,
-               0.01 if self.e2 <= 0 else -0.01 ]
+        ss = [0.01,
+              0.01 if self.e1 <= 0 else -0.01,
+              0.01 if self.e2 <= 0 else -0.01]
         return ss
 
     def isLegal(self):
@@ -110,7 +112,7 @@ class EllipseE(ParamList):
         G *= 3600.
         GGT = np.dot(G, G.T)
         return GGT
-    
+
     def getRaDecBasis(self):
         ''' Returns a transformation matrix that takes vectors in r_e
         to delta-RA, delta-Dec vectors.
@@ -134,11 +136,11 @@ class EllipseE(ParamList):
         if e >= 1.:
             ab = maxab
         else:
-            ab = min(maxab, (1.+e)/(1.-e))
+            ab = min(maxab, (1. + e) / (1. - e))
         r_deg = self.re / 3600.
-        
+
         # G takes unit vectors (in r_e) to degrees (~intermediate world coords)
-        G = r_deg * np.array([[ ct / ab, st],
+        G = r_deg * np.array([[ct / ab, st],
                               [-st / ab, ct]])
         return G
 
@@ -149,6 +151,7 @@ class EllipseE(ParamList):
         # T takes pixels to unit vectors.
         T = np.dot(np.linalg.inv(G), cd)
         return T
+
 
 class EllipseESoft(EllipseE):
     '''
@@ -183,13 +186,13 @@ class EllipseESoft(EllipseE):
         # but this class does not.
         self.lowers = [None, None, None]
         self.uppers = [None, None, None]
-        
+
     @staticmethod
     def fromEllipseE(ell, maxe=0.999999):
         e = ell.e
         e = min(e, maxe)
         esoft = -np.log(1. - e)
-        return EllipseESoft(np.log(ell.re), ell.e1/e*esoft, ell.e2/e*esoft)
+        return EllipseESoft(np.log(ell.re), ell.e1 / e * esoft, ell.e2 / e * esoft)
 
     @staticmethod
     def fromCovariance(cov):
@@ -202,15 +205,15 @@ class EllipseESoft(EllipseE):
 
     @staticmethod
     def rAbPhiToESoft(r, ba, phi):
-        ab = 1./ba
+        ab = 1. / ba
         e = (ab - 1) / (ab + 1)
         ee = -np.log(1 - e)
-        angle = np.deg2rad(2.*(-phi))
+        angle = np.deg2rad(2. * (-phi))
         ee1 = ee * np.cos(angle)
         ee2 = ee * np.sin(angle)
         return (np.log(r), ee1, ee2)
 
-    #def getAllStepSizes(self, *args, **kwargs):
+    # def getAllStepSizes(self, *args, **kwargs):
     #    return [0.01] * 3
 
     def __repr__(self):
@@ -218,7 +221,7 @@ class EllipseESoft(EllipseE):
 
     @property
     def re(self):
-        #return np.exp(self.logre)
+        # return np.exp(self.logre)
         # HACK - limits shouldn't be HERE...
         return np.exp(np.clip(self.logre, -100, 100))
 
@@ -235,7 +238,7 @@ class EllipseESoft(EllipseE):
         '''
         Returns the "softened" ellipticity ee in [0, inf]
         '''
-        #return np.hypot(self.ee1, self.ee2)
+        # return np.hypot(self.ee1, self.ee2)
         # HACK - limits shouldn't be HERE...
         return np.clip(np.hypot(self.ee1, self.ee2), 0, 100.)
 
@@ -245,7 +248,7 @@ class EllipseESoft(EllipseE):
         Returns position angle in *radians*
         '''
         return np.arctan2(self.ee2, self.ee1) / 2.
-    
+
     # Have to override this because all parameter values are legal,
     # unlike the superclass.
     def isLegal(self):
@@ -253,25 +256,26 @@ class EllipseESoft(EllipseE):
 
     def toEllipseE(self, maxe=0.999999):
         return EllipseESoft.fromEllipseESoft(self, maxe=maxe)
-    
+
+
 if __name__ == '__main__':
     ps = PlotSequence('ell')
 
     #r,ab,phi = 1., 0.5, 55.
-    for r,ab,phi in [(1., 1.0, 0.),
-                     (1., 0.5, 0.),
-                     (2., 0.25, 0.),
-                     (2., 0.5, 90.),
-                     (2., 0.5, 180.),
-                     (2., 0.5, 45.),
-                     (2., 0.5, 30.),
-                     (2., 0.1, -30.),
-                     ]:
+    for r, ab, phi in [(1., 1.0, 0.),
+                       (1., 0.5, 0.),
+                       (2., 0.25, 0.),
+                       (2., 0.5, 90.),
+                       (2., 0.5, 180.),
+                       (2., 0.5, 45.),
+                       (2., 0.5, 30.),
+                       (2., 0.1, -30.),
+                       ]:
         ell = GalaxyShape(r, ab, phi)
         print('ell:', ell)
         ebasis = ell.getRaDecBasis()
         print('basis:', ebasis)
-        
+
         esoft = EllipseESoft.fromRAbPhi(r, ab, phi)
         print('soft:', esoft)
         sbasis = esoft.getRaDecBasis()
@@ -282,93 +286,90 @@ if __name__ == '__main__':
         nbasis = enorm.getRaDecBasis()
         print('basis:', nbasis)
 
-        angle = np.linspace(0., 2.*np.pi, 100)
-        xx,yy = np.sin(angle), np.cos(angle)
-        xy = np.vstack((xx,yy)) * 3600.
+        angle = np.linspace(0., 2. * np.pi, 100)
+        xx, yy = np.sin(angle), np.cos(angle)
+        xy = np.vstack((xx, yy)) * 3600.
 
         plt.clf()
         txy = np.dot(ebasis, xy)
-        plt.plot(txy[0,:], txy[1,:], 'r-', alpha=0.25, lw=4)
+        plt.plot(txy[0, :], txy[1, :], 'r-', alpha=0.25, lw=4)
         txy = np.dot(sbasis, xy)
-        plt.plot(txy[0,:], txy[1,:], 'b-', alpha=0.5, lw=2)
+        plt.plot(txy[0, :], txy[1, :], 'b-', alpha=0.5, lw=2)
         txy = np.dot(nbasis, xy)
-        plt.plot(txy[0,:], txy[1,:], 'g-', alpha=0.8)
+        plt.plot(txy[0, :], txy[1, :], 'g-', alpha=0.8)
         plt.axis('equal')
         ps.savefig()
 
     import sys
-    
-    angle = np.linspace(0., 2.*np.pi, 20)
-    xx,yy = np.sin(angle), np.cos(angle)
-    xy = np.vstack((xx,yy))
-    #print 'xy', xy.shape
 
-    n1,n2 = 7,7
-    E1,E2 = np.meshgrid(np.linspace(-1.2, 1.2, n2), np.linspace(-1.2, 1.2, n2))
-    
+    angle = np.linspace(0., 2. * np.pi, 20)
+    xx, yy = np.sin(angle), np.cos(angle)
+    xy = np.vstack((xx, yy))
+    # print 'xy', xy.shape
+
+    n1, n2 = 7, 7
+    E1, E2 = np.meshgrid(np.linspace(-1.2, 1.2, n2),
+                         np.linspace(-1.2, 1.2, n2))
+
     plt.clf()
-    for logre,cc in zip([4,5,6], 'rgb'):
-        for e1,e2 in zip(E1.ravel(), E2.ravel()):
+    for logre, cc in zip([4, 5, 6], 'rgb'):
+        for e1, e2 in zip(E1.ravel(), E2.ravel()):
             e = EllipseESoft(logre, e1, e2)
             print(e)
 
             #ec = e.copy()
-            #print 'Copy:', ec
+            # print 'Copy:', ec
 
             T = e.getRaDecBasis()
-            #print 'T', T
+            # print 'T', T
             txy = np.dot(T, xy)
-            #print 'txy', txy.shape
-            plt.plot(e1 + txy[0,:], e2 + txy[1,:], '-', color=cc, alpha=0.5)
+            # print 'txy', txy.shape
+            plt.plot(e1 + txy[0, :], e2 + txy[1, :], '-', color=cc, alpha=0.5)
     plt.xlabel('ee1')
     plt.ylabel('ee2')
     plt.axis('scaled')
     plt.title('EllipseESoft')
     ps.savefig()
 
-
     plt.clf()
-    for re,cc in zip([np.exp(4.), np.exp(5.), np.exp(6.)], 'rgb'):
-        for e1,e2 in zip(E1.ravel(), E2.ravel()):
+    for re, cc in zip([np.exp(4.), np.exp(5.), np.exp(6.)], 'rgb'):
+        for e1, e2 in zip(E1.ravel(), E2.ravel()):
             e = EllipseE(re, e1, e2)
             print(e)
             T = e.getRaDecBasis()
-            #print 'T', T
+            # print 'T', T
             txy = np.dot(T, xy)
-            #print 'txy', txy.shape
-            plt.plot(e1 + txy[0,:], e2 + txy[1,:], '-', color=cc, alpha=0.5)
+            # print 'txy', txy.shape
+            plt.plot(e1 + txy[0, :], e2 + txy[1, :], '-', color=cc, alpha=0.5)
     plt.xlabel('e1')
     plt.ylabel('e2')
     plt.axis('scaled')
     plt.title('EllipseE')
     ps.savefig()
 
-
-
-
-
-    W,H = 500,500
-    img = np.zeros((H,W), np.float32)
+    W, H = 500, 500
+    img = np.zeros((H, W), np.float32)
     sig1 = 1.
     pixscale = 1.
     psf = NCircularGaussianPSF([1.5], [1.])
-    tim = Image(data=img, inverr=np.zeros_like(img) + (1./sig1),
+    tim = Image(data=img, inverr=np.zeros_like(img) + (1. / sig1),
                 psf=psf, wcs=NullWCS(pixscale=pixscale), sky=ConstantSky(0.),
                 photocal=LinearPhotoCal(1.),
-                domask=False, zr=[-2.*sig1, 3.*sig1])
+                domask=False, zr=[-2. * sig1, 3. * sig1])
 
     cat = []
     logre = 3.
     x = np.linspace(0, W, n1, endpoint=False)
-    x += (x[1]-x[0])/2.
+    x += (x[1] - x[0]) / 2.
     y = np.linspace(0, H, n2, endpoint=False)
-    y += (y[1]-y[0])/2.
-    xx,yy = np.meshgrid(x, y)
-    for e1,e2,x,y in zip(E1.ravel(), E2.ravel(), xx.ravel(), yy.ravel()):
+    y += (y[1] - y[0]) / 2.
+    xx, yy = np.meshgrid(x, y)
+    for e1, e2, x, y in zip(E1.ravel(), E2.ravel(), xx.ravel(), yy.ravel()):
         e = EllipseESoft(logre, e1, e2)
-        gal = ExpGalaxy(PixPos(x, y), Flux(500.*sig1), e)
+        gal = ExpGalaxy(PixPos(x, y), Flux(500. * sig1), e)
         # FIXME -- if 'halfsize' is not set, checks e.ab, e.re, etc.
-        gal.halfsize = int(np.ceil(gal.nre * np.exp(logre) / (pixscale/3600.)))
+        gal.halfsize = int(
+            np.ceil(gal.nre * np.exp(logre) / (pixscale / 3600.)))
         print('Galaxy', gal)
         cat.append(gal)
 
@@ -380,16 +381,15 @@ if __name__ == '__main__':
         # gal = ExpGalaxy(PixPos(x, y), Flux(50.*sig1), GalaxyShape(r,ab,theta))
         # gal.halfsize = 20.
         # cat2.append(gal)
-        # 
+        #
         # px,py = tim.wcs.positionToPixel(gal.pos)
         # print 'px,py', px,py
 
     ima = dict(interpolation='nearest', origin='lower', cmap='gray',
-               vmin=-1*sig1, vmax=3*sig1)
-        
+               vmin=-1 * sig1, vmax=3 * sig1)
+
     tractor = Tractor([tim], cat)
     mod = tractor.getModelImage(0)
     plt.clf()
     plt.imshow(mod, **ima)
     ps.savefig()
-

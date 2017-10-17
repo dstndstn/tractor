@@ -26,24 +26,30 @@ from __future__ import print_function
 
 from utils import Params
 
+
 class Observation(object):
     '''
     Observed data with Gaussian errors.
     '''
+
     def __init__(self, data, inverr):
         self.data = data
         self.inverr = inverr
+
 
 class Prediction(object):
     '''
     Observation-space prediction of a Model.
     '''
+
     def __init__(self, data):
         self.data = data
 
+
 class Model(Params):
     pass
-        
+
+
 class DieselEngine(object):
     def __init__(self, observations, model):
         self.obs = observations
@@ -53,7 +59,7 @@ class DieselEngine(object):
                  shared_params=True, variance=False, just_variance=False):
         '''
         Performs *one step* of linearized least-squares + line search.
-        
+
         Returns (delta-logprob, parameter update X, alpha stepsize)
 
         If variance=True,
@@ -73,7 +79,7 @@ class DieselEngine(object):
         if variance:
             if len(X) == 0:
                 return 0, X, 0, None
-            X,var = X
+            X, var = X
             if just_variance:
                 return var
 
@@ -86,7 +92,7 @@ class DieselEngine(object):
         '''
         Computes observation-space derivatives for each model
         parameter.
-        
+
         Returns a nested list of tuples:
 
         allderivs: [
@@ -102,15 +108,12 @@ class DieselEngine(object):
 
         for obs in self.observations:
             derivs = self.model.getParamDerivatives(obs)
-            for k,deriv in enumerate(derivs):
+            for k, deriv in enumerate(derivs):
                 if deriv is None:
                     continue
                 allderivs[k].append((deriv, obs))
 
         return allderivs
-
-    
-
 
     def tryUpdates(self, X, alphas=None):
         if alphas is None:
@@ -124,7 +127,7 @@ class DieselEngine(object):
         p0 = self.getParams()
         for alpha in alphas:
             logverb('  Stepping with alpha =', alpha)
-            pa = [p + alpha * d for p,d in zip(p0, X)]
+            pa = [p + alpha * d for p, d in zip(p0, X)]
             self.setParams(pa)
             pAfter = self.getLogProb()
             logverb('  Log-prob after:', pAfter)
@@ -140,20 +143,19 @@ class DieselEngine(object):
             if pAfter > pBest:
                 alphaBest = alpha
                 pBest = pAfter
-        
+
         if alphaBest is None or alphaBest == 0:
             print("Warning: optimization is borking")
-            print("Parameter direction =",X)
+            print("Parameter direction =", X)
             print("Parameters, step sizes, updates:")
-            for n,p,s,x in zip(self.getParamNames(), self.getParams(), self.getStepSizes(), X):
+            for n, p, s, x in zip(self.getParamNames(), self.getParams(), self.getStepSizes(), X):
                 print(n, '=', p, '  step', s, 'update', x)
         if alphaBest is None:
             self.setParams(p0)
             return 0, 0.
 
-        logmsg('  Stepping by', alphaBest, 'for delta-logprob', pBest - pBefore)
-        pa = [p + alphaBest * d for p,d in zip(p0, X)]
+        logmsg('  Stepping by', alphaBest,
+               'for delta-logprob', pBest - pBefore)
+        pa = [p + alphaBest * d for p, d in zip(p0, X)]
         self.setParams(pa)
         return pBest - pBefore, alphaBest
-
-    

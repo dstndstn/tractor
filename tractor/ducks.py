@@ -12,15 +12,17 @@ Most of this code is not actually used at all.  It's here for
 documentation purposes.
 """
 
+
 class Params(object):
     '''
     A set of parameters that can be optimized by the Tractor.
 
     This is a duck-type definition.
     '''
+
     def copy(self):
         return None
-        
+
     def hashkey(self):
         '''
         Returns a tuple containing the state of this `Params` object
@@ -31,35 +33,42 @@ class Params(object):
         '''
         return ()
 
-    #def __hash__(self):
+    # def __hash__(self):
     #    ''' Params must be hashable. '''
     #    return None
-    #def __eq__(self, other):
+    # def __eq__(self, other):
 
     def getParamNames(self):
         ''' Returns a list of strings: the names of the parameters. '''
         return []
+
     def numberOfParams(self):
         ''' Returns the number of parameters (ie, number of scalar
         values).'''
         return len(self.getParams())
+
     def getParams(self):
         ''' Returns a *copy* of the current parameter values as an
         iterable (eg, list)'''
         return []
+
     def getAllParams(self):
         return self.getParams()
 
     def getAllStepSizes(self, *args, **kwargs):
         return self.getStepSizes(*args, **kwargs)
+
     def getStepSizes(self, *args, **kwargs):
         ''' Returns "reasonable" step sizes for the parameters.'''
         return []
+
     def setAllStepSizes(self, ss):
         self.setStepSizes(ss)
+
     def setStepSizes(self, ss):
         assert(len(ss) == self.numberOfParams())
         pass
+
     def setParams(self, p):
         '''
         Sets the parameter values to the values in the given
@@ -68,8 +77,10 @@ class Params(object):
         '''
         assert(len(p) == self.numberOfParams())
         pass
+
     def setAllParams(self, p):
         return self.setParams(p)
+
     def setParam(self, i, p):
         '''
         Sets parameter index 'i' to new value 'p'.
@@ -80,10 +91,13 @@ class Params(object):
         Returns the old value.
         '''
         return None
+
     def getLowerBounds(self):
         return []
+
     def getUpperBounds(self):
         return []
+
     def getGaussianPriors(self):
         '''
         Returns a list of
@@ -91,6 +105,7 @@ class Params(object):
         of Gaussian priors on this set of parameters.
         '''
         return []
+
     def getLogPrior(self):
         '''
         Returns the prior, evaluated at the current values of
@@ -130,11 +145,12 @@ class Params(object):
         We also require *mub*, which is like "pb" but not shifted
         relative to the current parameter values; ie, it's the mean of
         the Gaussian.
-        
+
         This function must take frozen-ness of parameters into account
         (this is implied by the "numberOfParams" shape requirement).
         '''
         return None
+
 
 class ImageCalibration(object):
     def toFitsHeader(self, hdr, prefix=''):
@@ -164,12 +180,13 @@ class ImageCalibration(object):
             params.append(hdr.get(k))
         obj.setAllParams(params)
         return obj
-        
-    
+
+
 class Sky(ImageCalibration, Params):
     '''
     Duck-type definition for a sky model.
     '''
+
     def getParamDerivatives(self, tractor, img, srcs):
         '''
         Returns [ Patch, Patch, ... ], of length numberOfParams(),
@@ -207,12 +224,14 @@ class Sky(ImageCalibration, Params):
         s = self.copy()
         s.shift(x0, y0)
         return s
-    
+
+
 class Source(Params):
     '''
     This is the duck-type definition of a Source (star, galaxy, etc)
     that the Tractor uses.
     '''
+
     def getModelPatch(self, img, minsb=0., modelMask=None):
         '''
         Returns a Patch object containing a rendering of this Source
@@ -253,6 +272,7 @@ class Source(Params):
         '''
         pass
 
+
 class Brightness(Params):
     '''
     Duck-type definition of the brightness of an astronomical source.
@@ -262,6 +282,7 @@ class Brightness(Params):
     specific `Image`.
     '''
     pass
+
 
 class PhotoCal(ImageCalibration, Params):
     '''
@@ -278,6 +299,7 @@ class PhotoCal(ImageCalibration, Params):
     of freedom in the definition of the `Brightness` object, and
     `PhotoCal` has to be kept consistent with that.
     '''
+
     def brightnessToCounts(self, brightness):
         '''Converts `brightness`, a `Brightness` duck, into counts.
 
@@ -295,14 +317,16 @@ class Position(Params):
     in a specific `Image`.
     '''
     pass
-    
+
+
 class Time(Params):
     '''
     Objects of type "Time" should define arithmetic operators (at least
     __sub__, __add__, __isub__, __iadd__)
     '''
-    #def __sub__(self, other):
+    # def __sub__(self, other):
     #   pass
+
     def getSunTheta(self):
         ''' Returns the angle of the Earth's (mean?) anomaly at this time;
         ie, the time of year expressed as an angle in radians.'''
@@ -310,11 +334,12 @@ class Time(Params):
 
     def toYears():
         pass
-    
+
+
 class WCS(ImageCalibration, Params):
     '''
     Duck-type definition of World Coordinate System.
-    
+
     Converts between Position objects and Image pixel coordinates.
 
     In general, there is a lot of freedom in the definition of the
@@ -323,6 +348,7 @@ class WCS(ImageCalibration, Params):
     positions (`PixPos`), then `WCS` has to be null (or close to
     that); `NullWCS`.
     '''
+
     def positionToPixel(self, pos, src=None):
         '''
         Converts a :class:`tractor.Position` *pos* into ``x,y`` pixel
@@ -370,15 +396,15 @@ class WCS(ImageCalibration, Params):
         cd = self.cdAtPixel(px, py)
         cdi = np.linalg.inv(cd)
         return cdi
-    
+
     def pixscale_at(self, x, y):
         '''
         Returns the local pixel scale at the given *x*,*y* pixel coords,
         in *arcseconds* per pixel.
         '''
         import numpy as np
-        return 3600. * np.sqrt(np.abs(np.linalg.det(self.cdAtPixel(x,y))))
-    
+        return 3600. * np.sqrt(np.abs(np.linalg.det(self.cdAtPixel(x, y))))
+
     def shifted(self, dx, dy):
         '''
         Returns a new WCS object appropriate for the subimage starting
@@ -386,10 +412,12 @@ class WCS(ImageCalibration, Params):
         '''
         return None
 
+
 class PSF(ImageCalibration, Params):
     '''
     Duck-type definition of a point-spread function.
     '''
+
     def getPointSourcePatch(self, px, py, minval=0., modelMask=None):
         '''
         Returns a `Patch`, a rendering of a point source at the given
@@ -420,7 +448,7 @@ class PSF(ImageCalibration, Params):
         Returns a PSF model for the subimage starting at x0,y0.
         '''
         return None
-    
+
     # Optional: Allows galaxy models to render via analytic convolution:
     # def getMixtureOfGaussians(self, px=None, py=None, **kwargs):
     #     '''

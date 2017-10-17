@@ -1,4 +1,6 @@
 from __future__ import print_function
+
+
 class TractorCacheMixin(object):
     def __init__(self, *args, **kwargs):
         from .cache import Cache
@@ -14,7 +16,7 @@ class TractorCacheMixin(object):
 
     def clearCache(self):
         self.cache.clear()
-        
+
     def getModelPatch(self, img, src, minsb=None, **kwargs):
         if self.cache is None:
             return super(TractorCacheMixin, self).getModelPatch(
@@ -22,7 +24,7 @@ class TractorCacheMixin(object):
 
         deps = (img.hashkey(), src.hashkey())
         deps = hash(deps)
-        mv,mod = self.cache.get(deps, (0.,None))
+        mv, mod = self.cache.get(deps, (0., None))
         if minsb is None:
             minsb = img.modelMinval
         if mv > minsb:
@@ -32,7 +34,7 @@ class TractorCacheMixin(object):
         else:
             mod = super(TractorCacheMixin, self).getModelPatch(
                 img, src, minsb=minsb, **kwargs)
-            self.cache.put(deps, (minsb,mod))
+            self.cache.put(deps, (minsb, mod))
 
         # DEBUG
         if mod is not None and mod.patch is not None:
@@ -40,6 +42,7 @@ class TractorCacheMixin(object):
             assert(np.all(np.isfinite(mod.patch)))
 
         return mod
+
 
 try:
     # python 2.7
@@ -53,9 +56,12 @@ This code is based on: http://code.activestate.com/recipes/498245-lru-and-lfu-ca
 By: Raymond Hettinger
 License: Python Software Foundation (PSF) license.
 '''
+
+
 class Cache(object):
     class Entry(object):
         pass
+
     def __init__(self, maxsize=1000, sizeattr='size'):
         self.clear()
         self.maxsize = maxsize
@@ -83,7 +89,7 @@ class Cache(object):
             #   print 'real', refcnt(vv)
         self.hits = 0
         self.misses = 0
-        
+
     def __setitem__(self, key, val):
         sz = 0
         if hasattr(val, self.sizeattr):
@@ -114,32 +120,38 @@ class Cache(object):
             return e
         e.hits += 1
         return e.val
+
     def __len__(self):
         return len(self.dict)
+
     def put(self, k, v):
         self[k] = v
+
     def get(self, *args):
         if len(args) == 1:
             key = args[0]
             return self.__getitem__(key)
         assert(len(args) == 2)
-        key,default = args
+        key, default = args
         try:
             return self.__getitem__(key)
         except:
             return default
+
     def about(self):
         print('Cache has', len(self), 'items:')
-        for k,v in self.dict.items():
+        for k, v in self.dict.items():
             if v is None:
                 continue
             print('  size', v.size, 'hits', v.hits)
+
     def __str__(self):
-        s =  'Cache: %i items, total of %i hits, %i misses' % (len(self), self.hits, self.misses)
+        s = 'Cache: %i items, total of %i hits, %i misses' % (
+            len(self), self.hits, self.misses)
         nnone = 0
         hits = 0
         size = 0
-        for k,v in self.dict.items():
+        for k, v in self.dict.items():
             if v is None:
                 nnone += 1
                 continue
@@ -148,12 +160,12 @@ class Cache(object):
                 continue
             hits += v.hits
             size += v.size
-        s +=  ', %i entries are None' % nnone
-        s +=  '; current cache entries: %i hits, %i pixels' % (hits, size)
+        s += ', %i entries are None' % nnone
+        s += '; current cache entries: %i hits, %i pixels' % (hits, size)
         return s
 
     def printItems(self):
-        for k,v in self.dict.items():
+        for k, v in self.dict.items():
             val = None
             hits = None
             size = None
@@ -166,19 +178,19 @@ class Cache(object):
 
     def totalSize(self):
         sz = 0
-        for k,v in self.dict.items():
+        for k, v in self.dict.items():
             if v is None:
                 continue
             sz += v.size
         return sz
-        
+
     def printStats(self):
         print('Cache has', len(self), 'items')
         print('Total of', self.hits, 'cache hits and', self.misses, 'misses')
         nnone = 0
         hits = 0
         size = 0
-        for k,v in self.dict.items():
+        for k, v in self.dict.items():
             if v is None:
                 nnone += 1
                 continue
@@ -187,23 +199,28 @@ class Cache(object):
         print('  ', nnone, 'entries are None')
         print('Total number of hits of cache entries:', hits)
         print(' Total size (pixels) of cache entries:', size)
-        
+
 
 class NullCache(object):
     def __getitem__(self, key):
         raise KeyError
+
     def __setitem__(self, key, val):
         pass
+
     def clear(self):
         pass
+
     def get(self, *args):
         if len(args) == 1:
             return self.__getitem__(args[0])
         return args[1]
+
     def put(self, *args):
         pass
+
     def totalSize(self):
         return 0
+
     def __len__(self):
         return len(self.dict)
-

@@ -34,18 +34,19 @@ from tractor.fitpsf import em_init_params
 
 logger = logging.getLogger('wise')
 
+
 def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
                       nanomaggies=False, mask_gz=False, unc_gz=False,
                       sipwcs=False, constantInvvar=False,
-                      roi = None,
-                      zrsigs = [-3,10],
+                      roi=None,
+                      zrsigs=[-3, 10],
                       ):
-    intfn  = basefn + '-int-1b.fits'
+    intfn = basefn + '-int-1b.fits'
     maskfn = basefn + '-msk-1b.fits'
 
     if mask_gz:
         maskfn = maskfn + '.gz'
-    uncfn  = basefn + '-unc-1b.fits'
+    uncfn = basefn + '-unc-1b.fits'
     if unc_gz:
         uncfn = uncfn + '.gz'
 
@@ -61,33 +62,34 @@ def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
 
     # Read enough of the image to get its size
     Fint = fitsio.FITS(intfn)
-    H,W = Fint[0].get_info()['dims']
+    H, W = Fint[0].get_info()['dims']
 
     if radecrad is not None:
-        r,d,rad = radecrad
-        x,y = twcs.positionToPixel(tractor.RaDecPos(r,d))
+        r, d, rad = radecrad
+        x, y = twcs.positionToPixel(tractor.RaDecPos(r, d))
         pixrad = rad / (twcs.pixel_scale() / 3600.)
         print('Tractor WCS:', twcs)
-        print('RA,Dec,rad', r,d,rad, 'becomes x,y,pixrad', x,y,pixrad)
-        roi = (x-pixrad, x+pixrad+1, y-pixrad, y+pixrad+1)
+        print('RA,Dec,rad', r, d, rad, 'becomes x,y,pixrad', x, y, pixrad)
+        roi = (x - pixrad, x + pixrad + 1, y - pixrad, y + pixrad + 1)
 
     if radecroi is not None:
-        ralo,rahi, declo,dechi = radecroi
-        xy = [twcs.positionToPixel(tractor.RaDecPos(r,d))
-              for r,d in [(ralo,declo), (ralo,dechi), (rahi,declo), (rahi,dechi)]]
+        ralo, rahi, declo, dechi = radecroi
+        xy = [twcs.positionToPixel(tractor.RaDecPos(r, d))
+              for r, d in [(ralo, declo), (ralo, dechi), (rahi, declo), (rahi, dechi)]]
         xy = np.array(xy)
-        x0,x1 = xy[:,0].min(), xy[:,0].max()
-        y0,y1 = xy[:,1].min(), xy[:,1].max()
-        print('RA,Dec ROI', ralo,rahi, declo,dechi, 'becomes x,y ROI', x0,x1,y0,y1)
-        roi = (x0,x1+1, y0,y1+1)
+        x0, x1 = xy[:, 0].min(), xy[:, 0].max()
+        y0, y1 = xy[:, 1].min(), xy[:, 1].max()
+        print('RA,Dec ROI', ralo, rahi, declo, dechi,
+              'becomes x,y ROI', x0, x1, y0, y1)
+        roi = (x0, x1 + 1, y0, y1 + 1)
 
     if roi is not None:
-        x0,x1,y0,y1 = roi
+        x0, x1, y0, y1 = roi
         x0 = int(np.floor(x0))
-        x1 = int(np.ceil (x1))
+        x1 = int(np.ceil(x1))
         y0 = int(np.floor(y0))
-        y1 = int(np.ceil (y1))
-        roi = (x0,x1, y0,y1)
+        y1 = int(np.ceil(y1))
+        roi = (x0, x1, y0, y1)
         # Clip to image size...
         x0 = np.clip(x0, 0, W)
         x1 = np.clip(x1, 0, W)
@@ -99,11 +101,11 @@ def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
         assert(x0 < x1)
         assert(y0 < y1)
         #roi = (x0,x1,y0,y1)
-        twcs.setX0Y0(x0,y0)
+        twcs.setX0Y0(x0, y0)
 
     else:
-        x0,x1,y0,y1 = 0,W, 0,H
-        roi = (x0,x1,y0,y1)
+        x0, x1, y0, y1 = 0, W, 0, H
+        roi = (x0, x1, y0, y1)
 
     ihdr = Fint[0].read_header()
     data = Fint[0][y0:y1, x0:x1]
@@ -111,22 +113,20 @@ def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
     band = ihdr['BAND']
 
     F = fitsio.FITS(uncfn)
-    assert(F[0].get_info()['dims'] == [H,W])
+    assert(F[0].get_info()['dims'] == [H, W])
     unc = F[0][y0:y1, x0:x1]
 
     F = fitsio.FITS(maskfn)
-    assert(F[0].get_info()['dims'] == [H,W])
+    assert(F[0].get_info()['dims'] == [H, W])
     mask = F[0][y0:y1, x0:x1]
 
-
     # HACK -- circular Gaussian PSF of fixed size...
-    # in arcsec 
-    fwhms = { 1: 6.1, 2: 6.4, 3: 6.5, 4: 12.0 }
+    # in arcsec
+    fwhms = {1: 6.1, 2: 6.4, 3: 6.5, 4: 12.0}
     # -> sigma in pixels
     sig = fwhms[band] / 2.35 / twcs.pixel_scale()
-    #print 'PSF sigma', sig, 'pixels'
+    # print 'PSF sigma', sig, 'pixels'
     tpsf = tractor.NCircularGaussianPSF([sig], [1.])
-
 
     filter = 'w%i' % band
     if filtermap:
@@ -138,8 +138,8 @@ def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
     else:
         photocal = tractor.MagsPhotoCal(filter, zp)
 
-    #print 'Image median:', np.median(data)
-    #print 'unc median:', np.median(unc)
+    # print 'Image median:', np.median(data)
+    # print 'unc median:', np.median(unc)
 
     sky = np.median(data)
     tsky = tractor.ConstantSky(sky)
@@ -181,9 +181,9 @@ def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
     # 30 reserved
     # 31 not used: sign bit
 
-    goodmask = ((mask & sum([1<<bit for bit in [0,1,2,3,4,5,6,7, 9,
-                                                10,11,12,13,14,15,16,17,18,
-                                                21,26,27,28]])) == 0)
+    goodmask = ((mask & sum([1 << bit for bit in [0, 1, 2, 3, 4, 5, 6, 7, 9,
+                                                  10, 11, 12, 13, 14, 15, 16, 17, 18,
+                                                  21, 26, 27, 28]])) == 0)
     sigma1 = np.median(unc[goodmask])
     zr = np.array(zrsigs) * sigma1 + sky
 
@@ -193,7 +193,7 @@ def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
     # varying
     vinvvar = np.zeros_like(data)
     vinvvar[goodmask] = 1. / (unc[goodmask])**2
-    
+
     bad = np.flatnonzero(np.logical_not(np.isfinite(vinvvar)))
     if len(bad):
         vinvvar.flat[bad] = 0.
@@ -214,7 +214,7 @@ def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
     tim = tractor.Image(data=data, invvar=invvar, psf=tpsf, wcs=twcs,
                         sky=tsky, photocal=photocal, time=time, name=name, zr=zr,
                         domask=False)
-    tim.extent = [x0,x1,y0,y1]
+    tim.extent = [x0, x1, y0, y1]
     tim.sigma1 = sigma1
     #tim.roi = roi
 
@@ -272,42 +272,43 @@ def read_wise_level3(basefn, radecroi=None, filtermap={},
 
     twcs = tractor.WcslibWcs(intfn)
     print('WCS', twcs)
-    #twcs.debug()
+    # twcs.debug()
     print('pixel scale', twcs.pixel_scale())
 
     # HACK -- circular Gaussian PSF of fixed size...
-    # in arcsec 
-    fwhms = { 1: 6.1, 2: 6.4, 3: 6.5, 4: 12.0 }
+    # in arcsec
+    fwhms = {1: 6.1, 2: 6.4, 3: 6.5, 4: 12.0}
     # -> sigma in pixels
     sig = fwhms[band] / 2.35 / twcs.pixel_scale()
     print('PSF sigma', sig, 'pixels')
     tpsf = tractor.NCircularGaussianPSF([sig], [1.])
 
     if radecroi is not None:
-        ralo,rahi, declo,dechi = radecroi
-        xy = [twcs.positionToPixel(tractor.RaDecPos(r,d))
-              for r,d in [(ralo,declo), (ralo,dechi), (rahi,declo), (rahi,dechi)]]
+        ralo, rahi, declo, dechi = radecroi
+        xy = [twcs.positionToPixel(tractor.RaDecPos(r, d))
+              for r, d in [(ralo, declo), (ralo, dechi), (rahi, declo), (rahi, dechi)]]
         xy = np.array(xy)
-        x0,x1 = xy[:,0].min(), xy[:,0].max()
-        y0,y1 = xy[:,1].min(), xy[:,1].max()
-        print('RA,Dec ROI', ralo,rahi, declo,dechi, 'becomes x,y ROI', x0,x1,y0,y1)
+        x0, x1 = xy[:, 0].min(), xy[:, 0].max()
+        y0, y1 = xy[:, 1].min(), xy[:, 1].max()
+        print('RA,Dec ROI', ralo, rahi, declo, dechi,
+              'becomes x,y ROI', x0, x1, y0, y1)
 
         # Clip to image size...
-        H,W = data.shape
-        x0 = max(0, min(x0, W-1))
+        H, W = data.shape
+        x0 = max(0, min(x0, W - 1))
         x1 = max(0, min(x1, W))
-        y0 = max(0, min(y0, H-1))
+        y0 = max(0, min(y0, H - 1))
         y1 = max(0, min(y1, H))
-        print(' clipped to', x0,x1,y0,y1)
+        print(' clipped to', x0, x1, y0, y1)
 
         data = data[y0:y1, x0:x1]
         unc = unc[y0:y1, x0:x1]
-        twcs.setX0Y0(x0,y0)
+        twcs.setX0Y0(x0, y0)
         print('Cut data to', data.shape)
 
     else:
-        H,W = data.shape
-        x0,x1,y0,y1 = 0,W, 0,H
+        H, W = data.shape
+        x0, x1, y0, y1 = 0, W, 0, H
 
     filter = 'w%i' % band
     if filtermap:
@@ -327,15 +328,16 @@ def read_wise_level3(basefn, radecroi=None, filtermap={},
     tsky = tractor.ConstantSky(sky)
 
     sigma1 = np.median(unc)
-    zr = np.array([-3,10]) * sigma1 + sky
+    zr = np.array([-3, 10]) * sigma1 + sky
 
     name = 'WISE ' + ihdr['COADDID'] + ' W%i' % band
 
-    tim = tractor.Image(data=data, invvar=1./(unc**2), psf=tpsf, wcs=twcs,
+    tim = tractor.Image(data=data, invvar=1. / (unc**2), psf=tpsf, wcs=twcs,
                         sky=tsky, photocal=photocal, name=name, zr=zr,
                         domask=False)
-    tim.extent = [x0,x1,y0,y1]
+    tim.extent = [x0, x1, y0, y1]
     return tim
+
 
 read_wise_coadd = read_wise_level3
 read_wise_image = read_wise_level1b
@@ -344,12 +346,12 @@ read_wise_image = read_wise_level1b
 def get_psf_model(band, pixpsf=False, xy=None, positive=True, cache={}):
 
     if xy is not None:
-        x,y = xy
-        gx = np.clip((int(x)/100) * 100 + 50, 50, 950)
-        gy = np.clip((int(x)/100) * 100 + 50, 50, 950)
+        x, y = xy
+        gx = np.clip((int(x) / 100) * 100 + 50, 50, 950)
+        gy = np.clip((int(x) / 100) * 100 + 50, 50, 950)
         assert(gx % 100 == 50)
         assert(gy % 100 == 50)
-        xy = (gx,gy)
+        xy = (gx, gy)
 
     key = (band, pixpsf, xy, positive)
     if key in cache:
@@ -358,12 +360,12 @@ def get_psf_model(band, pixpsf=False, xy=None, positive=True, cache={}):
     if xy is None:
         psf = pyfits.open('wise-psf-w%i-500-500.fits' % band)[0].data
     else:
-        ## ASSUME existence of wise-psf/wise-psf-w%i-%i-%i.fits on a grid 50,150,...,950
+        # ASSUME existence of wise-psf/wise-psf-w%i-%i-%i.fits on a grid 50,150,...,950
         fn = 'wise-psf/wise-psf-w%i-%03i-%03i.fits' % (band, gx, gy)
         psf = pyfits.open(fn)[0].data
 
     if pixpsf:
-        #print 'Read PSF image:', psf.shape, 'range', psf.min(), psf.max()
+        # print 'Read PSF image:', psf.shape, 'range', psf.min(), psf.max()
         if positive:
             psf = np.maximum(psf, 0.)
         psf = PixelizedPSF(psf)
@@ -373,11 +375,11 @@ def get_psf_model(band, pixpsf=False, xy=None, positive=True, cache={}):
     S = psf.shape[0]
     # number of Gaussian components
     K = 3
-    w,mu,sig = em_init_params(K, None, None, None)
+    w, mu, sig = em_init_params(K, None, None, None)
     II = psf.copy()
     II = np.maximum(II, 0)
     II /= II.sum()
-    xm,ym = -(S/2), -(S/2)
+    xm, ym = -(S / 2), -(S / 2)
     res = em_fit_2d(II, xm, ym, w, mu, sig)
     if res != 0:
         raise RuntimeError('Failed to fit PSF')
@@ -390,30 +392,32 @@ def get_psf_model(band, pixpsf=False, xy=None, positive=True, cache={}):
     cache[key] = psf
     return psf
 
+
 def forcedphot():
     T1 = fits_table('cs82data/cas-primary-DR8.fits')
     print(len(T1), 'primary')
     T1.cut(T1.nchild == 0)
     print(len(T1), 'children')
 
-    rl,rh = T1.ra.min(), T1.ra.max()
-    dl,dh = T1.dec.min(), T1.dec.max()
+    rl, rh = T1.ra.min(), T1.ra.max()
+    dl, dh = T1.dec.min(), T1.dec.max()
 
     tims = []
 
     # Coadd
     basedir = os.path.join('cs82data', 'wise', 'level3')
     basefn = os.path.join(basedir, '3342p000_ab41-w1')
-    tim = read_wise_coadd(basefn, radecroi=[rl,rh,dl,dh], nanomaggies=True)
+    tim = read_wise_coadd(basefn, radecroi=[rl, rh, dl, dh], nanomaggies=True)
     tims.append(tim)
 
     # Individuals
     basedir = os.path.join('cs82data', 'wise', 'level1b')
-    for fn in [ '04933b137-w1', '04937b137-w1', '04941b137-w1', '04945b137-w1', '04948a112-w1',
-                '04949b137-w1', '04952a112-w1', '04953b137-w1', '04956a112-w1', '04960a112-w1',
-                '04964a112-w1', '04968a112-w1', '05204a106-w1' ]:
+    for fn in ['04933b137-w1', '04937b137-w1', '04941b137-w1', '04945b137-w1', '04948a112-w1',
+               '04949b137-w1', '04952a112-w1', '04953b137-w1', '04956a112-w1', '04960a112-w1',
+               '04964a112-w1', '04968a112-w1', '05204a106-w1']:
         basefn = os.path.join(basedir, '04933b137-w1')
-        tim = read_wise_image(basefn, radecroi=[rl,rh,dl,dh], nanomaggies=True)
+        tim = read_wise_image(
+            basefn, radecroi=[rl, rh, dl, dh], nanomaggies=True)
         tims.append(tim)
 
     # tractor.Image's setMask() does a binary dilation on bad pixels!
@@ -429,34 +433,34 @@ def forcedphot():
     plt.plot(T1.ra, T1.dec, 'r.')
     for tim in tims:
         wcs = tim.getWcs()
-        H,W = tim.shape
-        rr,dd = [],[]
-        for x,y in zip([1,1,W,W,1], [1,H,H,1,1]):
-            rd = wcs.pixelToPosition(x,y)
+        H, W = tim.shape
+        rr, dd = [], []
+        for x, y in zip([1, 1, W, W, 1], [1, H, H, 1, 1]):
+            rd = wcs.pixelToPosition(x, y)
             rr.append(rd.ra)
             dd.append(rd.dec)
         plt.plot(rr, dd, 'k-', alpha=0.5)
-    #setRadecAxes(rl,rh,dl,dh)
+    # setRadecAxes(rl,rh,dl,dh)
     ps.savefig()
 
     T2 = fits_table('wise-cut.fits')
     T2.w1 = T2.w1mpro
-    R = 1./3600.
-    I,J,d = match_radec(T1.ra, T1.dec, T2.ra, T2.dec, R)
+    R = 1. / 3600.
+    I, J, d = match_radec(T1.ra, T1.dec, T2.ra, T2.dec, R)
     print(len(I), 'matches')
 
     refband = 'r'
     #bandnum = band_index('r')
 
     Lstar = (T1.probpsf == 1) * 1.0
-    Lgal  = (T1.probpsf == 0)
+    Lgal = (T1.probpsf == 0)
     fracdev = T1.get('fracdev_%s' % refband)
     Ldev = Lgal * fracdev
     Lexp = Lgal * (1. - fracdev)
 
-    ndev, nexp, ncomp,nstar = 0, 0, 0, 0
+    ndev, nexp, ncomp, nstar = 0, 0, 0, 0
     cat = Catalog()
-    #for i,t in enumerate(T1):
+    # for i,t in enumerate(T1):
 
     jmatch = np.zeros(len(T1))
     jmatch[:] = -1
@@ -493,15 +497,15 @@ def forcedphot():
             ebright = bright
         else:
             assert(False)
-                                             
+
         if hasdev:
-            re  = T1.get('devrad_%s' % refband)[i]
-            ab  = T1.get('devab_%s'  % refband)[i]
+            re = T1.get('devrad_%s' % refband)[i]
+            ab = T1.get('devab_%s' % refband)[i]
             phi = T1.get('devphi_%s' % refband)[i]
             dshape = GalaxyShape(re, ab, phi)
         if hasexp:
-            re  = T1.get('exprad_%s' % refband)[i]
-            ab  = T1.get('expab_%s'  % refband)[i]
+            re = T1.get('exprad_%s' % refband)[i]
+            ab = T1.get('expab_%s' % refband)[i]
             phi = T1.get('expphi_%s' % refband)[i]
             eshape = GalaxyShape(re, ab, phi)
 
@@ -522,7 +526,7 @@ def forcedphot():
 
     tractor = Tractor(tims, cat)
 
-    for i,tim in enumerate(tims):
+    for i, tim in enumerate(tims):
         ima = dict(interpolation='nearest', origin='lower',
                    vmin=tim.zr[0], vmax=tim.zr[1])
 
@@ -546,17 +550,17 @@ def forcedphot():
         plt.title('invvar')
         ps.savefig()
 
-        #for tim in tims:
+        # for tim in tims:
         wcs = tim.getWcs()
-        H,W = tim.shape
+        H, W = tim.shape
         poly = []
-        for r,d in zip([rl,rl,rh,rh,rl], [dl,dh,dh,dl,dl]):
-            x,y = wcs.positionToPixel(RaDecPos(r,d))
-            poly.append((x,y))
-        xx,yy = np.meshgrid(np.arange(W), np.arange(H))
+        for r, d in zip([rl, rl, rh, rh, rl], [dl, dh, dh, dl, dl]):
+            x, y = wcs.positionToPixel(RaDecPos(r, d))
+            poly.append((x, y))
+        xx, yy = np.meshgrid(np.arange(W), np.arange(H))
         xy = np.vstack((xx.flat, yy.flat)).T
         grid = points_inside_poly(xy, poly)
-        grid = grid.reshape((H,W))
+        grid = grid.reshape((H, W))
 
         tim.setInvvar(tim.getInvvar() * grid)
 
@@ -578,15 +582,16 @@ def forcedphot():
             plt.title('goodmask')
             ps.savefig()
 
-            miv = (1./(tim.uncplane)**2)
-            for bit in range(-1,32):
+            miv = (1. / (tim.uncplane)**2)
+            for bit in range(-1, 32):
                 if bit >= 0:
                     miv[(tim.maskplane & (1 << bit)) != 0] = 0.
                 if bit == 31:
                     plt.clf()
                     plt.imshow(miv, interpolation='nearest', origin='lower')
                     plt.gray()
-                    plt.title('invvar with mask bits up to %i blanked out' % bit)
+                    plt.title(
+                        'invvar with mask bits up to %i blanked out' % bit)
                     ps.savefig()
 
             # for bit in range(32):
@@ -600,53 +605,56 @@ def forcedphot():
 
 def wise_psf_plots():
     # Plot Aaron's PSF models
-    for i in range(1,5):
-        P=pyfits.open('psf%i.fits' % i)[0].data
+    for i in range(1, 5):
+        P = pyfits.open('psf%i.fits' % i)[0].data
         print(P.min(), P.max())
-        P/=P.max()
+        P /= P.max()
         plt.clf()
-        plt.imshow(np.log10(np.maximum(P,1e-8)), interpolation='nearest', origin='lower', vmax=0.01)
+        plt.imshow(np.log10(np.maximum(P, 1e-8)),
+                   interpolation='nearest', origin='lower', vmax=0.01)
         plt.colorbar()
         plt.savefig('psf-w%i.png' % i)
-        
+
     plt.clf()
-    for i,y in enumerate([0,500,1000]):
-        for j,x in enumerate([0,500,1000]):
-            P=pyfits.open('psf-1-%i-%i.fits' % (x,y))[0].data
-            P/=P.max()
-            plt.subplot(3, 3, 3*i+j+1)
-            plt.imshow(np.log10(np.maximum(P,1e-8)), interpolation='nearest', origin='lower', vmax=0.01)
-            #plt.colorbar()
+    for i, y in enumerate([0, 500, 1000]):
+        for j, x in enumerate([0, 500, 1000]):
+            P = pyfits.open('psf-1-%i-%i.fits' % (x, y))[0].data
+            P /= P.max()
+            plt.subplot(3, 3, 3 * i + j + 1)
+            plt.imshow(np.log10(np.maximum(P, 1e-8)),
+                       interpolation='nearest', origin='lower', vmax=0.01)
+            # plt.colorbar()
     plt.savefig('psf-w1-xy.png')
 
     psf = pyfits.open('psf%i.fits' % 1)[0].data
     S = psf.shape[0]
     # number of Gaussian components
-    for K in range(1,6):
-        w,mu,sig = em_init_params(K, None, None, None)
+    for K in range(1, 6):
+        w, mu, sig = em_init_params(K, None, None, None)
         II = psf.copy()
         II /= II.sum()
         II = np.maximum(II, 0)
-        xm,ym = -(S/2), -(S/2)
+        xm, ym = -(S / 2), -(S / 2)
         res = em_fit_2d(II, xm, ym, w, mu, sig)
         print('em_fit_2d result:', res)
         if res != 0:
             raise RuntimeError('Failed to fit PSF')
-        print('w,mu,sig', w,mu,sig)
+        print('w,mu,sig', w, mu, sig)
         mypsf = GaussianMixturePSF(w, mu, sig)
         mypsf.computeRadius()
 
         #
-        mypsf.radius = S/2
+        mypsf.radius = S / 2
         mod = mypsf.getPointSourcePatch(0., 0.)
         mod = mod.patch
         mod /= mod.sum()
 
         plt.clf()
-        plt.subplot(1,2,1)
-        ima = dict(interpolation='nearest', origin='lower', vmax=0.01 + np.log10(II.max()))
+        plt.subplot(1, 2, 1)
+        ima = dict(interpolation='nearest', origin='lower',
+                   vmax=0.01 + np.log10(II.max()))
         plt.imshow(np.log10(np.maximum(II, 1e-8)), **ima)
-        plt.subplot(1,2,2)
+        plt.subplot(1, 2, 2)
         plt.imshow(np.log10(np.maximum(mod, 1e-8)), **ima)
         plt.savefig('psf-k%i.png' % K)
 
@@ -747,39 +755,40 @@ def plot_unmatched():
     ps = PlotSequence('sdss')
 
     if False:
-        r,d = np.mean(rng[0]), np.mean(rng[1])
-    
-        RCF = radec_to_sdss_rcf(r, d, radius=2. * 60., tablefn='window_flist-DR9.fits')
+        r, d = np.mean(rng[0]), np.mean(rng[1])
+
+        RCF = radec_to_sdss_rcf(r, d, radius=2. * 60.,
+                                tablefn='window_flist-DR9.fits')
         print('Found', len(RCF), 'fields in range')
-        for run,c,f,ra,dec in RCF:
-            print('  ',run,c,f, 'at', ra,dec)
-    
+        for run, c, f, ra, dec in RCF:
+            print('  ', run, c, f, 'at', ra, dec)
+
         from astrometry.blind.plotstuff import PlotSequence
-        plot = Plotstuff(rdw=(r,d, 10), size=(1000,1000), outformat='png')
+        plot = Plotstuff(rdw=(r, d, 10), size=(1000, 1000), outformat='png')
         plot.color = 'white'
         plot.alpha = 0.5
         plot.apply_settings()
         T = fits_table('window_flist-DR9.fits')
-        I,J,d = match_radec(T.ra, T.dec, r,d, 10)
+        I, J, d = match_radec(T.ra, T.dec, r, d, 10)
         T.cut(I)
         print('Plotting', len(T))
-        for i,(m0,m1,n0,n1,node,incl) in enumerate(zip(T.mu_start, T.mu_end, T.nu_start, T.nu_end, T.node, T.incl)):
+        for i, (m0, m1, n0, n1, node, incl) in enumerate(zip(T.mu_start, T.mu_end, T.nu_start, T.nu_end, T.node, T.incl)):
             #rr,dd = [],[]
-            for j,(m,n) in enumerate([(m0,n0),(m0,n1),(m1,n1),(m1,n0),(m0,n0)]):
-                ri,di = munu_to_radec_deg(m, n, node, incl)
-                #rr.append(ri)
-                #dd.append(di)
+            for j, (m, n) in enumerate([(m0, n0), (m0, n1), (m1, n1), (m1, n0), (m0, n0)]):
+                ri, di = munu_to_radec_deg(m, n, node, incl)
+                # rr.append(ri)
+                # dd.append(di)
                 if j == 0:
-                    plot.move_to_radec(ri,di)
+                    plot.move_to_radec(ri, di)
                 else:
-                    plot.line_to_radec(ri,di)
+                    plot.line_to_radec(ri, di)
             plot.stroke()
         plot.plot_grid(2, 2, 5, 5)
         plot.write('fields.png')
 
     # CAS PhotoObjAll.resolveStatus bits
     sprim = 0x100
-    sbad  = 0x800
+    sbad = 0x800
     sedge = 0x1000
     sbest = 0x200
 
@@ -799,12 +808,14 @@ def plot_unmatched():
         T = fits_table('sdss-cas-testarea-3.fits')
         plt.clf()
         plothist(T.ra, T.dec, 200, range=rng)
-        plt.title('PhotoObjAll: SURVEY_PRIMARY | SURVEY_BADFIELD | SURVEY_EDGE | SURVEY_BEST')
+        plt.title(
+            'PhotoObjAll: SURVEY_PRIMARY | SURVEY_BADFIELD | SURVEY_EDGE | SURVEY_BEST')
         ps.savefig()
 
-        for j,(flags,txt) in enumerate([ (sprim, 'PRIM'), (sbad, 'BAD'), (sedge, 'EDGE'),
-                         (sbest, 'BEST')]):
-            I = np.flatnonzero((T.resolvestatus & (sprim | sbad | sedge | sbest)) == flags)
+        for j, (flags, txt) in enumerate([(sprim, 'PRIM'), (sbad, 'BAD'), (sedge, 'EDGE'),
+                                          (sbest, 'BEST')]):
+            I = np.flatnonzero(
+                (T.resolvestatus & (sprim | sbad | sedge | sbest)) == flags)
             print(len(I), 'with', txt)
             if len(I) == 0:
                 continue
@@ -813,9 +824,9 @@ def plot_unmatched():
             plt.title('%i with %s' % (len(I), txt))
             ps.savefig()
 
-        for j,(flags,txt) in enumerate([ (sprim | sbad, 'PRIM + BAD'),
-                         (sprim | sedge, 'PRIM + EDGE'),
-                         (sprim | sbest, 'PRIM + BEST') ]):
+        for j, (flags, txt) in enumerate([(sprim | sbad, 'PRIM + BAD'),
+                                          (sprim | sedge, 'PRIM + EDGE'),
+                                          (sprim | sbest, 'PRIM + BEST')]):
             I = np.flatnonzero((T.resolvestatus & flags) > 0)
             print(len(I), 'with', txt)
             if len(I) == 0:
@@ -825,7 +836,6 @@ def plot_unmatched():
             plt.title('%i with %s' % (len(I), txt))
             ps.savefig()
 
-
         # for run in np.unique(T.run):
         #   I = (T.run == run)
         #   plt.clf()
@@ -833,25 +843,27 @@ def plot_unmatched():
         #   plt.title('Run %i' % run)
         #   ps.savefig()
 
-        R = 1./3600.
-        I,J,d = match_radec(T.ra, T.dec, T.ra, T.dec, R, notself=True)
+        R = 1. / 3600.
+        I, J, d = match_radec(T.ra, T.dec, T.ra, T.dec, R, notself=True)
         print(len(I), 'matches')
         plt.clf()
-        loghist((T.ra[I]-T.ra[J])*3600., (T.dec[I]-T.dec[J])*3600., 200, range=((-1,1),(-1,1)))
+        loghist((T.ra[I] - T.ra[J]) * 3600., (T.dec[I] - T.dec[J])
+                * 3600., 200, range=((-1, 1), (-1, 1)))
         ps.savefig()
 
     ps = PlotSequence('forced')
-    
+
     basedir = os.environ.get('BIGBOSS_DATA', '/project/projectdirs/bigboss')
     wisedatadir = os.path.join(basedir, 'data', 'wise')
     l1bdir = os.path.join(wisedatadir, 'level1b')
 
-    wisecat = fits_table(os.path.join(wisedatadir, 'catalogs', 'wisecat2.fits'))
-    #plt.clf()
+    wisecat = fits_table(os.path.join(
+        wisedatadir, 'catalogs', 'wisecat2.fits'))
+    # plt.clf()
     #plothist(wisecat.ra, wisecat.dec, 200, range=rng)
-    #plt.savefig('wisecat.png')
+    # plt.savefig('wisecat.png')
 
-    (ra0,ra1, dec0,dec1) = radecroi
+    (ra0, ra1, dec0, dec1) = radecroi
     ra = (ra0 + ra1) / 2.
     dec = (dec0 + dec1) / 2.
 
@@ -863,29 +875,28 @@ def plot_unmatched():
     cas.cut((cas.resolvestatus & sedge) == 0)
     print('Cut to ', len(cas), 'without SURVEY_EDGE set')
 
-
     # Check out WISE / SDSS matches.
     wise = wisecat
     sdss = cas
     print(len(sdss), 'SDSS sources')
     print(len(wise), 'WISE sources')
     R = 10.
-    I,J,d = match_radec(wise.ra, wise.dec, sdss.ra, sdss.dec,
-                        R/3600., nearest=True)
+    I, J, d = match_radec(wise.ra, wise.dec, sdss.ra, sdss.dec,
+                          R / 3600., nearest=True)
     print(len(I), 'matches')
 
     print('max dist:', d.max())
 
     plt.clf()
-    plt.hist(d * 3600., 100, range=(0,R), log=True)
+    plt.hist(d * 3600., 100, range=(0, R), log=True)
     plt.xlabel('Match distance (arcsec)')
     plt.ylabel('Number of matches')
     plt.title('SDSS-WISE astrometric matches')
     ps.savefig()
-    
+
     plt.clf()
-    loghist((wise.ra[I] - sdss.ra[J])*3600., (wise.dec[I] - sdss.dec[J])*3600.,
-            200, range=((-R,R),(-R,R)))
+    loghist((wise.ra[I] - sdss.ra[J]) * 3600., (wise.dec[I] - sdss.dec[J]) * 3600.,
+            200, range=((-R, R), (-R, R)))
     plt.title('SDSS-WISE astrometric matches')
     plt.xlabel('dRA (arcsec)')
     plt.ylabel('dDec (arcsec)')
@@ -893,8 +904,8 @@ def plot_unmatched():
 
     R = 4.
 
-    I,J,d = match_radec(wise.ra, wise.dec, sdss.ra, sdss.dec,
-                        R/3600., nearest=True)
+    I, J, d = match_radec(wise.ra, wise.dec, sdss.ra, sdss.dec,
+                          R / 3600., nearest=True)
     print(len(I), 'matches')
 
     unmatched = np.ones(len(wise), bool)
@@ -919,33 +930,33 @@ def plot_unmatched():
     ps.savefig()
 
     for band in 'ugriz':
-        sdss.set('psfmag_'+band,
-                 NanoMaggies.nanomaggiesToMag(sdss.get('psfflux_'+band)))
-    
+        sdss.set('psfmag_' + band,
+                 NanoMaggies.nanomaggiesToMag(sdss.get('psfflux_' + band)))
+
     # plt.clf()
     # loghist(wise.w1mpro[I], sdss.psfmag_r[J], 200)
     # plt.xlabel('WISE w1mpro')
     # plt.ylabel('SDSS psfflux_r')
     # ps.savefig()
-    
+
     for band in 'riz':
         ax = [0, 10, 25, 5]
         plt.clf()
-        mag = sdss.get('psfmag_'+band)[J]
+        mag = sdss.get('psfmag_' + band)[J]
         loghist(mag - wise.w1mpro[I], mag, 200,
-                range=((ax[0],ax[1]),(ax[3],ax[2])))
+                range=((ax[0], ax[1]), (ax[3], ax[2])))
         plt.xlabel('SDSS %s - WISE w1' % band)
-        plt.ylabel('SDSS '+band)
+        plt.ylabel('SDSS ' + band)
         plt.axis(ax)
         ps.savefig()
 
-    for w,t in [(wise[I], 'Matched'), (wun, 'Unmatched')]:
+    for w, t in [(wise[I], 'Matched'), (wun, 'Unmatched')]:
         plt.clf()
         w1 = w.get('w1mpro')
         w2 = w.get('w2mpro')
         ax = [-1, 3, 18, 6]
-        loghist(w1-w2, w1, 200,
-                range=((ax[0],ax[1]),(ax[3],ax[2])))
+        loghist(w1 - w2, w1, 200,
+                range=((ax[0], ax[1]), (ax[3], ax[2])))
         plt.xlabel('W1 - W2')
         plt.ylabel('W1')
         plt.title('WISE CMD for %s sources' % t)
@@ -961,16 +972,16 @@ def plot_unmatched():
     pfn = 'wcses.pickle'
     if os.path.exists(pfn):
         print('Reading', pfn)
-        wcses,fns = unpickle_from_file(pfn)
+        wcses, fns = unpickle_from_file(pfn)
     else:
-        for r,c,f in RCF:
+        for r, c, f in RCF:
             fn = sdssobj.retrieve('frame', r, c, f, band)
             print('got', fn)
             fns.append(fn)
             wcs = Tan(fn, 0)
             print('got wcs', wcs)
             wcses.append(wcs)
-        pickle_to_file((wcses,fns), pfn)
+        pickle_to_file((wcses, fns), pfn)
         print('Wrote to', pfn)
 
     wisefns = glob(os.path.join(wisedatadir, 'level3', '*w1-int-3.fits'))
@@ -980,19 +991,19 @@ def plot_unmatched():
         wcs = anwcs(fn, 0)
         print('Got', wcs)
         wisewcs.append(wcs)
-        
+
     I = np.argsort(wun.w1mpro)
     wun.cut(I)
     for i in range(len(wun)):
-        ra,dec = wun.ra[i], wun.dec[i]
+        ra, dec = wun.ra[i], wun.dec[i]
         insdss = -1
-        for j,wcs in enumerate(wcses):
-            if wcs.is_inside(ra,dec):
+        for j, wcs in enumerate(wcses):
+            if wcs.is_inside(ra, dec):
                 insdss = j
                 break
         inwise = -1
-        for j,wcs in enumerate(wisewcs):
-            if wcs.is_inside(ra,dec):
+        for j, wcs in enumerate(wisewcs):
+            if wcs.is_inside(ra, dec):
                 inwise = j
                 break
         N = 0
@@ -1005,162 +1016,163 @@ def plot_unmatched():
 
         if N != 2:
             continue
-        
+
         plt.clf()
         ss = 1
         plt.subplot(2, N, ss)
         ss += 1
         M = 0.02
-        I = np.flatnonzero((sdss.ra  > (ra  - M)) * (sdss.ra  < (ra  + M)) *
+        I = np.flatnonzero((sdss.ra > (ra - M)) * (sdss.ra < (ra + M)) *
                            (sdss.dec > (dec - M)) * (sdss.dec < (dec + M)))
         sdssnear = sdss[I]
         plt.plot(sdss.ra[I], sdss.dec[I], 'b.', alpha=0.7)
-        I = np.flatnonzero((wise.ra  > (ra  - M)) * (wise.ra  < (ra  + M)) *
+        I = np.flatnonzero((wise.ra > (ra - M)) * (wise.ra < (ra + M)) *
                            (wise.dec > (dec - M)) * (wise.dec < (dec + M)))
         wisenear = wise[I]
         plt.plot(wise.ra[I], wise.dec[I], 'rx', alpha=0.7)
         if insdss:
             wcs = wcses[j]
-            w,h = wcs.imagew, wcs.imageh
-            rd = np.array([wcs.pixelxy2radec(x,y) for x,y in
-                           [(1,1), (w,1), (w,h), (1,h), (1,1)]])
-            plt.plot(rd[:,0], rd[:,1], 'b-', alpha=0.5)
+            w, h = wcs.imagew, wcs.imageh
+            rd = np.array([wcs.pixelxy2radec(x, y) for x, y in
+                           [(1, 1), (w, 1), (w, h), (1, h), (1, 1)]])
+            plt.plot(rd[:, 0], rd[:, 1], 'b-', alpha=0.5)
         if inwise:
             wcs = wisewcs[j]
-            w,h = wcs.imagew, wcs.imageh
-            rd = np.array([wcs.pixelxy2radec(x,y) for x,y in
-                           [(1,1), (w,1), (w,h), (1,h), (1,1)]])
-            plt.plot(rd[:,0], rd[:,1], 'r-', alpha=0.5)
-        plt.plot([ra], [dec], 'o', mec='k', mfc='none', mew=3, ms=20, alpha=0.5)
+            w, h = wcs.imagew, wcs.imageh
+            rd = np.array([wcs.pixelxy2radec(x, y) for x, y in
+                           [(1, 1), (w, 1), (w, h), (1, h), (1, 1)]])
+            plt.plot(rd[:, 0], rd[:, 1], 'r-', alpha=0.5)
+        plt.plot([ra], [dec], 'o', mec='k',
+                 mfc='none', mew=3, ms=20, alpha=0.5)
         #plt.axis([ra+M, ra-M, dec-M, dec+M])
-        plt.axis([ra-M, ra+M, dec-M, dec+M])
+        plt.axis([ra - M, ra + M, dec - M, dec + M])
         plt.xticks([ra], ['RA = %0.3f' % ra])
         plt.yticks([dec], ['Dec = %0.3f' % dec])
 
         SW = 20
-        
-        ss = N+1
+
+        ss = N + 1
         plt.subplot(2, N, ss)
         if insdss != -1:
             ss += 1
             j = insdss
             wcs = wcses[j]
-            xc,yc = wcs.radec2pixelxy(ra,dec)
-            r,c,f = RCF[j]
-            frame = sdssobj.readFrame(r,c,f, band)
+            xc, yc = wcs.radec2pixelxy(ra, dec)
+            r, c, f = RCF[j]
+            frame = sdssobj.readFrame(r, c, f, band)
             #S = 50
             S = SW * 3.472
             im = frame.image
-            H,W = im.shape
-            y0,x0 = max(0, yc-S), max(0, xc-S)
-            y1,x1 = min(H, yc+S), min(W, xc+S)
+            H, W = im.shape
+            y0, x0 = max(0, yc - S), max(0, xc - S)
+            y1, x1 = min(H, yc + S), min(W, xc + S)
             subim = im[y0:y1, x0:x1]
 
-            #plt.imshow(subim, interpolation='nearest', origin='lower',
+            # plt.imshow(subim, interpolation='nearest', origin='lower',
             #          vmax=0.3, extent=[x0,x1,y0,y1])
             plt.imshow(subim.T, interpolation='nearest', origin='lower',
-                       vmax=0.3, extent=[y0,y1,x0,x1])
-            #vmax=subim.max()*1.01)
+                       vmax=0.3, extent=[y0, y1, x0, x1])
+            # vmax=subim.max()*1.01)
             ax = plt.axis()
-            sx,sy = wcs.radec2pixelxy(sdssnear.ra, sdssnear.dec)
+            sx, sy = wcs.radec2pixelxy(sdssnear.ra, sdssnear.dec)
             #plt.plot(x, y, 'o', mec='b', mfc='none', ms=15)
             plt.plot(sy, sx, 'o', mec='b', mfc='none', ms=15)
 
-            x,y = wcs.radec2pixelxy(wisenear.ra, wisenear.dec)
+            x, y = wcs.radec2pixelxy(wisenear.ra, wisenear.dec)
             #plt.plot(x, y, 'rx', ms=10)
             plt.plot(y, x, 'rx', ms=10)
 
             # Which way up?
-            x,y = wcs.radec2pixelxy(np.array([ra, ra]), np.array([0.5,2.0]) * S * 0.396/3600. + dec)
+            x, y = wcs.radec2pixelxy(np.array([ra, ra]), np.array(
+                [0.5, 2.0]) * S * 0.396 / 3600. + dec)
             #plt.plot(x, y, 'b-', alpha=0.5, lw=2)
             plt.plot(y, x, 'b-', alpha=0.5, lw=2)
             plt.axis(ax)
             plt.gray()
-            plt.title('SDSS %s (%i/%i/%i)' % (band, r,c,f))
+            plt.title('SDSS %s (%i/%i/%i)' % (band, r, c, f))
 
             # Try to guess the PRIMARY run from the nearest object.
-            for I in np.argsort((sx-xc)**2 + (sy-yc)**2):
-                r,c,f = sdssnear.run[I], sdssnear.camcol[I], sdssnear.field[I]
+            for I in np.argsort((sx - xc)**2 + (sy - yc)**2):
+                r, c, f = sdssnear.run[I], sdssnear.camcol[I], sdssnear.field[I]
                 jj = None
-                for j,(ri,ci,fi) in enumerate(RCF):
+                for j, (ri, ci, fi) in enumerate(RCF):
                     if ri == r and ci == c and fi == f:
                         jj = j
                         break
                 assert(jj is not None)
                 wcs = wcses[jj]
-                xc,yc = wcs.radec2pixelxy(ra,dec)
-                frame = sdssobj.readFrame(r,c,f, band)
+                xc, yc = wcs.radec2pixelxy(ra, dec)
+                frame = sdssobj.readFrame(r, c, f, band)
                 S = SW * 3.472
                 im = frame.image
-                H,W = im.shape
-                y0,x0 = max(0, yc-S), max(0, xc-S)
-                y1,x1 = min(H, yc+S), min(W, xc+S)
+                H, W = im.shape
+                y0, x0 = max(0, yc - S), max(0, xc - S)
+                y1, x1 = min(H, yc + S), min(W, xc + S)
                 subim = im[y0:y1, x0:x1]
                 if np.prod(subim.shape) == 0:
                     continue
                 print('subim shape', subim.shape)
-                plt.subplot(2,N,2)
+                plt.subplot(2, N, 2)
                 plt.imshow(subim.T, interpolation='nearest', origin='lower',
-                       vmax=0.3, extent=[y0,y1,x0,x1])
+                           vmax=0.3, extent=[y0, y1, x0, x1])
                 plt.gray()
-                plt.title('SDSS %s (%i/%i/%i)' % (band, r,c,f))
+                plt.title('SDSS %s (%i/%i/%i)' % (band, r, c, f))
                 break
-
 
         if inwise != -1:
             plt.subplot(2, N, ss)
             ss += 1
             j = inwise
             wcs = wisewcs[j]
-            ok,x,y = wcs.radec2pixelxy(ra,dec)
+            ok, x, y = wcs.radec2pixelxy(ra, dec)
             im = pyfits.open(wisefns[j])[0].data
             S = SW
-            H,W = im.shape
-            y0,x0 = max(0, y-S), max(0, x-S)
-            subim = im[y0 : min(H, y+S), x0 : min(W, x+S)]
+            H, W = im.shape
+            y0, x0 = max(0, y - S), max(0, x - S)
+            subim = im[y0: min(H, y + S), x0: min(W, x + S)]
 
             plt.imshow(subim, interpolation='nearest', origin='lower',
-                       vmax=subim.max()*1.01)
+                       vmax=subim.max() * 1.01)
             ax = plt.axis()
-            x,y = [],[]
-            for r,d in zip(wisenear.ra, wisenear.dec):
-                ok,xi,yi = wcs.radec2pixelxy(r,d)
+            x, y = [], []
+            for r, d in zip(wisenear.ra, wisenear.dec):
+                ok, xi, yi = wcs.radec2pixelxy(r, d)
                 x.append(xi)
                 y.append(yi)
             x = np.array(x)
             y = np.array(y)
-            plt.plot(x-x0, y-y0, 'rx', ms=15)
+            plt.plot(x - x0, y - y0, 'rx', ms=15)
 
-            x,y = [],[]
-            for r,d in zip(sdssnear.ra, sdssnear.dec):
-                ok,xi,yi = wcs.radec2pixelxy(r,d)
+            x, y = [], []
+            for r, d in zip(sdssnear.ra, sdssnear.dec):
+                ok, xi, yi = wcs.radec2pixelxy(r, d)
                 x.append(xi)
                 y.append(yi)
             x = np.array(x)
             y = np.array(y)
-            plt.plot(x-x0, y-y0, 'o', mec='b', mfc='none', ms=10)
+            plt.plot(x - x0, y - y0, 'o', mec='b', mfc='none', ms=10)
 
             # Which way up?
             pixscale = 1.375 / 3600.
-            ok,x1,y1 = wcs.radec2pixelxy(ra, dec + 0.5 * S * pixscale)
-            ok,x2,y2 = wcs.radec2pixelxy(ra, dec + 2.0 * S * pixscale)
-            plt.plot([x1-x0,x2-x0], [y1-y0,y2-y0], 'r-', alpha=0.5, lw=2)
+            ok, x1, y1 = wcs.radec2pixelxy(ra, dec + 0.5 * S * pixscale)
+            ok, x2, y2 = wcs.radec2pixelxy(ra, dec + 2.0 * S * pixscale)
+            plt.plot([x1 - x0, x2 - x0], [y1 - y0, y2 - y0],
+                     'r-', alpha=0.5, lw=2)
 
-            plt.axis([ax[1],ax[0],ax[2],ax[3]])
-            #plt.axis(ax)
+            plt.axis([ax[1], ax[0], ax[2], ax[3]])
+            # plt.axis(ax)
             plt.gray()
             plt.title('WISE W1 (coadd)')
 
         plt.suptitle('WISE unmatched source: w1=%.1f, RA,Dec = (%.3f, %.3f)' %
                      (wun.w1mpro[i], ra, dec))
-            
+
         ps.savefig()
 
         rcfs = zip(sdssnear.run, sdssnear.camcol, sdssnear.field)
         print('Nearby SDSS sources are from:', np.unique(rcfs))
 
     return
-
 
 
 def forced2():
@@ -1170,15 +1182,16 @@ def forced2():
     basedir = os.environ.get('BIGBOSS_DATA', '/project/projectdirs/bigboss')
     wisedatadir = os.path.join(basedir, 'data', 'wise')
     l1bdir = os.path.join(wisedatadir, 'level1b')
-    wisecat = fits_table(os.path.join(wisedatadir, 'catalogs', 'wisecat2.fits'))
+    wisecat = fits_table(os.path.join(
+        wisedatadir, 'catalogs', 'wisecat2.fits'))
 
     # CAS PhotoObjAll.resolveStatus bits
     sprim = 0x100
-    sbad  = 0x800
+    sbad = 0x800
     sedge = 0x1000
     sbest = 0x200
 
-    (ra0,ra1, dec0,dec1) = radecroi
+    (ra0, ra1, dec0, dec1) = radecroi
     ra = (ra0 + ra1) / 2.
     dec = (dec0 + dec1) / 2.
 
@@ -1190,7 +1203,8 @@ def forced2():
     # Drop "sbest" sources that have an "sprim" nearby.
     Ibest = (cas.resolvestatus & (sprim | sbest)) == sbest
     Iprim = (cas.resolvestatus & (sprim | sbest)) == sprim
-    I,J,d = match_radec(cas.ra[Ibest], cas.dec[Ibest], cas.ra[Iprim], cas.dec[Iprim], 2./3600.)
+    I, J, d = match_radec(
+        cas.ra[Ibest], cas.dec[Ibest], cas.ra[Iprim], cas.dec[Iprim], 2. / 3600.)
 
     Ibest[np.flatnonzero(Ibest)[I]] = False
     #Ikeep = np.ones(len(Ibest), bool)
@@ -1198,21 +1212,23 @@ def forced2():
     cas.cut(np.logical_or(Ibest, Iprim))
     print('Cut to', len(cas), 'PRIMARY + BEST-not-near-PRIMARY')
 
-    I,J,d = match_radec(cas.ra, cas.dec, cas.ra, cas.dec, 2./3600., notself=True)
+    I, J, d = match_radec(cas.ra, cas.dec, cas.ra,
+                          cas.dec, 2. / 3600., notself=True)
     plt.clf()
-    loghist((cas.ra[I]-cas.ra[J])*3600., (cas.dec[I]-cas.dec[J])*3600., 200)
+    loghist((cas.ra[I] - cas.ra[J]) * 3600.,
+            (cas.dec[I] - cas.dec[J]) * 3600., 200)
     plt.title('CAS self-matches')
     ps.savefig()
-    
+
     psf = pyfits.open('wise-psf-w1-500-500.fits')[0].data
     S = psf.shape[0]
     # number of Gaussian components
     K = 3
-    w,mu,sig = em_init_params(K, None, None, None)
+    w, mu, sig = em_init_params(K, None, None, None)
     II = psf.copy()
     II = np.maximum(II, 0)
     II /= II.sum()
-    xm,ym = -(S/2), -(S/2)
+    xm, ym = -(S / 2), -(S / 2)
     res = em_fit_2d(II, xm, ym, w, mu, sig)
     if res != 0:
         raise RuntimeError('Failed to fit PSF')
@@ -1224,10 +1240,11 @@ def forced2():
     w1psf.computeRadius()
 
     print('PSF radius:', w1psf.getRadius(), 'pixels')
-    
+
     T = fits_table('wise-roi.fits')
     for i in range(len(T)):
-        basefn = os.path.join(l1bdir, '%s%i-w1' % (T.scan_id[i], T.frame_num[i]))
+        basefn = os.path.join(l1bdir, '%s%i-w1' %
+                              (T.scan_id[i], T.frame_num[i]))
         fn = basefn + '-int-1b.fits'
         print('Looking for', fn)
         if not os.path.exists(fn):
@@ -1236,14 +1253,14 @@ def forced2():
 
         tim = read_wise_image(basefn, nanomaggies=True)
         tim.psf = w1psf
-        
+
         wcs = tim.wcs.wcs
-        r0,r1,d0,d1 = wcs.radec_bounds()
-        print('RA,Dec bounds:', r0,r1, d0,d1)
-        
-        w,h = wcs.imagew, wcs.imageh
-        rd = np.array([wcs.pixelxy2radec(x,y) for x,y in
-                       [(1,1), (w,1), (w,h), (1,h), (1,1)]])
+        r0, r1, d0, d1 = wcs.radec_bounds()
+        print('RA,Dec bounds:', r0, r1, d0, d1)
+
+        w, h = wcs.imagew, wcs.imageh
+        rd = np.array([wcs.pixelxy2radec(x, y) for x, y in
+                       [(1, 1), (w, 1), (w, h), (1, h), (1, 1)]])
 
         I = np.flatnonzero((cas.ra > r0) * (cas.ra < r1) *
                            (cas.dec > d0) * (cas.dec < d1))
@@ -1255,19 +1272,20 @@ def forced2():
         wbands = ['w1']
         sdssband = 'i'
         tsrcs = get_tractor_sources_cas_dr9(cashere, nanomaggies=True,
-                                            bandname=sdssband, bands=[sdssband],
+                                            bandname=sdssband, bands=[
+                                                sdssband],
                                             extrabands=wbands)
         #keepsrcs = []
         for src in tsrcs:
             for br in src.getBrightnesses():
                 f = br.getBand(sdssband)
-                #if f < 0:
+                # if f < 0:
                 #   continue
                 for wb in wbands:
                     br.setBand(wb, f)
-                #keepsrcs.append(src)
+                # keepsrcs.append(src)
         #tsrcs = keepsrcs
-                
+
         print('Created', len(tsrcs), 'tractor sources in this image')
 
         I = np.flatnonzero((wisecat.ra > r0) * (wisecat.ra < r1) *
@@ -1277,16 +1295,16 @@ def forced2():
         print('Found', len(I), 'WISE catalog sources in this image')
 
         wc = wisecat[I]
-        tra  = np.array([src.getPosition().ra  for src in tsrcs])
+        tra = np.array([src.getPosition().ra for src in tsrcs])
         tdec = np.array([src.getPosition().dec for src in tsrcs])
 
         R = 4.
-        I,J,d = match_radec(wc.ra, wc.dec, tra, tdec,
-                            R/3600., nearest=True)
-        # cashere.ra, cashere.dec, 
+        I, J, d = match_radec(wc.ra, wc.dec, tra, tdec,
+                              R / 3600., nearest=True)
+        # cashere.ra, cashere.dec,
         print('Found', len(I), 'SDSS-WISE matches within', R, 'arcsec')
 
-        for i,j in zip(I,J):
+        for i, j in zip(I, J):
             w1 = wc.w1mpro[i]
             w1 = NanoMaggies.magToNanomaggies(w1)
             bb = tsrcs[j].getBrightnesses()
@@ -1295,7 +1313,7 @@ def forced2():
 
         keepsrcs = []
         for src in tsrcs:
-            #for b in src.getBrightness():
+            # for b in src.getBrightness():
             b = src.getBrightness()
             if b.getBand(sdssband) > 0 or b.getBand(wbands[0]) > 0:
                 keepsrcs.append(src)
@@ -1311,18 +1329,18 @@ def forced2():
             nm = NanoMaggies.magToNanomaggies(wun.w1mpro[i])
             br = NanoMaggies(i=25., w1=nm)
             tsrcs.append(PointSource(pos, br))
-        
+
         plt.clf()
-        plt.plot(rd[:,0], rd[:,1], 'k-')
+        plt.plot(rd[:, 0], rd[:, 1], 'k-')
         plt.plot(cashere.ra, cashere.dec, 'r.', alpha=0.1)
         plt.plot(wc.ra, wc.dec, 'bx', alpha=0.1)
-        setRadecAxes(r0,r1,d0,d1)
+        setRadecAxes(r0, r1, d0, d1)
         ps.savefig()
 
-        zlo,zhi = tim.zr
+        zlo, zhi = tim.zr
         ima = dict(interpolation='nearest', origin='lower', vmin=zlo, vmax=zhi)
         imchi = dict(interpolation='nearest', origin='lower',
-                 vmin=-5, vmax=5)
+                     vmin=-5, vmax=5)
 
         plt.clf()
         plt.imshow(tim.getImage(), **ima)
@@ -1365,7 +1383,6 @@ def forced2():
 
             tr.optimize()
 
-
         tr = Tractor([tim], tsrcs)
         print('Rendering model image...')
         mod = tr.getModelImage(0)
@@ -1377,7 +1394,7 @@ def forced2():
 
         print('tim', tim)
         print('tim.photocal:', tim.photocal)
-        
+
         wsrcs = []
         for i in range(len(wc)):
             pos = RaDecPos(wc.ra[i], wc.dec[i])
@@ -1393,8 +1410,7 @@ def forced2():
         plt.imshow(wmod, **ima)
         plt.title(tim.name + ': WISE sources only')
         ps.savefig()
-        
-        
+
 
 if __name__ == '__main__':
     forced2()
@@ -1418,7 +1434,7 @@ if __name__ == '__main__':
         T2 = fits_table('wise-27-tag.fits')
         print(len(T2), 'WISE')
         print('  RA', T2.ra.min(), T2.ra.max())
-        T2.cut((T2.ra  > T1.ra.min())  * (T2.ra < T1.ra.max()) *
+        T2.cut((T2.ra > T1.ra.min()) * (T2.ra < T1.ra.max()) *
                (T2.dec > T1.dec.min()) * (T2.dec < T1.dec.max()))
         print('Cut WISE to same RA,Dec region:', len(T2))
         T2.writeto('wise-cut.fits')
@@ -1426,21 +1442,22 @@ if __name__ == '__main__':
         T2 = fits_table(cutfn)
         print(len(T2), 'WISE (cut)')
 
-    R = 1./3600.
-    I,J,d = match_radec(T1.ra, T1.dec, T2.ra, T2.dec, R)
+    R = 1. / 3600.
+    I, J, d = match_radec(T1.ra, T1.dec, T2.ra, T2.dec, R)
     print(len(I), 'matches')
 
     plt.clf()
     #loghist(T1.r[I] - T1.i[I], T1.r[I] - T2.w1mpro[J], 200, range=((0,2),(-2,5)))
     #plt.plot(T1.r[I] - T1.i[I], T1.r[I] - T2.w1mpro[J], 'r.')
-    for cc,lo,hi in [('r', 8, 14), ('y', 14, 15), ('g', 15, 16), ('b', 16, 17), ('m', 17,20)]:
+    for cc, lo, hi in [('r', 8, 14), ('y', 14, 15), ('g', 15, 16), ('b', 16, 17), ('m', 17, 20)]:
         w1 = T2.w1mpro[J]
         K = (w1 >= lo) * (w1 < hi)
-        plt.plot(T1.r[I[K]] - T1.i[I[K]], T1.r[I[K]] - T2.w1mpro[J[K]], '.', color=cc)
+        plt.plot(T1.r[I[K]] - T1.i[I[K]], T1.r[I[K]] -
+                 T2.w1mpro[J[K]], '.', color=cc)
         #plt.plot(T1.r[I] - T1.i[I], T1.r[I] - T2.w1mpro[J], 'r.')
     plt.xlabel('r - i')
     plt.ylabel('r - W1 3.4 micron')
-    plt.axis([0,2,0,8])
+    plt.axis([0, 2, 0, 8])
     plt.savefig('wise1.png')
 
     plt.clf()
@@ -1449,39 +1466,38 @@ if __name__ == '__main__':
     plt.plot(T2.ra[J], T2.dec[J], '^', mec='g', mfc='none')
     plt.savefig('wise2.png')
 
-    R = 2./3600.
-    I2,J2,d = match_radec(T1.ra, T1.dec, T2.ra, T2.dec, R)
+    R = 2. / 3600.
+    I2, J2, d = match_radec(T1.ra, T1.dec, T2.ra, T2.dec, R)
     print(len(I), 'matches')
     plt.plot(T2.ra[J2], T2.dec[J2], '^', mec='g', mfc='none', ms=10)
     plt.savefig('wise3.png')
 
     plt.clf()
-    plt.plot(3600.*(T1.ra [I2] - T2.ra [J2]),
-             3600.*(T1.dec[I2] - T2.dec[J2]), 'r.')
+    plt.plot(3600. * (T1.ra[I2] - T2.ra[J2]),
+             3600. * (T1.dec[I2] - T2.dec[J2]), 'r.')
     plt.xlabel('dRA (arcsec)')
     plt.ylabel('dDec (arcsec)')
     plt.savefig('wise4.png')
 
     plt.clf()
-    plt.subplot(2,1,1)
-    plt.hist(T1.r, 100, range=(10,25), histtype='step', color='k')
-    plt.hist(T1.r[I], 100, range=(10,25), histtype='step', color='r')
-    plt.hist(T1.r[I2], 100, range=(10,25), histtype='step', color='m')
+    plt.subplot(2, 1, 1)
+    plt.hist(T1.r, 100, range=(10, 25), histtype='step', color='k')
+    plt.hist(T1.r[I], 100, range=(10, 25), histtype='step', color='r')
+    plt.hist(T1.r[I2], 100, range=(10, 25), histtype='step', color='m')
     plt.xlabel('r band')
     plt.axhline(0, color='k', alpha=0.5)
     plt.ylim(-5, 90)
-    plt.xlim(10,25)
+    plt.xlim(10, 25)
 
-    plt.subplot(2,1,2)
-    plt.hist(T2.w1mpro, 100, range=(10,25), histtype='step', color='k')
-    plt.hist(T2.w1mpro[J], 100, range=(10,25), histtype='step', color='r')
-    plt.hist(T2.w1mpro[J2], 100, range=(10,25), histtype='step', color='m')
+    plt.subplot(2, 1, 2)
+    plt.hist(T2.w1mpro, 100, range=(10, 25), histtype='step', color='k')
+    plt.hist(T2.w1mpro[J], 100, range=(10, 25), histtype='step', color='r')
+    plt.hist(T2.w1mpro[J2], 100, range=(10, 25), histtype='step', color='m')
     plt.xlabel('W1 band')
     plt.axhline(0, color='k', alpha=0.5)
     plt.ylim(-5, 60)
-    plt.xlim(10,25)
+    plt.xlim(10, 25)
 
     plt.savefig('wise5.png')
 
     sys.exit(0)
-
