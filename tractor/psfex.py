@@ -451,6 +451,7 @@ class PixelizedPsfEx(PixelizedPSF):
 
     def getShifted(self, dx, dy):
         psfex = self.psfex.shifted(dx, dy)
+        psfex.fwhm = self.fwhm
         s = self.__class__(None, psfex=psfex)
         return s
 
