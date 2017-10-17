@@ -159,8 +159,9 @@ class MixtureOfGaussians(object):
         
         '''
         if mp_fourier and use_mp_fourier:
-            f = mp_fourier.mixture_profile_fourier_transform(
-                self.amp, self.mean, self.var, v, w)
+            f = np.zeros((self.w, self.v))
+            mp_fourier.mixture_profile_fourier_transform(
+                self.amp, self.mean, self.var, v, w, f)
             return f
 
         Fsum = None
