@@ -159,7 +159,7 @@ class MixtureOfGaussians(object):
         
         '''
         if mp_fourier and use_mp_fourier:
-            f = np.zeros((self.w, self.v))
+            f = np.zeros((len(w), len(v)))
             mp_fourier.mixture_profile_fourier_transform(
                 self.amp, self.mean, self.var, v, w, f)
             return f
