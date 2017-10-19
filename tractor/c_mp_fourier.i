@@ -6,7 +6,6 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/arrayobject.h>
 #include <math.h>
-#include <assert.h>
 %}
 
 %include "numpy.i"
@@ -50,19 +49,20 @@ static void mixture_profile_fourier_transform(double *amps, int amps_len,
     double *s = (double*)malloc(sizeof(double) * NV * NW);
     memset(s, 0, sizeof(double) * NV * NW);
 
-    #pragma parallel
     for (j = 0; j < NW; j++) {
+        double w_j = w[j];
+        double w_j_sqr = w_j * w_j;
         for (i = 0; i < NV; i++) {
             int index = NV * j + i;
+            double v_i = v[i];
+            double v_i_sqr = v_i * v_i;
             for (k = 0; k < K; k++) {
                 int offset = k * 4;
                 double a = vars[offset];
                 double b = vars[offset + 1];
                 double d = vars[offset + 3];
 
-                s[index] += amps[k] * exp(twopisquare * (a *  v[i] * v[i] +
-                                                      2. * b * v[i] * w[j] +
-                                                      d * w[j] * w[j]));
+                s[index] += amps[k] * exp(twopisquare * (a *  v_i_sqr + 2. * b * v_i * w_j + d * w_j_sqr));
             }
             out[index] = s[index];
         }
