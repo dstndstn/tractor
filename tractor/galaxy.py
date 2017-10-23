@@ -404,9 +404,6 @@ class ProfileGalaxy(object):
         # print('Tim shape:', img.shape)
         P, (cx, cy), (pH, pW), (v, w) = psf.getFourierTransform(px, py, halfsize)
 
-        preal = np.fft.irfft2(P, s=(pH, pW))
-        # print('Sum of inverse-Fourier-transformed PSF model:', preal.sum())
-
         dx = px - cx
         dy = py - cy
         if modelMask is not None:
