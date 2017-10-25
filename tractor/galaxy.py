@@ -485,7 +485,7 @@ class ProfileGalaxy(object):
             # Lanczos-3 interpolation in ~ the same way we do for
             # pixelized PSFs.
             from astrometry.util.miscutils import lanczos_filter
-            from scipy.ndimage.filters import correlate1d
+            #from scipy.ndimage.filters import correlate1d
             #L = 3
             L = fft_lanczos_order
             Lx = lanczos_filter(L, np.arange(-L, L+1) + mux)
@@ -496,14 +496,25 @@ class ProfileGalaxy(object):
             #print('Lx centroid', np.sum(Lx * (np.arange(-L,L+1))))
             #print('Ly centroid', np.sum(Ly * (np.arange(-L,L+1))))
 
-            #print('kernels:', Lx, Ly)
+            assert(len(Lx) == 7)
+            assert(len(Ly) == 7)
+            #cx = correlate1d(G,  Lx, axis=1, mode='constant')
+            #G  = correlate1d(cx, Ly, axis=0, mode='constant')
+            #del cx
 
-            cx = correlate1d(G,  Lx, axis=1, mode='constant')
-            G  = correlate1d(cx, Ly, axis=0, mode='constant')
-            del cx
+            G = np.require(G, requirements=['A'])
+
+            np.save('G.npy', G)
+            np.save('Lx.npy', Lx)
+            np.save('Ly.npy', Ly)
+            sys.exit(0)
+
+            from tractor.c_mp_fourier import correlate7
+            correlate7(G, Lx, Ly, work_corr7, G)
 
         else:
             G = np.zeros((pH,pW), np.float32)
+            assert(False)
         
         if modelMask is not None:
             gh,gw = G.shape
@@ -552,6 +563,11 @@ class ProfileGalaxy(object):
             G += mogpatch.patch
             
         return Patch(ix0, iy0, G)
+
+
+work_corr7 = np.zeros((1024,1024), np.float64)
+work_corr7 = np.require(work_corr7, requirements=['A'])
+
 
 fft_lanczos_order = 3
     

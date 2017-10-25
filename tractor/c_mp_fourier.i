@@ -71,8 +71,8 @@ static void correlate(double* img, int img_dim1, int img_dim2,
 
     assert(img_dim1 == out_dim1);
     assert(img_dim2 == out_dim2);
-    assert(img_dim1 == work_dim1);
-    assert(img_dim2 == work_dim2);
+    assert(work_dim1 >= img_dim1);
+    assert(work_dim2 >= img_dim2);
 
     double filter[8];
     int i, j, k;
@@ -199,8 +199,8 @@ static void correlate7(double* img, int img_dim1, int img_dim2,
 
     assert(img_dim1 == out_dim1);
     assert(img_dim2 == out_dim2);
-    assert(img_dim1 == work_dim1);
-    assert(img_dim2 == work_dim2);
+    assert(work_dim1 >= img_dim1);
+    assert(work_dim2 >= img_dim2);
 
     double filter[7];
     int i, j, k;
