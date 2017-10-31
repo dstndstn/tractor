@@ -1,6 +1,7 @@
 import numpy as np
 from tractor import RaDecPos
 
+
 def interpret_roi(wcs, imgshape, roi=None, roiradecsize=None, roiradecbox=None,
                   **kwargs):
     '''
@@ -17,43 +18,43 @@ def interpret_roi(wcs, imgshape, roi=None, roiradecsize=None, roiradecbox=None,
     "roiradecbox" = (ra0, ra1, dec0, dec1) indicates that you
     want to grab a ROI containing the given RA,Dec ranges.
     '''
-    (H,W) = imgshape
+    (H, W) = imgshape
     if roiradecsize is not None:
-        ra,dec,S = roiradecsize
-        fxc,fyc = wcs.positionToPixel(RaDecPos(ra,dec))
-        xc,yc = [int(np.round(p)) for p in (fxc,fyc)]
+        ra, dec, S = roiradecsize
+        fxc, fyc = wcs.positionToPixel(RaDecPos(ra, dec))
+        xc, yc = [int(np.round(p)) for p in (fxc, fyc)]
 
-        roi = [np.clip(xc-S, 0, W),
-               np.clip(xc+S+1, 0, W),
-               np.clip(yc-S, 0, H),
-               np.clip(yc+S+1, 0, H)]
+        roi = [np.clip(xc - S, 0, W),
+               np.clip(xc + S + 1, 0, W),
+               np.clip(yc - S, 0, H),
+               np.clip(yc + S + 1, 0, H)]
         roi = [int(x) for x in roi]
-        if roi[0]==roi[1] or roi[2]==roi[3]:
+        if roi[0] == roi[1] or roi[2] == roi[3]:
             return None
 
     if roiradecbox is not None:
-        ra0,ra1,dec0,dec1 = roiradecbox
+        ra0, ra1, dec0, dec1 = roiradecbox
         xy = []
-        for r,d in [(ra0,dec0),(ra1,dec0),(ra0,dec1),(ra1,dec1)]:
-            xy.append(wcs.positionToPixel(RaDecPos(r,d)))
+        for r, d in [(ra0, dec0), (ra1, dec0), (ra0, dec1), (ra1, dec1)]:
+            xy.append(wcs.positionToPixel(RaDecPos(r, d)))
         xy = np.array(xy)
         xy = np.round(xy).astype(int)
-        x0 = xy[:,0].min()
-        x1 = xy[:,0].max()
-        y0 = xy[:,1].min()
-        y1 = xy[:,1].max()
+        x0 = xy[:, 0].min()
+        x1 = xy[:, 0].max()
+        y0 = xy[:, 1].min()
+        y1 = xy[:, 1].max()
         roi = [np.clip(x0,   0, W),
-               np.clip(x1+1, 0, W),
+               np.clip(x1 + 1, 0, W),
                np.clip(y0,   0, H),
-               np.clip(y1+1, 0, H)]
+               np.clip(y1 + 1, 0, H)]
         if roi[0] == roi[1] or roi[2] == roi[3]:
             return None
 
     if roi is not None:
-        x0,x1,y0,y1 = roi
+        x0, x1, y0, y1 = roi
     else:
         x0 = y0 = 0
         x1 = W
         y1 = H
 
-    return (x0,x1,y0,y1), ((x0 != 0) or (y0 != 0) or (x1 != W) or (y1 != H))
+    return (x0, x1, y0, y1), ((x0 != 0) or (y0 != 0) or (x1 != W) or (y1 != H))

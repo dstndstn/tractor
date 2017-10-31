@@ -1,6 +1,7 @@
 from __future__ import print_function
 import numpy as np
-from .utils import MultiParams, _isint, listmax, get_class_from_name
+from tractor.utils import MultiParams, _isint, listmax, get_class_from_name
+
 
 class Image(MultiParams):
     '''
@@ -10,6 +11,7 @@ class Image(MultiParams):
     instances, and ``Image`` is a ``MultiParams`` so that the Tractor
     can optimize them.
     '''
+
     def __init__(self, data=None, invvar=None, inverr=None,
                  psf=None, wcs=None, sky=None,
                  photocal=None, name=None, time=None, **kwargs):
@@ -31,7 +33,7 @@ class Image(MultiParams):
         If *wcs* is not given, assumes pixel space.
 
         If *sky* is not given, assumes zero sky.
-        
+
         If *photocal* is not given, assumes count units.
         '''
         self.data = data
@@ -46,19 +48,19 @@ class Image(MultiParams):
 
         # Fill in defaults, if necessary.
         if wcs is None:
-            from .basics import NullWCS
+            from tractor.basics import NullWCS
             wcs = NullWCS()
         if sky is None:
-            from .basics import NullSky
+            from tractor.basics import NullSky
             sky = NullSky()
         if photocal is None:
-            from .basics import NullPhotoCal
+            from tractor.basics import NullPhotoCal
             photocal = NullPhotoCal()
 
         # acceptable approximation level when rendering this model
         # image
         self.modelMinval = 0.
-            
+
         super(Image, self).__init__(psf, wcs, photocal, sky)
 
     def __str__(self):
@@ -75,14 +77,14 @@ class Image(MultiParams):
         subtim.name = self.name
         subtim.time = self.time
         return subtim
-    
+
     @staticmethod
     def getNamedParams():
         return dict(psf=0, wcs=1, photocal=2, sky=3)
 
     def getTime(self):
         return self.time
-    
+
     def getParamDerivatives(self, tractor, srcs):
         '''
         Returns a list of Patch objects, one per numberOfParams().
@@ -120,12 +122,14 @@ class Image(MultiParams):
     @property
     def invvar(self):
         return self.inverr**2
-    
+
     # Numpy arrays have shape H,W
     def getWidth(self):
         return self.getShape()[1]
+
     def getHeight(self):
         return self.getShape()[0]
+
     def getShape(self):
         if 'shape' in self.__dict__:
             return self.shape
@@ -133,32 +137,37 @@ class Image(MultiParams):
 
     def getModelShape(self):
         return self.getShape()
-    
+
     def hashkey(self):
         return ('Image', id(self.data), id(self.inverr), self.psf.hashkey(),
                 self.sky.hashkey(), self.wcs.hashkey(),
                 self.photocal.hashkey())
 
     def numberOfPixels(self):
-        (H,W) = self.data.shape
-        return W*H
+        (H, W) = self.data.shape
+        return W * H
 
     def getInvError(self):
         return self.inverr
+
     def getInvvar(self):
         return self.inverr**2
+
     def setInvvar(self, iv):
         self.inverr = np.sqrt(iv)
-        
+
     def getImage(self):
         return self.data
+
     def setImage(self, img):
         self.data = img
 
     def getPsf(self):
         return self.psf
+
     def getWcs(self):
         return self.wcs
+
     def getPhotoCal(self):
         return self.photocal
 
@@ -186,7 +195,7 @@ class Image(MultiParams):
 
         return Image(data=pix, invvar=iv, psf=psf, wcs=wcs, sky=sky,
                      photocal=pcal)
-        
+
     def toFits(self, fits, prefix='', primheader=None, imageheader=None,
                invvarheader=None):
         hdr = self.getFitsHeader(header=primheader, prefix=prefix)
@@ -199,7 +208,7 @@ class Image(MultiParams):
         wcs = self.getWcs()
         sky = self.getSky()
         pcal = self.getPhotoCal()
-        
+
         if header is None:
             import fitsio
             hdr = fitsio.FITSHDR()
@@ -242,5 +251,3 @@ class Image(MultiParams):
         sky.toStandardFitsHeader(hdr)
         pcal.toStandardFitsHeader(hdr)
         return hdr
-
-    

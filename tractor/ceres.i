@@ -355,9 +355,10 @@ protected:
 };
 
 
-static PyObject* ceres_opt(PyObject* tractor, int nims,
-                           PyArrayObject* np_params,
-                           PyArrayObject* np_variance,
+static PyObject* ceres_opt(PyObject* tractor,
+                           int nims,
+                           PyObject* py_params,
+                           PyObject* py_variance,
                            int scale_columns,
                            int numeric,
                            float numeric_stepsize,
@@ -390,8 +391,10 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
     int get_variance;
     int variance_ok = 0;
     DlnpCallback cb(dlnp);
+    PyArrayObject *np_params, *np_variance=NULL;
 
-    assert(PyArray_Check(np_params));
+    assert(PyArray_Check(py_params));
+    np_params = (PyArrayObject*)py_params;
     assert(PyArray_TYPE(np_params) == NPY_DOUBLE);
     if (!(PyArray_Check(np_params) &&
           (PyArray_TYPE(np_params) == NPY_DOUBLE))) {
@@ -401,7 +404,7 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
     nparams = (int)PyArray_SIZE(np_params);
     params = (double*)PyArray_DATA(np_params);
 
-    get_variance = ((PyObject*)np_variance != Py_None);
+    get_variance = (py_variance != Py_None);
 
     //printf("ceres_opt, nims %i, nparams %i, get_variance %i\n",
     //       nims, nparams, get_variance);
@@ -577,8 +580,12 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
     printf("%s\n", summary.FullReport().c_str());
 
     if (get_variance && (summary.termination_type == ceres::CONVERGENCE)) {
-        if (!(PyArray_Check(np_variance) &&
-              (PyArray_TYPE(np_variance) == NPY_DOUBLE))) {
+        if (!PyArray_Check(py_variance)) {
+            printf("ceres_opt: variance must be a numpy array\n");
+            return NULL;
+        }
+        np_variance = (PyArrayObject*)py_variance;
+        if (PyArray_TYPE(np_variance) != NPY_DOUBLE) {
             printf("ceres_opt: wrong type for variance variable\n");
             return NULL;
         }
