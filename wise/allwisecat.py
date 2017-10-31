@@ -2,7 +2,7 @@ import os
 import numpy as np
 from astrometry.util.fits import *
 
-from wisecat import _read_wise_cats, _read_wise_cats_wcs
+from wise.wisecat import _read_wise_cats, _read_wise_cats_wcs
 
 def allwise_catalog_wcs(wcs, pixelmargin=0, path='allwise-cats', cols=None):
     return _read_wise_cats_wcs(wcs,
