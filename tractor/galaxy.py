@@ -498,15 +498,15 @@ class ProfileGalaxy(object):
             #G  = correlate1d(cx, Ly, axis=0, mode='constant')
             #del cx
 
+            from tractor.c_mp_fourier import correlate7
             G = np.require(G, requirements=['A'])
+            correlate7(G, Lx, Ly, work_corr7)
 
             np.save('G.npy', G)
             np.save('Lx.npy', Lx)
             np.save('Ly.npy', Ly)
             sys.exit(0)
 
-            from tractor.c_mp_fourier import correlate7
-            correlate7(G, Lx, Ly, work_corr7, G)
 
         else:
             G = np.zeros((pH,pW), np.float32)

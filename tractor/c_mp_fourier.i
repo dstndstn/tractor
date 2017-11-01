@@ -40,10 +40,10 @@
 %apply (double* INPLACE_ARRAY2, int DIM1, int DIM2) {
     (double *img, int img_dim1, int img_dim2)
 };
-%apply (double* INPLACE_ARRAY1, int DIM1) {
+%apply (double* IN_ARRAY1, int DIM1) {
     (double *filtx, int filtx_dim)
 };
-%apply (double* INPLACE_ARRAY1, int DIM1) {
+%apply (double* IN_ARRAY1, int DIM1) {
     (double *filty, int filty_dim)
 };
 
@@ -187,12 +187,11 @@ static void correlate(double* img, int img_dim1, int img_dim2,
 static void correlate7(double* img, int img_dim1, int img_dim2,
                        double* filtx, int filtx_dim,
                        double* filty, int filty_dim,
-                       double* work, int work_dim1, int work_dim2,
-                       double* out, int out_dim1, int out_dim2) {
+                       double* work, int work_dim1, int work_dim2) {
+    // Output goes back into "img"!
 
     __assume_aligned(img, 64);
     __assume_aligned(work, 64);
-    __assume_aligned(out, 64);
 
     assert(filtx_dim == 7);
     assert(filty_dim == 7);
@@ -259,6 +258,8 @@ static void correlate7(double* img, int img_dim1, int img_dim2,
     int workH = W;
     int workW = H;
 
+    // Output goes back into "img"!
+
     // Now run filty over rows of the 'work' array
     for (j=0; j<workH; j++) {
         // special handling of left edge
@@ -267,14 +268,14 @@ static void correlate7(double* img, int img_dim1, int img_dim2,
             double sum = 0.0;
             for (k=0; k<4+i; k++)
                 sum += filter[3-i+k] * work_row[k];
-            out[i*W + j] = sum;
+            img[i*W + j] = sum;
         }
         // middle section
         for (i=3; i<=(workW-4); i++) {
             double sum = 0.0;
             for (k=0; k<7; k++)
                 sum += filter[k] * work_row[i-3+k];
-            out[i*W + j] = sum;
+            img[i*W + j] = sum;
         }
         // special handling of right edge
         // i=0 is the rightmost pixel
@@ -282,7 +283,7 @@ static void correlate7(double* img, int img_dim1, int img_dim2,
             double sum = 0.0;
             for (k=0; k<4+i; k++)
                 sum += filter[k] * work_row[workW-(4+i)+k];
-            out[(workW-1-i)*W + j] = sum;
+            img[(workW-1-i)*W + j] = sum;
         }
     }
 }

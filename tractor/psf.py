@@ -133,10 +133,17 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         Ly /= Ly.sum()
 
         if modelMask is None:
-            sx      = correlate1d(img, Lx, axis=1, mode='constant')
-            shifted = correlate1d(sx,  Ly, axis=0, mode='constant')
-            assert(np.all(np.isfinite(shifted)))
-            return Patch(x0, y0, shifted)
+
+            assert(len(Lx) == 7)
+            assert(len(Ly) == 7)
+            img = np.require(img, requirements=['A'])
+            from tractor.c_mp_fourier import correlate7
+            correlate7(img, Lx, Ly, work_corr7)
+            return Patch(x0, y0, img)
+            # sx      = correlate1d(img, Lx, axis=1, mode='constant')
+            # shifted = correlate1d(sx,  Ly, axis=0, mode='constant')
+            # assert(np.all(np.isfinite(shifted)))
+            # return Patch(x0, y0, shifted)
 
         #
         padding = L
@@ -147,8 +154,15 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         xi,xo = get_overlapping_region(mx0-x0-padding, mx0-x0+mw-1+padding, 0, W-1)
         mm[yo,xo] = img[yi,xi]
 
-        sx = correlate1d(mm, Lx, axis=1, mode='constant')
-        mm = correlate1d(sx, Ly, axis=0, mode='constant')
+        assert(len(Lx) == 7)
+        assert(len(Ly) == 7)
+        mm = np.require(mm, requirements=['A'])
+        from tractor.c_mp_fourier import correlate7
+        correlate7(mm, Lx, Ly, work_corr7)
+
+        #sx = correlate1d(mm, Lx, axis=1, mode='constant')
+        #mm = correlate1d(sx, Ly, axis=0, mode='constant')
+
         mm = mm[padding:-padding, padding:-padding]
         assert(np.all(np.isfinite(mm)))
         return Patch(mx0, my0, mm)
@@ -221,6 +235,10 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         rtn = P, (cx, cy), (pH,pW), (v,w)
         self.fftcache[sz] = rtn
         return rtn
+
+
+work_corr7 = np.zeros((1024,1024), np.float64)
+work_corr7 = np.require(work_corr7, requirements=['A'])
 
 class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
     '''
