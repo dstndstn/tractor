@@ -502,10 +502,10 @@ class ProfileGalaxy(object):
             G = np.require(G, requirements=['A'])
             correlate7(G, Lx, Ly, work_corr7)
 
-            np.save('G.npy', G)
-            np.save('Lx.npy', Lx)
-            np.save('Ly.npy', Ly)
-            sys.exit(0)
+            # np.save('G.npy', G)
+            # np.save('Lx.npy', Lx)
+            # np.save('Ly.npy', Ly)
+            # sys.exit(0)
 
 
         else:
