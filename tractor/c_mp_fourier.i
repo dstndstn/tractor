@@ -6,9 +6,6 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/arrayobject.h>
 #include <math.h>
-
-    //#include <ipp.h>
-    //#include <ippcv.h>
 %}
 
 %include "numpy.i"
@@ -54,14 +51,6 @@
 %apply (float* INPLACE_ARRAY2, int DIM1, int DIM2) {
     (float *img, int img_dim1, int img_dim2)
 };
-/*
-%apply (float* IN_ARRAY1, int DIM1) {
-    (float *filtx, int filtx_dim)
-};
-%apply (float* IN_ARRAY1, int DIM1) {
-    (float *filty, int filty_dim)
-};
-*/
 
 %inline %{
 
@@ -229,33 +218,25 @@ static void correlate7(double* restrict img, int img_dim1, int img_dim2,
     // first run the filtx over image rows
     for (j=0; j<H; j++) {
         // special handling of left edge
-        //double* img_row = img + j*W;
         int offset = j*W;
         for (i=0; i<3; i++) {
             double sum = 0.0;
             for (k=0; k<4+i; k++)
-                //sum += filter[3-i+k] * img_row[k];
                 sum += filter[3-i+k] * img[offset + k];
             work[i*H + j] = sum;
         }
         // middle section
-        //offset = j*W - 3;
-        //for (i=3; i<=(W-4); i++) {
         for (i=0; i<=(W-7); i++) {
             double sum = 0.0;
             for (k=0; k<7; k++)
-                //sum += filter[k] * img_row[i-3+k];
                 sum += filter[k] * img[offset + i+k];
-            //work[i*H + j] = sum;
             work[(i+3)*H + j] = sum;
         }
         // special handling of right edge
         // i=0 is the rightmost pixel
-        //offset = j*W;
         for (i=0; i<3; i++) {
             double sum = 0.0;
             for (k=0; k<4+i; k++)
-                //sum += filter[k] * img_row[W-(4+i)+k];
                 sum += filter[k] * img[offset + W-(4+i)+k];
             work[(W-1-i)*H + j] = sum;
         }
@@ -271,41 +252,30 @@ static void correlate7(double* restrict img, int img_dim1, int img_dim2,
     // Now run filty over rows of the 'work' array
     for (j=0; j<workH; j++) {
         // special handling of left edge
-        //double* work_row = work + j * workW;
         int offset = j * workW;
         for (i=0; i<3; i++) {
             double sum = 0.0;
             for (k=0; k<4+i; k++)
-                //sum += filter[3-i+k] * work_row[k];
                 sum += filter[3-i+k] * work[offset + k];
             img[i*W + j] = sum;
         }
         // middle section
-        //offset = j * workW - 3;
-        //for (i=3; i<=(workW-4); i++) {
         for (i=0; i<=(workW-7); i++) {
             double sum = 0.0;
             for (k=0; k<7; k++)
-                //sum += filter[k] * work_row[i-3+k];
                 sum += filter[k] * work[offset + i+k];
-            //img[i*W + j] = sum;
             img[(i+3)*W + j] = sum;
         }
         // special handling of right edge
         // i=0 is the rightmost pixel
-        //offset = j * workW;
         for (i=0; i<3; i++) {
             double sum = 0.0;
             for (k=0; k<4+i; k++)
-                //sum += filter[k] * work_row[workW-(4+i)+k];
                 sum += filter[k] * work[offset +  workW-(4+i)+k];
             img[(workW-1-i)*W + j] = sum;
         }
     }
 }
-
-
-
 
 
 static void correlate7f(float* restrict img, int img_dim1, int img_dim2,
@@ -340,39 +310,30 @@ static void correlate7f(float* restrict img, int img_dim1, int img_dim2,
     // first run the filtx over image rows
     for (j=0; j<H; j++) {
         // special handling of left edge
-        //double* img_row = img + j*W;
         int offset = j*W;
         for (i=0; i<3; i++) {
             float sum = 0.0;
             for (k=0; k<4+i; k++)
-                //sum += filter[3-i+k] * img_row[k];
                 sum += filter[3-i+k] * img[offset + k];
             work[i*H + j] = sum;
         }
         // middle section
-        //offset = j*W - 3;
-        //for (i=3; i<=(W-4); i++) {
         for (i=0; i<=(W-7); i++) {
             float sum = 0.0;
             for (k=0; k<7; k++)
-                //sum += filter[k] * img_row[i-3+k];
                 sum += filter[k] * img[offset + i+k];
-            //work[i*H + j] = sum;
             work[(i+3)*H + j] = sum;
         }
         // special handling of right edge
         // i=0 is the rightmost pixel
-        //offset = j*W;
         for (i=0; i<3; i++) {
             float sum = 0.0;
             for (k=0; k<4+i; k++)
-                //sum += filter[k] * img_row[W-(4+i)+k];
                 sum += filter[k] * img[offset + W-(4+i)+k];
             work[(W-1-i)*H + j] = sum;
         }
     }
 
-    //memcpy(filter, filty, 7 * sizeof(double));
     for (i=0; i<7; i++)
         filter[i] = filty[i];
 
@@ -384,39 +345,30 @@ static void correlate7f(float* restrict img, int img_dim1, int img_dim2,
     // Now run filty over rows of the 'work' array
     for (j=0; j<workH; j++) {
         // special handling of left edge
-        //float* work_row = work + j * workW;
         int offset = j * workW;
         for (i=0; i<3; i++) {
             float sum = 0.0;
             for (k=0; k<4+i; k++)
-                //sum += filter[3-i+k] * work_row[k];
                 sum += filter[3-i+k] * work[offset + k];
             img[i*W + j] = sum;
         }
         // middle section
-        //offset = j * workW - 3;
-        //for (i=3; i<=(workW-4); i++) {
         for (i=0; i<=(workW-7); i++) {
             float sum = 0.0;
             for (k=0; k<7; k++)
-                //sum += filter[k] * work_row[i-3+k];
                 sum += filter[k] * work[offset + i+k];
-            //img[i*W + j] = sum;
             img[(i+3)*W + j] = sum;
         }
         // special handling of right edge
         // i=0 is the rightmost pixel
-        //offset = j * workW;
         for (i=0; i<3; i++) {
             float sum = 0.0;
             for (k=0; k<4+i; k++)
-                //sum += filter[k] * work_row[workW-(4+i)+k];
                 sum += filter[k] * work[offset +  workW-(4+i)+k];
             img[(workW-1-i)*W + j] = sum;
         }
     }
 }
-
 
 
 static void mixture_profile_fourier_transform(double *amps, int amps_len,
