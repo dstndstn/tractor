@@ -53,7 +53,8 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         - *Lorder* is the order of the Lanczos interpolant used for
            shifting the image to subpixel positions.
         '''
-        self.img = img
+        # align
+        self.img = np.require(img, requirements=['A'])
         H,W = img.shape
         assert((H % 2) == 1)
         assert((W % 2) == 1)
@@ -132,20 +133,21 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         Lx /= Lx.sum()
         Ly /= Ly.sum()
 
-        print('img', img.dtype)
-        print('Lx', Lx.dtype)
-        print('Ly', Ly.dtype)
+        # print('img', img.dtype)
+        # print('Lx', Lx.dtype)
+        # print('Ly', Ly.dtype)
 
         if modelMask is None:
 
             assert(len(Lx) == 7)
             assert(len(Ly) == 7)
-            img = np.require(img, requirements=['A'])
             from tractor.c_mp_fourier import correlate7, correlate7f
+            #print('modelMask is None, dtype', img.dtype)
             if img.dtype == np.float32:
                 correlate7f(img, Lx, Ly, work_corr7f)
             else:
                 correlate7(img, Lx, Ly, work_corr7)
+            #print('modelMask is None, dtype', img.dtype, 'done')
             # from tractor.c_mp_fourier import correlate7
             # correlate7(img, Lx, Ly, work_corr7)
             return Patch(x0, y0, img)
@@ -165,12 +167,14 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
 
         assert(len(Lx) == 7)
         assert(len(Ly) == 7)
-        mm = np.require(mm, requirements=['A'])
+        #mm = np.require(mm, requirements=['A'])
         from tractor.c_mp_fourier import correlate7, correlate7f
+        #print('mm, dtype', mm.dtype)
         if mm.dtype == np.float32:
             correlate7f(mm, Lx, Ly, work_corr7f)
         else:
             correlate7(mm, Lx, Ly, work_corr7)
+        #print('mm, dtype', mm.dtype, 'done')
 
         #sx = correlate1d(mm, Lx, axis=1, mode='constant')
         #mm = correlate1d(sx, Ly, axis=0, mode='constant')

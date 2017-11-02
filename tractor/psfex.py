@@ -185,6 +185,7 @@ class PsfExModel(object):
             from astrometry.util.fits import fits_table
             T = fits_table(fn, ext=ext)
             ims = T.psf_mask[0]
+            ims = ims.astype(np.float32)
             #print('Got', ims.shape, 'PSF images')
             hdr = T.get_header()
 
@@ -240,6 +241,7 @@ class PsfExModel(object):
             ne = (degree + 1) * (degree + 2) / 2
             assert(Ti.psfaxis3 == ne)
             ims = Ti.psf_mask
+            ims = ims.astype(np.float32)
             assert(len(ims.shape) == 3)
             assert(ims.shape[0] == ne)
             self.psfbases = ims
