@@ -132,13 +132,22 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         Lx /= Lx.sum()
         Ly /= Ly.sum()
 
+        print('img', img.dtype)
+        print('Lx', Lx.dtype)
+        print('Ly', Ly.dtype)
+
         if modelMask is None:
 
             assert(len(Lx) == 7)
             assert(len(Ly) == 7)
             img = np.require(img, requirements=['A'])
-            from tractor.c_mp_fourier import correlate7
-            correlate7(img, Lx, Ly, work_corr7)
+            from tractor.c_mp_fourier import correlate7, correlate7f
+            if img.dtype == np.float32:
+                correlate7f(img, Lx, Ly, work_corr7f)
+            else:
+                correlate7(img, Lx, Ly, work_corr7)
+            # from tractor.c_mp_fourier import correlate7
+            # correlate7(img, Lx, Ly, work_corr7)
             return Patch(x0, y0, img)
             # sx      = correlate1d(img, Lx, axis=1, mode='constant')
             # shifted = correlate1d(sx,  Ly, axis=0, mode='constant')
@@ -157,8 +166,11 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         assert(len(Lx) == 7)
         assert(len(Ly) == 7)
         mm = np.require(mm, requirements=['A'])
-        from tractor.c_mp_fourier import correlate7
-        correlate7(mm, Lx, Ly, work_corr7)
+        from tractor.c_mp_fourier import correlate7, correlate7f
+        if mm.dtype == np.float32:
+            correlate7f(mm, Lx, Ly, work_corr7f)
+        else:
+            correlate7(mm, Lx, Ly, work_corr7)
 
         #sx = correlate1d(mm, Lx, axis=1, mode='constant')
         #mm = correlate1d(sx, Ly, axis=0, mode='constant')
@@ -239,6 +251,9 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
 
 work_corr7 = np.zeros((1024,1024), np.float64)
 work_corr7 = np.require(work_corr7, requirements=['A'])
+
+work_corr7f = np.zeros((1024,1024), np.float32)
+work_corr7f = np.require(work_corr7f, requirements=['A'])
 
 class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
     '''
