@@ -239,17 +239,19 @@ static void correlate7(double* restrict img, int img_dim1, int img_dim2,
             work[i*H + j] = sum;
         }
         // middle section
-        offset = j*W - 3;
-        for (i=3; i<=(W-4); i++) {
+        //offset = j*W - 3;
+        //for (i=3; i<=(W-4); i++) {
+        for (i=0; i<=(W-7); i++) {
             double sum = 0.0;
             for (k=0; k<7; k++)
                 //sum += filter[k] * img_row[i-3+k];
                 sum += filter[k] * img[offset + i+k];
-            work[i*H + j] = sum;
+            //work[i*H + j] = sum;
+            work[(i+3)*H + j] = sum;
         }
         // special handling of right edge
         // i=0 is the rightmost pixel
-        offset = j*W;
+        //offset = j*W;
         for (i=0; i<3; i++) {
             double sum = 0.0;
             for (k=0; k<4+i; k++)
@@ -279,17 +281,19 @@ static void correlate7(double* restrict img, int img_dim1, int img_dim2,
             img[i*W + j] = sum;
         }
         // middle section
-        offset = j * workW - 3;
-        for (i=3; i<=(workW-4); i++) {
+        //offset = j * workW - 3;
+        //for (i=3; i<=(workW-4); i++) {
+        for (i=0; i<=(workW-7); i++) {
             double sum = 0.0;
             for (k=0; k<7; k++)
                 //sum += filter[k] * work_row[i-3+k];
                 sum += filter[k] * work[offset + i+k];
-            img[i*W + j] = sum;
+            //img[i*W + j] = sum;
+            img[(i+3)*W + j] = sum;
         }
         // special handling of right edge
         // i=0 is the rightmost pixel
-        offset = j * workW;
+        //offset = j * workW;
         for (i=0; i<3; i++) {
             double sum = 0.0;
             for (k=0; k<4+i; k++)
@@ -303,12 +307,11 @@ static void correlate7(double* restrict img, int img_dim1, int img_dim2,
 
 
 
-static void correlate7f(float* img, int img_dim1, int img_dim2,
-                        //float* filtx, int filtx_dim,
-                        //float* filty, int filty_dim,
-                        double* filtx, int filtx_dim,
-                        double* filty, int filty_dim,
-                        float* work, int work_dim1, int work_dim2) {
+
+static void correlate7f(float* restrict img, int img_dim1, int img_dim2,
+                        double* restrict filtx, int filtx_dim,
+                        double* restrict filty, int filty_dim,
+                        float* restrict work, int work_dim1, int work_dim2) {
     // Output goes back into "img"!
 
     __assume_aligned(img, 64);
@@ -330,40 +333,46 @@ static void correlate7f(float* img, int img_dim1, int img_dim2,
     assert(W > 8);
     assert(H > 8);
 
-    //memcpy(filter, filtx, 7 * sizeof(float));
-    // double -> float
+    //memcpy(filter, filtx, 7 * sizeof(double));
     for (i=0; i<7; i++)
         filter[i] = filtx[i];
 
     // first run the filtx over image rows
     for (j=0; j<H; j++) {
         // special handling of left edge
-        float* img_row = img + j*W;
+        //double* img_row = img + j*W;
+        int offset = j*W;
         for (i=0; i<3; i++) {
             float sum = 0.0;
             for (k=0; k<4+i; k++)
-                sum += filter[3-i+k] * img_row[k];
+                //sum += filter[3-i+k] * img_row[k];
+                sum += filter[3-i+k] * img[offset + k];
             work[i*H + j] = sum;
         }
         // middle section
-        for (i=3; i<=(W-4); i++) {
+        //offset = j*W - 3;
+        //for (i=3; i<=(W-4); i++) {
+        for (i=0; i<=(W-7); i++) {
             float sum = 0.0;
             for (k=0; k<7; k++)
-                sum += filter[k] * img_row[i-3+k];
-            work[i*H + j] = sum;
+                //sum += filter[k] * img_row[i-3+k];
+                sum += filter[k] * img[offset + i+k];
+            //work[i*H + j] = sum;
+            work[(i+3)*H + j] = sum;
         }
         // special handling of right edge
         // i=0 is the rightmost pixel
+        //offset = j*W;
         for (i=0; i<3; i++) {
             float sum = 0.0;
             for (k=0; k<4+i; k++)
-                sum += filter[k] * img_row[W-(4+i)+k];
+                //sum += filter[k] * img_row[W-(4+i)+k];
+                sum += filter[k] * img[offset + W-(4+i)+k];
             work[(W-1-i)*H + j] = sum;
         }
     }
 
-    //memcpy(filter, filty, 7 * sizeof(float));
-    // double -> float
+    //memcpy(filter, filty, 7 * sizeof(double));
     for (i=0; i<7; i++)
         filter[i] = filty[i];
 
@@ -375,32 +384,38 @@ static void correlate7f(float* img, int img_dim1, int img_dim2,
     // Now run filty over rows of the 'work' array
     for (j=0; j<workH; j++) {
         // special handling of left edge
-        float* work_row = work + j * workW;
+        //float* work_row = work + j * workW;
+        int offset = j * workW;
         for (i=0; i<3; i++) {
             float sum = 0.0;
             for (k=0; k<4+i; k++)
-                sum += filter[3-i+k] * work_row[k];
+                //sum += filter[3-i+k] * work_row[k];
+                sum += filter[3-i+k] * work[offset + k];
             img[i*W + j] = sum;
         }
         // middle section
-        for (i=3; i<=(workW-4); i++) {
+        //offset = j * workW - 3;
+        //for (i=3; i<=(workW-4); i++) {
+        for (i=0; i<=(workW-7); i++) {
             float sum = 0.0;
             for (k=0; k<7; k++)
-                sum += filter[k] * work_row[i-3+k];
-            img[i*W + j] = sum;
+                //sum += filter[k] * work_row[i-3+k];
+                sum += filter[k] * work[offset + i+k];
+            //img[i*W + j] = sum;
+            img[(i+3)*W + j] = sum;
         }
         // special handling of right edge
         // i=0 is the rightmost pixel
+        //offset = j * workW;
         for (i=0; i<3; i++) {
             float sum = 0.0;
             for (k=0; k<4+i; k++)
-                sum += filter[k] * work_row[workW-(4+i)+k];
+                //sum += filter[k] * work_row[workW-(4+i)+k];
+                sum += filter[k] * work[offset +  workW-(4+i)+k];
             img[(workW-1-i)*W + j] = sum;
         }
     }
 }
-
-
 
 
 
