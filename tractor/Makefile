@@ -58,8 +58,8 @@ BLAS_LIB ?= -lblas
 GLOG_LIB ?= $(shell pkg-config --libs   libglog) #-lglog
 GLOG_INC ?= $(shell pkg-config --cflags libglog)
 
-GFLAGS_LIB ?= $(shell pkg-config --libs   libgflags)
-GFLAGS_INC ?= $(shell pkg-config --cflags libgflags)
+GFLAGS_LIB ?= $(shell pkg-config --libs   gflags)
+GFLAGS_INC ?= $(shell pkg-config --cflags gflags)
 
 CERES_LIB_DIR ?= /usr/local/lib
 

@@ -57,7 +57,7 @@ static PyObject* real_ceres_forced_phot(PyObject* blocks,
     Nblocks = PyList_Size(blocks);
     //printf("N blocks: %i\n", (int)Nblocks);
     assert(PyArray_Check(np_fluxes));
-    assert(PyArray_TYPE(np_fluxes) == NPY_DOUBLE);
+    assert(PyArray_TYPE((PyArrayObject*)np_fluxes) == NPY_DOUBLE);
     int Nfluxes = (int)PyArray_Size(np_fluxes);
     double* realfluxes = (double*)PyArray_DATA((PyArrayObject*)np_fluxes);
     T* mod0data;
