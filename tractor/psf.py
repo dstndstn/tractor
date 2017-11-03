@@ -143,14 +143,19 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
             assert(len(Ly) == 7)
             from tractor.c_mp_fourier import correlate7, correlate7f
             #print('modelMask is None, dtype', img.dtype)
-            if img.dtype == np.float32:
-                correlate7f(img, Lx, Ly, work_corr7f)
-            else:
-                correlate7(img, Lx, Ly, work_corr7)
+
+            outimg = np.empty(img.shape, np.float32)
+            outimg[:,:] = img
+            correlate7f(outimg, Lx, Ly, work_corr7f)
+            return Patch(x0, y0, outimg)
+            # if img.dtype == np.float32:
+            #     correlate7f(img, Lx, Ly, work_corr7f)
+            # else:
+            #     correlate7(img, Lx, Ly, work_corr7)
+            #return Patch(x0, y0, img)
             #print('modelMask is None, dtype', img.dtype, 'done')
             # from tractor.c_mp_fourier import correlate7
             # correlate7(img, Lx, Ly, work_corr7)
-            return Patch(x0, y0, img)
             # sx      = correlate1d(img, Lx, axis=1, mode='constant')
             # shifted = correlate1d(sx,  Ly, axis=0, mode='constant')
             # assert(np.all(np.isfinite(shifted)))
@@ -159,7 +164,8 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         #
         padding = L
         # Create a modelMask + padding sized stamp and insert PSF image into it
-        mm = np.zeros((mh+2*padding, mw+2*padding), img.dtype)
+        #mm = np.zeros((mh+2*padding, mw+2*padding), img.dtype)
+        mm = np.zeros((mh+2*padding, mw+2*padding), np.float32)
 
         yi,yo = get_overlapping_region(my0-y0-padding, my0-y0+mh-1+padding, 0, H-1)
         xi,xo = get_overlapping_region(mx0-x0-padding, mx0-x0+mw-1+padding, 0, W-1)
@@ -170,10 +176,10 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         #mm = np.require(mm, requirements=['A'])
         from tractor.c_mp_fourier import correlate7, correlate7f
         #print('mm, dtype', mm.dtype)
-        if mm.dtype == np.float32:
-            correlate7f(mm, Lx, Ly, work_corr7f)
-        else:
-            correlate7(mm, Lx, Ly, work_corr7)
+        #if mm.dtype == np.float32:
+        correlate7f(mm, Lx, Ly, work_corr7f)
+        #else:
+        #    correlate7(mm, Lx, Ly, work_corr7)
         #print('mm, dtype', mm.dtype, 'done')
 
         #sx = correlate1d(mm, Lx, axis=1, mode='constant')
