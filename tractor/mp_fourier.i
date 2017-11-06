@@ -66,8 +66,10 @@ static void correlate7(double* restrict img, int img_dim1, int img_dim2,
                        double* restrict work, int work_dim1, int work_dim2) {
     // Output goes back into "img"!
 
+#ifdef __INTEL_COMPILER
     __assume_aligned(img, 64);
     __assume_aligned(work, 64);
+#endif
 
     assert(filtx_dim == 7);
     assert(filty_dim == 7);
@@ -156,8 +158,10 @@ static void correlate7f(float* restrict img, int img_dim1, int img_dim2,
                         float* restrict work, int work_dim1, int work_dim2) {
     // Output goes back into "img"!
 
+#ifdef __INTEL_COMPILER
     __assume_aligned(img, 64);
     __assume_aligned(work, 64);
+#endif
 
     assert(filtx_dim == 7);
     assert(filty_dim == 7);
