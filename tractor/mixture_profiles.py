@@ -6,12 +6,14 @@ if __name__ == '__main__':
     import pylab as plt
     import matplotlib.cm as cm
 import numpy as np
-#import scipy.spatial.distance as scp
 
 try:
-    from tractor import c_mp_fourier as mp_fourier
+    from tractor import intel_mp_fourier as mp_fourier
 except:
-    mp_fourier = None
+    try:
+        from tractor import mp_fourier
+    except:
+        mp_fourier = None
 
 from tractor.patch import Patch
     

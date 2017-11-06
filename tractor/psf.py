@@ -2,23 +2,6 @@ from __future__ import print_function
 from __future__ import division
 
 import numpy as np
-# import numpy.fft_intel.libifft as m
-# def irfftn_numpy(x, s=None, axes=None):
-#     a = np.asarray(x)
-#     no_trim = (s is None) and (axes is None)
-#     s, axes = m._cook_nd_args(a, s, axes, invreal=True)
-#     la = axes[-1]
-#     ovr_x = False
-#     if len(s) > 1:
-#         if not no_trim:
-#             a = m._fix_dimensions(a, s, axes)
-#         for ii in range(len(axes)-1):
-#             a = m.ifft(a, s[ii], axes[ii], overwrite_x=ovr_x)
-#             ovr_x = True
-#     a = m.irfft_numpy(a, n = s[-1], axis=la)
-#     return a
-# m.irfftn_numpy  = irfftn_numpy
-
 from astrometry.util.miscutils import lanczos_filter
 
 from tractor.image import Image
@@ -30,6 +13,37 @@ from tractor.patch import Patch
 from tractor.utils import BaseParams, ParamList, MultiParams, MogParams
 from tractor import mixture_profiles as mp
 from tractor import ducks
+
+def lanczos_shift_image(img, dx, dy):
+    L = 3
+    Lx = lanczos_filter(L, np.arange(-L, L+1) + dx)
+    Ly = lanczos_filter(L, np.arange(-L, L+1) + dy)
+    # Normalize the Lanczos interpolants (preserve flux)
+    Lx /= Lx.sum()
+    Ly /= Ly.sum()
+
+    sx      = correlate1d(img, Lx, axis=1, mode='constant')
+    shifted = correlate1d(sx,  Ly, axis=0, mode='constant')
+    assert(np.all(np.isfinite(shifted)))
+    return shifted
+
+#     assert(len(Lx) == 7)
+#     assert(len(Ly) == 7)
+#     from tractor.c_mp_fourier import correlate7, correlate7f
+#     outimg = np.empty(img.shape, np.float32)
+#     outimg[:,:] = img
+#     correlate7f(outimg, Lx, Ly, work_corr7f)
+# 
+# 
+# try:
+#     from tractor import intel_mp_fourier as mp_fourier
+# except:
+#     try:
+#         from tractor import mp_fourier
+#     except:
+#         mp_fourier = None
+# from tractor.c_mp_fourier import correlate7, correlate7f
+
 
 class HybridPSF(object):
     pass
@@ -126,40 +140,9 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
             # image as usual, and then copy it into the modelMask
             # space.
 
-        L = self.Lorder
-        Lx = lanczos_filter(L, np.arange(-L, L+1) + dx)
-        Ly = lanczos_filter(L, np.arange(-L, L+1) + dy)
-        # Normalize the Lanczos interpolants (preserve flux)
-        Lx /= Lx.sum()
-        Ly /= Ly.sum()
-
-        # print('img', img.dtype)
-        # print('Lx', Lx.dtype)
-        # print('Ly', Ly.dtype)
-
         if modelMask is None:
-
-            assert(len(Lx) == 7)
-            assert(len(Ly) == 7)
-            from tractor.c_mp_fourier import correlate7, correlate7f
-            #print('modelMask is None, dtype', img.dtype)
-
-            outimg = np.empty(img.shape, np.float32)
-            outimg[:,:] = img
-            correlate7f(outimg, Lx, Ly, work_corr7f)
+            outimg = lanczos_shift_image(img, dx, dy)
             return Patch(x0, y0, outimg)
-            # if img.dtype == np.float32:
-            #     correlate7f(img, Lx, Ly, work_corr7f)
-            # else:
-            #     correlate7(img, Lx, Ly, work_corr7)
-            #return Patch(x0, y0, img)
-            #print('modelMask is None, dtype', img.dtype, 'done')
-            # from tractor.c_mp_fourier import correlate7
-            # correlate7(img, Lx, Ly, work_corr7)
-            # sx      = correlate1d(img, Lx, axis=1, mode='constant')
-            # shifted = correlate1d(sx,  Ly, axis=0, mode='constant')
-            # assert(np.all(np.isfinite(shifted)))
-            # return Patch(x0, y0, shifted)
 
         #
         padding = L
@@ -171,19 +154,7 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         xi,xo = get_overlapping_region(mx0-x0-padding, mx0-x0+mw-1+padding, 0, W-1)
         mm[yo,xo] = img[yi,xi]
 
-        assert(len(Lx) == 7)
-        assert(len(Ly) == 7)
-        #mm = np.require(mm, requirements=['A'])
-        from tractor.c_mp_fourier import correlate7, correlate7f
-        #print('mm, dtype', mm.dtype)
-        #if mm.dtype == np.float32:
-        correlate7f(mm, Lx, Ly, work_corr7f)
-        #else:
-        #    correlate7(mm, Lx, Ly, work_corr7)
-        #print('mm, dtype', mm.dtype, 'done')
-
-        #sx = correlate1d(mm, Lx, axis=1, mode='constant')
-        #mm = correlate1d(sx, Ly, axis=0, mode='constant')
+        mm = lanczos_shift_image(mm, dx, dy)
 
         mm = mm[padding:-padding, padding:-padding]
         assert(np.all(np.isfinite(mm)))
