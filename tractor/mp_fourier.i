@@ -247,22 +247,19 @@ static void correlate7f(float* restrict img, int img_dim1, int img_dim2,
 }
 
 
-static void mixture_profile_fourier_transform(double *amps, int amps_len,
-                                              double *means, int means_dim1, int means_dim2,
-                                              double *vars, int vars_dim1, int vars_dim2, int vars_dim3,
-                                              double *v, int v_len,
-                                              double *w, int w_len,
-                                              double *out, int out_dim1, int out_dim2)
+static void gaussian_fourier_transform_zero_mean(
+    double * restrict amps, int amps_len,
+    double * restrict vars, int vars_dim1, int vars_dim2, int vars_dim3,
+    double * restrict v, int v_len,
+    double * restrict w, int w_len,
+    double * restrict out, int out_dim1, int out_dim2)
 {
-    const double twopisquare = -2. * M_PI * M_PI;
+    const double negtwopisquare = -2. * M_PI * M_PI;
 
     int K = amps_len;
     int NV = v_len;
     int NW = w_len;
     int i, j, k;
-
-    double *s = (double*)malloc(sizeof(double) * NV * NW);
-    memset(s, 0, sizeof(double) * NV * NW);
 
     for (j = 0; j < NW; j++) {
         double w_j = w[j];
@@ -271,20 +268,78 @@ static void mixture_profile_fourier_transform(double *amps, int amps_len,
             int index = NV * j + i;
             double v_i = v[i];
             double v_i_sqr = v_i * v_i;
+            double sum = 0.0;
             for (k = 0; k < K; k++) {
                 int offset = k * 4;
                 double a = vars[offset];
                 double b = vars[offset + 1];
                 double d = vars[offset + 3];
 
-                s[index] += amps[k] * exp(twopisquare * (a *  v_i_sqr + 2. * b * v_i * w_j + d * w_j_sqr));
+                sum += amps[k] * exp(negtwopisquare *
+                                     (a *  v_i_sqr + 2. * b * v_i * w_j + d * w_j_sqr));
             }
-            out[index] = s[index];
+            out[index] = sum;
         }
     }
-    free(s);
     return;
 }
+
+
+static void gaussian_fourier_transform(
+    double * restrict amps, int amps_len,
+    double * restrict means, int means_dim1, int means_dim2,
+    double * restrict vars, int vars_dim1, int vars_dim2, int vars_dim3,
+    double * restrict v, int v_len,
+    double * restrict w, int w_len,
+    double * restrict out, int out_dim1, int out_dim2)
+{
+    // General case with non-zero means; output must be complex128.
+    // ASSUMES 2-d data, and that all means are equal.
+
+    const double negtwopisquare = -2. * M_PI * M_PI;
+
+    int K = amps_len;
+    int NV = v_len;
+    int NW = w_len;
+    int i, j, k;
+
+    assert(
+
+    double mu0 = means[0];
+    double mu1 = means[1];
+
+    // 
+
+    for (j = 0; j < NW; j++) {
+        double w_j = w[j];
+        double w_j_sqr = w_j * w_j;
+        for (i = 0; i < NV; i++) {
+            int index = 2 * (NV * j + i);
+            double v_i = v[i];
+            double v_i_sqr = v_i * v_i;
+            double sum = 0.0;
+            for (k = 0; k < K; k++) {
+                int offset = k * 4;
+                double a = vars[offset];
+                double b = vars[offset + 1];
+                double d = vars[offset + 3];
+
+                sum += amps[k] * exp(negtwopisquare *
+                                     (a *  v_i_sqr + 2. * b * v_i * w_j + d * w_j_sqr));
+            }
+
+            double angle = -2. * M_PI * (mu0 * vv[i] + mu1 * ww[j]);
+            out[index+0] = sum * cos(angle);
+            out[index+1] = sum * sin(angle);
+        }
+    }
+    return;
+}
+
+
+
+
+
 
 
 %}

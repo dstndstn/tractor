@@ -470,7 +470,7 @@ class ProfileGalaxy(object):
 
         if fftmix is not None:
             #print('fftmix; mux,muy=', mux,muy)
-            Fsum = fftmix.getFourierTransform(v, w)
+            Fsum = fftmix.getFourierTransform(v, w, zero_mean=True)
             # print('inverse Fourier-transforming into result size:', pH,pW)
             G = np.fft.irfft2(Fsum * P, s=(pH,pW))
 
