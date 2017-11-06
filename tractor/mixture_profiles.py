@@ -161,7 +161,7 @@ class MixtureOfGaussians(object):
         
         '''
         if mp_fourier and use_mp_fourier and zero_mean:
-            f = np.zeros((len(w), len(v)))
+            f = np.zeros((len(w), len(v)), np.float64)
             mp_fourier.gaussian_fourier_transform_zero_mean(
                 self.amp, self.var, v, w, f)
             return f

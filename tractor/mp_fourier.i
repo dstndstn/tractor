@@ -261,6 +261,12 @@ static void gaussian_fourier_transform_zero_mean(
     int NW = w_len;
     int i, j, k;
 
+    assert(vars_dim1 == K);
+    assert(vars_dim2 == 2);
+    assert(vars_dim3 == 2);
+    assert(out_dim1 == NV);
+    assert(out_dim2 == NW);
+
     for (j = 0; j < NW; j++) {
         double w_j = w[j];
         double w_j_sqr = w_j * w_j;
