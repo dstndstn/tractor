@@ -41,8 +41,7 @@ install:
     # - which fitsverify
 
 script:
-    - echo CC is $CC
-    - $CC --version
+    - gcc --version
     - python --version
     - python setup.py install
     - python setup.py build_ext --inplace
