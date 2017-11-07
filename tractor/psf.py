@@ -2,7 +2,6 @@ from __future__ import print_function
 from __future__ import division
 
 import numpy as np
-from astrometry.util.miscutils import lanczos_filter
 
 from tractor.image import Image
 from tractor.pointsource import PointSource
@@ -18,14 +17,17 @@ from tractor import ducks
 try:
     from tractor import intel_mp_fourier as mp_fourier
 except:
+    print('tractor.psf: failed import intel version of mp_fourier library.  Falling back to generic version.')
     try:
         from tractor import mp_fourier
     except:
+        print('tractor.psf: failed import C version of mp_fourier library.  Falling back to python version.')
         mp_fourier = None
-# from tractor.c_mp_fourier import correlate7, correlate7f
 
-def lanczos_shift_image(img, dx, dy, inplace=False):
+def lanczos_shift_image(img, dx, dy, inplace=False, force_python=False):
     from scipy.ndimage import correlate1d
+    from astrometry.util.miscutils import lanczos_filter
+
     L = 3
     Lx = lanczos_filter(L, np.arange(-L, L+1) + dx)
     Ly = lanczos_filter(L, np.arange(-L, L+1) + dy)
@@ -34,7 +36,7 @@ def lanczos_shift_image(img, dx, dy, inplace=False):
     Ly /= Ly.sum()
 
     #print('mp_fourier:', mp_fourier)
-    if mp_fourier is None:
+    if mp_fourier is None or force_python:
         sx     = correlate1d(img, Lx, axis=1, mode='constant')
         outimg = correlate1d(sx,  Ly, axis=0, mode='constant')
     else:
