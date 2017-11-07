@@ -14,7 +14,7 @@ __all__ = [
     'sdss', 'fitpsf', 'emfit', 'galaxy', 'sersic',
     # ducks
     'Params', 'Sky', 'Source', 'Position', 'Brightness', 'PhotoCal',
-    'PSF', 
+    'PSF',
     # utils
     'BaseParams', 'ScalarParam', 'ParamList', 'MultiParams',
     'NamedParams', 'NpArrayParams',
@@ -31,7 +31,7 @@ __all__ = [
     'GaussianMixtureEllipsePSF',
     'ScaledWcs', 'ShiftedWcs', 'ScaledPhotoCal', 'ShiftedPsf',
     'ParamsWrapper',
-    #'GaussianPriors',
+    # 'GaussianPriors',
     # engine
     'Patch', 'ModelMask', 'Image', 'Images',
     'Catalog', 'Tractor',
@@ -45,4 +45,4 @@ __all__ = [
     'GalaxyShape', 'Galaxy', 'ProfileGalaxy', 'GaussianGalaxy',
     'ExpGalaxy', 'DevGalaxy', 'FracDev', 'SoftenedFracDev',
     'FixedCompositeGalaxy', 'CompositeGalaxy',
-    ]
+]

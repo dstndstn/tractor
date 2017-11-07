@@ -10,6 +10,7 @@ import numpy as np
 from astrometry.util.fits import *
 from astrometry.util.file import *
 
+
 def getcat(cat, cols, NC):
     ffn = '%s.fits' % cat
     if os.path.exists(ffn):
@@ -29,11 +30,11 @@ def getcat(cat, cols, NC):
             f.write(data)
             f.close()
             print('Wrote', len(data), 'to', fn)
-    
+
         tree = ET.parse(fn)
         root = tree.getroot()
         print('Parsed XML:', root)
-    
+
         colnames = []
         for col in root.iter('column'):
             name = col.find('colname')
@@ -77,13 +78,14 @@ def getcat(cat, cols, NC):
             print('File exists:', ffn2)
             fitsfns.append(ffn2)
             continue
-        
+
         cn += ['cntr']
 
         if (os.path.exists(catfn2) and file_size(catfn2) > 100):
             print('File exists:', catfn2)
         else:
-            url2 = 'http://irsa.ipac.caltech.edu/cgi-bin/Gator/nph-query?outfmt=3&spatial=NONE&catalog=%s&selcols=%s' % (cat, ','.join(cn))
+            url2 = 'http://irsa.ipac.caltech.edu/cgi-bin/Gator/nph-query?outfmt=3&spatial=NONE&catalog=%s&selcols=%s' % (
+                cat, ','.join(cn))
             print('Retrieving', url2)
             cmd = 'wget -nv --timeout 0 -O %s "%s"' % (catfn2, url2)
             print('Running:', cmd)
@@ -102,26 +104,27 @@ def getcat(cat, cols, NC):
         #     print x
         # for x in root:
         #     print 'Root child:', x.tag
-    
+
         tab = list(root.iter('TABLE'))[0]
         fieldnames = []
         fieldtypes = []
-        typemap = dict(char=str, int=np.int64, double=np.float64, float=np.float64)
-        nullmap = {str:'', np.int64:-1, np.float64:np.nan}
+        typemap = dict(char=str, int=np.int64,
+                       double=np.float64, float=np.float64)
+        nullmap = {str: '', np.int64: -1, np.float64: np.nan}
         for f in tab.findall('FIELD'):
             print('Field', f.attrib)
             nm = f.attrib['name']
             ty = f.attrib['datatype']
             fieldnames.append(nm)
             fieldtypes.append(typemap[ty])
-        
+
         data = [[] for f in fieldnames]
-        
+
         datanode = list(root.iter('TABLEDATA'))[0]
-        for irow,tr in enumerate(datanode):
+        for irow, tr in enumerate(datanode):
             assert(len(tr) == len(fieldtypes))
             try:
-                for td,typ,dd in zip(tr, fieldtypes, data):
+                for td, typ, dd in zip(tr, fieldtypes, data):
                     if td.text is None:
                         dd.append(nullmap[typ])
                     else:
@@ -130,8 +133,8 @@ def getcat(cat, cols, NC):
                 print('Error in TR row', irow, 'of file', catfn2)
                 print(ET.dump(tr))
                 raise
-        
-        data = [np.array(dd, dtype=tt) for dd,tt in zip(data, fieldtypes)]
+
+        data = [np.array(dd, dtype=tt) for dd, tt in zip(data, fieldtypes)]
 
         del td
         del tr
@@ -140,9 +143,9 @@ def getcat(cat, cols, NC):
         del tab
         del root
         del tree
-        
+
         T = tabledata()
-        for dd,nn in zip(data, fieldnames):
+        for dd, nn in zip(data, fieldnames):
             T.set(nn, dd)
         T.about()
 
@@ -171,12 +174,13 @@ def getcat(cat, cols, NC):
     Tall.writeto(ffn)
     print('Wrote', ffn)
 
-    
+
 threads = []
 
 
 if False:
-    cols = ['coadd_id', 'ra', 'dec', 'crota', 'moon_lev', 'w1moonrej', 'w2moonrej', 'w3moonrej', 'w4moonrej', 'w1numfrms', 'w2numfrms', 'w3numfrms', 'w4numfrms', 'naxis1', 'naxis2', 'crpix1', 'crpix2', 'ctype1', 'ctype2', 'bunit', 'cdelt1', 'cdelt2', 'mergetype', 'w1magzp', 'w2magzp', 'w3magzp', 'w4magzp', 'w1magzpunc', 'w2magzpunc', 'w3magzpunc', 'w4magzpunc', 'qual_coadd', 'qc_fact', 'qi_fact', 'qa_fact', 'cntr']
+    cols = ['coadd_id', 'ra', 'dec', 'crota', 'moon_lev', 'w1moonrej', 'w2moonrej', 'w3moonrej', 'w4moonrej', 'w1numfrms', 'w2numfrms', 'w3numfrms', 'w4numfrms', 'naxis1', 'naxis2', 'crpix1', 'crpix2', 'ctype1',
+            'ctype2', 'bunit', 'cdelt1', 'cdelt2', 'mergetype', 'w1magzp', 'w2magzp', 'w3magzp', 'w4magzp', 'w1magzpunc', 'w2magzpunc', 'w3magzpunc', 'w4magzpunc', 'qual_coadd', 'qc_fact', 'qi_fact', 'qa_fact', 'cntr']
     NC = 100
     for cat in ['wise_allsky_4band_p3as_cdd',
                 'wise_allsky_3band_p3as_cdd',
@@ -185,7 +189,7 @@ if False:
         t = threading.Thread(target=getcat, args=(cat, cols, NC))
         t.start()
         threads.append(t)
-        #getcat(cat,cols,NC)
+        # getcat(cat,cols,NC)
 
 if True:
     cols = None
@@ -195,11 +199,10 @@ if True:
         'wise_allsky_2band_p1bs_frm',
         #'wise_allsky_3band_p1bs_frm',
         #'wise_allsky_4band_p1bs_frm',
-        ]:
+    ]:
         t = threading.Thread(target=getcat, args=(cat, cols, NC))
         t.start()
         threads.append(t)
-    
 
 
 for t in threads:

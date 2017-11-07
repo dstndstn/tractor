@@ -59,9 +59,9 @@ def lanczos_shift_image(img, dx, dy, inplace=False, force_python=False):
 work_corr7f = np.zeros((1024,1024), np.float32)
 work_corr7f = np.require(work_corr7f, requirements=['A'])
 
-
 class HybridPSF(object):
     pass
+
 
 class PixelizedPSF(BaseParams, ducks.ImageCalibration):
     '''
@@ -87,11 +87,11 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         H,W = img.shape
         assert((H % 2) == 1)
         assert((W % 2) == 1)
-        self.radius = np.hypot(H/2., W/2.)
-        self.H, self.W = H,W
+        self.radius = np.hypot(H / 2., W / 2.)
+        self.H, self.W = H, W
         self.Lorder = Lorder
         self.fftcache = {}
-        
+
     def __str__(self):
         return 'PixelizedPSF'
 
@@ -101,7 +101,7 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
     @property
     def shape(self):
         return (self.H, self.W)
-    
+
     def hashkey(self):
         return ('PixelizedPSF', tuple(self.img.ravel()))
 
@@ -115,7 +115,7 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
     def constantPsfAt(self, x, y):
         # not spatially varying
         return self
-    
+
     def getRadius(self):
         return self.radius
 
@@ -128,18 +128,18 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
 
         img = self.getImage(px, py)
         assert(np.all(np.isfinite(img)))
-        
-        H,W = img.shape
+
+        H, W = img.shape
         ix = int(np.round(px))
         iy = int(np.round(py))
         dx = px - ix
         dy = py - iy
-        x0 = ix - W//2
-        y0 = iy - H//2
+        x0 = ix - W // 2
+        y0 = iy - H // 2
 
         if modelMask is not None:
-            mh,mw = modelMask.shape
-            mx0,my0 = modelMask.x0, modelMask.y0
+            mh, mw = modelMask.shape
+            mx0, my0 = modelMask.x0, modelMask.y0
 
             # print 'PixelizedPSF + modelMask'
             # print 'mx0,my0', mx0,my0, '+ mw,mh', mw,mh
@@ -148,7 +148,7 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
             if (mx0 >= x0 + W or
                 my0 >= y0 + H or
                 mx0 + mw <= x0 or
-                my0 + mh <= y0):
+                    my0 + mh <= y0):
                 # No overlap
                 return None
             # Otherwise, we'll just produce the Lanczos-shifted PSF
@@ -176,10 +176,10 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
 
     def getFourierTransformSize(self, radius):
         # Next power-of-two size
-        sz = 2**int(np.ceil(np.log2(radius*2.)))
+        sz = 2**int(np.ceil(np.log2(radius * 2.)))
         return sz
 
-    def _padInImage(self, H,W, img=None):
+    def _padInImage(self, H, W, img=None):
         '''
         Embeds this PSF image into a larger or smaller image of shape H,W.
 
@@ -188,32 +188,32 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         '''
         if img is None:
             img = self.img
-        ph,pw = img.shape
+        ph, pw = img.shape
         subimg = img
 
         if H >= ph:
             y0 = (H - ph) // 2
-            cy = y0 + ph//2
+            cy = y0 + ph // 2
         else:
             y0 = 0
             cut = (ph - H) // 2
-            subimg = subimg[cut:cut+H, :]
-            cy = ph//2 - cut
+            subimg = subimg[cut:cut + H, :]
+            cy = ph // 2 - cut
 
         if W >= pw:
             x0 = (W - pw) // 2
-            cx = x0 + pw//2
+            cx = x0 + pw // 2
         else:
             x0 = 0
             cut = (pw - W) // 2
-            subimg = subimg[:, cut:cut+W]
-            cx = pw//2 - cut
-        sh,sw = subimg.shape
+            subimg = subimg[:, cut:cut + W]
+            cx = pw // 2 - cut
+        sh, sw = subimg.shape
 
         pad = np.zeros((H, W), img.dtype)
-        pad[y0:y0+sh, x0:x0+sw] = subimg
+        pad[y0:y0 + sh, x0:x0 + sw] = subimg
         return pad, cx, cy
-        
+
     def getFourierTransform(self, px, py, radius):
         '''
         Returns the Fourier Transform of this PSF, with the
@@ -226,20 +226,20 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         *yc*:    ditto
         *imh,imw*: ints, shape of the padded PSF image
         *v,w*: v=np.fft.rfftfreq(imw), w=np.fft.fftfreq(imh)
-        
+
         '''
         sz = self.getFourierTransformSize(radius)
         # print 'PixelizedPSF FFT size', sz
         if sz in self.fftcache:
             return self.fftcache[sz]
 
-        pad,cx,cy = self._padInImage(sz,sz)
-        ## cx,cy: coordinate of the PSF center in *pad*
+        pad, cx, cy = self._padInImage(sz, sz)
+        # cx,cy: coordinate of the PSF center in *pad*
         P = np.fft.rfft2(pad)
-        pH,pW = pad.shape
+        pH, pW = pad.shape
         v = np.fft.rfftfreq(pW)
         w = np.fft.fftfreq(pH)
-        rtn = P, (cx, cy), (pH,pW), (v,w)
+        rtn = P, (cx, cy), (pH, pW), (v, w)
         self.fftcache[sz] = rtn
         return rtn
 
@@ -249,6 +249,7 @@ class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
     A PSF model that is a mixture of general 2-D Gaussians
     (characterized by amplitude, mean, covariance)
     '''
+
     def __init__(self, *args):
         '''
         GaussianMixturePSF(amp, mean, var)
@@ -257,7 +258,7 @@ class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
 
         GaussianMixturePSF(a0,a1,a2, mx0,my0,mx1,my1,mx2,my2,
                            vxx0,vyy0,vxy0, vxx1,vyy1,vxy1, vxx2,vyy2,vxy2)
-        
+
         amp:  np array (size K) of Gaussian amplitudes
         mean: np array (size K,2) of means
         var:  np array (size K,2,2) of variances
@@ -266,20 +267,21 @@ class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
         assert(self.mog.D == 2)
         self.radius = 25
         K = self.mog.K
-        self.stepsizes = [0.01]*K + [0.01]*(K*2) + [0.1]*(K*3)
+        self.stepsizes = [0.01] * K + [0.01] * (K * 2) + [0.1] * (K * 3)
 
     def getShifted(self, x0, y0):
         # not spatially varying
         return self
+
     def constantPsfAt(self, x, y):
         return self
-    
+
     def mogAt(self, x, y):
         return self
-        
+
     def get_wmuvar(self):
         return (self.mog.amp, self.mog.mean, self.mog.var)
-        
+
     @classmethod
     def fromFitsHeader(clazz, hdr, prefix=''):
         params = []
@@ -292,19 +294,19 @@ class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
         print('PSF Params:', params)
         if len(params) == 0 or (len(params) % 6 != 0):
             raise RuntimeError('Failed to create %s from FITS header: expected '
-                               'factor of 6 parameters, got %i' % 
+                               'factor of 6 parameters, got %i' %
                                (str(clazz), len(params)))
         K = len(params) // 6
-        psf = clazz(np.zeros(K), np.zeros((K,2)), np.zeros((K,2,2)))
+        psf = clazz(np.zeros(K), np.zeros((K, 2)), np.zeros((K, 2, 2)))
         psf.setParams(params)
         return psf
-    
+
     def getMixtureOfGaussians(self, px=None, py=None):
         return self.mog
 
     def applyTo(self, image):
         raise
-    
+
     def scaleBy(self, factor):
         # Use not advised, ever
         amp = self.mog.amp
@@ -313,16 +315,16 @@ class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
         return GaussianMixturePSF(amp, mean, var)
 
     def shiftBy(self, dx, dy):
-        self.mog.mean[:,0] += dx
-        self.mog.mean[:,1] += dy
-    
+        self.mog.mean[:, 0] += dx
+        self.mog.mean[:, 1] += dy
+
     def computeRadius(self):
         import numpy.linalg
         # ?
         meig = max([max(abs(numpy.linalg.eigvalsh(v)))
                     for v in self.mog.var])
         return self.getNSigma() * np.sqrt(meig)
-        
+
     def getNSigma(self):
         # MAGIC -- N sigma for rendering patches
         return 5.
@@ -337,7 +339,7 @@ class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
                             **kwargs):
         # clipExtent: [xl,xh, yl,yh] to avoid rendering a model that extends
         # outside the image bounds.
-        # 
+        #
         if modelMask is not None:
             if modelMask.mask is None:
                 return self.mog.evaluate_grid(modelMask.x0, modelMask.x1,
@@ -350,17 +352,17 @@ class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
 
         def get_extent(px, py, rr, clipExtent):
             x0 = int(np.floor(px - rr))
-            x1 = int(np.ceil (px + rr)) + 1
+            x1 = int(np.ceil(px + rr)) + 1
             y0 = int(np.floor(py - rr))
-            y1 = int(np.ceil (py + rr)) + 1
+            y1 = int(np.ceil(py + rr)) + 1
             if clipExtent is not None:
-                [xl,xh,yl,yh] = clipExtent
+                [xl, xh, yl, yh] = clipExtent
                 # clip
                 x0 = max(x0, xl)
                 x1 = min(x1, xh)
                 y0 = max(y0, yl)
                 y1 = min(y1, yh)
-            return x0,x1,y0,y1
+            return x0, x1, y0, y1
 
         # Yuck!
 
@@ -375,21 +377,21 @@ class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
                 r = 0.
                 for v in self.mog.var:
                     # overestimate
-                    vv = (v[0,0] + v[1,1])
+                    vv = (v[0, 0] + v[1, 1])
                     norm = 2. * np.pi * np.linalg.det(v)
                     r2 = vv * -2. * np.log(minval * norm)
                     if r2 > 0:
                         r = max(r, np.sqrt(r2))
                 rr = int(np.ceil(r))
 
-            x0,x1,y0,y1 = get_extent(px, py, rr, clipExtent)
+            x0, x1, y0, y1 = get_extent(px, py, rr, clipExtent)
             if x0 >= x1 or y0 >= y1:
                 return None
 
             kwa = {}
             if minradius is not None:
                 kwa['minradius'] = minradius
-            
+
             return self.mog.evaluate_grid_approx3(
                 x0, x1, y0, y1, px, py, minval, derivs=derivs, **kwa)
 
@@ -398,7 +400,7 @@ class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
         else:
             r = radius
 
-        x0,x1,y0,y1 = get_extent(px, py, r, clipExtent)
+        x0, x1, y0, y1 = get_extent(px, py, r, clipExtent)
         if x0 >= x1 or y0 >= y1:
             return None
         return self.mog.evaluate_grid(x0, x1, y0, y1, px, py)
@@ -425,43 +427,43 @@ class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
         from tractor.emfit import em_fit_2d, em_fit_2d_reg
         from tractor.fitpsf import em_init_params
         if P0 is not None:
-            w,mu,var = P0
+            w, mu, var = P0
         else:
-            w,mu,var = em_init_params(N, None, None, None)
+            w, mu, var = em_init_params(N, None, None, None)
         stamp = stamp.copy()
-        
+
         if xy0 is None:
-            xm, ym = -(stamp.shape[1]//2), -(stamp.shape[0]//2)
+            xm, ym = -(stamp.shape[1] // 2), -(stamp.shape[0] // 2)
         else:
             xm, ym = xy0
 
         if v3:
             tpsf = GaussianMixturePSF(w, mu, var)
-            tim = Image(data=stamp, invvar=1e6*np.ones_like(stamp),
+            tim = Image(data=stamp, invvar=1e6 * np.ones_like(stamp),
                         psf=tpsf)
-            h,w = tim.shape
-            src = PointSource(PixPos(w//2, h//2), Flux(1.))
-            tr = Tractor([tim],[src])
+            h, w = tim.shape
+            src = PointSource(PixPos(w // 2, h // 2), Flux(1.))
+            tr = Tractor([tim], [src])
             tr.freezeParam('catalog')
             tim.freezeAllBut('psf')
             tim.modelMinval = approx
             for step in range(20):
-                dlnp,X,alpha = tr.optimize(shared_params=False)
+                dlnp, X, alpha = tr.optimize(shared_params=False)
                 print('dlnp', dlnp)
                 if dlnp < 1e-6:
                     break
             return tpsf
-                
+
         elif v2:
             from tractor.emfit import em_fit_2d_reg2
             print('stamp sum:', np.sum(stamp))
             #stamp *= 1000.
-            ok,skyamp = em_fit_2d_reg2(stamp, xm, ym, w, mu, var, alpha,
-                                       emsteps, approx)
-            #print 'sky amp:', skyamp
-            #print 'w sum:', sum(w)
+            ok, skyamp = em_fit_2d_reg2(stamp, xm, ym, w, mu, var, alpha,
+                                        emsteps, approx)
+            # print 'sky amp:', skyamp
+            # print 'w sum:', sum(w)
             tpsf = GaussianMixturePSF(w, mu, var)
-            return tpsf,skyamp
+            return tpsf, skyamp
         else:
 
             stamp /= stamp.sum()
@@ -472,16 +474,18 @@ class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
         tpsf = GaussianMixturePSF(w, mu, var)
         return tpsf
 
+
 class HybridPixelizedPSF(HybridPSF):
     '''
     This class wraps a PixelizedPSF model, adding a Gaussian approximation
     model.
     '''
+
     def __init__(self, pix, gauss=None, N=2, cx=0., cy=0.):
         '''
         Create a new hybrid PSF model using the given PixelizedPSF
         model *pix* and Gaussian approximation *gauss*.
-        
+
         If *gauss* is *None*, a *GaussianMixturePSF* model will be fit
         to the PixelizedPSF image using *N* Gaussian components.
         '''
@@ -494,15 +498,15 @@ class HybridPixelizedPSF(HybridPSF):
 
     def __str__(self):
         return ('HybridPixelizedPSF: Gaussian sigma %.2f, Pix %s' %
-                (np.sqrt(self.gauss.mog.var[0,0,0]), str(self.pix)))
-        
+                (np.sqrt(self.gauss.mog.var[0, 0, 0]), str(self.pix)))
+
     def getMixtureOfGaussians(self, **kwargs):
         return self.gauss.getMixtureOfGaussians(**kwargs)
 
     def getShifted(self, dx, dy):
         pix = self.pix.getShifted(dx, dy)
         return HybridPixelizedPSF(pix, self.gauss)
-    
+
     def constantPsfAt(self, x, y):
         pix = self.pix.constantPsfAt(x, y)
         return HybridPixelizedPSF(pix, self.gauss)
@@ -520,9 +524,10 @@ class HybridPixelizedPSF(HybridPSF):
     # for pickling:
     def __getstate__(self):
         return (self.gauss, self.pix)
-     
+
     def __setstate__(self, state):
         self.gauss, self.pix = state
+
 
 class GaussianMixtureEllipsePSF(GaussianMixturePSF):
     '''
@@ -538,7 +543,7 @@ class GaussianMixtureEllipsePSF(GaussianMixturePSF):
 
         args = (a0,a1,..., mx0,my0,mx1,my1,..., logr0,ee1-0,ee2-0,logr1,ee1-2,...)
 
-        
+
         amp:  np array (size K) of Gaussian amplitudes
         mean: np array (size K,2) of means
         ell:  list (length K) of EllipseESoft objects
@@ -549,35 +554,35 @@ class GaussianMixtureEllipsePSF(GaussianMixturePSF):
             from tractor.ellipses import EllipseESoft
             assert(len(args) % 6 == 0)
             K = len(args) // 6
-            amp  = np.array(args[:K])
-            mean = np.array(args[K:3*K]).reshape((K,2))
-            args = args[3*K:]
-            ell = [EllipseESoft(*args[3*k: 3*(k+1)]) for k in range(K)]
+            amp = np.array(args[:K])
+            mean = np.array(args[K:3 * K]).reshape((K, 2))
+            args = args[3 * K:]
+            ell = [EllipseESoft(*args[3 * k: 3 * (k + 1)]) for k in range(K)]
 
         K = len(amp)
-        var = np.zeros((K,2,2))
+        var = np.zeros((K, 2, 2))
         for k in range(K):
-            var[k,:,:] = self.ellipseToVariance(ell[k])
+            var[k, :, :] = self.ellipseToVariance(ell[k])
         self.ellipses = [e.copy() for e in ell]
         super(GaussianMixtureEllipsePSF, self).__init__(amp, mean, var)
-        self.stepsizes = [0.001]*K + [0.001]*(K*2) + [0.001]*(K*3)
+        self.stepsizes = [0.001] * K + [0.001] * (K * 2) + [0.001] * (K * 3)
 
     def ellipseToVariance(self, ell):
         return ell.getCovariance()
-        
+
     def getShifted(self, x0, y0):
         # not spatially varying
         return self
-    
+
     def _set_param_names(self, K):
         names = {}
         for k in range(K):
-            names['amp%i'%k] = k
-            names['meanx%i'%k] = K+(k*2)
-            names['meany%i'%k] = K+(k*2)+1
-            names['logr%i'%k] = K*3 + (k*3)
-            names['ee1-%i'%k] = K*3 + (k*3)+1
-            names['ee2-%i'%k] = K*3 + (k*3)+2
+            names['amp%i' % k] = k
+            names['meanx%i' % k] = K + (k * 2)
+            names['meany%i' % k] = K + (k * 2) + 1
+            names['logr%i' % k] = K * 3 + (k * 3)
+            names['ee1-%i' % k] = K * 3 + (k * 3) + 1
+            names['ee2-%i' % k] = K * 3 + (k * 3) + 2
         self.addNamedParams(**names)
 
     def toMog(self):
@@ -588,33 +593,35 @@ class GaussianMixtureEllipsePSF(GaussianMixturePSF):
 
     def constantPsfAt(self, x, y):
         return self.mogAt(x, y)
-        
+
     def __str__(self):
         return (
             'GaussianMixtureEllipsePSF: amps=' +
-            '['+', '.join(['%.3f' % a for a in self.mog.amp.ravel()]) + ']' +
+            '[' + ', '.join(['%.3f' % a for a in self.mog.amp.ravel()]) + ']' +
             ', means=[' + ', '.join([
-                '(%.3f, %.3f)' % (x,y) for x,y in self.mog.mean]) + ']' +
+                '(%.3f, %.3f)' % (x, y) for x, y in self.mog.mean]) + ']' +
             ', ellipses=' + ', '.join(str(e) for e in self.ellipses) +
             ', var=' + str(tuple(self.mog.var.ravel())))
-    
+
     def _getThings(self):
         p = list(self.mog.amp) + list(self.mog.mean.ravel())
         for e in self.ellipses:
             p += e.getAllParams()
         return p
+
     def _setThings(self, p):
         K = self.mog.K
         self.mog.amp = np.atleast_1d(p[:K])
         pp = p[K:]
-        self.mog.mean = np.atleast_2d(pp[:K*2]).reshape(K,2)
-        pp = pp[K*2:]
-        for i,e in enumerate(self.ellipses):
+        self.mog.mean = np.atleast_2d(pp[:K * 2]).reshape(K, 2)
+        pp = pp[K * 2:]
+        for i, e in enumerate(self.ellipses):
             e.setAllParams(pp[:3])
             pp = pp[3:]
-            self.mog.var[i,:,:] = self.ellipseToVariance(e)
+            self.mog.var[i, :, :] = self.ellipseToVariance(e)
+
     def _setThing(self, i, p):
-        ## hack
+        # hack
         things = self._getThings()
         old = things[i]
         things[i] = p
@@ -630,35 +637,37 @@ class GaussianMixtureEllipsePSF(GaussianMixturePSF):
         '''
         from tractor.ellipses import EllipseESoft
         w = np.ones(N) / float(N)
-        mu = np.zeros((N,2))
-        ell = [EllipseESoft(np.log(2*r), 0., 0.) for r in range(1, N+1)]
+        mu = np.zeros((N, 2))
+        ell = [EllipseESoft(np.log(2 * r), 0., 0.) for r in range(1, N + 1)]
         psf = GaussianMixtureEllipsePSF(w, mu, ell)
         if P0 is not None:
             psf.setAllParams(P0)
-        tim = Image(data=stamp, invvar=1e6*np.ones_like(stamp), psf=psf)
-        H,W = stamp.shape
-        src = PointSource(PixPos(W//2, H//2), Flux(1.))
-        tr = Tractor([tim],[src])
+        tim = Image(data=stamp, invvar=1e6 * np.ones_like(stamp), psf=psf)
+        H, W = stamp.shape
+        src = PointSource(PixPos(W // 2, H // 2), Flux(1.))
+        tr = Tractor([tim], [src])
         tr.freezeParam('catalog')
         tim.freezeAllBut('psf')
-        #print 'Fitting:'
-        #tr.printThawedParams()
+        # print 'Fitting:'
+        # tr.printThawedParams()
         tim.modelMinval = approx
         alphas = [0.1, 0.3, 1.0]
         for step in range(50):
-            dlnp,X,alpha = tr.optimize(shared_params=False, alphas=alphas,
-                                       damp=damp)
-            #print 'dlnp', dlnp, 'alpha', alpha
-            #print 'X', X
+            dlnp, X, alpha = tr.optimize(shared_params=False, alphas=alphas,
+                                         damp=damp)
+            # print 'dlnp', dlnp, 'alpha', alpha
+            # print 'X', X
             if dlnp < 1e-6:
                 break
-            #print 'psf', psf
+            # print 'psf', psf
         return psf
-    
+
+
 class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
     '''
     A PSF model using N concentric, circular Gaussians.
     '''
+
     def __init__(self, sigmas, weights):
         '''
         Creates a new N-Gaussian (concentric, isotropic) PSF.
@@ -686,7 +695,7 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
 
     def constantPsfAt(self, x, y):
         return self
-    
+
     @property
     def amp(self):
         return self.weights
@@ -694,29 +703,30 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
     @property
     def mog(self):
         return self.getMixtureOfGaussians()
-    
+
     @staticmethod
     def getNamedParams():
         return dict(sigmas=0, weights=1)
 
     def __str__(self):
         return ('NCircularGaussianPSF: sigmas [ ' +
-                ', '.join(['%.3f'%s for s in self.sigmas]) +
+                ', '.join(['%.3f' % s for s in self.sigmas]) +
                 ' ], weights [ ' +
-                ', '.join(['%.3f'%w for w in self.weights]) +
+                ', '.join(['%.3f' % w for w in self.weights]) +
                 ' ]')
 
     def __repr__(self):
         return ('NCircularGaussianPSF: sigmas [ ' +
-                ', '.join(['%.3f'%s for s in self.sigmas]) +
+                ', '.join(['%.3f' % s for s in self.sigmas]) +
                 ' ], weights [ ' +
-                ', '.join(['%.3f'%w for w in self.weights]) +
+                ', '.join(['%.3f' % w for w in self.weights]) +
                 ' ]')
 
     # Get the real underlying ones without paying attention to frozen state
     @property
     def mysigmas(self):
         return self.sigmas.vals
+
     @property
     def myweights(self):
         return self.weights.vals
@@ -729,16 +739,16 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
     def getMixtureOfGaussians(self, px=None, py=None):
         K = len(self.myweights)
         amps = np.array(self.myweights)
-        means = np.zeros((K,2))
-        vars = np.zeros((K,2,2))
+        means = np.zeros((K, 2))
+        vars = np.zeros((K, 2, 2))
         for k in range(K):
-            vars[k,0,0] = vars[k,1,1] = self.mysigmas[k]**2
+            vars[k, 0, 0] = vars[k, 1, 1] = self.mysigmas[k]**2
         return mp.MixtureOfGaussians(amps, means, vars)
-        
+
     def hashkey(self):
         hk = ('NCircularGaussianPSF', tuple(self.sigmas), tuple(self.weights))
         return hk
-    
+
     def copy(self):
         return NCircularGaussianPSF(list([s for s in self.sigmas]),
                                     list([w for w in self.weights]))
@@ -748,7 +758,7 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
         # gaussian_filter normalizes the Gaussian; the output has ~ the
         # same sum as the input.
         res = np.zeros_like(image)
-        for s,w in zip(self.sigmas, self.weights):
+        for s, w in zip(self.sigmas, self.weights):
             res += w * gaussian_filter(image, s)
         res /= sum(self.weights)
         return res
@@ -766,7 +776,7 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
     def getPointSourcePatch(self, px, py, minval=0., radius=None,
                             modelMask=None, **kwargs):
         if modelMask is not None:
-            x0,x1,y0,y1 = modelMask.extent
+            x0, x1, y0, y1 = modelMask.extent
         else:
             ix = int(round(px))
             iy = int(round(py))
@@ -779,7 +789,7 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
             y0 = iy - rad
             y1 = iy + rad + 1
         mix = self.getMixtureOfGaussians()
-        mix.mean[:,0] += px
-        mix.mean[:,1] += py
+        mix.mean[:, 0] += px
+        mix.mean[:, 1] += py
         return mp.mixture_to_patch(mix, x0, x1, y0, y1, minval=minval,
                                    exactExtent=(modelMask is not None))

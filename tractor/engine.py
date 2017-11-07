@@ -19,14 +19,20 @@ from tractor.utils import MultiParams, _isint, get_class_from_name
 from tractor.patch import Patch, ModelMask
 from tractor.image import Image
 
+
 def logverb(*args):
     msg = ' '.join([str(x) for x in args])
     logging.debug(msg)
+
+
 def logmsg(*args):
     msg = ' '.join([str(x) for x in args])
     logging.info(msg)
+
+
 def isverbose():
     return (logging.getLogger().level <= logging.DEBUG)
+
 
 def set_fp_err():
     '''Cause all floating-point errors to raise exceptions.
@@ -37,7 +43,8 @@ def set_fp_err():
         np.seterr(**olderr)
     '''
     return np.seterr(all='raise')
-        
+
+
 class Catalog(MultiParams):
     '''
     A list of Source objects.  This class allows the Tractor to treat
@@ -63,7 +70,7 @@ class Catalog(MultiParams):
 
     def printLong(self):
         print('Catalog with %i sources:' % len(self))
-        for i,x in enumerate(self):
+        for i, x in enumerate(self):
             print('  %i:' % i, x)
 
     def getThawedSources(self):
@@ -75,6 +82,7 @@ class Catalog(MultiParams):
     def getNamedParamName(self, j):
         return 'source%i' % j
 
+
 class Images(MultiParams):
     """
     This is a class for holding a list of `Image` objects, each which
@@ -83,12 +91,15 @@ class Images(MultiParams):
     parameters.  Basically all the functionality comes from the base
     class.
     """
+
     def getNamedParamName(self, j):
         return 'image%i' % j
-    
+
+
 class OptResult():
     # quack
     pass
+
 
 class Tractor(MultiParams):
     '''
@@ -103,7 +114,7 @@ class Tractor(MultiParams):
     @staticmethod
     def getName():
         return 'Tractor'
-    
+
     @staticmethod
     def getNamedParams():
         return dict(images=0, catalog=1)
@@ -117,7 +128,7 @@ class Tractor(MultiParams):
             images = Images(*images)
         if not isinstance(catalog, Catalog):
             catalog = Catalog(*catalog)
-        super(Tractor,self).__init__(images, catalog)
+        super(Tractor, self).__init__(images, catalog)
         self.modtype = np.float32
         self.modelMasks = None
         self.expectModelMasks = False
@@ -126,7 +137,7 @@ class Tractor(MultiParams):
             self.optimizer = LsqrOptimizer()
         else:
             self.optimizer = optimizer
-        
+
     def __str__(self):
         s = ('%s with %i sources and %i images' % (
             self.getName(), len(self.catalog), len(self.images)))
@@ -151,6 +162,7 @@ class Tractor(MultiParams):
              self.modtype, self.modelMasks, self.expectModelMasks,
              self.optimizer)
         return S
+
     def __setstate__(self, state):
         if len(state) == 6:
             # "backwards compat"
@@ -193,7 +205,7 @@ class Tractor(MultiParams):
 
     def removeSource(self, src):
         self.catalog.remove(src)
-    
+
     def optimize_forced_photometry(self, **kwargs):
         '''
         Returns an "OptResult" duck with fields:
@@ -204,7 +216,7 @@ class Tractor(MultiParams):
 
         ims0, ims1:
         [ (img_data, mod, ie, chi, roi), ... ]
-        
+
 
         ASSUMES linear brightnesses!
 
@@ -222,7 +234,6 @@ class Tractor(MultiParams):
         '''
         return self.optimizer.forced_photometry(self, **kwargs)
 
-
     # alphas=None, damp=0, priors=True, scale_columns=True,
     # shared_params=True, variance=False, just_variance=False):
     def optimize(self, **kwargs):
@@ -232,7 +243,7 @@ class Tractor(MultiParams):
         (Exactly what that entails depends on the optimizer; by
         default (LsqrOptimizer) it means one linearized least-squares
         + line search iteration.)
-        
+
         Returns (delta-logprob, parameter update X, alpha stepsize)
 
         If variance=True,
@@ -261,7 +272,7 @@ class Tractor(MultiParams):
     def getDerivs(self):
         '''
         Computes model-image derivatives for each parameter.
-        
+
         Returns a nested list of tuples:
 
         allderivs: [
@@ -279,7 +290,7 @@ class Tractor(MultiParams):
             srcs = []
         else:
             srcs = list(self.catalog.getThawedSources())
-        
+
         allsrcs = self.catalog
 
         if not self.isParamFrozen('images'):
@@ -287,7 +298,7 @@ class Tractor(MultiParams):
                 img = self.images[i]
                 derivs = img.getParamDerivatives(self, allsrcs)
                 mod0 = None
-                for di,deriv in enumerate(derivs):
+                for di, deriv in enumerate(derivs):
                     if deriv is False:
                         if mod0 is None:
                             mod0 = self.getModelImage(img)
@@ -306,7 +317,7 @@ class Tractor(MultiParams):
             srcderivs = [[] for i in range(src.numberOfParams())]
             for img in self.images:
                 derivs = self._getSourceDerivatives(src, img)
-                for k,deriv in enumerate(derivs):
+                for k, deriv in enumerate(derivs):
                     if deriv is None:
                         continue
                     srcderivs[k].append((deriv, img))
@@ -425,7 +436,7 @@ class Tractor(MultiParams):
     def getModelImages(self, **kwargs):
         for img in self.images:
             yield self.getModelImage(img, **kwargs)
-        
+
     def getChiImages(self):
         for img in self.images:
             yield self.getChiImage(img=img)
@@ -452,7 +463,7 @@ class Tractor(MultiParams):
 
     def getLogLikelihood(self):
         chisq = 0.
-        for i,chi in enumerate(self.getChiImages()):
+        for i, chi in enumerate(self.getChiImages()):
             chisq += (chi.astype(float) ** 2).sum()
         return -0.5 * chisq
 
@@ -473,4 +484,3 @@ class Tractor(MultiParams):
             print('log prior:', lnprior)
             return -np.inf
         return lnp
-

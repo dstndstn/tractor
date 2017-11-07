@@ -3,12 +3,13 @@ import numpy as np
 from tractor import *
 from tractor.galaxy import *
 
-def get_se_modelfit_cat(T, maglim=25, bands=['u','g','r','i','z']):
+
+def get_se_modelfit_cat(T, maglim=25, bands=['u', 'g', 'r', 'i', 'z']):
     srcs = Catalog()
     isrcs = []
-    for i,t in enumerate(T):
+    for i, t in enumerate(T):
         if t.chi2_psf < t.chi2_model and t.mag_psf <= maglim:
-            #print 'PSF'
+            # print 'PSF'
             themag = t.mag_psf
             nm = NanoMaggies.magToNanomaggies(themag)
             m = NanoMaggies(order=bands, **dict([(k, nm) for k in bands]))
@@ -17,7 +18,7 @@ def get_se_modelfit_cat(T, maglim=25, bands=['u','g','r','i','z']):
             continue
 
         if t.mag_disk > maglim and t.mag_spheroid > maglim:
-            #print 'Faint'
+            # print 'Faint'
             continue
 
         # deV: spheroid
@@ -60,7 +61,5 @@ def get_se_modelfit_cat(T, maglim=25, bands=['u','g','r','i','z']):
         m = NanoMaggies(order=bands, **dict([(k, nm) for k in bands]))
         srcs.append(FixedCompositeGalaxy(pos, m, fdev, shape_exp, shape_dev))
 
-    #print 'Sources:', len(srcs)
+    # print 'Sources:', len(srcs)
     return srcs, np.array(isrcs)
-
-

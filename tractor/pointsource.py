@@ -5,11 +5,14 @@ from tractor.utils import MultiParams
 from tractor.patch import ModelMask
 from tractor import ducks
 
+
 class BasicSource(ducks.Source):
     def getPosition(self):
         return self.pos
+
     def setPosition(self, position):
         self.pos = position
+
 
 class SingleProfileSource(BasicSource):
     '''
@@ -17,10 +20,13 @@ class SingleProfileSource(BasicSource):
     Dev, Exp, and Sersic galaxies, and also FixedCompositeGalaxy (surprising but true)
     but not CompositeGalaxy.
     '''
+
     def getBrightness(self):
         return self.brightness
+
     def setBrightness(self, brightness):
         self.brightness = brightness
+
     def getBrightnesses(self):
         return [self.getBrightness()]
 
@@ -31,7 +37,7 @@ class SingleProfileSource(BasicSource):
         counts = img.getPhotoCal().brightnessToCounts(self.brightness)
         if counts == 0:
             return None
-        ## HACK
+        # HACK
         if not np.isfinite(np.float32(counts)):
             return None
         if minsb is None:
@@ -45,7 +51,7 @@ class SingleProfileSource(BasicSource):
         if upatch.patch is not None:
             assert(np.all(np.isfinite(upatch.patch)))
 
-        #print('getModelPatch: unit-patch sum', np.sum(upatch.patch), 'counts', counts,
+        # print('getModelPatch: unit-patch sum', np.sum(upatch.patch), 'counts', counts,
         #      'scaled sum:', np.sum(upatch.patch * counts))
 
         p = upatch * counts
@@ -53,11 +59,13 @@ class SingleProfileSource(BasicSource):
             assert(np.all(np.isfinite(p.patch)))
         return p
 
+
 class PointSource(MultiParams, SingleProfileSource):
     '''
     An implementation of a point source, characterized by its position
     and brightness.
     '''
+
     def __init__(self, pos, br):
         '''
         PointSource(pos, brightness)
@@ -79,19 +87,22 @@ class PointSource(MultiParams, SingleProfileSource):
     @staticmethod
     def getNamedParams():
         return dict(pos=0, brightness=1)
+
     def getSourceType(self):
         return 'PointSource'
+
     def __str__(self):
         return (self.getSourceType() + ' at ' + str(self.pos) +
                 ' with ' + str(self.brightness))
+
     def __repr__(self):
         return (self.getSourceType() + '(' + repr(self.pos) + ', ' +
                 repr(self.brightness) + ')')
 
     def getUnitFluxModelPatch(self, img, minval=0., derivs=False,
                               modelMask=None):
-        (px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
-        H,W = img.shape
+        (px, py) = img.getWcs().positionToPixel(self.getPosition(), self)
+        H, W = img.shape
         psf = self._getPsf(img)
         # quit early if the requested position is way outside the image bounds
         r = self.fixedRadius
@@ -103,7 +114,7 @@ class PointSource(MultiParams, SingleProfileSource):
         clipExtent = None
         if modelMask is None:
             # max extent
-            clipExtent = [0,W,0,H]
+            clipExtent = [0, W, 0, H]
 
         patch = psf.getPointSourcePatch(px, py, minval=minval,
                                         radius=self.fixedRadius,
@@ -127,7 +138,7 @@ class PointSource(MultiParams, SingleProfileSource):
             bsteps = self.brightness.getStepSizes(img)
             bvals = self.brightness.getParams()
             allzero = True
-            for i,bstep in enumerate(bsteps):
+            for i, bstep in enumerate(bsteps):
                 oldval = self.brightness.setParam(i, bvals[i] + bstep)
                 countsi = img.getPhotoCal().brightnessToCounts(self.brightness)
                 self.brightness.setParam(i, oldval)
@@ -135,7 +146,7 @@ class PointSource(MultiParams, SingleProfileSource):
                     allzero = False
                     break
             if allzero:
-                return [None]*self.numberOfParams()
+                return [None] * self.numberOfParams()
 
         pos = self.getPosition()
         wcs = img.getWcs()
@@ -147,14 +158,14 @@ class PointSource(MultiParams, SingleProfileSource):
             minval = None
 
         derivs = (not self.isParamFrozen('pos')) and fastPosDerivs
-        patchdx,patchdy = None,None
-        
+        patchdx, patchdy = None, None
+
         if derivs:
             patches = self.getUnitFluxModelPatch(img, minval=minval,
                                                  derivs=True,
                                                  modelMask=modelMask)
             if patches is None:
-                return [None]*self.numberOfParams()
+                return [None] * self.numberOfParams()
             if not isinstance(patches, tuple):
                 patch0 = patches
             else:
@@ -164,24 +175,25 @@ class PointSource(MultiParams, SingleProfileSource):
                                                 modelMask=modelMask)
 
         if patch0 is None:
-            return [None]*self.numberOfParams()
+            return [None] * self.numberOfParams()
         # check for intersection of patch0 with img
-        H,W = img.shape
+        H, W = img.shape
         if not patch0.overlapsBbox((0, W, 0, H)):
-            return [None]*self.numberOfParams()
-        
+            return [None] * self.numberOfParams()
+
         derivs = []
 
         # Position
         if not self.isParamFrozen('pos'):
             if patchdx is not None and patchdy is not None:
                 # Convert x,y derivatives to Position derivatives
-                px,py = wcs.positionToPixel(pos, self)
+                px, py = wcs.positionToPixel(pos, self)
                 cdi = wcs.cdInverseAtPixel(px, py)
                 # Get thawed Position parameter indices
                 thawed = pos.getThawedParamIndices()
-                for i,pname in zip(thawed, pos.getParamNames()):
-                    deriv = (patchdx * cdi[0,i] + patchdy * cdi[1,i]) * counts0
+                for i, pname in zip(thawed, pos.getParamNames()):
+                    deriv = (patchdx * cdi[0, i] +
+                             patchdy * cdi[1, i]) * counts0
                     deriv.setName('d(ptsrc)/d(pos.%s)' % pname)
                     derivs.append(deriv)
             elif counts0 == 0:
@@ -190,7 +202,7 @@ class PointSource(MultiParams, SingleProfileSource):
                 # Step params
                 psteps = pos.getStepSizes(img)
                 pvals = pos.getParams()
-                for i,pstep in enumerate(psteps):
+                for i, pstep in enumerate(psteps):
                     pdiff = pstep
                     p0 = patch0
                     oldval = pos.setParam(i, pvals[i] + pstep)
@@ -201,7 +213,7 @@ class PointSource(MultiParams, SingleProfileSource):
                         patchmx = self.getUnitFluxModelPatch(img, minval=minval,
                                                              modelMask=modelMask)
                         p0 = patchmx
-                        pdiff = pstep*2
+                        pdiff = pstep * 2
 
                     pos.setParam(i, oldval)
                     if patchx is None:
@@ -215,7 +227,7 @@ class PointSource(MultiParams, SingleProfileSource):
         if not self.isParamFrozen('brightness'):
             bsteps = self.brightness.getStepSizes(img)
             bvals = self.brightness.getParams()
-            for i,bstep in enumerate(bsteps):
+            for i, bstep in enumerate(bsteps):
                 oldval = self.brightness.setParam(i, bvals[i] + bstep)
                 countsi = img.getPhotoCal().brightnessToCounts(self.brightness)
                 self.brightness.setParam(i, oldval)
