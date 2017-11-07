@@ -15,7 +15,7 @@ else:
     mpf_module = Extension('_mp_fourier',
                            sources = ['mp_fourier.i' ],
                            include_dirs = numpy_inc,
-                           extra_compile_args=['-g'],
+                           extra_compile_args=['-g', '-std=c99'],
                            extra_link_args=['-g'],
     )
 
