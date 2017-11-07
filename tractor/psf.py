@@ -14,7 +14,18 @@ from tractor.utils import BaseParams, ParamList, MultiParams, MogParams
 from tractor import mixture_profiles as mp
 from tractor import ducks
 
+
+try:
+    from tractor import intel_mp_fourier as mp_fourier
+except:
+    try:
+        from tractor import mp_fourier as mp_fourier
+    except:
+        mp_fourier = None
+# from tractor.c_mp_fourier import correlate7, correlate7f
+
 def lanczos_shift_image(img, dx, dy):
+    from scipy.ndimage import correlate1d
     L = 3
     Lx = lanczos_filter(L, np.arange(-L, L+1) + dx)
     Ly = lanczos_filter(L, np.arange(-L, L+1) + dy)
@@ -22,27 +33,20 @@ def lanczos_shift_image(img, dx, dy):
     Lx /= Lx.sum()
     Ly /= Ly.sum()
 
-    sx      = correlate1d(img, Lx, axis=1, mode='constant')
-    shifted = correlate1d(sx,  Ly, axis=0, mode='constant')
-    assert(np.all(np.isfinite(shifted)))
-    return shifted
+    #print('mp_fourier:', mp_fourier)
+    if mp_fourier is None:
+        sx     = correlate1d(img, Lx, axis=1, mode='constant')
+        outimg = correlate1d(sx,  Ly, axis=0, mode='constant')
+    else:
+        assert(len(Lx) == 7)
+        assert(len(Ly) == 7)
+        outimg = np.empty(img.shape, np.float32)
+        outimg[:,:] = img
+        mp_fourier.correlate7f(outimg, Lx, Ly, work_corr7f)
 
-#     assert(len(Lx) == 7)
-#     assert(len(Ly) == 7)
-#     from tractor.c_mp_fourier import correlate7, correlate7f
-#     outimg = np.empty(img.shape, np.float32)
-#     outimg[:,:] = img
-#     correlate7f(outimg, Lx, Ly, work_corr7f)
-# 
-# 
-# try:
-#     from tractor import intel_mp_fourier as mp_fourier
-# except:
-#     try:
-#         from tractor import mp_fourier
-#     except:
-#         mp_fourier = None
-# from tractor.c_mp_fourier import correlate7, correlate7f
+    assert(np.all(np.isfinite(outimg)))
+    return outimg
+
 
 
 class HybridPSF(object):
@@ -145,19 +149,18 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
             return Patch(x0, y0, outimg)
 
         #
+        L = 3
         padding = L
         # Create a modelMask + padding sized stamp and insert PSF image into it
         #mm = np.zeros((mh+2*padding, mw+2*padding), img.dtype)
         mm = np.zeros((mh+2*padding, mw+2*padding), np.float32)
-
         yi,yo = get_overlapping_region(my0-y0-padding, my0-y0+mh-1+padding, 0, H-1)
         xi,xo = get_overlapping_region(mx0-x0-padding, mx0-x0+mw-1+padding, 0, W-1)
         mm[yo,xo] = img[yi,xi]
-
         mm = lanczos_shift_image(mm, dx, dy)
-
         mm = mm[padding:-padding, padding:-padding]
         assert(np.all(np.isfinite(mm)))
+
         return Patch(mx0, my0, mm)
 
     def getFourierTransformSize(self, radius):

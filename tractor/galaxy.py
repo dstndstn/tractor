@@ -16,22 +16,6 @@ from __future__ import print_function
 from __future__ import division
 
 import numpy as np
-# import numpy.fft_intel.libifft as m
-# def irfftn_numpy(x, s=None, axes=None):
-#     a = np.asarray(x)
-#     no_trim = (s is None) and (axes is None)
-#     s, axes = m._cook_nd_args(a, s, axes, invreal=True)
-#     la = axes[-1]
-#     ovr_x = False
-#     if len(s) > 1:
-#         if not no_trim:
-#             a = m._fix_dimensions(a, s, axes)
-#         for ii in range(len(axes)-1):
-#             a = m.ifft(a, s[ii], axes[ii], overwrite_x=ovr_x)
-#             ovr_x = True
-#     a = m.irfft_numpy(a, n = s[-1], axis=la)
-#     return a
-# m.irfftn_numpy  = irfftn_numpy
 
 from astrometry.util.miscutils import get_overlapping_region
 
@@ -39,8 +23,6 @@ from tractor import mixture_profiles as mp
 from tractor.utils import ParamList, MultiParams, ScalarParam, BaseParams
 from tractor.patch import Patch, add_patches, ModelMask
 from tractor.basics import SingleProfileSource, BasicSource
-
-#from .cache import Cache
 
 debug_ps = None
 
@@ -478,29 +460,32 @@ class ProfileGalaxy(object):
             # after cutting G down to nearly its final size... tricky
             # tho
 
-            # Lanczos-3 interpolation in ~ the same way we do for
-            # pixelized PSFs.
-            from astrometry.util.miscutils import lanczos_filter
-            #from scipy.ndimage.filters import correlate1d
-            #L = 3
-            L = fft_lanczos_order
-            Lx = lanczos_filter(L, np.arange(-L, L+1) + mux)
-            Ly = lanczos_filter(L, np.arange(-L, L+1) + muy)
-            # Normalize the Lanczos interpolants (preserve flux)
-            Lx /= Lx.sum()
-            Ly /= Ly.sum()
-            #print('Lx centroid', np.sum(Lx * (np.arange(-L,L+1))))
-            #print('Ly centroid', np.sum(Ly * (np.arange(-L,L+1))))
+            from tractor.psf import lanczos_shift_image
+            G = lanczos_shift_image(G, mux, muy)
 
-            assert(len(Lx) == 7)
-            assert(len(Ly) == 7)
-            #cx = correlate1d(G,  Lx, axis=1, mode='constant')
-            #G  = correlate1d(cx, Ly, axis=0, mode='constant')
-            #del cx
-
-            from tractor.c_mp_fourier import correlate7
-            G = np.require(G, requirements=['A'])
-            correlate7(G, Lx, Ly, work_corr7)
+            # # Lanczos-3 interpolation in ~ the same way we do for
+            # # pixelized PSFs.
+            # from astrometry.util.miscutils import lanczos_filter
+            # #from scipy.ndimage.filters import correlate1d
+            # #L = 3
+            # L = fft_lanczos_order
+            # Lx = lanczos_filter(L, np.arange(-L, L+1) + mux)
+            # Ly = lanczos_filter(L, np.arange(-L, L+1) + muy)
+            # # Normalize the Lanczos interpolants (preserve flux)
+            # Lx /= Lx.sum()
+            # Ly /= Ly.sum()
+            # #print('Lx centroid', np.sum(Lx * (np.arange(-L,L+1))))
+            # #print('Ly centroid', np.sum(Ly * (np.arange(-L,L+1))))
+            # 
+            # assert(len(Lx) == 7)
+            # assert(len(Ly) == 7)
+            # #cx = correlate1d(G,  Lx, axis=1, mode='constant')
+            # #G  = correlate1d(cx, Ly, axis=0, mode='constant')
+            # #del cx
+            # 
+            # from tractor.c_mp_fourier import correlate7
+            # G = np.require(G, requirements=['A'])
+            # correlate7(G, Lx, Ly, work_corr7)
 
         else:
             G = np.zeros((pH,pW), np.float32)

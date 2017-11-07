@@ -26,7 +26,7 @@ _mp_fourier$(PYTHON_SO_EXT): mp_fourier.i setup-mpf.py
 	$(PYTHON) setup-mpf.py build_ext --inplace
 
 _intel_mp_fourier$(PYTHON_SO_EXT): mp_fourier.i setup-mpf.py
-	cp mp_fourier.i intel_mp_fourier.i
+	cat mp_fourier.i | sed s/mp_fourier/intel_mp_fourier/g > intel_mp_fourier.i
 	CC=icc $(PYTHON) setup-mpf.py build_ext --inplace
 
 mix.py _mix$(PYTHON_SO_EXT): mix.i approx3.c gauss_masked.c setup-mix.py

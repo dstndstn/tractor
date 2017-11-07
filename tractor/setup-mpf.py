@@ -6,7 +6,7 @@ numpy_inc = get_numpy_include_dirs()
 
 if os.environ.get('CC') == 'icc':
     mpf_module = Extension('_intel_mp_fourier',
-                           sources=['mp_fourier.i'],
+                           sources=['intel_mp_fourier.i'],
                            include_dirs=numpy_inc,
                            extra_compile_args=['-g', '-xhost', '-qopt-report=5', '-axMIC-AVX512'],
                            extra_link_args=['-g', '-lsvml']
