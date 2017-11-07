@@ -10,6 +10,7 @@ emfit: FORCE
 	$(MAKE) -C tractor emfit
 mpf: FORCE
 	$(MAKE) -C tractor mpf
+	-$(MAKE) -C tractor intel_mp_fourier
 
 cov:
 	coverage erase

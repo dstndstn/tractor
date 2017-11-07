@@ -7,7 +7,7 @@ PYTHON_SO_EXT ?= $(shell $(PYTHON) -c "from distutils import sysconfig; print(sy
 ceres: _ceres$(PYTHON_SO_EXT) ceres.py
 .PHONY: ceres
 
-mpf: mp_fourier intel_mp_fourier
+mpf: mp_fourier
 .PHONY: mpf
 
 mp_fourier: _mp_fourier$(PYTHON_SO_EXT) mp_fourier.py

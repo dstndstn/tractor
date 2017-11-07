@@ -7,6 +7,7 @@
 #include <numpy/arrayobject.h>
 #include <math.h>
 #include <assert.h>
+
 %}
 
 %include "numpy.i"
@@ -55,6 +56,16 @@
 
 
 %inline %{
+
+// #ifdef __INTEL_COMPILER
+// #define RESTRICT restrict
+// #else
+// #define RESTRICT __restrict
+// #endif
+
+// #ifndef __INTEL_COMPILER
+// #define restrict __restrict
+// #endif
 
 #if 0
  } // fool emacs indenter
