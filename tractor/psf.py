@@ -24,7 +24,7 @@ except:
         mp_fourier = None
 # from tractor.c_mp_fourier import correlate7, correlate7f
 
-def lanczos_shift_image(img, dx, dy):
+def lanczos_shift_image(img, dx, dy, inplace=False):
     from scipy.ndimage import correlate1d
     L = 3
     Lx = lanczos_filter(L, np.arange(-L, L+1) + dx)
@@ -40,13 +40,22 @@ def lanczos_shift_image(img, dx, dy):
     else:
         assert(len(Lx) == 7)
         assert(len(Ly) == 7)
-        outimg = np.empty(img.shape, np.float32)
-        outimg[:,:] = img
+        if inplace:
+            assert(img.dtype == np.float32)
+            outimg = img
+        else:
+            outimg = np.empty(img.shape, np.float32)
+            outimg[:,:] = img
         mp_fourier.correlate7f(outimg, Lx, Ly, work_corr7f)
 
     assert(np.all(np.isfinite(outimg)))
     return outimg
 
+#work_corr7 = np.zeros((1024,1024), np.float64)
+#work_corr7 = np.require(work_corr7, requirements=['A'])
+
+work_corr7f = np.zeros((1024,1024), np.float32)
+work_corr7f = np.require(work_corr7f, requirements=['A'])
 
 
 class HybridPSF(object):
@@ -232,12 +241,6 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         self.fftcache[sz] = rtn
         return rtn
 
-
-work_corr7 = np.zeros((1024,1024), np.float64)
-work_corr7 = np.require(work_corr7, requirements=['A'])
-
-work_corr7f = np.zeros((1024,1024), np.float32)
-work_corr7f = np.require(work_corr7f, requirements=['A'])
 
 class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
     '''

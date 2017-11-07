@@ -460,32 +460,11 @@ class ProfileGalaxy(object):
             # after cutting G down to nearly its final size... tricky
             # tho
 
+            # Lanczos-3 interpolation in ~the same way we do for
+            # pixelized PSFs.
             from tractor.psf import lanczos_shift_image
-            G = lanczos_shift_image(G, mux, muy)
-
-            # # Lanczos-3 interpolation in ~ the same way we do for
-            # # pixelized PSFs.
-            # from astrometry.util.miscutils import lanczos_filter
-            # #from scipy.ndimage.filters import correlate1d
-            # #L = 3
-            # L = fft_lanczos_order
-            # Lx = lanczos_filter(L, np.arange(-L, L+1) + mux)
-            # Ly = lanczos_filter(L, np.arange(-L, L+1) + muy)
-            # # Normalize the Lanczos interpolants (preserve flux)
-            # Lx /= Lx.sum()
-            # Ly /= Ly.sum()
-            # #print('Lx centroid', np.sum(Lx * (np.arange(-L,L+1))))
-            # #print('Ly centroid', np.sum(Ly * (np.arange(-L,L+1))))
-            # 
-            # assert(len(Lx) == 7)
-            # assert(len(Ly) == 7)
-            # #cx = correlate1d(G,  Lx, axis=1, mode='constant')
-            # #G  = correlate1d(cx, Ly, axis=0, mode='constant')
-            # #del cx
-            # 
-            # from tractor.c_mp_fourier import correlate7
-            # G = np.require(G, requirements=['A'])
-            # correlate7(G, Lx, Ly, work_corr7)
+            G = G.astype(np.float32)
+            lanczos_shift_image(G, mux, muy, inplace=True)
 
         else:
             G = np.zeros((pH,pW), np.float32)
