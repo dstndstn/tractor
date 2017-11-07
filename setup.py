@@ -61,6 +61,7 @@ module_mix = Extension('tractor._mix',
 module_fourier = Extension('tractor._mp_fourier',
                        sources = ['tractor/mp_fourier.i'],
                        include_dirs = numpy_inc,
+                       extra_compile_args=['-std=c99'],
                        extra_objects = [],
                        undef_macros=['NDEBUG'],
     )
