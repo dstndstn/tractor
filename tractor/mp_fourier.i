@@ -85,8 +85,6 @@ static void correlate7(double* restrict img, int img_dim1, int img_dim2,
     assert(filtx_dim == 7);
     assert(filty_dim == 7);
 
-    assert(img_dim1 == out_dim1);
-    assert(img_dim2 == out_dim2);
     assert(work_dim1 >= img_dim1);
     assert(work_dim2 >= img_dim2);
 
@@ -163,10 +161,10 @@ static void correlate7(double* restrict img, int img_dim1, int img_dim2,
 }
 
 
-static void correlate7f(float* restrict img, int img_dim1, int img_dim2,
+static void correlate7f(float*  restrict img, int img_dim1, int img_dim2,
                         double* restrict filtx, int filtx_dim,
                         double* restrict filty, int filty_dim,
-                        float* restrict work, int work_dim1, int work_dim2) {
+                        float*  restrict work, int work_dim1, int work_dim2) {
     // Output goes back into "img"!
 
 #ifdef __INTEL_COMPILER
@@ -177,8 +175,6 @@ static void correlate7f(float* restrict img, int img_dim1, int img_dim2,
     assert(filtx_dim == 7);
     assert(filty_dim == 7);
 
-    assert(img_dim1 == out_dim1);
-    assert(img_dim2 == out_dim2);
     assert(work_dim1 >= img_dim1);
     assert(work_dim2 >= img_dim2);
 
