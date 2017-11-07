@@ -1,6 +1,22 @@
 from __future__ import print_function
 
 import numpy as np
+# import numpy.fft_intel.libifft as m
+# def irfftn_numpy(x, s=None, axes=None):
+#     a = np.asarray(x)
+#     no_trim = (s is None) and (axes is None)
+#     s, axes = m._cook_nd_args(a, s, axes, invreal=True)
+#     la = axes[-1]
+#     ovr_x = False
+#     if len(s) > 1:
+#         if not no_trim:
+#             a = m._fix_dimensions(a, s, axes)
+#         for ii in range(len(axes)-1):
+#             a = m.ifft(a, s[ii], axes[ii], overwrite_x=ovr_x)
+#             ovr_x = True
+#     a = m.irfft_numpy(a, n = s[-1], axis=la)
+#     return a
+# m.irfftn_numpy  = irfftn_numpy
 
 from tractor.utils import MultiParams, getClassName
 from tractor.psf import GaussianMixturePSF, PixelizedPSF
@@ -172,6 +188,7 @@ class PsfExModel(object):
             from astrometry.util.fits import fits_table
             T = fits_table(fn, ext=ext)
             ims = T.psf_mask[0]
+            ims = ims.astype(np.float32)
             #print('Got', ims.shape, 'PSF images')
             hdr = T.get_header()
 
@@ -229,6 +246,7 @@ class PsfExModel(object):
             ne = (degree + 1) * (degree + 2) / 2
             assert(Ti.psfaxis3 == ne)
             ims = Ti.psf_mask
+            ims = ims.astype(np.float32)
             assert(len(ims.shape) == 3)
             assert(ims.shape[0] == ne)
             self.psfbases = ims

@@ -24,8 +24,6 @@ from tractor.utils import ParamList, MultiParams, ScalarParam, BaseParams
 from tractor.patch import Patch, add_patches, ModelMask
 from tractor.basics import SingleProfileSource, BasicSource
 
-#from .cache import Cache
-
 debug_ps = None
 
 
@@ -466,7 +464,7 @@ class ProfileGalaxy(object):
 
         if fftmix is not None:
             #print('fftmix; mux,muy=', mux,muy)
-            Fsum = fftmix.getFourierTransform(v, w)
+            Fsum = fftmix.getFourierTransform(v, w, zero_mean=True)
             # print('inverse Fourier-transforming into result size:', pH,pW)
             G = np.fft.irfft2(Fsum * P, s=(pH, pW))
 
@@ -474,26 +472,11 @@ class ProfileGalaxy(object):
             # after cutting G down to nearly its final size... tricky
             # tho
 
-            # Lanczos-3 interpolation in ~ the same way we do for
+            # Lanczos-3 interpolation in ~the same way we do for
             # pixelized PSFs.
-            from astrometry.util.miscutils import lanczos_filter
-            from scipy.ndimage.filters import correlate1d
-            #L = 3
-            L = fft_lanczos_order
-            Lx = lanczos_filter(L, np.arange(-L, L + 1) + mux)
-            Ly = lanczos_filter(L, np.arange(-L, L + 1) + muy)
-            # Normalize the Lanczos interpolants (preserve flux)
-            Lx /= Lx.sum()
-            Ly /= Ly.sum()
-            #print('Lx centroid', np.sum(Lx * (np.arange(-L,L+1))))
-            #print('Ly centroid', np.sum(Ly * (np.arange(-L,L+1))))
-
-            #print('kernels:', Lx, Ly)
-
-            cx = correlate1d(G,  Lx, axis=1, mode='constant')
-            G = correlate1d(cx, Ly, axis=0, mode='constant')
-            del cx
-
+            from tractor.psf import lanczos_shift_image
+            G = G.astype(np.float32)
+            lanczos_shift_image(G, mux, muy, inplace=True)
         else:
             G = np.zeros((pH, pW), np.float32)
 
@@ -506,10 +489,6 @@ class ProfileGalaxy(object):
                 # FIXME -- are yo,xo always the whole image?  If so, optimize
                 shG = np.zeros((mh, mw), G.dtype)
                 shG[yo, xo] = G[yi, xi]
-
-                # print('shift:', (sx,sy), 'mm', (mw,mh), 'g', (gw,gh))
-                # print('yi,xi,', yi,xi)
-                # print('yo,xo,', yo,xo)
 
                 if debug_ps is not None:
                     _fourier_galaxy_debug_plots(G, shG, xi, yi, xo, yo, P, Fsum,
@@ -544,10 +523,6 @@ class ProfileGalaxy(object):
             G += mogpatch.patch
 
         return Patch(ix0, iy0, G)
-
-
-fft_lanczos_order = 3
-
 
 def _fourier_galaxy_debug_plots(G, shG, xi, yi, xo, yo, P, Fsum,
                                 pW, pH, psf):

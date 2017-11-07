@@ -13,6 +13,9 @@ mpf: mp_fourier
 mp_fourier: _mp_fourier$(PYTHON_SO_EXT) mp_fourier.py
 .PHONY: mp_fourier
 
+intel_mp_fourier: _intel_mp_fourier$(PYTHON_SO_EXT) #intel_mp_fourier.py
+.PHONY: intel_mp_fourier
+
 mix: _mix$(PYTHON_SO_EXT) mix.py
 .PHONY: mix
 
@@ -21,6 +24,10 @@ emfit: _emfit$(PYTHON_SO_EXT) emfit.py
 
 _mp_fourier$(PYTHON_SO_EXT): mp_fourier.i setup-mpf.py
 	$(PYTHON) setup-mpf.py build_ext --inplace
+
+_intel_mp_fourier$(PYTHON_SO_EXT): mp_fourier.i setup-mpf.py
+	cat mp_fourier.i | sed s/mp_fourier/intel_mp_fourier/g > intel_mp_fourier.i
+	CC=icc $(PYTHON) setup-mpf.py build_ext --inplace
 
 mix.py _mix$(PYTHON_SO_EXT): mix.i approx3.c gauss_masked.c setup-mix.py
 	$(PYTHON) setup-mix.py build_ext --inplace

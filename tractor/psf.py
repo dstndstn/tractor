@@ -2,7 +2,6 @@ from __future__ import print_function
 from __future__ import division
 
 import numpy as np
-from astrometry.util.miscutils import lanczos_filter
 
 from tractor.image import Image
 from tractor.pointsource import PointSource
@@ -14,6 +13,51 @@ from tractor.utils import BaseParams, ParamList, MultiParams, MogParams
 from tractor import mixture_profiles as mp
 from tractor import ducks
 
+
+try:
+    from tractor import intel_mp_fourier as mp_fourier
+except:
+    print('tractor.psf: failed import intel version of mp_fourier library.  Falling back to generic version.')
+    try:
+        from tractor import mp_fourier
+    except:
+        print('tractor.psf: failed import C version of mp_fourier library.  Falling back to python version.')
+        mp_fourier = None
+
+def lanczos_shift_image(img, dx, dy, inplace=False, force_python=False):
+    from scipy.ndimage import correlate1d
+    from astrometry.util.miscutils import lanczos_filter
+
+    L = 3
+    Lx = lanczos_filter(L, np.arange(-L, L+1) + dx)
+    Ly = lanczos_filter(L, np.arange(-L, L+1) + dy)
+    # Normalize the Lanczos interpolants (preserve flux)
+    Lx /= Lx.sum()
+    Ly /= Ly.sum()
+
+    #print('mp_fourier:', mp_fourier)
+    if mp_fourier is None or force_python:
+        sx     = correlate1d(img, Lx, axis=1, mode='constant')
+        outimg = correlate1d(sx,  Ly, axis=0, mode='constant')
+    else:
+        assert(len(Lx) == 7)
+        assert(len(Ly) == 7)
+        if inplace:
+            assert(img.dtype == np.float32)
+            outimg = img
+        else:
+            outimg = np.empty(img.shape, np.float32)
+            outimg[:,:] = img
+        mp_fourier.correlate7f(outimg, Lx, Ly, work_corr7f)
+
+    assert(np.all(np.isfinite(outimg)))
+    return outimg
+
+#work_corr7 = np.zeros((1024,1024), np.float64)
+#work_corr7 = np.require(work_corr7, requirements=['A'])
+
+work_corr7f = np.zeros((1024,1024), np.float32)
+work_corr7f = np.require(work_corr7f, requirements=['A'])
 
 class HybridPSF(object):
     pass
@@ -38,8 +82,9 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         - *Lorder* is the order of the Lanczos interpolant used for
            shifting the image to subpixel positions.
         '''
-        self.img = img
-        H, W = img.shape
+        # align
+        self.img = np.require(img, requirements=['A'])
+        H,W = img.shape
         assert((H % 2) == 1)
         assert((W % 2) == 1)
         self.radius = np.hypot(H / 2., W / 2.)
@@ -110,34 +155,23 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
             # image as usual, and then copy it into the modelMask
             # space.
 
-        L = self.Lorder
-        Lx = lanczos_filter(L, np.arange(-L, L + 1) + dx)
-        Ly = lanczos_filter(L, np.arange(-L, L + 1) + dy)
-        # Normalize the Lanczos interpolants (preserve flux)
-        Lx /= Lx.sum()
-        Ly /= Ly.sum()
-
         if modelMask is None:
-            sx = correlate1d(img, Lx, axis=1, mode='constant')
-            shifted = correlate1d(sx,  Ly, axis=0, mode='constant')
-            assert(np.all(np.isfinite(shifted)))
-            return Patch(x0, y0, shifted)
+            outimg = lanczos_shift_image(img, dx, dy)
+            return Patch(x0, y0, outimg)
 
         #
+        L = 3
         padding = L
         # Create a modelMask + padding sized stamp and insert PSF image into it
-        mm = np.zeros((mh + 2 * padding, mw + 2 * padding), img.dtype)
-
-        yi, yo = get_overlapping_region(
-            my0 - y0 - padding, my0 - y0 + mh - 1 + padding, 0, H - 1)
-        xi, xo = get_overlapping_region(
-            mx0 - x0 - padding, mx0 - x0 + mw - 1 + padding, 0, W - 1)
-        mm[yo, xo] = img[yi, xi]
-
-        sx = correlate1d(mm, Lx, axis=1, mode='constant')
-        mm = correlate1d(sx, Ly, axis=0, mode='constant')
+        #mm = np.zeros((mh+2*padding, mw+2*padding), img.dtype)
+        mm = np.zeros((mh+2*padding, mw+2*padding), np.float32)
+        yi,yo = get_overlapping_region(my0-y0-padding, my0-y0+mh-1+padding, 0, H-1)
+        xi,xo = get_overlapping_region(mx0-x0-padding, mx0-x0+mw-1+padding, 0, W-1)
+        mm[yo,xo] = img[yi,xi]
+        mm = lanczos_shift_image(mm, dx, dy)
         mm = mm[padding:-padding, padding:-padding]
         assert(np.all(np.isfinite(mm)))
+
         return Patch(mx0, my0, mm)
 
     def getFourierTransformSize(self, radius):
