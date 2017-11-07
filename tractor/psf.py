@@ -19,7 +19,7 @@ try:
     from tractor import intel_mp_fourier as mp_fourier
 except:
     try:
-        from tractor import mp_fourier as mp_fourier
+        from tractor import mp_fourier
     except:
         mp_fourier = None
 # from tractor.c_mp_fourier import correlate7, correlate7f

@@ -513,13 +513,6 @@ class ProfileGalaxy(object):
             
         return Patch(ix0, iy0, G)
 
-
-work_corr7 = np.zeros((1024,1024), np.float64)
-work_corr7 = np.require(work_corr7, requirements=['A'])
-
-
-fft_lanczos_order = 3
-    
 def _fourier_galaxy_debug_plots(G, shG, xi,yi,xo,yo, P, Fsum,
                                 pW,pH, psf):
     import pylab as plt
