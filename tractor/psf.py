@@ -15,14 +15,10 @@ from tractor import ducks
 
 
 try:
-    from tractor import intel_mp_fourier as mp_fourier
+    from tractor import mp_fourier
 except:
-    print('tractor.psf: failed import intel version of mp_fourier library.  Falling back to generic version.')
-    try:
-        from tractor import mp_fourier
-    except:
-        print('tractor.psf: failed import C version of mp_fourier library.  Falling back to python version.')
-        mp_fourier = None
+    print('tractor.psf: failed to import C version of mp_fourier library.  Falling back to python version.')
+    mp_fourier = None
 
 def lanczos_shift_image(img, dx, dy, inplace=False, force_python=False):
     from scipy.ndimage import correlate1d
