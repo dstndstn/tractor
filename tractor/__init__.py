@@ -11,7 +11,7 @@ from .galaxy import *
 
 __all__ = [
     # modules
-    'sdss', 'fitpsf', 'emfit', 'galaxy', 'sersic',
+    'sdss', 'fitpsf', 'emfit', 'galaxy', 'sersic', 'sfd',
     # ducks
     'Params', 'Sky', 'Source', 'Position', 'Brightness', 'PhotoCal',
     'PSF',
