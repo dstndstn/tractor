@@ -32,7 +32,8 @@ def lanczos_shift_image(img, dx, dy, inplace=False, force_python=False):
     Ly /= Ly.sum()
 
     #print('mp_fourier:', mp_fourier)
-    if mp_fourier is None or force_python:
+    H,W = img.shape
+    if mp_fourier is None or force_python or W <= 8 or H <= 8:
         sx     = correlate1d(img, Lx, axis=1, mode='constant')
         outimg = correlate1d(sx,  Ly, axis=0, mode='constant')
     else:
