@@ -28,7 +28,6 @@ mix.py _mix$(PYTHON_SO_EXT): mix.i approx3.c gauss_masked.c setup-mix.py
 _emfit$(PYTHON_SO_EXT): emfit.i emfit2.c setup-emfit.py
 	$(PYTHON) setup-emfit.py build_ext --inplace
 
-
 NUMPY_INC := $(shell $(PYTHON) -c "from __future__ import print_function; from numpy.distutils.misc_util import get_numpy_include_dirs as d; print(' '.join('-I'+x for x in d()))")
 
 PYMOD_LIB ?= -L$(shell $(PYTHON_CONFIG) --prefix)/lib $(shell $(PYTHON_CONFIG) --libs)
@@ -58,8 +57,8 @@ BLAS_LIB ?= -lblas
 GLOG_LIB ?= $(shell pkg-config --libs   libglog) #-lglog
 GLOG_INC ?= $(shell pkg-config --cflags libglog)
 
-GFLAGS_LIB ?= $(shell pkg-config --libs   libgflags)
-GFLAGS_INC ?= $(shell pkg-config --cflags libgflags)
+GFLAGS_LIB ?= $(shell pkg-config --libs   gflags)
+GFLAGS_INC ?= $(shell pkg-config --cflags gflags)
 
 CERES_LIB_DIR ?= /usr/local/lib
 

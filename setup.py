@@ -1,9 +1,7 @@
 from distutils.core import setup, Extension
 from distutils.command.build_ext import *
 from distutils.dist import Distribution
-
-# import sys
-# py3 = (sys.version_info[0] >= 3)
+import os
 
 # from http://stackoverflow.com/questions/12491328/python-distutils-not-include-the-swig-generated-module
 from distutils.command.build import build
@@ -58,21 +56,26 @@ module_mix = Extension('tractor._mix',
 #extra_compile_args=['-O0','-g'],
 #extra_link_args=['-O0', '-g'],
 
-module_fourier = Extension('tractor._mp_fourier',
-                       sources = ['tractor/mp_fourier.i'],
-                       include_dirs = numpy_inc,
-                       extra_objects = [],
-                       undef_macros=['NDEBUG'],
-    )
-
 module_em = Extension('tractor._emfit',
                       sources = ['tractor/emfit.i' ],
                       include_dirs = numpy_inc,
                       extra_objects = [],
                       undef_macros=['NDEBUG'],
                       )
-#extra_compile_args=['-O0','-g'],
-#extra_link_args=['-O0', '-g'],
+
+kwargs = {}
+if os.environ.get('CC') == 'icc':
+    kwargs.update(extra_compile_args=['-g', '-xhost', '-axMIC-AVX512'],
+                  extra_link_args=['-g', '-lsvml'])
+else:
+    kwargs.update(extra_compile_args=['-g', '-std=c99'],
+                  extra_link_args=['-g'])
+
+module_fourier = Extension('tractor._mp_fourier',
+                           sources = ['tractor/mp_fourier.i'],
+                           include_dirs = numpy_inc,
+                           undef_macros=['NDEBUG'],
+                           **kwargs)
 
 class MyDistribution(Distribution):
     display_options = Distribution.display_options + [
@@ -100,8 +103,6 @@ setup(
     author_email="dstndstn@gmail.com",
     packages=['tractor', 'wise'],
     ext_modules = mods,
-# py_modules = pymods,
-# data_files=[('lib/python/wise', ['wise/wise-psf-avg.fits'])],
     package_data={'wise':['wise-psf-avg.fits', 'allsky-atlas.fits']},
     package_dir={'wise':'wise', 'tractor':'tractor'},
     url="http://theTractor.org/",

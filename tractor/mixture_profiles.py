@@ -6,7 +6,6 @@ if __name__ == '__main__':
     import pylab as plt
     import matplotlib.cm as cm
 import numpy as np
-#import scipy.spatial.distance as scp
 
 try:
     from tractor import mp_fourier
@@ -147,7 +146,7 @@ class MixtureOfGaussians(object):
             newk = nextnewk
         return MixtureOfGaussians(newamp, newmean, newvar)
 
-    def getFourierTransform(self, v, w, use_mp_fourier=True):
+    def getFourierTransform(self, v, w, use_mp_fourier=True, zero_mean=False):
         '''
         v: FFT frequencies in the x direction
         w: FFT frequencies in the y direction
@@ -160,10 +159,13 @@ class MixtureOfGaussians(object):
         v = np.fft.rfftfreq(W)
         w = np.fft.fftfreq(H)
 
+        If zero_mean is *True*, ignore the *mean* of this mixture of Gaussians.
+        
         '''
-        if mp_fourier and use_mp_fourier:
-            f = mp_fourier.mixture_profile_fourier_transform(
-                self.amp, self.mean, self.var, v, w)
+        if mp_fourier and use_mp_fourier and zero_mean:
+            f = np.zeros((len(w), len(v)), np.float64)
+            mp_fourier.gaussian_fourier_transform_zero_mean(
+                self.amp, self.var, v, w, f)
             return f
 
         Fsum = None
