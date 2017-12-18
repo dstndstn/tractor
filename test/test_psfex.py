@@ -21,7 +21,23 @@ class PsfExTest(unittest.TestCase):
         fn = os.path.join(os.path.dirname(__file__),
                           'psfex-decam-00392360-S31.fits')
         self.psf = PixelizedPsfEx(fn)
-    
+
+    def test_tiny_image(self):
+        from tractor.patch import ModelMask
+        H,W = 1,1
+        tim = Image(data=np.zeros((H,W)), invvar=np.ones((H,W)),
+                    psf=self.psf)
+        src = PointSource(PixPos(2.3,2.4), Flux(100.))
+        tr = Tractor([tim],[src])
+        mod = tr.getModelImage(0)
+        assert(mod.shape == (H,W))
+        #
+        mm = ModelMask(0,0,W,H)
+        #patch = src.getModelPatch(tim, modelMask=mm)
+        #upatch = src.getUnitFluxModelPatch(img, modelMask=mm)
+        psfpatch = self.psf.getPointSourcePatch(-3.1, 2.4, modelMask=mm)
+        # psf.getImage(px,py)
+        
     def test_shifted(self):
         # Test that the PsfEx model varies spatially
         # Test that the PixelizedPsfEx.getShifted() method works

@@ -120,7 +120,6 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         return self.img
 
     def getPointSourcePatch(self, px, py, minval=0., modelMask=None, **kwargs):
-        from scipy.ndimage.filters import correlate1d
         from astrometry.util.miscutils import get_overlapping_region
 
         img = self.getImage(px, py)
