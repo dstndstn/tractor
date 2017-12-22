@@ -31,9 +31,11 @@ def lanczos_shift_image(img, dx, dy, inplace=False, force_python=False):
     Lx /= Lx.sum()
     Ly /= Ly.sum()
 
-    #print('mp_fourier:', mp_fourier)
     H,W = img.shape
-    if mp_fourier is None or force_python or W <= 8 or H <= 8:
+    #print('lanczos_shift_image: size', W, H)
+    #print('mp_fourier:', mp_fourier)
+    if (mp_fourier is None or force_python or W <= 8 or H <= 8
+        or H > work_corr7f.shape[0] or W > work_corr7f.shape[1]):
         sx     = correlate1d(img, Lx, axis=1, mode='constant')
         outimg = correlate1d(sx,  Ly, axis=0, mode='constant')
     else:
@@ -50,10 +52,7 @@ def lanczos_shift_image(img, dx, dy, inplace=False, force_python=False):
     assert(np.all(np.isfinite(outimg)))
     return outimg
 
-#work_corr7 = np.zeros((1024,1024), np.float64)
-#work_corr7 = np.require(work_corr7, requirements=['A'])
-
-work_corr7f = np.zeros((1024,1024), np.float32)
+work_corr7f = np.zeros((4096, 4096), np.float32)
 work_corr7f = np.require(work_corr7f, requirements=['A'])
 
 class HybridPSF(object):
