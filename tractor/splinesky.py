@@ -26,9 +26,9 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         # Compute medians in grid cells
         grid = np.zeros((ny, nx))
         for iy, y in enumerate(ygrid):
-            ylo, yhi = max(0, y - halfbox), min(H, y + halfbox)
+            ylo, yhi = int(max(0, y - halfbox)), int(min(H, y + halfbox))
             for ix, x in enumerate(xgrid):
-                xlo, xhi = max(0, x - halfbox), min(W, x + halfbox)
+                xlo, xhi = int(max(0, x - halfbox)), int(min(W, x + halfbox))
                 im = image[ylo:yhi, xlo:xhi]
                 if mask is not None:
                     im = im[mask[ylo:yhi, xlo:xhi]]
