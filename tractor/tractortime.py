@@ -17,8 +17,8 @@ class TAITime(ScalarParam, ArithmeticParams):
 
     MJD = TAI/(24*3600)
     '''
-    equinox = 53084.28  # mjd
-    daysperyear = 365.25
+    equinox = 53084.28  # mjd of the spring equinox in 2004
+    daysperyear = 365.25  # Julian years, by definition
 
     mjd2k = datetomjd(J2000)
 

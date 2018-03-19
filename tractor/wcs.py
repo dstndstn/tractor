@@ -154,6 +154,8 @@ class ConstantFitsWcs(ParamList, ducks.ImageCalibration):
 
         cd = self.wcs.get_cd()
         self.cd = np.array([[cd[0], cd[1]], [cd[2], cd[3]]])
+
+        self.cd_inverse = np.linalg.inv(cd)
         self.pixscale = self.wcs.pixel_scale()
 
     def hashkey(self):
@@ -218,6 +220,9 @@ class ConstantFitsWcs(ParamList, ducks.ImageCalibration):
         (Returns the constant ``CD`` matrix elements)
         '''
         return self.cd
+
+    def cdInverseAtPixel(self, x, y):
+        return self.cd_inverse
 
     def pixel_scale(self):
         return self.pixscale
