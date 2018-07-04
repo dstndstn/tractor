@@ -18,7 +18,7 @@ from .unwise import (unwise_tile_wcs, unwise_tiles_touching_wcs,
 def unwise_forcedphot(cat, tiles, bands=[1, 2, 3, 4], roiradecbox=None,
                       unwise_dir='.',
                       use_ceres=True, ceres_block=8,
-                      save_fits=False, ps=None,
+                      save_fits=False, get_models=False, ps=None,
                       psf_broadening=None):
     '''
     Given a list of tractor sources *cat*
@@ -33,8 +33,10 @@ def unwise_forcedphot(cat, tiles, bands=[1, 2, 3, 4], roiradecbox=None,
         else:
             src.halfsize = 10
 
-    wantims = ((ps is not None) or save_fits)
+    wantims = ((ps is not None) or save_fits or get_models)
     wanyband = 'w'
+    if get_models:
+        models = {}
 
     fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix',
               'pronexp']
@@ -192,6 +194,10 @@ def unwise_forcedphot(cat, tiles, bands=[1, 2, 3, 4], roiradecbox=None,
                 fitsio.write('%s-chi.fits' % tag,  chi,
                              clobber=True, header=wcshdr)
 
+            if get_models:
+                (dat, mod, ie, chi, roi) = ims1[0]
+                models[(tile.coadd_id, band)] = (mod, tim.roi)
+
             if ps:
                 tag = '%s W%i' % (tile.coadd_id, band)
                 (dat, mod, ie, chi, roi) = ims1[0]
@@ -265,6 +271,8 @@ def unwise_forcedphot(cat, tiles, bands=[1, 2, 3, 4], roiradecbox=None,
         if not np.all(mjd == 0):
             phot.set(wband + '_mjd', mjd)
 
+    if get_models:
+        return phot,models
     return phot
 
 
