@@ -224,6 +224,8 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         # fits.close()
         from astrometry.util.fits import fits_table
         T = fits_table()
+        T.gridw = np.atleast_1d(self.W).astype(np.int32)
+        T.gridh = np.atleast_1d(self.H).astype(np.int32)
         T.xgrid = np.atleast_2d(self.xgrid).astype(np.int32)
         T.ygrid = np.atleast_2d(self.ygrid).astype(np.int32)
         T.x0 = np.atleast_1d(self.x0).astype(np.int32)
