@@ -132,33 +132,27 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         x0 = ix - W // 2
         y0 = iy - H // 2
 
-        if modelMask is not None:
-            mh, mw = modelMask.shape
-            mx0, my0 = modelMask.x0, modelMask.y0
-
-            # print 'PixelizedPSF + modelMask'
-            # print 'mx0,my0', mx0,my0, '+ mw,mh', mw,mh
-            # print 'PSF image x0,y0', x0,y0, '+ W,H', W,H
-
-            if (mx0 >= x0 + W or
-                my0 >= y0 + H or
-                mx0 + mw <= x0 or
-                    my0 + mh <= y0):
-                # No overlap
-                return None
-            # Otherwise, we'll just produce the Lanczos-shifted PSF
-            # image as usual, and then copy it into the modelMask
-            # space.
-
         if modelMask is None:
             outimg = lanczos_shift_image(img, dx, dy)
             return Patch(x0, y0, outimg)
 
-        #
+        mh, mw = modelMask.shape
+        mx0, my0 = modelMask.x0, modelMask.y0
+
+        # print 'PixelizedPSF + modelMask'
+        # print 'mx0,my0', mx0,my0, '+ mw,mh', mw,mh
+        # print 'PSF image x0,y0', x0,y0, '+ W,H', W,H
+
+        if ((mx0 >= x0 + W) or (mx0 + mw <= x0) or
+            (my0 >= y0 + H) or (my0 + mh <= y0)):
+            # No overlap
+            return None
+        # Otherwise, we'll just produce the Lanczos-shifted PSF
+        # image as usual, and then copy it into the modelMask
+        # space.
         L = 3
         padding = L
         # Create a modelMask + padding sized stamp and insert PSF image into it
-        #mm = np.zeros((mh+2*padding, mw+2*padding), img.dtype)
         mm = np.zeros((mh+2*padding, mw+2*padding), np.float32)
         yi,yo = get_overlapping_region(my0-y0-padding, my0-y0+mh-1+padding, 0, H-1)
         xi,xo = get_overlapping_region(mx0-x0-padding, mx0-x0+mw-1+padding, 0, W-1)
