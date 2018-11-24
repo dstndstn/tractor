@@ -257,8 +257,9 @@ class Optimizer(object):
 
         # profile-weighted chi-squared (unit-model weighted chi-squared)
         fs.prochi2 = np.zeros(len(srcs))
-        # profile-weighted number of pixels
+        # profile-weighted number of pixels: ~ 1 if all pixels are masked.
         fs.pronpix = np.zeros(len(srcs))
+        fs.promasked = np.zeros(len(srcs))
         # profile-weighted sum of (flux from other sources / my flux)
         fracflux_num = np.zeros(len(srcs))
         fracflux_den = np.zeros(len(srcs))
@@ -338,12 +339,13 @@ class Optimizer(object):
                 fs.prochi2[si] += np.sum(np.abs(srcmod[slc].flat[nz])
                                          * chi[slc].flat[nz]**2)
                 fs.pronpix[si] += np.sum(np.abs(srcmod[slc].flat[nz]))
+                fs.promasked[si] += np.sum(np.abs(srcmod[slc][ie[slc] == 0]))
                 # (mod - srcmod*sourcecounts) is the model for everybody else
                 fracflux_num[si] += (np.sum((np.abs(mod[slc] / sourcecounts - srcmod[slc]) * np.abs(srcmod[slc])).flat[nz])
                                      / np.sum((srcmod[slc]**2).flat[nz]))
                 fracflux_den[si] += np.sum(np.abs(srcmod[slc]
                                                   ).flat[nz] / np.abs(sourcecounts))
-                # scalegit  to nanomaggies, weight by profile
+                # scale to nanomaggies, weight by profile
                 fs.proflux[si] += np.sum((np.abs((mod[slc] - srcmod[slc]
                                                   * sourcecounts) / scale) * np.abs(srcmod[slc])).flat[nz])
                 fs.npix[si] += len(nz)
