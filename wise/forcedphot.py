@@ -19,19 +19,20 @@ def unwise_forcedphot(cat, tiles, bands=[1, 2, 3, 4], roiradecbox=None,
                       unwise_dir='.',
                       use_ceres=True, ceres_block=8,
                       save_fits=False, get_models=False, ps=None,
-                      psf_broadening=None):
+                      psf_broadening=None,
+                      pixelized_psf=False):
     '''
     Given a list of tractor sources *cat*
     and a list of unWISE tiles *tiles* (a fits_table with RA,Dec,coadd_id)
     runs forced photometry, returning a FITS table the same length as *cat*.
     '''
 
-    # Severely limit sizes of models
-    for src in cat:
-        if isinstance(src, PointSource):
-            src.fixedRadius = 10
-        else:
-            src.halfsize = 10
+    # # Severely limit sizes of models
+    # for src in cat:
+    #     if isinstance(src, PointSource):
+    #         src.fixedRadius = 10
+    #     else:
+    #         src.halfsize = 10
 
     wantims = ((ps is not None) or save_fits or get_models)
     wanyband = 'w'
@@ -70,7 +71,36 @@ def unwise_forcedphot(cat, tiles, bands=[1, 2, 3, 4], roiradecbox=None,
                 print('Actually, no overlap with tile', tile.coadd_id)
                 continue
 
-            if psf_broadening is not None:
+            if pixelized_psf:
+                import unwise_psf
+                psfimg = unwise_psf.get_unwise_psf(band, tile.coadd_id)
+                print('PSF postage stamp', psfimg.shape, 'sum', psfimg.sum())
+                from tractor.psf import PixelizedPSF
+                psfimg /= psfimg.sum()
+                tim.psf = PixelizedPSF(psfimg)
+                print('### HACK ### normalized PSF to 1.0')
+                print('Set PSF to', tim.psf)
+
+                if False:
+                    ph,pw = psfimg.shape
+                    px,py = np.meshgrid(np.arange(ph), np.arange(pw))
+                    cx = np.sum(psfimg * px)
+                    cy = np.sum(psfimg * py)
+                    print('PSF center of mass: %.2f, %.2f' % (cx, cy))
+        
+                    for sz in range(1, 11):
+                        middle = pw//2
+                        sub = (slice(middle-sz, middle+sz+1),
+                               slice(middle-sz, middle+sz+1))
+                        cx = np.sum((psfimg * px)[sub]) / np.sum(psfimg[sub])
+                        cy = np.sum((psfimg * py)[sub]) / np.sum(psfimg[sub])
+                        print('Size', sz, ': PSF center of mass: %.2f, %.2f' % (cx, cy))
+                    
+                    import fitsio
+                    fitsio.write('psfimg-%s-w%i.fits' % (tile.coadd_id, band), psfimg,
+                             clobber=True)
+            
+            if psf_broadening is not None and not pixelized_psf:
                 # psf_broadening is a factor by which the PSF FWHMs
                 # should be scaled; the PSF is a little wider
                 # post-reactivation.
