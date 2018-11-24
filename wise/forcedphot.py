@@ -28,11 +28,11 @@ def unwise_forcedphot(cat, tiles, bands=[1, 2, 3, 4], roiradecbox=None,
     '''
 
     # # Severely limit sizes of models
-    # for src in cat:
-    #     if isinstance(src, PointSource):
-    #         src.fixedRadius = 10
-    #     else:
-    #         src.halfsize = 10
+    for src in cat:
+        if isinstance(src, PointSource):
+            src.fixedRadius = 20
+        else:
+            src.halfsize = 20
 
     wantims = ((ps is not None) or save_fits or get_models)
     wanyband = 'w'
