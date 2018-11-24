@@ -420,6 +420,8 @@ class Optimizer(object):
             logverb('  Log-prob after:', pAfter)
             logverb('  delta log-prob:', pAfter - pBefore)
 
+            #print('Step', alpha, 'p', pAfter, 'dlnp', pAfter-pBefore)
+            
             if not np.isfinite(pAfter):
                 logmsg('  Got bad log-prob', pAfter)
                 break

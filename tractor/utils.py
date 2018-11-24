@@ -1088,6 +1088,8 @@ class MultiParams(BaseParams, NamedParams):
             pre = self.getNamedParamName(i)
             if pre is None:
                 pre = 'param%i' % i
+            if s is None:
+                continue
             snames = s.getParamNames()
             if snames is not None and len(snames) == s.numberOfParams():
                 n.extend('%s.%s' % (pre, post) for post in snames)
