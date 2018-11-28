@@ -34,6 +34,9 @@ def unwise_forcedphot(cat, tiles, bands=[1, 2, 3, 4], roiradecbox=None,
         else:
             src.halfsize = 20
 
+    from collections import Counter
+    print('Source types:', Counter([type(src) for src in cat]))
+            
     wantims = ((ps is not None) or save_fits or get_models)
     wanyband = 'w'
     if get_models:
@@ -53,15 +56,20 @@ def unwise_forcedphot(cat, tiles, bands=[1, 2, 3, 4], roiradecbox=None,
         print('Photometering WISE band', band)
         wband = 'w%i' % band
 
-        # The tiles have some overlap, so for each source, keep the
-        # fit in the tile whose center is closest to the source.
-        tiledists = np.empty(Nsrcs)
-        tiledists[:] = 1e100
-        flux_invvars = np.zeros(Nsrcs, np.float32)
-        fitstats = dict([(k, np.zeros(Nsrcs, np.float32)) for k in fskeys])
+        #- central pixel <= 1000: 19x19 pix box size
+        #- central pixel in 1000 - 20000: 59x59 box size
+        #- central pixel > 20000 or saturated: 149x149 box size
+        #- object near "bright star": 299x299 box size 
+        #flux_invvars = np.zeros(Nsrcs, np.float32)
+
         nexp = np.zeros(Nsrcs, np.int16)
         mjd = np.zeros(Nsrcs, np.float64)
 
+        fitstats = {}
+        tims = []
+
+        central_flux = np.zeros(Nsrcs, np.float32)
+        
         for tile in tiles:
             print('Reading tile', tile.coadd_id)
 
@@ -71,6 +79,37 @@ def unwise_forcedphot(cat, tiles, bands=[1, 2, 3, 4], roiradecbox=None,
                 print('Actually, no overlap with tile', tile.coadd_id)
                 continue
 
+            # The tiles have some overlap, so zero out pixels outside the
+            # tile's unique area.
+            th,tw = tim.shape
+            xx,yy = np.meshgrid(np.arange(tw), np.arange(th))
+            rr,dd = tim.wcs.wcs.pixelxy2radec(xx+1, yy+1)
+            unique = (dd >= tile.dec1) * (dd < tile.dec2)
+            if tile.ra1 < tile.ra2:
+                # normal RA
+                unique *= (rr >= tile.ra1) * (rr < tile.ra2)
+            else:
+                # RA wrap-around
+                unique[rr > 180] *= (rr[rr > 180] >= tile.ra1)
+                unique[rr < 180] *= (rr[rr < 180] <  tile.ra2)
+
+            print(np.sum(unique), 'of', (th*tw), 'pixels in this tile are unique')
+            tim.inverr[unique == False] = 0.
+
+            del xx,yy,rr,dd
+            wcs = tim.wcs.wcs
+            ok,x,y = wcs.radec2pixelxy(ra, dec)
+            x = np.round(x - 1.).astype(int)
+            y = np.round(y - 1.).astype(int)
+            good = (x >= 0) * (x < tw) * (y >= 0) * (y < th)
+            good[good] *= unique[y[good],x[good]]
+
+            nexp[good] = tim.nuims[y[good], x[good]]
+            if hasattr(tim, 'mjdmin') and hasattr(tim, 'mjdmax'):
+                mjd[good] = (tim.mjdmin + tim.mjdmax) / 2.
+            central_flux[good] = tim.getImage()[y[good],x[good]]
+            del x,y,good,unique
+            
             if pixelized_psf:
                 import unwise_psf
                 psfimg = unwise_psf.get_unwise_psf(band, tile.coadd_id)
@@ -122,97 +161,63 @@ def unwise_forcedphot(cat, tiles, bands=[1, 2, 3, 4], roiradecbox=None,
                     print(
                         'WARNING: cannot apply psf_broadening to WISE PSF of type', type(psf))
 
-            print('Read image with shape', tim.shape)
+            print('unWISE tile', tile.coadd_id,
+                  ': read image with shape', tim.shape)
 
-            # Select sources in play.
-            wcs = tim.wcs.wcs
-            H, W = tim.shape
-            ok, x, y = wcs.radec2pixelxy(ra, dec)
-            x = (x - 1.).astype(np.float32)
-            y = (y - 1.).astype(np.float32)
-            margin = 10.
-            I = np.flatnonzero((x >= -margin) * (x < W + margin) *
-                               (y >= -margin) * (y < H + margin))
-            print(len(I), 'within the image + margin')
+            tim.tile = tile
+            tims.append(tim)
 
-            inbox = ((x[I] >= -0.5) * (x[I] < (W - 0.5)) *
-                     (y[I] >= -0.5) * (y[I] < (H - 0.5)))
-            print(sum(inbox), 'strictly within the image')
+        print('Central flux: max', central_flux.max(), 'median',
+              np.median(central_flux))
+            
+        minsb = 0.
+        fitsky = False
 
-            # Compute L_inf distance to (full) tile center.
-            tilewcs = unwise_tile_wcs(tile.ra, tile.dec)
-            cx, cy = tilewcs.crpix
-            ok, tx, ty = tilewcs.radec2pixelxy(ra[I], dec[I])
-            td = np.maximum(np.abs(tx - cx), np.abs(ty - cy))
-            closest = (td < tiledists[I])
-            tiledists[I[closest]] = td[closest]
+        # FIXME -- Look in image and set source radius based on peak height??
 
-            keep = inbox * closest
+        tractor = Tractor(tims, cat)
+        if use_ceres:
+            from tractor.ceres_optimizer import CeresOptimizer
+            tractor.optimizer = CeresOptimizer(BW=ceres_block, BH=ceres_block)
+        tractor.freezeParamsRecursive('*')
+        tractor.thawPathsTo(wanyband)
 
-            # Source indices (in the full "cat") to keep (the fit values for)
-            srci = I[keep]
+        kwa = dict(fitstat_extras=[('pronexp', [tim.nims for tim in tims])])
+        t0 = Time()
 
-            if not len(srci):
-                print('No sources to be kept; skipping.')
-                continue
+        R = tractor.optimize_forced_photometry(
+            minsb=minsb, mindlnp=1., sky=fitsky, fitstats=True,
+            variance=True, shared_params=False,
+            wantims=wantims, **kwa)
+        print('unWISE forced photometry took', Time() - t0)
 
-            phot.tile[srci] = tile.coadd_id
-            nexp[srci] = tim.nuims[np.clip(np.round(y[srci]).astype(int), 0, H - 1),
-                                   np.clip(np.round(x[srci]).astype(int), 0, W - 1)]
+        if use_ceres:
+            term = R.ceres_status['termination']
+            print('Ceres termination status:', term)
+            # Running out of memory can cause failure to converge
+            # and term status = 2.
+            # Fail completely in this case.
+            if term != 0:
+                raise RuntimeError(
+                    'Ceres terminated with status %i' % term)
 
-            # Source indices in the margins
-            margi = I[np.logical_not(keep)]
+        if wantims:
+            ims0 = R.ims0
+            ims1 = R.ims1
+        #IV, fs = R.IV, R.fitstats
+        flux_invvars = R.IV
+        if R.fitstats is not None:
+            for k in fskeys:
+                x = getattr(R.fitstats, k)
+                fitstats[k] = np.array(x).astype(np.float32)
+            
+        #fs = R.fitstats
 
-            # sources in the box -- at the start of the subcat list.
-            subcat = [cat[i] for i in srci]
-
-            # include *copies* of sources in the margins
-            # (that way we automatically don't save the results)
-            subcat.extend([cat[i].copy() for i in margi])
-            assert(len(subcat) == len(I))
-
-            # FIXME -- set source radii, ...?
-
-            minsb = 0.
-            fitsky = False
-
-            # Look in image and set radius based on peak height??
-
-            tractor = Tractor([tim], subcat)
-            if use_ceres:
-                from tractor.ceres_optimizer import CeresOptimizer
-                tractor.optimizer = CeresOptimizer(BW=ceres_block,
-                                                   BH=ceres_block)
-            tractor.freezeParamsRecursive('*')
-            tractor.thawPathsTo(wanyband)
-
-            kwa = dict(fitstat_extras=[('pronexp', [tim.nims])])
-            t0 = Time()
-
-            R = tractor.optimize_forced_photometry(
-                minsb=minsb, mindlnp=1., sky=fitsky, fitstats=True,
-                variance=True, shared_params=False,
-                wantims=wantims, **kwa)
-            print('unWISE forced photometry took', Time() - t0)
-
-            if use_ceres:
-                term = R.ceres_status['termination']
-                print('Ceres termination status:', term)
-                # Running out of memory can cause failure to converge
-                # and term status = 2.
-                # Fail completely in this case.
-                if term != 0:
-                    raise RuntimeError(
-                        'Ceres terminated with status %i' % term)
-
-            if wantims:
-                ims0 = R.ims0
-                ims1 = R.ims1
-            IV, fs = R.IV, R.fitstats
-
-            if save_fits:
-                import fitsio
-                (dat, mod, ie, chi, roi) = ims1[0]
+        if save_fits:
+            import fitsio
+            for i,tim in enumerate(tims):
+                tile = tim.tile
+                (dat, mod, ie, chi, roi) = ims1[i]
                 wcshdr = fitsio.FITSHDR()
                 tim.wcs.wcs.add_to_header(wcshdr)
 
@@ -224,13 +229,18 @@ def unwise_forcedphot(cat, tiles, bands=[1, 2, 3, 4], roiradecbox=None,
                 fitsio.write('%s-chi.fits' % tag,  chi,
                              clobber=True, header=wcshdr)
 
-            if get_models:
-                (dat, mod, ie, chi, roi) = ims1[0]
+        if get_models:
+            for i,tim in enumerate(tims):
+                tile = tim.tile
+                (dat, mod, ie, chi, roi) = ims1[i]
+                print('unWISE get_models: ims1 roi:', roi, 'tim.roi:', tim.roi)
                 models[(tile.coadd_id, band)] = (mod, tim.roi)
 
-            if ps:
+        if ps:
+            for i,tim in enumerate(tims):
+                tile = tim.tile
                 tag = '%s W%i' % (tile.coadd_id, band)
-                (dat, mod, ie, chi, roi) = ims1[0]
+                (dat, mod, ie, chi, roi) = ims1[i]
 
                 sig1 = tim.sig1
                 plt.clf()
@@ -239,14 +249,14 @@ def unwise_forcedphot(cat, tiles, bands=[1, 2, 3, 4], roiradecbox=None,
                 plt.colorbar()
                 plt.title('%s: data' % tag)
                 ps.savefig()
-
+    
                 plt.clf()
                 plt.imshow(mod, interpolation='nearest', origin='lower',
                            cmap='gray', vmin=-3 * sig1, vmax=10 * sig1)
                 plt.colorbar()
                 plt.title('%s: model' % tag)
                 ps.savefig()
-
+    
                 plt.clf()
                 plt.imshow(chi, interpolation='nearest', origin='lower',
                            cmap='gray', vmin=-5, vmax=+5)
@@ -254,17 +264,84 @@ def unwise_forcedphot(cat, tiles, bands=[1, 2, 3, 4], roiradecbox=None,
                 plt.title('%s: chi' % tag)
                 ps.savefig()
 
-            # Save results for this tile.
-            # the "keep" sources are at the beginning of the "subcat" list
-            flux_invvars[srci] = IV[:len(srci)].astype(np.float32)
-            if hasattr(tim, 'mjdmin') and hasattr(tim, 'mjdmax'):
-                mjd[srci] = (tim.mjdmin + tim.mjdmax) / 2.
-            if fs is None:
-                continue
-            for k in fskeys:
-                x = getattr(fs, k)
-                # fitstats are returned only for un-frozen sources
-                fitstats[k][srci] = np.array(x).astype(np.float32)[:len(srci)]
+        # Save results for this tile.
+        # the "keep" sources are at the beginning of the "subcat" list
+        #flux_invvars[srci] = IV[:len(srci)].astype(np.float32)
+
+        # #### FIXME --
+        # #if hasattr(tim, 'mjdmin') and hasattr(tim, 'mjdmax'):
+        # #    mjd[srci] = (tim.mjdmin + tim.mjdmax) / 2.
+        # if fs is None:
+        #     continue
+        # for k in fskeys:
+        #     x = getattr(fs, k)
+        #     # fitstats are returned only for un-frozen sources
+        #     fitstats[k] = np.array(x).astype(np.float32)
+        # 
+        # 
+        # 
+        #     
+        #     # Select sources in play.
+        #     wcs = tim.wcs.wcs
+        #     H, W = tim.shape
+        #     ok, x, y = wcs.radec2pixelxy(ra, dec)
+        #     x = (x - 1.).astype(np.float32)
+        #     y = (y - 1.).astype(np.float32)
+        #     margin = 10.
+        #     I = np.flatnonzero((x >= -margin) * (x < W + margin) *
+        #                        (y >= -margin) * (y < H + margin))
+        #     print(len(I), 'within the image + margin')
+        # 
+        #     inbox = ((x[I] >= -0.5) * (x[I] < (W - 0.5)) *
+        #              (y[I] >= -0.5) * (y[I] < (H - 0.5)))
+        #     print(sum(inbox), 'strictly within the image')
+        # 
+        #     # Compute L_inf distance to (full) tile center.
+        #     tilewcs = unwise_tile_wcs(tile.ra, tile.dec)
+        #     cx, cy = tilewcs.crpix
+        #     ok, tx, ty = tilewcs.radec2pixelxy(ra[I], dec[I])
+        #     td = np.maximum(np.abs(tx - cx), np.abs(ty - cy))
+        #     closest = (td < tiledists[I])
+        #     tiledists[I[closest]] = td[closest]
+        # 
+        #     keep = inbox * closest
+        # 
+        #     # Source indices (in the full "cat") to keep (the fit values for)
+        #     srci = I[keep]
+        # 
+        #     if not len(srci):
+        #         print('No sources to be kept; skipping.')
+        #         continue
+        # 
+        #     phot.tile[srci] = tile.coadd_id
+        #     
+        #     nexp[srci] = tim.nuims[np.clip(np.round(y[srci]).astype(int), 0, H - 1),
+        #                            np.clip(np.round(x[srci]).astype(int), 0, W - 1)]
+        # 
+        #     # Source indices in the margins
+        #     margi = I[np.logical_not(keep)]
+        # 
+        #     # sources in the box -- at the start of the subcat list.
+        #     subcat = [cat[i] for i in srci]
+        # 
+        #     # include *copies* of sources in the margins
+        #     # (that way we automatically don't save the results)
+        #     subcat.extend([cat[i].copy() for i in margi])
+        #     assert(len(subcat) == len(I))
+        # 
+        #     if True:
+        #         import pylab as plt
+        #         plt.clf()
+        #         plt.imshow(tim.getImage(), vmin=-2.*tim.sig1, vmax=5.*tim.sig1,
+        #                    interpolation='nearest', origin='lower')
+        #         xy = np.array([tim.getWcs().positionToPixel(src.getPosition())
+        #                        for src in subcat])
+        #         xx = xy[:,0]
+        #         yy = xy[:,1]
+        #         plt.plot(xx[:len(srci)], yy[:len(srci)], 'o', mec='b', mfc='none')
+        #         plt.plot(xx[len(srci):], yy[len(srci):], 'o', mec='r', mfc='none')
+        #         plt.savefig('wise-srcs-%s-w%i.png' % (tile.coadd_id, band))
+
 
         # Note, this is *outside* the loop over tiles.
         # The fluxes are saved in the source objects, and will be set based on
