@@ -23,10 +23,13 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         y0 = int((H - (ny - 2) * halfbox) // 2)
         ygrid = y0 + (halfbox * (np.arange(ny) - 0.5)).astype(int)
 
+        print('ygrid', ygrid)
+        
         # Compute medians in grid cells
         grid = np.zeros((ny, nx))
         for iy, y in enumerate(ygrid):
             ylo, yhi = int(max(0, y - halfbox)), int(min(H, y + halfbox))
+            print('Ylo,Yhi', ylo,yhi)
             for ix, x in enumerate(xgrid):
                 xlo, xhi = int(max(0, x - halfbox)), int(min(W, x + halfbox))
                 im = image[ylo:yhi, xlo:xhi]

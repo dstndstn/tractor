@@ -68,6 +68,7 @@ class MultiBandBrightness(ParamList, ducks.Brightness):
     def setBand(self, band, value):
         return setattr(self, band, value)
 
+    
 
 class Mags(MultiBandBrightness):
     '''

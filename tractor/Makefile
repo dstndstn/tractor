@@ -119,10 +119,11 @@ CERES_LIB ?= -L$(CERES_LIB_DIR) -l$(CERES_LIB_NAME) $(GLOG_LIB) $(SUITESPARSE_LI
 ceres.py: ceres.i
 	swig -python -c++ $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $(GLOG_INC) $(GFLAGS_INC) $<
 
-CXXFLAGS := -Wall -fPIC
 # DEBUG
-CXXFLAGS += -O0 -g
-#CXXFLAGS += -O3
+#CXXFLAGS ?= -O0 -g
+CXXFLAGS ?= -O2
+
+CXXFLAGS += -Wall -fPIC
 #CXXLINKFLAGS := -Wl,--no-undefined
 #CXXLINKFLAGS :=
 CXXLINKFLAGS ?=

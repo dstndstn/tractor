@@ -21,6 +21,8 @@ cov:
 	coverage html
 .PHONY: cov
 
+PYTHON ?= python
+
 cython:
 	python setup-cython.py build_ext --inplace
 .PHONY: cython
