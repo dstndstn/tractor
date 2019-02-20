@@ -10,9 +10,7 @@ git clone https://github.com/dstndstn/tractor.git .
 wget "http://astrometry.net/downloads/astrometry.net-latest.tar.gz"
 tar xzf astrometry.net-latest.tar.gz
 mv astrometry.net-?.?? astrometry
-(cd astrometry && make pyutil)
-(cd astrometry/libkd && make pyspherematch)
-(cd astrometry/sdss && make)
+(cd astrometry && make py)
 
 make
 
