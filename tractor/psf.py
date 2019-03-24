@@ -303,7 +303,7 @@ class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
         return self.mog
 
     def applyTo(self, image):
-        raise
+        raise RuntimeError('Not implemented')
 
     def scaleBy(self, factor):
         # Use not advised, ever

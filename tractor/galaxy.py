@@ -249,7 +249,7 @@ class ProfileGalaxy(object):
     def _getUnitFluxDeps(self, img, px, py):
         return None
 
-    def _getUnitFluxPatchSize(self, img, minval):
+    def _getUnitFluxPatchSize(self, img, **kwargs):
         return 0
 
     def getUnitFluxModelPatch(self, img, px=None, py=None, minval=0.0,
@@ -267,7 +267,7 @@ class ProfileGalaxy(object):
             x0, y0 = modelMask.x0, modelMask.y0
         else:
             # choose the patch size
-            halfsize = self._getUnitFluxPatchSize(img, px, py, minval)
+            halfsize = self._getUnitFluxPatchSize(img, px=px, py=py, minval=minval)
             # find overlapping pixels to render
             (outx, inx) = get_overlapping_region(
                 int(np.floor(px - halfsize)), int(np.ceil(px + halfsize + 1)),
@@ -673,7 +673,7 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
                      img.getPsf().hashkey(), self.shape.hashkey())
                     )
 
-    def _getUnitFluxPatchSize(self, img, px, py, minval):
+    def _getUnitFluxPatchSize(self, img, px=0., py=0., minval=0.):
         if hasattr(self, 'halfsize'):
             return self.halfsize
         pixscale = img.wcs.pixscale_at(px, py)
@@ -847,7 +847,7 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy, SingleProfileSource):
         #print('amp sum', np.sum(smix.amp))
         return mix[0] + mix[1]
 
-    def _getUnitFluxPatchSize(self, img, px, py, minval):
+    def _getUnitFluxPatchSize(self, img, px=0., py=0., minval=0.):
         if hasattr(self, 'halfsize'):
             return self.halfsize
         pixscale = img.wcs.pixscale_at(px, py)
