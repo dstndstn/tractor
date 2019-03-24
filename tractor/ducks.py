@@ -76,7 +76,6 @@ class Params(object):
         `numberOfParams()`.
         '''
         assert(len(p) == self.numberOfParams())
-        pass
 
     def setAllParams(self, p):
         return self.setParams(p)
@@ -156,9 +155,9 @@ class ImageCalibration(object):
     def toFitsHeader(self, hdr, prefix=''):
         params = self.getAllParams()
         names = self.getParamNames()
-        for i in range(len(params)):
+        for i,(name,val) in enumerate(zip(names, params)):
             k = prefix + 'P%i' % i
-            hdr.add_record(dict(name=k, value=params[i], comment=names[i]))
+            hdr.add_record(dict(name=k, value=val, comment=name))
 
     def toStandardFitsHeader(self, hdr):
         pass
@@ -332,7 +331,7 @@ class Time(Params):
         ie, the time of year expressed as an angle in radians.'''
         pass
 
-    def toYears():
+    def toYears(self):
         pass
 
 
