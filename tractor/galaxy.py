@@ -154,7 +154,7 @@ class Galaxy(MultiParams, SingleProfileSource):
         else:
             minval = None
 
-        patch0 = self.getUnitFluxModelPatch(img, px0, py0, minval=minval,
+        patch0 = self.getUnitFluxModelPatch(img, px=px0, py=py0, minval=minval,
                                             modelMask=modelMask)
         if patch0 is None:
             return [None] * self.numberOfParams()
@@ -179,7 +179,7 @@ class Galaxy(MultiParams, SingleProfileSource):
                 (px, py) = img.getWcs().positionToPixel(pos0, self)
                 pos0.setParam(i, oldval)
                 patchx = self.getUnitFluxModelPatch(
-                    img, px, py, minval=minval, modelMask=modelMask)
+                    img, px=px, py=py, minval=minval, modelMask=modelMask)
                 if patchx is None or patchx.getImage() is None:
                     derivs.append(None)
                     continue
@@ -210,7 +210,7 @@ class Galaxy(MultiParams, SingleProfileSource):
             for i, gstep in enumerate(gsteps):
                 oldval = self.shape.setParam(i, oldvals[i] + gstep)
                 patchx = self.getUnitFluxModelPatch(
-                    img, px0, py0, minval=minval, modelMask=modelMask)
+                    img, px=px0, py=py0, minval=minval, modelMask=modelMask)
                 self.shape.setParam(i, oldval)
                 if patchx is None:
                     print('patchx is None:')
