@@ -5,14 +5,10 @@ if __name__ == '__main__':
 
 import os
 import logging
-import tempfile
 import tractor
-import pyfits
 import pylab as plt
 import numpy as np
 import sys
-from glob import glob
-from scipy.ndimage.measurements import label, find_objects
 from collections import Counter
 
 from astrometry.util.fits import *
@@ -30,8 +26,6 @@ from astrometry.util.ttime import *
 from tractor import *
 from tractor.sdss import *
 from tractor.galaxy import *
-from tractor.emfit import em_fit_2d
-from tractor.fitpsf import em_init_params
 
 import wise
 
@@ -196,7 +190,6 @@ def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
     r0, r1, d0, d1 = rd
 
     xyrois = []
-    subwcses = []
     tims = []
 
     # Margin 1: grab WISE images that extend outside the RA,Dec box.
@@ -212,7 +205,7 @@ def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
 
     ninroi = []
     # Find the pixel ROI in each image containing the RA,Dec ROI.
-    for i, (Ti, wcs) in enumerate(zip(T, wcses)):
+    for Ti, wcs in zip(T, wcses):
         xy = []
         for r, d in [(rm0, dm0), (rm0, dm1), (rm1, dm1), (rm1, dm0)]:
             ok, x, y = wcs.radec2pixelxy(r, d)
@@ -608,7 +601,6 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 def stage105(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
              S=None, ri=None, di=None, W=None,
              **kwa):
-    tims = tractor.images
     cat = tractor.getCatalog()
     cat1 = cat.copy()
     sdss = S
@@ -761,7 +753,7 @@ def _resample_one(argl):
     print('Resampling', tim.name)
     wcs2 = get_sip_subwcs(tim.getWcs().wcs, tim.extent)
     try:
-        yo, xo, yi, xi, nil = resample_with_wcs(
+        yo, xo, yi, xi, _ = resample_with_wcs(
             targetwcs, wcs2, [], [], spline=spline)
     except OverlapError:
         return None
@@ -884,7 +876,6 @@ def stage107(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
              # ims2=None,
              **kwa):
     r0, r1, d0, d1 = ralo, rahi, declo, dechi
-    sdss = S
     cat = tractor.getCatalog()
     W, H = cowcs.get_width(), cowcs.get_height()
     tims = tractor.getImages()

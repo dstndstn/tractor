@@ -88,12 +88,9 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         '''
         Scales this sky model by a factor of *s*.
         '''
-        sky0 = self.spl(0, 0)
         (tx, ty, c) = self.spl.tck
         c *= s
         self.vals = c
-        sky1 = self.spl(0, 0)
-        #print('Scaled sky:', sky0, 'x', s, '=', sky0*s, 'vs', sky1)
 
     def setPriorSmoothness(self, sigma):
         '''
@@ -186,11 +183,9 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         print('x', len(tx), tx)
         print('y', len(ty), ty)
         print('W,H', self.W, self.H)
-        #NX = len(tx) - self.order
-        # print 'NX', NX
         for i in self.getThawedParamIndices():
-            ix = i % self.W
-            iy = i // self.W
+            #ix = i % self.W
+            #iy = i // self.W
             derivs.append(False)
         return derivs
 

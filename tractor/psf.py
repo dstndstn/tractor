@@ -72,7 +72,7 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
     def __init__(self, img, Lorder=3):
         '''
         Creates a new PixelizedPSF object from the given *img* (numpy
-        array) image of the PSF. 
+        array) image of the PSF.
 
         - *img* must be an ODD size.
         - *Lorder* is the order of the Lanczos interpolant used for
@@ -422,7 +422,7 @@ class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
 
         optional xy0 = int x0,y0 origin of stamp.
         '''
-        from tractor.emfit import em_fit_2d, em_fit_2d_reg
+        from tractor.emfit import em_fit_2d_reg
         from tractor.fitpsf import em_init_params
         if P0 is not None:
             w, mu, var = P0
@@ -738,10 +738,10 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
         K = len(self.myweights)
         amps = np.array(self.myweights)
         means = np.zeros((K, 2))
-        vars = np.zeros((K, 2, 2))
+        variances = np.zeros((K, 2, 2))
         for k in range(K):
-            vars[k, 0, 0] = vars[k, 1, 1] = self.mysigmas[k]**2
-        return mp.MixtureOfGaussians(amps, means, vars)
+            variances[k, 0, 0] = variances[k, 1, 1] = self.mysigmas[k]**2
+        return mp.MixtureOfGaussians(amps, means, variances)
 
     def hashkey(self):
         hk = ('NCircularGaussianPSF', tuple(self.sigmas), tuple(self.weights))

@@ -300,8 +300,6 @@ if __name__ == '__main__':
         plt.axis('equal')
         ps.savefig()
 
-    import sys
-
     angle = np.linspace(0., 2. * np.pi, 20)
     xx, yy = np.sin(angle), np.cos(angle)
     xy = np.vstack((xx, yy))

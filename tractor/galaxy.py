@@ -556,7 +556,6 @@ def _fourier_galaxy_debug_plots(G, shG, xi, yi, xo, yo, P, Fsum,
         plt.clf()
         plt.subplot(2, 2, 1)
         print(name, 'real range', F.real.min(), F.real.max())
-        mx = np.abs(F.real).max()
         plt.imshow(np.log10(np.abs(F.real)),
                    interpolation='nearest', origin='lower')
         plt.xticks([])
@@ -842,9 +841,6 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy, SingleProfileSource):
             #print('amp sum:', np.sum(amix.amp))
         if len(mix) == 1:
             return mix[0]
-        smix = mix[0] + mix[1]
-        #print('Summed profiles:', smix)
-        #print('amp sum', np.sum(smix.amp))
         return mix[0] + mix[1]
 
     def _getUnitFluxPatchSize(self, img, px=0., py=0., minval=0.):
