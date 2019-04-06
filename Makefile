@@ -13,12 +13,12 @@ mpf: FORCE
 
 cov:
 	coverage erase
-	# coverage run test/test_psfex.py
-	# coverage run -a test/test_sdss.py
-	# coverage run -a test/test_tractor.py
 	coverage run -a test/test_galaxy.py
-	# coverage run -a examples/tractor-sdss-synth.py --roi 100 200 100 200 --no-flipbook
 	coverage html
+# coverage run test/test_psfex.py
+# coverage run -a test/test_sdss.py
+# coverage run -a test/test_tractor.py
+# coverage run -a examples/tractor-sdss-synth.py --roi 100 200 100 200 --no-flipbook
 .PHONY: cov
 
 cython:
@@ -58,7 +58,7 @@ PY_INSTALL_DIR ?= $(INSTALL_DIR)/lib/python
 
 TRACTOR_INSTALL_DIR := $(PY_INSTALL_DIR)/tractor
 
-TRACTOR_INSTALL := __init__.py basics.py brightness.py cache.py \
+TRACTOR_INSTALL := __init__.py version.py basics.py brightness.py cache.py \
 	ducks.py ellipses.py engine.py fitpsf.py galaxy.py \
 	image.py imageutils.py mixture_profiles.py motion.py \
 	multiproc.py ordereddict.py patch.py pointsource.py psf.py psfex.py \
@@ -76,7 +76,11 @@ WISE_INSTALL := __init__.py allwisecat.py forcedphot.py unwise.py wise_psf.py \
 
 CERES_INSTALL := ceres.py _ceres$(PYTHON_SO_EXT)
 
-install:
+version:
+	echo "version = '$(shell git describe)'" > tractor/version.py
+.PHONY: version
+
+install: version
 	-($(MAKE) ceres && $(MAKE) install-ceres)
 	$(MAKE) mix emfit
 	mkdir -p $(TRACTOR_INSTALL_DIR)
