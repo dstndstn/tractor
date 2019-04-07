@@ -190,16 +190,8 @@ class PointSource(MultiParams, SingleProfileSource):
         # Position
         if not pos_frozen:
             if patchdx is not None and patchdy is not None:
-                # Convert x,y derivatives to Position derivatives
-                px, py = wcs.positionToPixel(pos, self)
-                cdi = wcs.cdInverseAtPixel(px, py)
-                # Get thawed Position parameter indices
-                thawed = pos.getThawedParamIndices()
-                for i, pname in zip(thawed, pos.getParamNames()):
-                    deriv = (patchdx * cdi[0, i] +
-                             patchdy * cdi[1, i]) * counts0
-                    deriv.setName('d(ptsrc)/d(pos.%s)' % pname)
-                    derivs.append(deriv)
+                derivs.extend(wcs.pixelDerivsToPositionDerivs(pos, src, counts0, patch0,
+                                                              patchdx, patchdy))
             elif counts0 == 0:
                 derivs.extend([None] * pos.numberOfParams())
             else:

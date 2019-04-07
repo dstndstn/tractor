@@ -397,6 +397,22 @@ class WCS(ImageCalibration, Params):
         cdi = np.linalg.inv(cd)
         return cdi
 
+    def cdInverseAtPosition(self, pos, src=None):
+        px, py = self.positionToPixel(pos, src=src)
+        return self.cdInverseAtPixel(px, py)
+
+    def pixelDerivsToPositionDerivs(self, pos, src, counts0, patch0, patchdx, patchdy):
+        # Convert x,y derivatives to Position derivatives
+        cdi = wcs.cdInverseAtPosition(pos, src=src)
+        # Get thawed Position parameter indices
+        derivs = []
+        for i,pname in pos.getThawedParamIndicesAndName():
+            deriv = (patchdx * cdi[0, i] +
+                     patchdy * cdi[1, i]) * counts0
+            deriv.setName('d(ptsrc)/d(pos.%s)' % pname)
+            derivs.append(deriv)
+        return derivs
+
     def pixscale_at(self, x, y):
         '''
         Returns the local pixel scale at the given *x*,*y* pixel coords,

@@ -42,6 +42,16 @@ class NullWCS(BaseParams, ducks.WCS):
     def cdInverseAtPosition(self, pos, src=None):
         return self.cd_inverse
 
+    def pixelDerivsToPositionDerivs(self, pos, src, counts0, patch0, patchdx, patchdy):
+        # Convert x,y derivatives to Position derivatives
+        derivs = []
+        for i,pname in pos.getThawedParamIndicesAndName():
+            deriv = (patchdx * self.cd_inverse[0, i] +
+                     patchdy * self.cd_inverse[1, i]) * counts0
+            deriv.setName('d(ptsrc)/d(pos.%s)' % pname)
+            derivs.append(deriv)
+        return derivs
+
     def pixscale_at(self, x, y):
         return self.pixscale
 
