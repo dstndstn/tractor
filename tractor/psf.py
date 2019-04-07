@@ -122,8 +122,11 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
                             radius=None, **kwargs):
         from astrometry.util.miscutils import get_overlapping_region
 
+        #print('getPointSourcePatch: %.2f,%.2f,' % (px,py), 'modelMask', modelMask,
+        #      'radius', radius)
+        
+        # get PSF image at desired pixel location
         img = self.getImage(px, py)
-        assert(np.all(np.isfinite(img)))
 
         if radius is not None:
             R = int(np.ceil(radius))
@@ -133,6 +136,8 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
             img = img[max(cy-R, 0) : min(cy+R+1,H-1),
                       max(cx-R, 0) : min(cx+R+1,W-1)]
 
+        #print('img shape', img.shape, 'radius', radius)
+            
         H, W = img.shape
         ix = int(np.round(px))
         iy = int(np.round(py))
