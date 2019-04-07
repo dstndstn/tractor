@@ -4,12 +4,20 @@ import os
 
 numpy_inc = get_numpy_include_dirs()
 
+cflags = os.environ.get('CFLAGS')
+
 kwargs = {}
 if os.environ.get('CC') == 'icc':
-    kwargs.update(extra_compile_args=['-g', '-xhost', '-axMIC-AVX512'],
+    if cflags is None:
+        cflags = '-g -xhost -axMIC-AVX512'
+    else:
+        print('mp_fourier: using user-specified CFLAGS')
+    cflags = cflags.split()
+    kwargs.update(extra_compile_args=cflags,
                   extra_link_args=['-g', '-lsvml'])
 else:
-    kwargs.update(extra_compile_args=['-g', '-std=c99'],
+    cflags = cflags.split()
+    kwargs.update(extra_compile_args=cflags,
                   extra_link_args=['-g'])
 
 mpf_module = Extension('_mp_fourier',
