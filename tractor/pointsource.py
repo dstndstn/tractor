@@ -190,7 +190,7 @@ class PointSource(MultiParams, SingleProfileSource):
         # Position
         if not pos_frozen:
             if patchdx is not None and patchdy is not None:
-                derivs.extend(wcs.pixelDerivsToPositionDerivs(pos, src, counts0, patch0,
+                derivs.extend(wcs.pixelDerivsToPositionDerivs(pos, self, counts0, patch0,
                                                               patchdx, patchdy))
             elif counts0 == 0:
                 derivs.extend([None] * pos.numberOfParams())

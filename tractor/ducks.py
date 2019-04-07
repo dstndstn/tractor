@@ -393,7 +393,8 @@ class WCS(ImageCalibration, Params):
         return None
 
     def cdInverseAtPixel(self, x, y):
-        cd = self.cdAtPixel(px, py)
+        import numpy as np
+        cd = self.cdAtPixel(x, y)
         cdi = np.linalg.inv(cd)
         return cdi
 
@@ -403,7 +404,7 @@ class WCS(ImageCalibration, Params):
 
     def pixelDerivsToPositionDerivs(self, pos, src, counts0, patch0, patchdx, patchdy):
         # Convert x,y derivatives to Position derivatives
-        cdi = wcs.cdInverseAtPosition(pos, src=src)
+        cdi = self.cdInverseAtPosition(pos, src=src)
         # Get thawed Position parameter indices
         derivs = []
         for i,pname in pos.getThawedParamIndicesAndName():

@@ -129,6 +129,7 @@ class CeresOptimizer(Optimizer):
     # This function is called-back by _ceres_opt; it is called from
     # ceres-tractor.cc via ceres.i .
     def _getOneImageDerivs(self, tractor, imgi):
+        from tractor.patches import Patch
         # Returns:
         #     [  (param-index, deriv_x0, deriv_y0, deriv), ... ]
         # not necessarily in order of param-index

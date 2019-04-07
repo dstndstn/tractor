@@ -31,6 +31,6 @@ setup(
         # 'tractor/total_ordering.py',
         'tractor/tractortime.py',
         'tractor/wcs.py',
-        ])
+        ], annotate=True, compiler_directives=dict(language_level=3))
 )
 
