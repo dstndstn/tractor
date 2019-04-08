@@ -4,7 +4,7 @@ import os
 
 numpy_inc = get_numpy_include_dirs()
 
-cflags = os.environ.get('CFLAGS')
+cflags = os.environ.get('CFLAGS', '')
 
 kwargs = {}
 if os.environ.get('CC') == 'icc':

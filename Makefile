@@ -25,6 +25,14 @@ cython:
 	python setup-cython.py build_ext --inplace
 .PHONY: cython
 
+cython-clean:
+	@for x in basics brightness ceres_optimizer ducks ellipses engine galaxy \
+		image imageutils lsqr_optimizer mixture_profiles motion optimize patch \
+		pointsource psf psfex sersic sfd shifted sky splinesky tractortime \
+		utils wcs; do \
+		-rm tractor/$$x.c tractor/$$x.cpython*.so; \
+	done
+
 doc:
 	$(MAKE) -C doc -f Makefile.sphinx html PYTHONPATH=$(shell pwd):${PYTHONPATH}
 	cp -a doc/_build/html .
