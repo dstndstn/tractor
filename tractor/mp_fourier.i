@@ -356,21 +356,49 @@ static void lanczos_filter_3(double* filt, double dx) {
     int i;
     assert(dx >= -0.5);
     assert(dx <=  0.5);
+
+    /*
+     double sum = 0.0;
+     for (i=0; i<7; i++) {
+         double pi_x = M_PI * (i - 3.0 + dx);
+         double val = 3 * sin(pi_x) * sin(pi_x / 3.0) / (pi_x*pi_x);
+         // BUT:
+         if (i - 3. + dx < -3. or i-3+dx > 3.) { val = 0; }
+         filt[i] = val;
+         sum += val;
+     }
+     for (i=0; i<7; i++)
+         filt[i] /= sum;
+     */
     if (dx == 0.0) {
         filt[0] = filt[1] = filt[2] = 0.0;
         filt[3] = 1.0;
         filt[4] = filt[5] = filt[6] = 0.0;
-        return;
+    } else if (dx > 0.0) {
+        // dx positive; last element is > +3.0 so filter = 0.
+        double sum = 0.0;
+        for (i=0; i<6; i++) {
+            double pi_x = M_PI * (i - 3.0 + dx);
+            double val = 3 * sin(pi_x) * sin(pi_x / 3.0) / (pi_x*pi_x);
+            filt[i] = val;
+            sum += val;
+        }
+        filt[6] = 0.0;
+        for (i=0; i<6; i++)
+            filt[i] /= sum;
+    } else {
+        // dx negative; first element is < -3.0 so filter = 0.
+        double sum = 0.0;
+        filt[0] = 0.0;
+        for (i=1; i<7; i++) {
+            double pi_x = M_PI * (i - 3.0 + dx);
+            double val = 3 * sin(pi_x) * sin(pi_x / 3.0) / (pi_x*pi_x);
+            filt[i] = val;
+            sum += val;
+        }
+        for (i=1; i<7; i++)
+            filt[i] /= sum;
     }
-    double sum = 0.0;
-    for (i=0; i<7; i++) {
-        double pi_x = M_PI * (i - 3.0 + dx);
-        double val = 3 * sin(pi_x) * sin(pi_x / 3.0) / (pi_x*pi_x);
-        filt[i] = val;
-        sum += val;
-    }
-    for (i=0; i<7; i++)
-        filt[i] /= sum;
 }
 
 
