@@ -133,8 +133,9 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         #print('img shape', img.shape, 'radius', radius)
             
         H, W = img.shape
-        ix = int(np.round(px))
-        iy = int(np.round(py))
+        # required because builtin round(np.float64(11.0)) returns 11.0 !!
+        ix = round(float(px))
+        iy = round(float(py))
         dx = px - ix
         dy = py - iy
         x0 = ix - W // 2

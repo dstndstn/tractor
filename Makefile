@@ -30,7 +30,7 @@ cython-clean:
 		image imageutils lsqr_optimizer mixture_profiles motion optimize patch \
 		pointsource psf psfex sersic sfd shifted sky splinesky tractortime \
 		utils wcs; do \
-		-rm tractor/$$x.c tractor/$$x.cpython*.so; \
+		rm tractor/$$x.c tractor/$$x.cpython*.so; \
 	done
 
 doc:
