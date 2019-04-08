@@ -20,18 +20,14 @@ from tractor.patch import Patch, ModelMask
 from tractor.image import Image
 
 
+import logging
+logger = logging.getLogger('tractor.engine')
 def logverb(*args):
-    msg = ' '.join([str(x) for x in args])
-    logging.debug(msg)
-
-
+    log_debug(logger, args)
 def logmsg(*args):
-    msg = ' '.join([str(x) for x in args])
-    logging.info(msg)
-
-
+    log_info(logger, args)
 def isverbose():
-    return (logging.getLogger().level <= logging.DEBUG)
+    return (logger.getLogger().level <= logging.DEBUG)
 
 
 def set_fp_err():
