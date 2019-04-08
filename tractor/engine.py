@@ -23,12 +23,12 @@ from tractor.image import Image
 import logging
 logger = logging.getLogger('tractor.engine')
 def logverb(*args):
-    log_debug(logger, args)
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(' '.join(map(str, args)))
 def logmsg(*args):
-    log_info(logger, args)
+    logger.info(' '.join(map(str, args)))
 def isverbose():
-    return (logger.getLogger().level <= logging.DEBUG)
-
+    return logger.isEnabledFor(logging.DEBUG)
 
 def set_fp_err():
     '''Cause all floating-point errors to raise exceptions.
