@@ -19,8 +19,6 @@ from tractor.utils import MultiParams, _isint, get_class_from_name
 from tractor.patch import Patch, ModelMask
 from tractor.image import Image
 
-
-import logging
 logger = logging.getLogger('tractor.engine')
 def logverb(*args):
     if logger.isEnabledFor(logging.DEBUG):
