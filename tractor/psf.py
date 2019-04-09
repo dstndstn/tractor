@@ -13,14 +13,24 @@ from tractor.utils import BaseParams, ParamList, MultiParams, MogParams
 from tractor import mixture_profiles as mp
 from tractor import ducks
 
+import sys
 
-try:
-    from tractor import mp_fourier
-except:
-    print('tractor.psf: failed to import C version of mp_fourier library.  Falling back to python version.')
-    mp_fourier = None
+if sys.version_info[0] == 2:
+    # Py2
+    def round(x):
+        import __builtin__
+        return int(__builtin__.round(float(x)))
 
+mp_fourier = -1
 def lanczos_shift_image(img, dx, dy, inplace=False, force_python=False):
+    global mp_fourier
+    if mp_fourier == -1:
+        try:
+            from tractor import mp_fourier
+        except:
+            print('tractor.psf: failed to import C version of mp_fourier library.  Falling back to python version.')
+            mp_fourier = None
+
     H,W = img.shape
     if (mp_fourier is None or force_python or W <= 8 or H <= 8
         or H > work_corr7f.shape[0] or W > work_corr7f.shape[1]):
