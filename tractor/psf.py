@@ -13,45 +13,49 @@ from tractor.utils import BaseParams, ParamList, MultiParams, MogParams
 from tractor import mixture_profiles as mp
 from tractor import ducks
 
+import sys
 
-try:
-    from tractor import mp_fourier
-except:
-    print('tractor.psf: failed to import C version of mp_fourier library.  Falling back to python version.')
-    mp_fourier = None
+if sys.version_info[0] == 2:
+    # Py2
+    def round(x):
+        import __builtin__
+        return int(__builtin__.round(float(x)))
 
+mp_fourier = -1
 def lanczos_shift_image(img, dx, dy, inplace=False, force_python=False):
-    from scipy.ndimage import correlate1d
-    from astrometry.util.miscutils import lanczos_filter
-
-    L = 3
-    Lx = lanczos_filter(L, np.arange(-L, L+1) + dx)
-    Ly = lanczos_filter(L, np.arange(-L, L+1) + dy)
-    # Normalize the Lanczos interpolants (preserve flux)
-    Lx /= Lx.sum()
-    Ly /= Ly.sum()
+    global mp_fourier
+    if mp_fourier == -1:
+        try:
+            from tractor import mp_fourier
+        except:
+            print('tractor.psf: failed to import C version of mp_fourier library.  Falling back to python version.')
+            mp_fourier = None
 
     H,W = img.shape
-    #print('lanczos_shift_image: size', W, H)
-    #print('mp_fourier:', mp_fourier)
     if (mp_fourier is None or force_python or W <= 8 or H <= 8
         or H > work_corr7f.shape[0] or W > work_corr7f.shape[1]):
+        # fallback to python:
+        from scipy.ndimage import correlate1d
+        from astrometry.util.miscutils import lanczos_filter
+        L = 3
+        Lx = lanczos_filter(L, np.arange(-L, L+1) + dx)
+        Ly = lanczos_filter(L, np.arange(-L, L+1) + dy)
+        # Normalize the Lanczos interpolants (preserve flux)
+        Lx /= Lx.sum()
+        Ly /= Ly.sum()
         sx     = correlate1d(img, Lx, axis=1, mode='constant')
         outimg = correlate1d(sx,  Ly, axis=0, mode='constant')
-    else:
-        assert(len(Lx) == 7)
-        assert(len(Ly) == 7)
-        if inplace:
-            assert(img.dtype == np.float32)
-            outimg = img
-        else:
-            outimg = np.empty(img.shape, np.float32)
-            outimg[:,:] = img
-        mp_fourier.correlate7f(outimg, Lx, Ly, work_corr7f)
+        return outimg
 
-    assert(np.all(np.isfinite(outimg)))
+    outimg = np.empty(img.shape, np.float32)
+    mp_fourier.lanczos_shift_3f(img, outimg, dx, dy, work_corr7f)
+    # yuck!  (don't change this without ensuring the "restrict" keyword still applies
+    # in lanczos_shift_3f!)
+    if inplace:
+        img[:,:] = outimg
     return outimg
 
+# GLOBAL scratch array for lanczos_shift_image!
 work_corr7f = np.zeros((4096, 4096), np.float32)
 work_corr7f = np.require(work_corr7f, requirements=['A'])
 
@@ -139,8 +143,9 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         #print('img shape', img.shape, 'radius', radius)
             
         H, W = img.shape
-        ix = int(np.round(px))
-        iy = int(np.round(py))
+        # required because builtin round(np.float64(11.0)) returns 11.0 !!
+        ix = round(float(px))
+        iy = round(float(py))
         dx = px - ix
         dy = py - iy
         x0 = ix - W // 2

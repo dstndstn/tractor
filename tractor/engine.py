@@ -19,20 +19,14 @@ from tractor.utils import MultiParams, _isint, get_class_from_name
 from tractor.patch import Patch, ModelMask
 from tractor.image import Image
 
-
+logger = logging.getLogger('tractor.engine')
 def logverb(*args):
-    msg = ' '.join([str(x) for x in args])
-    logging.debug(msg)
-
-
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(' '.join(map(str, args)))
 def logmsg(*args):
-    msg = ' '.join([str(x) for x in args])
-    logging.info(msg)
-
-
+    logger.info(' '.join(map(str, args)))
 def isverbose():
-    return (logging.getLogger().level <= logging.DEBUG)
-
+    return logger.isEnabledFor(logging.DEBUG)
 
 def set_fp_err():
     '''Cause all floating-point errors to raise exceptions.
