@@ -4,7 +4,7 @@ import os
 
 numpy_inc = get_numpy_include_dirs()
 
-cflags = os.environ.get('CFLAGS', '')
+cflags = os.environ.get('CFLAGS')
 
 kwargs = {}
 if os.environ.get('CC') == 'icc':
@@ -16,9 +16,10 @@ if os.environ.get('CC') == 'icc':
     kwargs.update(extra_compile_args=cflags,
                   extra_link_args=['-g', '-lsvml'])
 else:
-    cflags = cflags.split()
-    kwargs.update(extra_compile_args=cflags,
-                  extra_link_args=['-g'])
+    if cflags is not None:
+        cflags = cflags.split()
+        kwargs.update(extra_compile_args=cflags)
+    kwargs.update(extra_link_args=['-g'])
 
 mpf_module = Extension('_mp_fourier',
                        sources = ['mp_fourier.i' ],
