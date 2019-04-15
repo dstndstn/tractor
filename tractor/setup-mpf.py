@@ -16,8 +16,10 @@ if os.environ.get('CC') == 'icc':
     kwargs.update(extra_compile_args=cflags,
                   extra_link_args=['-g', '-lsvml'])
 else:
-    if cflags is not None:
-        cflags = cflags.split()
+    if cflags is None:
+        cflags = '-std=c99'
+    else:
+        cflags = cflags = cflags.split()
         kwargs.update(extra_compile_args=cflags)
     kwargs.update(extra_link_args=['-g'])
 
