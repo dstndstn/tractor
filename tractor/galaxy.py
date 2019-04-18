@@ -839,21 +839,40 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy, SingleProfileSource):
         if f < 1.:
             profs.append((1. - f, ExpGalaxy.profile, self.shapeExp))
 
-        cd = img.getWcs().cdAtPixel(px, py)
+        cdinv = img.getWcs().cdInverseAtPixel(px, py)
         mix = []
         for f, p, s in profs:
-            Tinv = np.linalg.inv(s.getTensor(cd))
-            amix = p.apply_affine(np.array([px, py]), Tinv.T)
-            amix.symmetrize()
-            amix.amp *= f
+            G = s.getRaDecBasis()
+            Tinv = np.dot(cdinv, G)
+            amix = p.apply_affine(np.array([px, py]), Tinv)
+            amix.amp = amix.amp * f
             mix.append(amix)
-            #print('affine profile: shape', s, 'weight', f, '->', amix)
-            #print('amp sum:', np.sum(amix.amp))
         if len(mix) == 1:
             return mix[0]
-        smix = mix[0] + mix[1]
-        #print('Summed profiles:', smix)
-        #print('amp sum', np.sum(smix.amp))
+        return mix[0] + mix[1]
+
+    def _getShearedProfile(self, img, px, py):
+        ''' Returns a MixtureOfGaussians profile that has been
+        shear-transformed into the pixel space of the image.
+        At px,py (but not offset to px,py).
+        '''
+        f = self.fracDev.clipped()
+        profs = []
+        if f > 0.:
+            profs.append((f, DevGalaxy.profile, self.shapeDev))
+        if f < 1.:
+            profs.append((1. - f, ExpGalaxy.profile, self.shapeExp))
+
+        cdinv = img.getWcs().cdInverseAtPixel(px, py)
+        mix = []
+        for f, p, s in profs:
+            G = s.getRaDecBasis()
+            Tinv = np.dot(cdinv, G)
+            amix = p.apply_shear(Tinv)
+            amix.amp = amix.amp * f
+            mix.append(amix)
+        if len(mix) == 1:
+            return mix[0]
         return mix[0] + mix[1]
 
     def _getUnitFluxPatchSize(self, img, px, py, minval):
