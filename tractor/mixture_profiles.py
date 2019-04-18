@@ -29,10 +29,10 @@ dev_var = np.array([2.23759216e-04,   1.00220099e-03,   4.18731126e-03,   1.6943
 dev_amp /= np.sum(dev_amp)
 
 def get_exp_mixture():
-    return MixtureOfGaussians(exp_amp, np.zeros((exp_amp.size, 2)), exp_var, quick=True)
+    return MixtureOfGaussians(exp_amp, np.zeros((exp_amp.size, 2)), exp_var)
 
 def get_dev_mixture():
-    return MixtureOfGaussians(dev_amp, np.zeros((dev_amp.size, 2)), dev_var, quick=True)
+    return MixtureOfGaussians(dev_amp, np.zeros((dev_amp.size, 2)), dev_var)
 
 class MixtureOfGaussians(object):
 
