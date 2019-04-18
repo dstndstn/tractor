@@ -152,7 +152,6 @@ class EllipseE(ParamList):
         T = np.dot(np.linalg.inv(G), cd)
         return T
 
-
 class EllipseESoft(EllipseE):
     '''
     This is an alternate implementation of the ellipse describing a

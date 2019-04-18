@@ -430,7 +430,7 @@ class ProfileGalaxy(object):
         assert(np.abs(mux) <= 0.5)
         assert(np.abs(muy) <= 0.5)
 
-        amix = self._getAffineProfile(img, 0., 0.)
+        amix = self._getShearedProfile(img, px, py)
         fftmix = amix
         mogmix = None
 
@@ -656,14 +656,23 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
         ''' Returns a MixtureOfGaussians profile that has been
         affine-transformed into the pixel space of the image.
         '''
-        # shift and squash
-        cd = img.getWcs().cdAtPixel(px, py)
-        #print('CD matrix at pixel:', cd)
         galmix = self.getProfile()
-        #print('Galaxy mixture model:', galmix)
-        Tinv = np.linalg.inv(self.shape.getTensor(cd))
-        amix = galmix.apply_affine(np.array([px, py]), Tinv.T)
-        amix.symmetrize()
+        cdinv = img.getWcs().cdInverseAtPixel(px, py)
+        G = self.shape.getRaDecBasis()
+        Tinv = np.dot(cdinv, G)
+        amix = galmix.apply_affine(np.array([px, py]), Tinv)
+        return amix
+
+    def _getShearedProfile(self, img, px, py):
+        ''' Returns a MixtureOfGaussians profile that has been
+        shear-transformed into the pixel space of the image.
+        At px,py (but not offset to px,py).
+        '''
+        galmix = self.getProfile()
+        cdinv = img.getWcs().cdInverseAtPixel(px, py)
+        G = self.shape.getRaDecBasis()
+        Tinv = np.dot(cdinv, G)
+        amix = galmix.apply_shear(Tinv)
         return amix
 
     def _getUnitFluxDeps(self, img, px, py):

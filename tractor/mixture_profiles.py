@@ -40,17 +40,23 @@ def get_dev_mixture():
 class MixtureOfGaussians(object):
 
     # symmetrize is an unnecessary step in principle, but in practice?
-    def __init__(self, amp, mean, var):
+    def __init__(self, amp, mean, var, quick=False):
         '''
         amp: shape (K,)
         mean: shape (K,D)
         var: shape (K,D,D)
         '''
-        self.amp = np.atleast_1d(amp).astype(float)
-        self.mean = np.atleast_2d(np.array(mean)).astype(float)
-        (self.K, self.D) = self.mean.shape
-        self.set_var(var)
-        self.symmetrize()
+        if quick:
+            self.amp = amp
+            self.mean = mean
+            self.var = var
+            (self.K, self.D) = self.mean.shape
+        else:
+            self.amp = np.atleast_1d(amp).astype(float)
+            self.mean = np.atleast_2d(np.array(mean)).astype(float)
+            (self.K, self.D) = self.mean.shape
+            self.set_var(var)
+            self.symmetrize()
         # self.test()
 
     def __str__(self):
@@ -87,7 +93,7 @@ class MixtureOfGaussians(object):
             assert(np.linalg.det(thisvar) >= 0.)
 
     def copy(self):
-        return MixtureOfGaussians(self.amp, self.mean, self.var)
+        return MixtureOfGaussians(self.amp, self.mean, self.var, quick=True)
 
     def normalize(self):
         self.amp /= np.sum(self.amp)
@@ -112,12 +118,16 @@ class MixtureOfGaussians(object):
         assert(amp.shape == (K,))
         assert(mean.shape == (K, D))
         assert(var.shape == (K, D, D))
-        s = MixtureOfGaussians(amp, mean, var)
+        s = MixtureOfGaussians(amp, mean, var, quick=True)
         s.normalize()
         return s
 
     def apply_affine(self, shift, scale):
         '''
+        NOTE, "scale" is transposed vs earlier versions of this code!
+
+        NOTE, does NOT make a copy of amplitude!!
+
         shift: D-vector offset
         scale: DxD-matrix transformation
         '''
@@ -126,8 +136,22 @@ class MixtureOfGaussians(object):
         newmean = self.mean + shift
         newvar = np.zeros_like(self.var)
         for k in range(self.K):
-            newvar[k, :, :] = np.dot(scale.T, np.dot(self.var[k, :, :], scale))
-        return MixtureOfGaussians(self.amp.copy(), newmean, newvar)
+            newvar[k, :, :] = np.linalg.multi_dot((scale, self.var[k,:,:], scale.T))
+        return MixtureOfGaussians(self.amp, newmean, newvar, quick=True)
+
+    def apply_shear(self, scale):
+        '''
+        NOTE, does NOT make a copy of amplitude and mean!!
+
+        shift: D-vector offset
+        scale: DxD-matrix transformation
+        '''
+        assert(shift.shape == (self.D,))
+        assert(scale.shape == (self.D, self.D))
+        newvar = np.zeros_like(self.var)
+        for k in range(self.K):
+            newvar[k, :, :] = np.linalg.multi_dot((scale, self.var[k,:,:], scale.T))
+        return MixtureOfGaussians(self.amp, self.mean, newvar, quick=True)
 
     # dstn: should this be called "correlate"?
     def convolve(self, other):
