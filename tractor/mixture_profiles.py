@@ -28,14 +28,11 @@ dev_var = np.array([2.23759216e-04,   1.00220099e-03,   4.18731126e-03,   1.6943
                     6.84850479e-02,   2.87207080e-01,   1.33320254e+00,   8.40215071e+00])
 dev_amp /= np.sum(dev_amp)
 
-
 def get_exp_mixture():
-    return MixtureOfGaussians(exp_amp, np.zeros((exp_amp.size, 2)), exp_var)
-
+    return MixtureOfGaussians(exp_amp, np.zeros((exp_amp.size, 2)), exp_var, quick=True)
 
 def get_dev_mixture():
-    return MixtureOfGaussians(dev_amp, np.zeros((dev_amp.size, 2)), dev_var)
-
+    return MixtureOfGaussians(dev_amp, np.zeros((dev_amp.size, 2)), dev_var, quick=True)
 
 class MixtureOfGaussians(object):
 
@@ -57,7 +54,6 @@ class MixtureOfGaussians(object):
             (self.K, self.D) = self.mean.shape
             self.set_var(var)
             self.symmetrize()
-        # self.test()
 
     def __str__(self):
         result = "MixtureOfGaussians instance"
@@ -168,7 +164,7 @@ class MixtureOfGaussians(object):
             newmean[newk:nextnewk, :] = self.mean + other.mean[k]
             newvar[newk:nextnewk, :, :] = self.var + other.var[k]
             newk = nextnewk
-        return MixtureOfGaussians(newamp, newmean, newvar)
+        return MixtureOfGaussians(newamp, newmean, newvar, quick=True)
 
     def getFourierTransform(self, v, w, use_mp_fourier=True, zero_mean=False):
         '''
