@@ -832,20 +832,31 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy, SingleProfileSource):
                 ', shapeDev=' + repr(self.shapeDev) + ')')
 
     def _getAffineProfile(self, img, px, py):
-        f = self.fracDev.clipped()
-        profs = []
-        if f > 0.:
-            profs.append((f, DevGalaxy.profile, self.shapeDev))
-        if f < 1.:
-            profs.append((1. - f, ExpGalaxy.profile, self.shapeExp))
+        # f = self.fracDev.clipped()
+        # profs = []
+        # if f > 0.:
+        #     profs.append((f, DevGalaxy.profile, self.shapeDev))
+        # if f < 1.:
+        #     profs.append((1. - f, ExpGalaxy.profile, self.shapeExp))
+        # cdinv = img.getWcs().cdInverseAtPixel(px, py)
+        # mix = []
+        # for f, p, s in profs:
+        #     G = s.getRaDecBasis()
+        #     Tinv = np.dot(cdinv, G)
+        #     amix = p.apply_affine(np.array([px, py]), Tinv)
+        #     amix.amp = amix.amp * f
+        #     mix.append(amix)
 
+        f = self.fracDev.clipped()
         cdinv = img.getWcs().cdInverseAtPixel(px, py)
         mix = []
-        for f, p, s in profs:
-            G = s.getRaDecBasis()
-            Tinv = np.dot(cdinv, G)
-            amix = p.apply_affine(np.array([px, py]), Tinv)
+        if f > 0.:
+            amix = DevGalaxy.profile.apply_affine(np.array([px, py]), np.dot(cdinv, self.shapeDev.getRaDecBasis()))
             amix.amp = amix.amp * f
+            mix.append(amix)
+        if f < 1.:
+            amix = ExpGalaxy.profile.apply_affine(np.array([px, py]), np.dot(cdinv, self.shapeExp.getRaDecBasis()))
+            amix.amp = amix.amp * (1. - f)
             mix.append(amix)
         if len(mix) == 1:
             return mix[0]
@@ -856,25 +867,40 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy, SingleProfileSource):
         shear-transformed into the pixel space of the image.
         At px,py (but not offset to px,py).
         '''
-        f = self.fracDev.clipped()
-        profs = []
-        if f > 0.:
-            profs.append((f, DevGalaxy.profile, self.shapeDev))
-        if f < 1.:
-            profs.append((1. - f, ExpGalaxy.profile, self.shapeExp))
+        # f = self.fracDev.clipped()
+        # profs = []
+        # if f > 0.:
+        #     profs.append((f, DevGalaxy.profile, self.shapeDev))
+        # if f < 1.:
+        #     profs.append((1. - f, ExpGalaxy.profile, self.shapeExp))
+        # cdinv = img.getWcs().cdInverseAtPixel(px, py)
+        # mix = []
+        # for f, p, s in profs:
+        #     G = s.getRaDecBasis()
+        #     Tinv = np.dot(cdinv, G)
+        #     amix = p.apply_shear(Tinv)
+        #     amix.amp = amix.amp * f
+        #     mix.append(amix)
+        # if len(mix) == 1:
+        #     return mix[0]
+        # return mix[0] + mix[1]
 
+        f = self.fracDev.clipped()
         cdinv = img.getWcs().cdInverseAtPixel(px, py)
         mix = []
-        for f, p, s in profs:
-            G = s.getRaDecBasis()
-            Tinv = np.dot(cdinv, G)
-            amix = p.apply_shear(Tinv)
+        if f > 0.:
+            amix = DevGalaxy.profile.apply_shear(np.dot(cdinv, self.shapeDev.getRaDecBasis()))
             amix.amp = amix.amp * f
+            mix.append(amix)
+        if f < 1.:
+            amix = ExpGalaxy.profile.apply_shear(np.dot(cdinv, self.shapeExp.getRaDecBasis()))
+            amix.amp = amix.amp * (1. - f)
             mix.append(amix)
         if len(mix) == 1:
             return mix[0]
         return mix[0] + mix[1]
 
+    
     def _getUnitFluxPatchSize(self, img, px, py, minval):
         if hasattr(self, 'halfsize'):
             return self.halfsize
