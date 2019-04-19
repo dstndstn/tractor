@@ -6,6 +6,7 @@ if __name__ == '__main__':
     from astrometry.util.plotutils import *
     from tractor.galaxy import *
 
+import math
 import numpy as np
 
 from tractor import ParamList
@@ -50,37 +51,37 @@ class EllipseE(ParamList):
         re = esoft.re
         e = min(maxe, esoft.e)
         theta = esoft.theta
-        e1 = e * np.cos(2. * theta)
-        e2 = e * np.sin(2. * theta)
+        e1 = e * math.cos(2. * theta)
+        e2 = e * math.sin(2. * theta)
         return EllipseE(re, e1, e2)
 
     @staticmethod
     def fromRAbPhi(r, ba, phi):
         ab = 1. / ba
         e = (ab - 1) / (ab + 1)
-        angle = np.deg2rad(2. * (-phi))
-        e1 = e * np.cos(angle)
-        e2 = e * np.sin(angle)
+        angle = math.radians(2. * (-phi))
+        e1 = e * math.cos(angle)
+        e2 = e * math.sin(angle)
         return EllipseE(r, e1, e2)
 
     @staticmethod
     def fromCovariance(cov):
         u, s, v = np.linalg.svd(cov)
-        r = np.sqrt(s[0])
-        ab = np.sqrt(s[1] / s[0])
-        theta = np.rad2deg(np.arctan2(u[0, 0], u[0, 1]))
+        r = math.sqrt(s[0])
+        ab = math.sqrt(s[1] / s[0])
+        theta = math.degrees(math.atan2(u[0, 0], u[0, 1]))
         return EllipseE.fromRAbPhi(r, ab, -theta)
 
     @property
     def e(self):
-        return np.hypot(self.e1, self.e2)
+        return math.hypot(self.e1, self.e2)
 
     @property
     def theta(self):
         '''
         Returns position angle in *radians*
         '''
-        return np.arctan2(self.e2, self.e1) / 2.
+        return math.atan2(self.e2, self.e1) / 2.
 
     def __repr__(self):
         return 're=%g, e1=%g, e2=%g' % (self.re, self.e1, self.e2)
@@ -118,8 +119,8 @@ class EllipseE(ParamList):
         to delta-RA, delta-Dec vectors.
         '''
         theta = self.theta
-        ct = np.cos(theta)
-        st = np.sin(theta)
+        ct = math.cos(theta)
+        st = math.sin(theta)
 
         # Using this (untested) function could eliminate the arctan2/cos/sin above.
         # Faster?  Maybe.
@@ -190,8 +191,8 @@ class EllipseESoft(EllipseE):
     def fromEllipseE(ell, maxe=0.999999):
         e = ell.e
         e = min(e, maxe)
-        esoft = -np.log(1. - e)
-        return EllipseESoft(np.log(ell.re), ell.e1 / e * esoft, ell.e2 / e * esoft)
+        esoft = -math.log(1. - e)
+        return EllipseESoft(math.log(ell.re), ell.e1 / e * esoft, ell.e2 / e * esoft)
 
     @staticmethod
     def fromCovariance(cov):
@@ -206,11 +207,11 @@ class EllipseESoft(EllipseE):
     def rAbPhiToESoft(r, ba, phi):
         ab = 1. / ba
         e = (ab - 1) / (ab + 1)
-        ee = -np.log(1 - e)
-        angle = np.deg2rad(2. * (-phi))
-        ee1 = ee * np.cos(angle)
-        ee2 = ee * np.sin(angle)
-        return (np.log(r), ee1, ee2)
+        ee = -math.log(1 - e)
+        angle = math.radians(2. * (-phi))
+        ee1 = ee * math.cos(angle)
+        ee2 = ee * math.sin(angle)
+        return (math.log(r), ee1, ee2)
 
     # def getAllStepSizes(self, *args, **kwargs):
     #    return [0.01] * 3
@@ -220,33 +221,29 @@ class EllipseESoft(EllipseE):
 
     @property
     def re(self):
-        # return np.exp(self.logre)
-        # HACK - limits shouldn't be HERE...
-        return np.exp(np.clip(self.logre, -100, 100))
+        return math.exp(self.logre)
 
     @property
     def e(self):
         '''
         Returns the "usual" ellipticity e in [0,1]
         '''
-        ee = np.hypot(self.ee1, self.ee2)
-        return 1. - np.exp(-ee)
+        ee = math.hypot(self.ee1, self.ee2)
+        return 1. - math.exp(-ee)
 
     @property
     def softe(self):
         '''
         Returns the "softened" ellipticity ee in [0, inf]
         '''
-        # return np.hypot(self.ee1, self.ee2)
-        # HACK - limits shouldn't be HERE...
-        return np.clip(np.hypot(self.ee1, self.ee2), 0, 100.)
+        return math.hypot(self.ee1, self.ee2)
 
     @property
     def theta(self):
         '''
         Returns position angle in *radians*
         '''
-        return np.arctan2(self.ee2, self.ee1) / 2.
+        return math.atan2(self.ee2, self.ee1) / 2.
 
     # Have to override this because all parameter values are legal,
     # unlike the superclass.
@@ -372,7 +369,7 @@ if __name__ == '__main__':
         print('Galaxy', gal)
         cat.append(gal)
 
-        # theta = np.arctan2(e2, e1) / 2.
+        # theta = math.atan2(e2, e1) / 2.
         # e = np.sqrt(e1**2 + e2**2)
         # e = 1. - np.exp(-e)
         # ab = (1.+e)/(1.-e)
