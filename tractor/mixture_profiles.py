@@ -142,7 +142,6 @@ class MixtureOfGaussians(object):
         shift: D-vector offset
         scale: DxD-matrix transformation
         '''
-        assert(shift.shape == (self.D,))
         assert(scale.shape == (self.D, self.D))
         newvar = np.zeros_like(self.var)
         for k in range(self.K):
