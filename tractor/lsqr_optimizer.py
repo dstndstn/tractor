@@ -435,7 +435,8 @@ class LsqrOptimizer(Optimizer):
             I = (np.abs(vals) > (FACTOR * mx))
             rows = rows[I]
             vals = vals[I]
-            scale = np.hypot(vals)
+            # L2 norm
+            scale = np.sqrt(np.dot(vals,vals))
             colscales[col] = scale
             if scales_only:
                 continue
