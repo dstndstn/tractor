@@ -435,17 +435,13 @@ class LsqrOptimizer(Optimizer):
             I = (np.abs(vals) > (FACTOR * mx))
             rows = rows[I]
             vals = vals[I]
-            scale = np.sqrt(np.dot(vals, vals))
+            scale = np.hypot(vals)
             colscales[col] = scale
-            #logverb('Column', col, 'scale:', scale)
             if scales_only:
                 continue
 
             sprows.append(rows)
             spcols.append(col)
-            #c = np.empty_like(rows)
-            #c[:] = col
-            # spcols.append(c)
             if scale_columns:
                 if scale == 0.:
                     spvals.append(vals)
