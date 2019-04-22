@@ -22,14 +22,14 @@ class LsqrOptimizer(Optimizer):
         Nsourceparams = len(umodels[0])
         imgs = tractor.images
 
-        t0 = Time()
+        #t0 = Time()
         derivs = [[] for i in range(Nsourceparams)]
         for tim, umods, scale in zip(imlist, umodels, scales):
             for um, dd in zip(umods, derivs):
                 if um is None:
                     continue
                 dd.append((um * scale, tim))
-        logverb('forced phot: derivs', Time() - t0)
+        #logverb('forced phot: derivs', Time() - t0)
         if sky:
             # Sky derivatives are part of the image derivatives, so go
             # first in the derivative list.
@@ -75,13 +75,13 @@ class LsqrOptimizer(Optimizer):
                 p0 = p0[Nsky:]
 
             if lnp0 is None:
-                t0 = Time()
+                #t0 = Time()
                 lnp0, chis0, ims0 = self._lnp_for_update(
                     tractor,
                     mod0, imgs, umodels, None, None, p0, rois, scales,
                     None, None, priors, sky, minFlux)
-                logverb('forced phot: initial lnp = ',
-                        lnp0, 'took', Time() - t0)
+                #logverb('forced phot: initial lnp = ',
+                #        lnp0, 'took', Time() - t0)
                 assert(np.isfinite(lnp0))
 
             if justims0:
@@ -104,14 +104,14 @@ class LsqrOptimizer(Optimizer):
                 realims = tractor.images
                 tractor.images = subimgs
 
-            logverb('forced phot: getting update with damp=', damping)
-            t0 = Time()
+            #logverb('forced phot: getting update with damp=', damping)
+            #t0 = Time()
             X = self.getUpdateDirection(tractor, derivs, damp=damping,
                                         priors=priors,
                                         scale_columns=False, chiImages=chis0,
                                         shared_params=shared_params)
-            topt = Time() - t0
-            logverb('forced phot: opt:', topt)
+            #topt = Time() - t0
+            #logverb('forced phot: opt:', topt)
             #print('forced phot: update', X)
             if rois is not None:
                 tractor.images = realims
@@ -158,14 +158,14 @@ class LsqrOptimizer(Optimizer):
             chiBest = None
 
             for alpha in alphas:
-                t0 = Time()
+                #t0 = Time()
                 lnp, chis, ims = self._lnp_for_update(
                     tractor,
                     mod0, imgs, umodels, X, alpha, p0, rois, scales,
                     p0sky, Xsky, priors, sky, minFlux)
                 logverb('Forced phot: stepped with alpha', alpha,
                         'for lnp', lnp, ', dlnp', lnp - lnp0)
-                logverb('Took', Time() - t0)
+                #logverb('Took', Time() - t0)
                 if lnp < (lnpBest - 1.):
                     logverb('lnp', lnp, '< lnpBest-1', lnpBest - 1.)
                     break
@@ -254,17 +254,17 @@ class LsqrOptimizer(Optimizer):
                  scale_columns=True,
                  shared_params=True, variance=False, just_variance=False,
                  **nil):
-        logverb(tractor.getName() + ': Finding derivs...')
-        t0 = Time()
+        #logverb(tractor.getName() + ': Finding derivs...')
+        #t0 = Time()
         allderivs = tractor.getDerivs()
-        tderivs = Time() - t0
+        #tderivs = Time() - t0
         #print(Time() - t0)
         #print('allderivs:', allderivs)
         # for d in allderivs:
         #   for (p,im) in d:
         #       print('patch mean', np.mean(p.patch))
-        logverb('Finding optimal update direction...')
-        t0 = Time()
+        #logverb('Finding optimal update direction...')
+        #t0 = Time()
         X = self.getUpdateDirection(tractor, allderivs, damp=damp,
                                     priors=priors,
                                     scale_columns=scale_columns,
@@ -280,20 +280,20 @@ class LsqrOptimizer(Optimizer):
             if just_variance:
                 return var
         #print(Time() - t0)
-        topt = Time() - t0
+        #topt = Time() - t0
         #print('X:', X)
         if len(X) == 0:
             return 0, X, 0.
-        logverb('X: len', len(X), '; non-zero entries:', np.count_nonzero(X))
+        #logverb('X: len', len(X), '; non-zero entries:', np.count_nonzero(X))
         logverb('Finding optimal step size...')
-        t0 = Time()
+        #t0 = Time()
         (dlogprob, alpha) = self.tryUpdates(tractor, X, alphas=alphas)
-        tstep = Time() - t0
-        logverb('Finished opt2.')
-        logverb('  alpha =', alpha)
-        logverb('  Tderiv', tderivs)
-        logverb('  Topt  ', topt)
-        logverb('  Tstep ', tstep)
+        #tstep = Time() - t0
+        #logverb('Finished opt2.')
+        #logverb('  alpha =', alpha)
+        #logverb('  Tderiv', tderivs)
+        #logverb('  Topt  ', topt)
+        #logverb('  Tstep ', tstep)
         if variance:
             return dlogprob, X, alpha, var
         return dlogprob, X, alpha
@@ -435,17 +435,14 @@ class LsqrOptimizer(Optimizer):
             I = (np.abs(vals) > (FACTOR * mx))
             rows = rows[I]
             vals = vals[I]
-            scale = np.sqrt(np.dot(vals, vals))
+            # L2 norm
+            scale = np.sqrt(np.dot(vals,vals))
             colscales[col] = scale
-            #logverb('Column', col, 'scale:', scale)
             if scales_only:
                 continue
 
             sprows.append(rows)
             spcols.append(col)
-            #c = np.empty_like(rows)
-            #c[:] = col
-            # spcols.append(c)
             if scale_columns:
                 if scale == 0.:
                     spvals.append(vals)
@@ -638,13 +635,13 @@ class LsqrOptimizer(Optimizer):
         if shared_params:
             # Unapply shared parameter map -- result is duplicated
             # result elements.
-            logverb('shared_params: before, X len', len(X), 'with',
-                    np.count_nonzero(X), 'non-zero entries')
-            logverb('paramindexmap: len', len(paramindexmap),
-                    'range', paramindexmap.min(), paramindexmap.max())
+            # logverb('shared_params: before, X len', len(X), 'with',
+            #         np.count_nonzero(X), 'non-zero entries')
+            # logverb('paramindexmap: len', len(paramindexmap),
+            #         'range', paramindexmap.min(), paramindexmap.max())
             X = X[paramindexmap]
-            logverb('shared_params: after, X len', len(X), 'with',
-                    np.count_nonzero(X), 'non-zero entries')
+            # logverb('shared_params: after, X len', len(X), 'with',
+            #         np.count_nonzero(X), 'non-zero entries')
 
         if scale_columns:
             X[colscales > 0] /= colscales[colscales > 0]

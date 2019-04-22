@@ -15,12 +15,17 @@ class NullWCS(BaseParams, ducks.WCS):
         '''
         pixscale: [arcsec/pix]
         '''
-        self.pixscale = pixscale
         self.dx = dx
         self.dy = dy
+        self.setPixscale(pixscale)
 
     def hashkey(self):
         return ('NullWCS', self.dx, self.dy)
+
+    def setPixscale(self, pixscale):
+        self.pixscale = pixscale
+        self.cd = np.array([[1., 0.], [0., 1.]]) *  self.pixscale / 3600.
+        self.cd_inverse = np.array([[1., 0.], [0., 1.]]) / (self.pixscale / 3600.)
 
     def positionToPixel(self, pos, src=None):
         return pos.x + self.dx, pos.y + self.dy
@@ -29,7 +34,23 @@ class NullWCS(BaseParams, ducks.WCS):
         return x - self.dx, y - self.dy
 
     def cdAtPixel(self, x, y):
-        return np.array([[1., 0.], [0., 1.]]) * self.pixscale / 3600.
+        return self.cd
+
+    def cdInverseAtPixel(self, x, y):
+        return self.cd_inverse
+
+    def cdInverseAtPosition(self, pos, src=None):
+        return self.cd_inverse
+
+    def pixelDerivsToPositionDerivs(self, pos, src, counts0, patch0, patchdx, patchdy):
+        # Convert x,y derivatives to Position derivatives
+        derivs = []
+        for i,pname in pos.getThawedParamIndicesAndName():
+            deriv = (patchdx * self.cd_inverse[0, i] +
+                     patchdy * self.cd_inverse[1, i]) * counts0
+            deriv.setName('d(ptsrc)/d(pos.%s)' % pname)
+            derivs.append(deriv)
+        return derivs
 
     def pixscale_at(self, x, y):
         return self.pixscale

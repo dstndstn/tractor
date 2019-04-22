@@ -610,6 +610,11 @@ class NamedParams(object):
             if v:
                 yield i
 
+    def getThawedParamIndicesAndNames(self):
+        for i, v in enumerate(self.liquid):
+            if v:
+                yield i, self.getNamedParamName(i)
+
     def isParamFrozen(self, paramname):
         i = self.getNamedParamIndex(paramname)
         assert(i is not None)

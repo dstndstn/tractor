@@ -94,6 +94,11 @@ if key in sys.argv:
     mods.append(module_ceres)
     pymods.append('tractor.ceres')
 
+# Record current version number....
+cmd = 'echo "version = \'$(git describe)\'" > tractor/version.py'
+print(cmd)
+os.system(cmd)
+
 setup(
     distclass=MyDistribution,
     cmdclass={'build': CustomBuild},

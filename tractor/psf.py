@@ -1,6 +1,9 @@
 from __future__ import print_function
 from __future__ import division
 
+import sys
+import functools
+
 import numpy as np
 
 from tractor.image import Image
@@ -13,45 +16,47 @@ from tractor.utils import BaseParams, ParamList, MultiParams, MogParams
 from tractor import mixture_profiles as mp
 from tractor import ducks
 
+if sys.version_info[0] == 2:
+    # Py2
+    def round(x):
+        import __builtin__
+        return int(__builtin__.round(float(x)))
 
-try:
-    from tractor import mp_fourier
-except:
-    print('tractor.psf: failed to import C version of mp_fourier library.  Falling back to python version.')
-    mp_fourier = None
-
+mp_fourier = -1
 def lanczos_shift_image(img, dx, dy, inplace=False, force_python=False):
-    from scipy.ndimage import correlate1d
-    from astrometry.util.miscutils import lanczos_filter
-
-    L = 3
-    Lx = lanczos_filter(L, np.arange(-L, L+1) + dx)
-    Ly = lanczos_filter(L, np.arange(-L, L+1) + dy)
-    # Normalize the Lanczos interpolants (preserve flux)
-    Lx /= Lx.sum()
-    Ly /= Ly.sum()
+    global mp_fourier
+    if mp_fourier == -1:
+        try:
+            from tractor import mp_fourier
+        except:
+            print('tractor.psf: failed to import C version of mp_fourier library.  Falling back to python version.')
+            mp_fourier = None
 
     H,W = img.shape
-    #print('lanczos_shift_image: size', W, H)
-    #print('mp_fourier:', mp_fourier)
     if (mp_fourier is None or force_python or W <= 8 or H <= 8
         or H > work_corr7f.shape[0] or W > work_corr7f.shape[1]):
+        # fallback to python:
+        from scipy.ndimage import correlate1d
+        from astrometry.util.miscutils import lanczos_filter
+        L = 3
+        Lx = lanczos_filter(L, np.arange(-L, L+1) + dx)
+        Ly = lanczos_filter(L, np.arange(-L, L+1) + dy)
+        # Normalize the Lanczos interpolants (preserve flux)
+        Lx /= Lx.sum()
+        Ly /= Ly.sum()
         sx     = correlate1d(img, Lx, axis=1, mode='constant')
         outimg = correlate1d(sx,  Ly, axis=0, mode='constant')
-    else:
-        assert(len(Lx) == 7)
-        assert(len(Ly) == 7)
-        if inplace:
-            assert(img.dtype == np.float32)
-            outimg = img
-        else:
-            outimg = np.empty(img.shape, np.float32)
-            outimg[:,:] = img
-        mp_fourier.correlate7f(outimg, Lx, Ly, work_corr7f)
+        return outimg
 
-    assert(np.all(np.isfinite(outimg)))
+    outimg = np.empty(img.shape, np.float32)
+    mp_fourier.lanczos_shift_3f(img, outimg, dx, dy, work_corr7f)
+    # yuck!  (don't change this without ensuring the "restrict" keyword still applies
+    # in lanczos_shift_3f!)
+    if inplace:
+        img[:,:] = outimg
     return outimg
 
+# GLOBAL scratch array for lanczos_shift_image!
 work_corr7f = np.zeros((4096, 4096), np.float32)
 work_corr7f = np.require(work_corr7f, requirements=['A'])
 
@@ -122,8 +127,11 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
                             radius=None, **kwargs):
         from astrometry.util.miscutils import get_overlapping_region
 
+        #print('getPointSourcePatch: %.2f,%.2f,' % (px,py), 'modelMask', modelMask,
+        #      'radius', radius)
+        
+        # get PSF image at desired pixel location
         img = self.getImage(px, py)
-        assert(np.all(np.isfinite(img)))
 
         if radius is not None:
             R = int(np.ceil(radius))
@@ -133,9 +141,12 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
             img = img[max(cy-R, 0) : min(cy+R+1,H-1),
                       max(cx-R, 0) : min(cx+R+1,W-1)]
 
+        #print('img shape', img.shape, 'radius', radius)
+            
         H, W = img.shape
-        ix = int(np.round(px))
-        iy = int(np.round(py))
+        # required because builtin round(np.float64(11.0)) returns 11.0 !!
+        ix = round(float(px))
+        iy = round(float(py))
         dx = px - ix
         dy = py - iy
         x0 = ix - W // 2
@@ -234,13 +245,13 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         pad, cx, cy = self._padInImage(sz, sz)
         # cx,cy: coordinate of the PSF center in *pad*
         P = np.fft.rfft2(pad)
+        P = P.astype(np.complex64)
         pH, pW = pad.shape
         v = np.fft.rfftfreq(pW)
         w = np.fft.fftfreq(pH)
         rtn = P, (cx, cy), (pH, pW), (v, w)
         self.fftcache[sz] = rtn
         return rtn
-
 
 class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
     '''
@@ -735,13 +746,9 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
                                     self.myweights)
 
     def getMixtureOfGaussians(self, px=None, py=None):
-        K = len(self.myweights)
-        amps = np.array(self.myweights)
-        means = np.zeros((K, 2))
-        variances = np.zeros((K, 2, 2))
-        for k in range(K):
-            variances[k, 0, 0] = variances[k, 1, 1] = self.mysigmas[k]**2
-        return mp.MixtureOfGaussians(amps, means, variances)
+        amps = tuple(self.myweights)
+        sigs = tuple(self.mysigmas)
+        return getCircularMog(amps, sigs)
 
     def hashkey(self):
         hk = ('NCircularGaussianPSF', tuple(self.sigmas), tuple(self.weights))
@@ -786,8 +793,28 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
             x1 = ix + rad + 1
             y0 = iy - rad
             y1 = iy + rad + 1
+        # UGH - API question -- is the getMixtureOfGaussians() result read-only?
         mix = self.getMixtureOfGaussians()
+        oldmean = mix.mean
+        mix.mean = mix.mean.copy()
         mix.mean[:, 0] += px
         mix.mean[:, 1] += py
-        return mp.mixture_to_patch(mix, x0, x1, y0, y1, minval=minval,
-                                   exactExtent=(modelMask is not None))
+        p = mp.mixture_to_patch(mix, x0, x1, y0, y1, minval=minval,
+                                exactExtent=(modelMask is not None))
+        mix.mean = oldmean
+        return p
+
+def getCircularMog(amps, sigmas):
+    K = len(amps)
+    amps = np.array(amps).astype(np.float32)
+    means = np.zeros((K, 2), np.float32)
+    vars = np.zeros((K, 2, 2), np.float32)
+    for k in range(K):
+        vars[k, 0, 0] = vars[k, 1, 1] = sigmas[k]**2
+    return mp.MixtureOfGaussians(amps, means, vars, quick=True)
+
+# lru_cache is new in python 3.2
+try:
+    getCircularMog = functools.lru_cache(maxsize=16)(getCircularMog)
+except:
+    pass

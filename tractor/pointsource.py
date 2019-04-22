@@ -133,8 +133,12 @@ class PointSource(MultiParams, SingleProfileSource):
         '''
         # Short-cut the case where we're only fitting fluxes, and the
         # band of the image is not being fit.
+
+        pos_frozen = self.isParamFrozen('pos')
+        bright_frozen = self.isParamFrozen('brightness')
+
         counts0 = img.getPhotoCal().brightnessToCounts(self.brightness)
-        if self.isParamFrozen('pos') and not self.isParamFrozen('brightness'):
+        if pos_frozen and not bright_frozen:
             bsteps = self.brightness.getStepSizes(img)
             bvals = self.brightness.getParams()
             allzero = True
@@ -157,7 +161,7 @@ class PointSource(MultiParams, SingleProfileSource):
         else:
             minval = None
 
-        derivs = (not self.isParamFrozen('pos')) and fastPosDerivs
+        derivs = (not pos_frozen) and fastPosDerivs
         patchdx, patchdy = None, None
 
         if derivs:
@@ -184,18 +188,10 @@ class PointSource(MultiParams, SingleProfileSource):
         derivs = []
 
         # Position
-        if not self.isParamFrozen('pos'):
+        if not pos_frozen:
             if patchdx is not None and patchdy is not None:
-                # Convert x,y derivatives to Position derivatives
-                px, py = wcs.positionToPixel(pos, self)
-                cdi = wcs.cdInverseAtPixel(px, py)
-                # Get thawed Position parameter indices
-                thawed = pos.getThawedParamIndices()
-                for i, pname in zip(thawed, pos.getParamNames()):
-                    deriv = (patchdx * cdi[0, i] +
-                             patchdy * cdi[1, i]) * counts0
-                    deriv.setName('d(ptsrc)/d(pos.%s)' % pname)
-                    derivs.append(deriv)
+                derivs.extend(wcs.pixelDerivsToPositionDerivs(pos, self, counts0, patch0,
+                                                              patchdx, patchdy))
             elif counts0 == 0:
                 derivs.extend([None] * pos.numberOfParams())
             else:
@@ -224,7 +220,7 @@ class PointSource(MultiParams, SingleProfileSource):
                     derivs.append(dx)
 
         # Brightness
-        if not self.isParamFrozen('brightness'):
+        if not bright_frozen:
             bsteps = self.brightness.getStepSizes(img)
             bvals = self.brightness.getParams()
             for i, bstep in enumerate(bsteps):

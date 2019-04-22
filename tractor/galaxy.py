@@ -430,7 +430,7 @@ class ProfileGalaxy(object):
         assert(np.abs(mux) <= 0.5)
         assert(np.abs(muy) <= 0.5)
 
-        amix = self._getAffineProfile(img, 0., 0.)
+        amix = self._getShearedProfile(img, px, py)
         fftmix = amix
         mogmix = None
 
@@ -442,32 +442,29 @@ class ProfileGalaxy(object):
             vv = amix.var[:, 0, 0] + amix.var[:, 1, 1]
             nsigma = 3.
             # Terms that will wrap-around significantly...
-            I = (np.sqrt(vv) * nsigma > pW)
-            if np.sum(I):
+            I = ((vv * nsigma**2) > (pW**2))
+            if np.any(I):
                 # print('Evaluating', np.sum(I), 'terms as MoGs')
                 mogmix = mp.MixtureOfGaussians(amix.amp[I],
-                                               amix.mean[I, :] +
-                                               np.array([px, py])[
-                    np.newaxis, :],
-                    amix.var[I, :, :])
+                                               amix.mean[I, :] + np.array([px, py])[np.newaxis, :],
+                                               amix.var[I, :, :], quick=True)
             I = np.logical_not(I)
-            if np.sum(I):
+            if np.any(I):
                 # print('Evaluating', np.sum(I), 'terms with FFT')
-
-                # print('Terms:',
-                #      mp.MixtureOfGaussians(amix.amp[I], amix.mean[I,:], amix.var[I,:,:]))
-
-                fftmix = mp.MixtureOfGaussians(amix.amp[I], amix.mean[I, :],
-                                               amix.var[I, :, :])
+                fftmix = mp.MixtureOfGaussians(amix.amp[I], amix.mean[I, :], amix.var[I, :, :],
+                                                quick=True)
             else:
                 fftmix = None
 
         if fftmix is not None:
-            #print('fftmix; mux,muy=', mux,muy)
             Fsum = fftmix.getFourierTransform(v, w, zero_mean=True)
-            # print('inverse Fourier-transforming into result size:', pH,pW)
-            G = np.fft.irfft2(Fsum * P, s=(pH, pW))
+            # In Intel's mkl_fft library, the irfftn code path is faster than irfft2
+            # (the irfft2 version sets args (to their default values) which triggers padding
+            #  behavior, changing the FFT size and copying behavior)
+            #G = np.fft.irfft2(Fsum * P, s=(pH, pW))
+            G = np.fft.irfftn(Fsum * P)
 
+            assert(G.shape == (pH,pW))
             # FIXME -- we could try to be sneaky and Lanczos-interp
             # after cutting G down to nearly its final size... tricky
             # tho
@@ -655,14 +652,23 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
         ''' Returns a MixtureOfGaussians profile that has been
         affine-transformed into the pixel space of the image.
         '''
-        # shift and squash
-        cd = img.getWcs().cdAtPixel(px, py)
-        #print('CD matrix at pixel:', cd)
         galmix = self.getProfile()
-        #print('Galaxy mixture model:', galmix)
-        Tinv = np.linalg.inv(self.shape.getTensor(cd))
-        amix = galmix.apply_affine(np.array([px, py]), Tinv.T)
-        amix.symmetrize()
+        cdinv = img.getWcs().cdInverseAtPixel(px, py)
+        G = self.shape.getRaDecBasis()
+        Tinv = np.dot(cdinv, G)
+        amix = galmix.apply_affine(np.array([px, py]), Tinv)
+        return amix
+
+    def _getShearedProfile(self, img, px, py):
+        ''' Returns a MixtureOfGaussians profile that has been
+        shear-transformed into the pixel space of the image.
+        At px,py (but not offset to px,py).
+        '''
+        galmix = self.getProfile()
+        cdinv = img.getWcs().cdInverseAtPixel(px, py)
+        G = self.shape.getRaDecBasis()
+        Tinv = np.dot(cdinv, G)
+        amix = galmix.apply_shear(Tinv)
         return amix
 
     def _getUnitFluxDeps(self, img, px, py):
@@ -822,23 +828,70 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy, SingleProfileSource):
                 ', shapeDev=' + repr(self.shapeDev) + ')')
 
     def _getAffineProfile(self, img, px, py):
-        f = self.fracDev.clipped()
-        profs = []
-        if f > 0.:
-            profs.append((f, DevGalaxy.profile, self.shapeDev))
-        if f < 1.:
-            profs.append((1. - f, ExpGalaxy.profile, self.shapeExp))
+        # f = self.fracDev.clipped()
+        # profs = []
+        # if f > 0.:
+        #     profs.append((f, DevGalaxy.profile, self.shapeDev))
+        # if f < 1.:
+        #     profs.append((1. - f, ExpGalaxy.profile, self.shapeExp))
+        # cdinv = img.getWcs().cdInverseAtPixel(px, py)
+        # mix = []
+        # for f, p, s in profs:
+        #     G = s.getRaDecBasis()
+        #     Tinv = np.dot(cdinv, G)
+        #     amix = p.apply_affine(np.array([px, py]), Tinv)
+        #     amix.amp = amix.amp * f
+        #     mix.append(amix)
 
-        cd = img.getWcs().cdAtPixel(px, py)
+        f = self.fracDev.clipped()
+        cdinv = img.getWcs().cdInverseAtPixel(px, py)
         mix = []
-        for f, p, s in profs:
-            Tinv = np.linalg.inv(s.getTensor(cd))
-            amix = p.apply_affine(np.array([px, py]), Tinv.T)
-            amix.symmetrize()
-            amix.amp *= f
+        if f > 0.:
+            amix = DevGalaxy.profile.apply_affine(np.array([px, py]), np.dot(cdinv, self.shapeDev.getRaDecBasis()))
+            amix.amp = amix.amp * f
             mix.append(amix)
-            #print('affine profile: shape', s, 'weight', f, '->', amix)
-            #print('amp sum:', np.sum(amix.amp))
+        if f < 1.:
+            amix = ExpGalaxy.profile.apply_affine(np.array([px, py]), np.dot(cdinv, self.shapeExp.getRaDecBasis()))
+            amix.amp = amix.amp * (1. - f)
+            mix.append(amix)
+        if len(mix) == 1:
+            return mix[0]
+        return mix[0] + mix[1]
+
+    def _getShearedProfile(self, img, px, py):
+        ''' Returns a MixtureOfGaussians profile that has been
+        shear-transformed into the pixel space of the image.
+        At px,py (but not offset to px,py).
+        '''
+        # f = self.fracDev.clipped()
+        # profs = []
+        # if f > 0.:
+        #     profs.append((f, DevGalaxy.profile, self.shapeDev))
+        # if f < 1.:
+        #     profs.append((1. - f, ExpGalaxy.profile, self.shapeExp))
+        # cdinv = img.getWcs().cdInverseAtPixel(px, py)
+        # mix = []
+        # for f, p, s in profs:
+        #     G = s.getRaDecBasis()
+        #     Tinv = np.dot(cdinv, G)
+        #     amix = p.apply_shear(Tinv)
+        #     amix.amp = amix.amp * f
+        #     mix.append(amix)
+        # if len(mix) == 1:
+        #     return mix[0]
+        # return mix[0] + mix[1]
+
+        f = self.fracDev.clipped()
+        cdinv = img.getWcs().cdInverseAtPixel(px, py)
+        mix = []
+        if f > 0.:
+            amix = DevGalaxy.profile.apply_shear(np.dot(cdinv, self.shapeDev.getRaDecBasis()))
+            amix.amp = amix.amp * f
+            mix.append(amix)
+        if f < 1.:
+            amix = ExpGalaxy.profile.apply_shear(np.dot(cdinv, self.shapeExp.getRaDecBasis()))
+            amix.amp = amix.amp * (1. - f)
+            mix.append(amix)
         if len(mix) == 1:
             return mix[0]
         return mix[0] + mix[1]

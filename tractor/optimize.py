@@ -57,13 +57,13 @@ class Optimizer(object):
         srcs = list(tractor.catalog.getThawedSources())
 
         # Render unit-flux models for each source.
-        t0 = Time()
+        #t0 = Time()
         (umodels, umodtosource, umodsforsource
          ) = self._get_umodels(tractor, srcs, imgs, minsb, rois)
         for umods in umodels:
             assert(len(umods) == Nsourceparams)
-        tmods = Time() - t0
-        logverb('forced phot: getting unit-flux models:', tmods)
+        #tmods = Time() - t0
+        #logverb('forced phot: getting unit-flux models:', tmods)
 
         subimgs = []
         if rois is not None:
@@ -80,7 +80,7 @@ class Optimizer(object):
         else:
             imlist = imgs
 
-        t0 = Time()
+        #t0 = Time()
         fsrcs = list(tractor.catalog.getFrozenSources())
         mod0 = []
         for img in imlist:
@@ -91,12 +91,12 @@ class Optimizer(object):
             # then computing derivatives.
             mod0.append(tractor.getModelImage(
                 img, fsrcs, minsb=minsb, sky=not sky))
-        tmod = Time() - t0
-        logverb('forced phot: getting frozen-source model:', tmod)
+        #tmod = Time() - t0
+        #logverb('forced phot: getting frozen-source model:', tmod)
 
         skyderivs = None
         if sky:
-            t0 = Time()
+            #t0 = Time()
             # build the derivative list as required by getUpdateDirection:
             #    (param0) ->  [  (deriv, img), (deriv, img), ...   ], ... ],
             skyderivs = []
@@ -107,7 +107,7 @@ class Optimizer(object):
             Nsky = len(skyderivs)
             assert(Nsky == tractor.images.numberOfParams())
             assert(Nsky + Nsourceparams == tractor.numberOfParams())
-            logverb('forced phot: sky derivs', Time() - t0)
+            #logverb('forced phot: sky derivs', Time() - t0)
         else:
             Nsky = 0
 
@@ -124,21 +124,21 @@ class Optimizer(object):
 
         if variance:
             # Inverse variance
-            t0 = Time()
+            #t0 = Time()
             result.IV = self._get_iv(sky, skyvariance, Nsky, skyderivs, Nsourceparams,
                                      imlist, umodels, scales)
-            logverb('forced phot: variance:', Time() - t0)
+            #logverb('forced phot: variance:', Time() - t0)
 
         imsBest = getattr(result, 'ims1', None)
         if fitstats and imsBest is None:
             print('Warning: fit stats not computed because imsBest is None')
             result.fitstats = None
         elif fitstats:
-            t0 = Time()
+            #t0 = Time()
             result.fitstats = self._get_fitstats(
                 tractor.catalog, imsBest, srcs, imlist, umodsforsource,
                 umodels, scales, nilcounts, extras=fitstat_extras)
-            logverb('forced phot: fit stats:', Time() - t0)
+            #logverb('forced phot: fit stats:', Time() - t0)
         return result
 
     def _get_umodels(self, tractor, srcs, imgs, minsb, rois):
