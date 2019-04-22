@@ -451,7 +451,7 @@ class ProfileGalaxy(object):
             I = np.logical_not(I)
             if np.any(I):
                 # print('Evaluating', np.sum(I), 'terms with FFT')
-                fftmix = mp.MixtureOfGaussianso(amix.amp[I], amix.mean[I, :], amix.var[I, :, :],
+                fftmix = mp.MixtureOfGaussians(amix.amp[I], amix.mean[I, :], amix.var[I, :, :],
                                                 quick=True)
             else:
                 fftmix = None
