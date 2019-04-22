@@ -793,20 +793,25 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
             x1 = ix + rad + 1
             y0 = iy - rad
             y1 = iy + rad + 1
+        # UGH - API question -- is the getMixtureOfGaussians() result read-only?
         mix = self.getMixtureOfGaussians()
+        oldmean = mix.mean
+        mix.mean = mix.mean.copy()
         mix.mean[:, 0] += px
         mix.mean[:, 1] += py
-        return mp.mixture_to_patch(mix, x0, x1, y0, y1, minval=minval,
-                                   exactExtent=(modelMask is not None))
+        p = mp.mixture_to_patch(mix, x0, x1, y0, y1, minval=minval,
+                                exactExtent=(modelMask is not None))
+        mix.mean = oldmean
+        return p
 
 def getCircularMog(amps, sigmas):
     K = len(amps)
-    amps = np.array(amps)
-    means = np.zeros((K, 2))
-    vars = np.zeros((K, 2, 2))
+    amps = np.array(amps).astype(np.float32)
+    means = np.zeros((K, 2), np.float32)
+    vars = np.zeros((K, 2, 2), np.float32)
     for k in range(K):
         vars[k, 0, 0] = vars[k, 1, 1] = sigmas[k]**2
-    return mp.MixtureOfGaussians(amps, means, vars)
+    return mp.MixtureOfGaussians(amps, means, vars, quick=True)
 
 # lru_cache is new in python 3.2
 try:
