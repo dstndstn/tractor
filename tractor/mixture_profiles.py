@@ -144,8 +144,28 @@ class MixtureOfGaussians(object):
         '''
         assert(scale.shape == (self.D, self.D))
         newvar = np.zeros_like(self.var)
+        # for k in range(self.K):
+        #     newvar[k, :, :] = np.linalg.multi_dot((scale, self.var[k,:,:], scale.T))
+
+        a = scale[0,0]
+        b = scale[0,1]
+        c = scale[1,0]
+        d = scale[1,1]
         for k in range(self.K):
-            newvar[k, :, :] = np.linalg.multi_dot((scale, self.var[k,:,:], scale.T))
+            e = self.var[k,0,0]
+            f = self.var[k,0,1]
+            g = self.var[k,1,0]
+            h = self.var[k,1,1]
+            # hi I am writing out 2x2 matrix multiplication ftw?
+            t1 = a*e+b*f
+            t2 = c*e+d*f
+            t3 = a*g+b*h
+            t4 = c*g+d*h
+            newvar[k, 0, 0] = a*t1 + b*t3
+            newvar[k, 0, 1] = a*t2 + b*t4
+            newvar[k, 1, 0] = c*t1 + d*t3
+            newvar[k, 1, 1] = c*t2 + d*t4
+
         return MixtureOfGaussians(self.amp, self.mean, newvar, quick=True)
 
     # dstn: should this be called "correlate"?
