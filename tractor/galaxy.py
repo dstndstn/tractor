@@ -154,7 +154,7 @@ class Galaxy(MultiParams, SingleProfileSource):
         else:
             minval = None
 
-        patch0 = self.getUnitFluxModelPatch(img, px0, py0, minval=minval,
+        patch0 = self.getUnitFluxModelPatch(img, px=px0, py=py0, minval=minval,
                                             modelMask=modelMask)
         if patch0 is None:
             return [None] * self.numberOfParams()
@@ -179,7 +179,7 @@ class Galaxy(MultiParams, SingleProfileSource):
                 (px, py) = img.getWcs().positionToPixel(pos0, self)
                 pos0.setParam(i, oldval)
                 patchx = self.getUnitFluxModelPatch(
-                    img, px, py, minval=minval, modelMask=modelMask)
+                    img, px=px, py=py, minval=minval, modelMask=modelMask)
                 if patchx is None or patchx.getImage() is None:
                     derivs.append(None)
                     continue
@@ -210,7 +210,7 @@ class Galaxy(MultiParams, SingleProfileSource):
             for i, gstep in enumerate(gsteps):
                 oldval = self.shape.setParam(i, oldvals[i] + gstep)
                 patchx = self.getUnitFluxModelPatch(
-                    img, px0, py0, minval=minval, modelMask=modelMask)
+                    img, px=px0, py=py0, minval=minval, modelMask=modelMask)
                 self.shape.setParam(i, oldval)
                 if patchx is None:
                     print('patchx is None:')
@@ -249,7 +249,7 @@ class ProfileGalaxy(object):
     def _getUnitFluxDeps(self, img, px, py):
         return None
 
-    def _getUnitFluxPatchSize(self, img, minval):
+    def _getUnitFluxPatchSize(self, img, **kwargs):
         return 0
 
     def getUnitFluxModelPatch(self, img, px=None, py=None, minval=0.0,
@@ -267,7 +267,7 @@ class ProfileGalaxy(object):
             x0, y0 = modelMask.x0, modelMask.y0
         else:
             # choose the patch size
-            halfsize = self._getUnitFluxPatchSize(img, px, py, minval)
+            halfsize = self._getUnitFluxPatchSize(img, px=px, py=py, minval=minval)
             # find overlapping pixels to render
             (outx, inx) = get_overlapping_region(
                 int(np.floor(px - halfsize)), int(np.ceil(px + halfsize + 1)),
@@ -553,7 +553,6 @@ def _fourier_galaxy_debug_plots(G, shG, xi, yi, xo, yo, P, Fsum,
         plt.clf()
         plt.subplot(2, 2, 1)
         print(name, 'real range', F.real.min(), F.real.max())
-        mx = np.abs(F.real).max()
         plt.imshow(np.log10(np.abs(F.real)),
                    interpolation='nearest', origin='lower')
         plt.xticks([])
@@ -679,7 +678,7 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
                      img.getPsf().hashkey(), self.shape.hashkey())
                     )
 
-    def _getUnitFluxPatchSize(self, img, px, py, minval):
+    def _getUnitFluxPatchSize(self, img, px=0., py=0., minval=0.):
         if hasattr(self, 'halfsize'):
             return self.halfsize
         pixscale = img.wcs.pixscale_at(px, py)
@@ -897,8 +896,7 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy, SingleProfileSource):
             return mix[0]
         return mix[0] + mix[1]
 
-    
-    def _getUnitFluxPatchSize(self, img, px, py, minval):
+    def _getUnitFluxPatchSize(self, img, px=0., py=0., minval=0.):
         if hasattr(self, 'halfsize'):
             return self.halfsize
         pixscale = img.wcs.pixscale_at(px, py)

@@ -24,7 +24,7 @@ class LsqrOptimizer(Optimizer):
 
         #t0 = Time()
         derivs = [[] for i in range(Nsourceparams)]
-        for i, (tim, umods, scale) in enumerate(zip(imlist, umodels, scales)):
+        for tim, umods, scale in zip(imlist, umodels, scales):
             for um, dd in zip(umods, derivs):
                 if um is None:
                     continue
@@ -539,7 +539,7 @@ class LsqrOptimizer(Optimizer):
         # b = bnz
         assert(np.all(np.isfinite(b)))
 
-        from scipy.sparse import csr_matrix, csc_matrix
+        from scipy.sparse import csr_matrix
         from scipy.sparse.linalg import lsqr
 
         spvals = np.hstack(spvals)

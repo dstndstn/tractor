@@ -348,7 +348,7 @@ class SersicGalaxy(HoggGalaxy):
 
         pos0 = self.getPosition()
         (px0, py0) = img.getWcs().positionToPixel(pos0, self)
-        patch0 = self.getUnitFluxModelPatch(img, px0, py0, modelMask=modelMask)
+        patch0 = self.getUnitFluxModelPatch(img, px=px0, py=py0, modelMask=modelMask)
         if patch0 is None:
             derivs.append(None)
             return derivs
@@ -362,7 +362,7 @@ class SersicGalaxy(HoggGalaxy):
             for i, istep in enumerate(isteps):
                 oldval = self.sersicindex.setParam(i, oldvals[i] + istep)
                 patchx = self.getUnitFluxModelPatch(
-                    img, px0, py0, modelMask=modelMask)
+                    img, px=px0, py=py0, modelMask=modelMask)
                 self.sersicindex.setParam(i, oldval)
                 if patchx is None:
                     print('patchx is None:')

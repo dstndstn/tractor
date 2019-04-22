@@ -101,7 +101,7 @@ def save(idstr, tractor, nlscale=1., debug=False, plotAll=False, imgi=0,
                 shapes.append(getattr(obj,'shape'))
                 attrType.append(' ')
             x0,y0 = wcs.positionToPixel(obj.getPosition(), obj)
-            
+
             cd = timg.getWcs().cdAtPixel(x0,y0)
             print("CD",cd)
             for i,shape in enumerate(shapes):
@@ -209,7 +209,7 @@ def main():
     parser.add_option('--unzip', dest='unzip', help='Save unzipped frame files in this directory')
     parser.add_option('--no-flipbook', dest='flipbook', default=True,
                       action='store_false', help='Do not write PDF flip-book of plots')
-    opt,args = parser.parse_args()
+    opt,_ = parser.parse_args()
 
     if opt.verbose == 0:
         lvl = logging.INFO
@@ -237,7 +237,7 @@ def main():
         print('Demo mode: grabbing Run/Camcol/Field/Band %i/%i/%i/%s' % (run, camcol, field, opt.band))
         print('Using SDSS DR9 data')
         print()
-        
+
     if opt.band is None:
         parser.print_help()
         print()
@@ -252,7 +252,6 @@ def main():
             print('Must supply band (u/g/r/i/z)')
             print()
             sys.exit(-1)
-    rerun = 0
     usercf = (run is not None and field is not None and camcol is not None)
     userd = (opt.radec is not None and opt.pixsize is not None)
     if not (usercf or userd) or len(bands)==0:
@@ -264,7 +263,6 @@ def main():
     if userd:
         ra = opt.radec[0]
         dec = opt.radec[1]
-        size = opt.pixsize
     if prefix is None:
         if usercf:
             prefix = '%06i-%i-%04i' % (run,camcol, field)
@@ -295,7 +293,7 @@ def main():
         imkw.update(invvarAtCenter=True)
     if opt.unzip:
         sdss.saveUnzippedFiles(opt.unzip)
-        
+
     tims = []
     for bandname in bands:
         if userd:
@@ -320,20 +318,20 @@ def main():
         tim.zr = tinf['zr']
         if userd:
             opt.roi = tinf['roi']
-        
+
         tims.append(tim)
 
     if opt.scale:
         print('Scaling images by', opt.scale)
         tims = [st.scale_sdss_image(tim, opt.scale) for tim in tims]
-        
+
     sources = getsrc(run, camcol, field, bandname, bands=bands, curl=opt.curl, roi=opt.roi, sdss=sdss, retrieve=False)
     tractor = Tractor(tims, sources)
 
     sa = dict(debug=opt.debug, plotAll=opt.plotAll, roi=opt.roi)
     if opt.noarcsinh:
         sa.update(nlscale=0)
-        
+
     for j,band in enumerate(bands):
         save('initial-%s-' % (band) + prefix, tractor, imgi=j, **sa)
 
@@ -358,7 +356,7 @@ def main():
                 lnp1 = tractor.getLogProb()
                 print('After optimization: lnprob', lnp1)
                 print('  delta-lnprob:', lnp1 - lnp0)
-    
+
         elif each[0]=='i':
             tractor.images.freezeParamsRecursive('sky')
             for i in range(each[1][0]):
@@ -421,7 +419,7 @@ def makeflipbook(opt, prefix,tune,numSrcs,bands):
     for count,step in enumerate(tune):
         if step[0] == 'n':
             for i in range (step[1]):
-                for k,band in enumerate(bands):
+                for band in bands:
                     tex += page % (('Tuning set %i, Tuning step %i, Band: %s' % (count+1,i+1,band),) +
                        ('tune-%d-%d-%s-' % (count+1,i+1,band) + prefix,)*4)
                 if opt.plotAll:
@@ -436,7 +434,7 @@ def makeflipbook(opt, prefix,tune,numSrcs,bands):
                     for j in range(numSrcs):
                         for band in bands:
                             tex += page % (('Source: %i, Band: %s' % (j+1,band),) + ('s%d-tune-%d-%d-%s-' % (j+1,count+1,i+1,band) + prefix,)*4)
-    if len(tune) != 0: 
+    if len(tune) != 0:
         last = tune[len(tune)-1]
         lastSet = len(tune) - 1
         if last[0] == 'n':
@@ -470,7 +468,7 @@ def makeflipbook(opt, prefix,tune,numSrcs,bands):
 if __name__ == '__main__':
     import cProfile
     import sys
-    from datetime import tzinfo, timedelta, datetime
+    from datetime import datetime
     cProfile.run('main()', 'prof-%s.dat' % (datetime.now().isoformat()))
     sys.exit(0)
     #main()

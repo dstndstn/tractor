@@ -15,7 +15,7 @@ from .unwise import (unwise_tile_wcs, unwise_tiles_touching_wcs,
                      get_unwise_tractor_image)
 
 
-def unwise_forcedphot(cat, tiles, bands=[1, 2, 3, 4], roiradecbox=None,
+def unwise_forcedphot(cat, tiles, bands=None, roiradecbox=None,
                       unwise_dir='.',
                       use_ceres=True, ceres_block=8,
                       save_fits=False, get_models=False, ps=None,
@@ -26,6 +26,9 @@ def unwise_forcedphot(cat, tiles, bands=[1, 2, 3, 4], roiradecbox=None,
     and a list of unWISE tiles *tiles* (a fits_table with RA,Dec,coadd_id)
     runs forced photometry, returning a FITS table the same length as *cat*.
     '''
+
+    if bands is None:
+        bands = [1,2,3,4]
 
     # # Severely limit sizes of models
     for src in cat:

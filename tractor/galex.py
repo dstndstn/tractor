@@ -4,14 +4,8 @@ if __name__ == '__main__':
     matplotlib.use('Agg')
 import pylab as plt
 
-import os
 import tempfile
 import numpy as np
-import sys
-from glob import glob
-import logging
-
-import fitsio
 
 from astrometry.util.fits import *
 from astrometry.util.plotutils import *

@@ -77,7 +77,7 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
     def __init__(self, img, Lorder=3):
         '''
         Creates a new PixelizedPSF object from the given *img* (numpy
-        array) image of the PSF. 
+        array) image of the PSF.
 
         - *img* must be an ODD size.
         - *Lorder* is the order of the Lanczos interpolant used for
@@ -314,7 +314,7 @@ class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
         return self.mog
 
     def applyTo(self, image):
-        raise
+        raise RuntimeError('Not implemented')
 
     def scaleBy(self, factor):
         # Use not advised, ever
@@ -433,7 +433,7 @@ class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
 
         optional xy0 = int x0,y0 origin of stamp.
         '''
-        from tractor.emfit import em_fit_2d, em_fit_2d_reg
+        from tractor.emfit import em_fit_2d_reg
         from tractor.fitpsf import em_init_params
         if P0 is not None:
             w, mu, var = P0

@@ -113,11 +113,15 @@ class Tractor(MultiParams):
     def getNamedParams():
         return dict(images=0, catalog=1)
 
-    def __init__(self, images=[], catalog=[], optimizer=None):
+    def __init__(self, images=None, catalog=None, optimizer=None):
         '''
         - `images:` list of Image objects (data)
         - `catalog:` list of Source objects
         '''
+        if images is None:
+            images = []
+        if catalog is None:
+            catalog = []
         if not isinstance(images, Images):
             images = Images(*images)
         if not isinstance(catalog, Catalog):

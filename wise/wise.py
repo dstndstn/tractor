@@ -4,7 +4,6 @@ if __name__ == '__main__':
     matplotlib.use('Agg')
 
 import os
-import tempfile
 import pylab as plt
 import numpy as np
 import sys
@@ -35,12 +34,15 @@ from tractor.fitpsf import em_init_params
 logger = logging.getLogger('wise')
 
 
-def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
+def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap=None,
                       nanomaggies=False, mask_gz=False, unc_gz=False,
                       sipwcs=False, constantInvvar=False,
                       roi=None,
                       zrsigs=[-3, 10],
                       ):
+    if filtermap is None:
+        filtermap = {}
+
     intfn = basefn + '-int-1b.fits'
     maskfn = basefn + '-msk-1b.fits'
 
@@ -230,8 +232,10 @@ def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
     return tim
 
 
-def read_wise_level3(basefn, radecroi=None, filtermap={},
+def read_wise_level3(basefn, radecroi=None, filtermap=None,
                      nanomaggies=False):
+    if filtermap is None:
+        filtermap = {}
     intfn = basefn + '-int-3.fits'
     uncfn = basefn + '-unc-3.fits'
 
@@ -245,7 +249,6 @@ def read_wise_level3(basefn, radecroi=None, filtermap={},
     band = ihdr['BAND']
 
     P = pyfits.open(uncfn)
-    uhdr = P[0].header
     unc = P[0].data
     print('Read', unc.shape, 'uncertainty')
 
@@ -310,16 +313,16 @@ def read_wise_level3(basefn, radecroi=None, filtermap={},
         H, W = data.shape
         x0, x1, y0, y1 = 0, W, 0, H
 
-    filter = 'w%i' % band
+    filt = 'w%i' % band
     if filtermap:
-        filter = filtermap.get(filter, filter)
+        filt = filtermap.get(filt, filt)
     zp = ihdr['MAGZP']
 
     if nanomaggies:
         photocal = tractor.LinearPhotoCal(tractor.NanoMaggies.zeropointToScale(zp),
-                                          band=filter)
+                                          band=filt)
     else:
-        photocal = tractor.MagsPhotoCal(filter, zp)
+        photocal = tractor.MagsPhotoCal(filt, zp)
 
     print('Image median:', np.median(data))
     print('unc median:', np.median(unc))
@@ -343,12 +346,13 @@ read_wise_coadd = read_wise_level3
 read_wise_image = read_wise_level1b
 
 
-def get_psf_model(band, pixpsf=False, xy=None, positive=True, cache={}):
-
+def get_psf_model(band, pixpsf=False, xy=None, positive=True, cache=None):
+    if cache is None:
+        cache = {}
     if xy is not None:
-        x, y = xy
+        x,y = xy
         gx = np.clip((int(x) / 100) * 100 + 50, 50, 950)
-        gy = np.clip((int(x) / 100) * 100 + 50, 50, 950)
+        gy = np.clip((int(y) / 100) * 100 + 50, 50, 950)
         assert(gx % 100 == 50)
         assert(gy % 100 == 50)
         xy = (gx, gy)
@@ -415,7 +419,7 @@ def forcedphot():
     for fn in ['04933b137-w1', '04937b137-w1', '04941b137-w1', '04945b137-w1', '04948a112-w1',
                '04949b137-w1', '04952a112-w1', '04953b137-w1', '04956a112-w1', '04960a112-w1',
                '04964a112-w1', '04968a112-w1', '05204a106-w1']:
-        basefn = os.path.join(basedir, '04933b137-w1')
+        basefn = os.path.join(basedir, fn)
         tim = read_wise_image(
             basefn, radecroi=[rl, rh, dl, dh], nanomaggies=True)
         tims.append(tim)
@@ -743,7 +747,7 @@ def plot_unmatched():
     dbo.fResolveStatus('SURVEY_EDGE') |
     dbo.fResolveStatus('SURVEY_BEST')
     )) != 0
-    
+
     --> sdss-cas-testarea-3.fits
     '''
 
@@ -751,7 +755,7 @@ def plot_unmatched():
     '''
 
     rng = ((333.5, 335.5), (-0.5, 1.5))
-
+    from astrometry.util.plotutils import PlotSequence
     ps = PlotSequence('sdss')
 
     if False:
@@ -855,7 +859,6 @@ def plot_unmatched():
 
     basedir = os.environ.get('BIGBOSS_DATA', '/project/projectdirs/bigboss')
     wisedatadir = os.path.join(basedir, 'data', 'wise')
-    l1bdir = os.path.join(wisedatadir, 'level1b')
 
     wisecat = fits_table(os.path.join(
         wisedatadir, 'catalogs', 'wisecat2.fits'))
@@ -1187,7 +1190,7 @@ def forced2():
 
     # CAS PhotoObjAll.resolveStatus bits
     sprim = 0x100
-    sbad = 0x800
+    #sbad = 0x800
     sedge = 0x1000
     sbest = 0x200
 
@@ -1422,8 +1425,6 @@ if __name__ == '__main__':
     forcedphot()
 
     from astrometry.util.fits import fits_table
-    from astrometry.libkd.spherematch import match_radec
-    import pylab as plt
 
     T1 = fits_table('cs82data/cas-primary-DR8.fits')
     print(len(T1), 'SDSS')

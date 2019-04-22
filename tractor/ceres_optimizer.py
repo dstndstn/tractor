@@ -1,6 +1,5 @@
 from __future__ import print_function
 import numpy as np
-from collections import Counter
 
 from astrometry.util.ttime import Time
 
@@ -247,25 +246,6 @@ class CeresOptimizer(Optimizer):
 
         sky = (skyderivs is not None)
 
-        umod_npix = []
-        umod_sizes = []
-        for zi, (umods, img, scale, mod0, paramoffset) in enumerate(Z):
-            for umod in umods:
-                if umod is None:
-                    continue
-                h, w = umod.shape
-                umod_npix.append(h * w)
-                umod_sizes.append(umod.shape)
-        umod_npix = np.array(umod_npix)
-        I = np.argsort(-umod_npix)
-        #print('Largest umods:', [umod_sizes[i] for i in I[:20]])
-
-        # umod_sizes = Counter()
-        # for zi,(umods,img,scale,mod0, paramoffset) in enumerate(Z):
-        #     umod_sizes.update([umod.shape for umod in umods if umod is not None])
-        # print('Unit-model sizes')
-        # print(umod_sizes.most_common())
-
         for zi, (umods, img, scale, mod0, paramoffset) in enumerate(Z):
             H, W = img.shape
             if img in blockstart:
@@ -330,7 +310,6 @@ class CeresOptimizer(Optimizer):
                         blocks[b0 + bi][1].append(dd)
         logverb('forced phot: dicing up', Time() - t0)
 
-        rtn = []
         if wantims0:
             t0 = Time()
             params = tractor.getParams()
