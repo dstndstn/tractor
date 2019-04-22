@@ -244,13 +244,13 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         pad, cx, cy = self._padInImage(sz, sz)
         # cx,cy: coordinate of the PSF center in *pad*
         P = np.fft.rfft2(pad)
+        P = P.astype(np.complex64)
         pH, pW = pad.shape
         v = np.fft.rfftfreq(pW)
         w = np.fft.fftfreq(pH)
         rtn = P, (cx, cy), (pH, pW), (v, w)
         self.fftcache[sz] = rtn
         return rtn
-
 
 class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
     '''

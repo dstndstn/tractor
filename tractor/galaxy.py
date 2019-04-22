@@ -453,7 +453,6 @@ class ProfileGalaxy(object):
             I = np.logical_not(I)
             if np.sum(I):
                 # print('Evaluating', np.sum(I), 'terms with FFT')
-
                 # print('Terms:',
                 #      mp.MixtureOfGaussians(amix.amp[I], amix.mean[I,:], amix.var[I,:,:]))
 
@@ -463,11 +462,14 @@ class ProfileGalaxy(object):
                 fftmix = None
 
         if fftmix is not None:
-            #print('fftmix; mux,muy=', mux,muy)
             Fsum = fftmix.getFourierTransform(v, w, zero_mean=True)
-            # print('inverse Fourier-transforming into result size:', pH,pW)
-            G = np.fft.irfft2(Fsum * P, s=(pH, pW))
+            # In Intel's mkl_fft library, the irfftn code path is faster than irfft2
+            # (the irfft2 version sets args (to their default values) which triggers padding
+            #  behavior, changing the FFT size and copying behavior)
+            #G = np.fft.irfft2(Fsum * P, s=(pH, pW))
+            G = np.fft.irfftn(Fsum * P)
 
+            assert(G.shape == (pH,pW))
             # FIXME -- we could try to be sneaky and Lanczos-interp
             # after cutting G down to nearly its final size... tricky
             # tho
