@@ -442,14 +442,14 @@ class ProfileGalaxy(object):
             vv = amix.var[:, 0, 0] + amix.var[:, 1, 1]
             nsigma = 3.
             # Terms that will wrap-around significantly...
-            I = (np.sqrt(vv) * nsigma > pW)
-            if np.sum(I):
+            I = ((vv * nsigma**2) > (pW**2))
+            if np.any(I):
                 # print('Evaluating', np.sum(I), 'terms as MoGs')
                 mogmix = mp.MixtureOfGaussians(amix.amp[I],
                                                amix.mean[I, :] + np.array([px, py])[np.newaxis, :],
                                                amix.var[I, :, :], quick=True)
             I = np.logical_not(I)
-            if np.sum(I):
+            if np.any(I):
                 # print('Evaluating', np.sum(I), 'terms with FFT')
                 fftmix = mp.MixtureOfGaussianso(amix.amp[I], amix.mean[I, :], amix.var[I, :, :],
                                                 quick=True)
