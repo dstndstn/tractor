@@ -10,6 +10,8 @@ from tractor.galaxy import *
 from tractor.patch import ModelMask
 #from tractor.sersic import SersicGalaxy, SersicIndex
 
+#from astrometry.util.plotutils import PlotSequence
+#ps = PlotSequence('gal')
 ps = None
 
 class GalaxyTest(unittest.TestCase):
@@ -492,8 +494,7 @@ class GalaxyTest(unittest.TestCase):
 
         self.assertTrue(np.abs(mod13.sum() - 100.00) < 1e-2)
         print('SAD:', np.sum(np.abs(mod13 - modExp)))
-        #self.assertTrue(np.sum(np.abs(mod13 - modExp)) < 1e-8)
-        self.assertTrue(np.sum(np.abs(mod13 - modExp)) < 1e-5)
+        self.assertTrue(np.sum(np.abs(mod13 - modExp)) < 2e-5)
 
         # Set FracDev = 1 --> equals gal2 in patch12.
         gal3.fracDev.setValue(1.)
@@ -519,7 +520,7 @@ class GalaxyTest(unittest.TestCase):
         self.assertTrue(np.abs(mod15.sum() - 99.98) < 1e-2)
         target = (modDev + modExp) / 2.
         print('SAD:', np.sum(np.abs(mod15 - target)))
-        self.assertTrue(np.sum(np.abs(mod15 - target)) < 1e-5)
+        self.assertTrue(np.sum(np.abs(mod15 - target)) < 2e-5)
 
         derivs = gal3.getParamDerivatives(tim)
         print('Derivs:', derivs)
@@ -540,7 +541,7 @@ class GalaxyTest(unittest.TestCase):
         self.assertTrue(np.abs(mod16.sum() - 199.95) < 1e-2)
         target = (modDev + modExp)
         print('SAD:', np.sum(np.abs(mod16 - target)))
-        self.assertTrue(np.sum(np.abs(mod16 - target)) < 1e-5)
+        self.assertTrue(np.sum(np.abs(mod16 - target)) < 2e-5)
 
         derivs = gal4.getParamDerivatives(tim)
         print('Derivs:', derivs)
@@ -553,8 +554,8 @@ class GalaxyTest(unittest.TestCase):
         p18.addTo(mod18)
         print('SAD', np.sum(np.abs(mod17 * 100. - modExp)))
         print('SAD', np.sum(np.abs(mod18 * 100. - modDev)))
-        self.assertTrue(np.abs(mod17 * 100. - modExp).sum() < 1e-5)
-        self.assertTrue(np.abs(mod18 * 100. - modDev).sum() < 1e-5)
+        self.assertTrue(np.abs(mod17 * 100. - modExp).sum() < 2e-5)
+        self.assertTrue(np.abs(mod18 * 100. - modDev).sum() < 2e-5)
 
         # SersicGalaxy
         # gal5 = SersicGalaxy(pos, bright, shapeExp, SersicIndex(1.))
@@ -663,13 +664,13 @@ class GalaxyTest(unittest.TestCase):
         diff = np.diff(m22[:imx+1])
         # Assert monotonic up to the peak (from the left)
         # (low-level jitter/wrap-around is allowed)
-        self.assertTrue(np.all(np.logical_or(np.abs(diff) < 1e-9,
+        self.assertTrue(np.all(np.logical_or(np.abs(diff) < 2e-9,
                                              diff > 0)))
 
         diff = np.diff(m22[imx:])
         # Assert monotonic decreasing after to the peak
         # (low-level jitter/wrap-around is allowed)
-        self.assertTrue(np.all(np.logical_or(np.abs(diff) < 1e-9,
+        self.assertTrue(np.all(np.logical_or(np.abs(diff) < 2e-9,
                                              diff < 0)))
 
         # Assert that wrap-around exists for PixelizedPsf model

@@ -28,30 +28,32 @@ dev_var = np.array([2.23759216e-04,   1.00220099e-03,   4.18731126e-03,   1.6943
                     6.84850479e-02,   2.87207080e-01,   1.33320254e+00,   8.40215071e+00])
 dev_amp /= np.sum(dev_amp)
 
-
 def get_exp_mixture():
     return MixtureOfGaussians(exp_amp, np.zeros((exp_amp.size, 2)), exp_var)
-
 
 def get_dev_mixture():
     return MixtureOfGaussians(dev_amp, np.zeros((dev_amp.size, 2)), dev_var)
 
-
 class MixtureOfGaussians(object):
 
     # symmetrize is an unnecessary step in principle, but in practice?
-    def __init__(self, amp, mean, var):
+    def __init__(self, amp, mean, var, quick=False):
         '''
         amp: shape (K,)
         mean: shape (K,D)
         var: shape (K,D,D)
         '''
-        self.amp = np.atleast_1d(amp).astype(float)
-        self.mean = np.atleast_2d(np.array(mean)).astype(float)
-        (self.K, self.D) = self.mean.shape
-        self.set_var(var)
-        self.symmetrize()
-        # self.test()
+        if quick:
+            self.amp = amp
+            self.mean = mean
+            self.var = var
+            (self.K, self.D) = self.mean.shape
+        else:
+            self.amp = np.atleast_1d(amp).astype(float)
+            self.mean = np.atleast_2d(np.array(mean)).astype(float)
+            (self.K, self.D) = self.mean.shape
+            self.set_var(var)
+            self.symmetrize()
 
     def __str__(self):
         result = "MixtureOfGaussians instance"
@@ -87,7 +89,7 @@ class MixtureOfGaussians(object):
             assert(np.linalg.det(thisvar) >= 0.)
 
     def copy(self):
-        return MixtureOfGaussians(self.amp, self.mean, self.var)
+        return MixtureOfGaussians(self.amp, self.mean, self.var, quick=True)
 
     def normalize(self):
         self.amp /= np.sum(self.amp)
@@ -112,12 +114,16 @@ class MixtureOfGaussians(object):
         assert(amp.shape == (K,))
         assert(mean.shape == (K, D))
         assert(var.shape == (K, D, D))
-        s = MixtureOfGaussians(amp, mean, var)
+        s = MixtureOfGaussians(amp, mean, var, quick=True)
         s.normalize()
         return s
 
     def apply_affine(self, shift, scale):
         '''
+        NOTE, "scale" is transposed vs earlier versions of this code!
+
+        NOTE, does NOT make a copy of amplitude!!
+
         shift: D-vector offset
         scale: DxD-matrix transformation
         '''
@@ -126,8 +132,41 @@ class MixtureOfGaussians(object):
         newmean = self.mean + shift
         newvar = np.zeros_like(self.var)
         for k in range(self.K):
-            newvar[k, :, :] = np.dot(scale.T, np.dot(self.var[k, :, :], scale))
-        return MixtureOfGaussians(self.amp.copy(), newmean, newvar)
+            newvar[k, :, :] = np.linalg.multi_dot((scale, self.var[k,:,:], scale.T))
+        return MixtureOfGaussians(self.amp, newmean, newvar, quick=True)
+
+    def apply_shear(self, scale):
+        '''
+        NOTE, does NOT make a copy of amplitude and mean!!
+
+        shift: D-vector offset
+        scale: DxD-matrix transformation
+        '''
+        assert(scale.shape == (self.D, self.D))
+        newvar = np.zeros_like(self.var)
+        # for k in range(self.K):
+        #     newvar[k, :, :] = np.linalg.multi_dot((scale, self.var[k,:,:], scale.T))
+
+        a = scale[0,0]
+        b = scale[0,1]
+        c = scale[1,0]
+        d = scale[1,1]
+        for k in range(self.K):
+            e = self.var[k,0,0]
+            f = self.var[k,0,1]
+            g = self.var[k,1,0]
+            h = self.var[k,1,1]
+            # hi I am writing out 2x2 matrix multiplication ftw?
+            t1 = a*e+b*f
+            t2 = c*e+d*f
+            t3 = a*g+b*h
+            t4 = c*g+d*h
+            newvar[k, 0, 0] = a*t1 + b*t3
+            newvar[k, 0, 1] = a*t2 + b*t4
+            newvar[k, 1, 0] = c*t1 + d*t3
+            newvar[k, 1, 1] = c*t2 + d*t4
+
+        return MixtureOfGaussians(self.amp, self.mean, newvar, quick=True)
 
     # dstn: should this be called "correlate"?
     def convolve(self, other):
@@ -144,7 +183,7 @@ class MixtureOfGaussians(object):
             newmean[newk:nextnewk, :] = self.mean + other.mean[k]
             newvar[newk:nextnewk, :, :] = self.var + other.var[k]
             newk = nextnewk
-        return MixtureOfGaussians(newamp, newmean, newvar)
+        return MixtureOfGaussians(newamp, newmean, newvar, quick=True)
 
     def getFourierTransform(self, v, w, use_mp_fourier=True, zero_mean=False):
         '''

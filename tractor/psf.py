@@ -1,6 +1,9 @@
 from __future__ import print_function
 from __future__ import division
 
+import sys
+import functools
+
 import numpy as np
 
 from tractor.image import Image
@@ -12,8 +15,6 @@ from tractor.patch import Patch
 from tractor.utils import BaseParams, ParamList, MultiParams, MogParams
 from tractor import mixture_profiles as mp
 from tractor import ducks
-
-import sys
 
 if sys.version_info[0] == 2:
     # Py2
@@ -244,13 +245,13 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         pad, cx, cy = self._padInImage(sz, sz)
         # cx,cy: coordinate of the PSF center in *pad*
         P = np.fft.rfft2(pad)
+        P = P.astype(np.complex64)
         pH, pW = pad.shape
         v = np.fft.rfftfreq(pW)
         w = np.fft.fftfreq(pH)
         rtn = P, (cx, cy), (pH, pW), (v, w)
         self.fftcache[sz] = rtn
         return rtn
-
 
 class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
     '''
@@ -745,13 +746,9 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
                                     self.myweights)
 
     def getMixtureOfGaussians(self, px=None, py=None):
-        K = len(self.myweights)
-        amps = np.array(self.myweights)
-        means = np.zeros((K, 2))
-        vars = np.zeros((K, 2, 2))
-        for k in range(K):
-            vars[k, 0, 0] = vars[k, 1, 1] = self.mysigmas[k]**2
-        return mp.MixtureOfGaussians(amps, means, vars)
+        amps = tuple(self.myweights)
+        sigs = tuple(self.mysigmas)
+        return getCircularMog(amps, sigs)
 
     def hashkey(self):
         hk = ('NCircularGaussianPSF', tuple(self.sigmas), tuple(self.weights))
@@ -796,8 +793,28 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
             x1 = ix + rad + 1
             y0 = iy - rad
             y1 = iy + rad + 1
+        # UGH - API question -- is the getMixtureOfGaussians() result read-only?
         mix = self.getMixtureOfGaussians()
+        oldmean = mix.mean
+        mix.mean = mix.mean.copy()
         mix.mean[:, 0] += px
         mix.mean[:, 1] += py
-        return mp.mixture_to_patch(mix, x0, x1, y0, y1, minval=minval,
-                                   exactExtent=(modelMask is not None))
+        p = mp.mixture_to_patch(mix, x0, x1, y0, y1, minval=minval,
+                                exactExtent=(modelMask is not None))
+        mix.mean = oldmean
+        return p
+
+def getCircularMog(amps, sigmas):
+    K = len(amps)
+    amps = np.array(amps).astype(np.float32)
+    means = np.zeros((K, 2), np.float32)
+    vars = np.zeros((K, 2, 2), np.float32)
+    for k in range(K):
+        vars[k, 0, 0] = vars[k, 1, 1] = sigmas[k]**2
+    return mp.MixtureOfGaussians(amps, means, vars, quick=True)
+
+# lru_cache is new in python 3.2
+try:
+    getCircularMog = functools.lru_cache(maxsize=16)(getCircularMog)
+except:
+    pass
