@@ -446,18 +446,13 @@ class ProfileGalaxy(object):
             if np.sum(I):
                 # print('Evaluating', np.sum(I), 'terms as MoGs')
                 mogmix = mp.MixtureOfGaussians(amix.amp[I],
-                                               amix.mean[I, :] +
-                                               np.array([px, py])[
-                    np.newaxis, :],
-                    amix.var[I, :, :])
+                                               amix.mean[I, :] + np.array([px, py])[np.newaxis, :],
+                                               amix.var[I, :, :], quick=True)
             I = np.logical_not(I)
             if np.sum(I):
                 # print('Evaluating', np.sum(I), 'terms with FFT')
-                # print('Terms:',
-                #      mp.MixtureOfGaussians(amix.amp[I], amix.mean[I,:], amix.var[I,:,:]))
-
-                fftmix = mp.MixtureOfGaussians(amix.amp[I], amix.mean[I, :],
-                                               amix.var[I, :, :])
+                fftmix = mp.MixtureOfGaussianso(amix.amp[I], amix.mean[I, :], amix.var[I, :, :],
+                                                quick=True)
             else:
                 fftmix = None
 
