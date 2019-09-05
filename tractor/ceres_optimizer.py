@@ -9,11 +9,12 @@ from tractor.optimize import Optimizer
 
 class CeresOptimizer(Optimizer):
 
-    def __init__(self, BW=10, BH=10):
+    def __init__(self, BW=10, BH=10, threads=None):
         super(CeresOptimizer, self).__init__()
         self.BW = 10
         self.BH = 10
         self.ceresType = np.float32
+        self.threads = threads
 
     def getDynamicScales(self, tractor):
         '''
@@ -332,16 +333,21 @@ class CeresOptimizer(Optimizer):
 
         iverbose = 1 if verbose else 0
         nonneg = int(nonneg)
+
+        ithreads = 0
+        if self.threads is not None:
+            ithreads = int(self.threads)
+
         if nonneg:
             # Initial run with nonneg=False, to get in the ballpark
-            x = ceres_forced_phot(blocks, fluxes, 0, iverbose)
+            x = ceres_forced_phot(blocks, fluxes, 0, iverbose, ithreads)
             assert(x == 0)
             logverb('forced phot: ceres initial run', Time() - t0)
             t0 = Time()
             if negfluxval is not None:
                 fluxes = np.maximum(fluxes, negfluxval)
 
-        x = ceres_forced_phot(blocks, fluxes, nonneg, iverbose)
+        x = ceres_forced_phot(blocks, fluxes, nonneg, iverbose, ithreads)
         #print('Ceres forced phot:', x)
         logverb('forced phot: ceres', Time() - t0)
 

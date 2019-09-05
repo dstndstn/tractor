@@ -44,7 +44,8 @@ static PyObject* real_ceres_forced_phot(PyObject* blocks,
                                         PyObject* np_fluxes,
                                         int npy_type,
                                         int nonneg,
-                                        int verbose) {
+                                        int verbose,
+                                        int nthreads) {
     // Note, if you change this function signature, you also need
     // to change the template instantiations below!
     /*
@@ -168,6 +169,11 @@ static PyObject* real_ceres_forced_phot(PyObject* blocks,
     Solver::Options options;
     if (verbose)
         options.minimizer_progress_to_stdout = true;
+    if (nthreads) {
+        options.num_threads = nthreads;
+        // deprecated as of ceres 1.14 (controlled by num_threads)
+        options.num_linear_solver_threads = nthreads;
+    }
     //options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
     options.linear_solver_type = ceres::SPARSE_SCHUR;
 
@@ -264,8 +270,8 @@ static PyObject* real_ceres_forced_phot(PyObject* blocks,
                          
 }
 
-template PyObject* real_ceres_forced_phot<float>(PyObject*, PyObject*, int, int, int);
-template PyObject* real_ceres_forced_phot<double>(PyObject*, PyObject*, int, int, int);
+template PyObject* real_ceres_forced_phot<float>(PyObject*, PyObject*, int, int, int, int);
+template PyObject* real_ceres_forced_phot<double>(PyObject*, PyObject*, int, int, int, int);
 
 
 %}
@@ -280,8 +286,9 @@ template PyObject* real_ceres_forced_phot<double>(PyObject*, PyObject*, int, int
 static PyObject* ceres_forced_phot(PyObject* blocks,
                                    PyObject* np_fluxes,
                                    int nonneg,
-                                   int verbose) {
-	assert(PyList_Check(blocks));
+                                   int verbose,
+                                   int nthreads=0) {
+    assert(PyList_Check(blocks));
     assert(PyList_Size(blocks) > 0);
     PyObject* block;
     block = PyList_GET_ITEM(blocks, 0);
@@ -300,12 +307,12 @@ static PyObject* ceres_forced_phot(PyObject* blocks,
         if (verbose)
             printf("Calling float version\n");
         return real_ceres_forced_phot<float>(blocks, np_fluxes, NPY_FLOAT,
-                                             nonneg, verbose);
+                                             nonneg, verbose, nthreads);
     } else if (PyArray_TYPE(img) == NPY_DOUBLE) {
         if (verbose)
             printf("Calling double version\n");
         return real_ceres_forced_phot<double>(blocks, np_fluxes, NPY_DOUBLE,
-                                              nonneg, verbose);
+                                              nonneg, verbose, nthreads);
     }
     printf("Unknown PyArray type %i\n", PyArray_TYPE(img));
 
