@@ -365,7 +365,6 @@ class CeresOptimizer(Optimizer):
             logverb('forced phot: ims1:', Time() - t0)
         return x
 
-
 class CeresTractorAdapter(object):
     def __init__(self, tractor, ceresopt, p0, scales):
         self.tractor = tractor
