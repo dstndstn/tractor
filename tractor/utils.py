@@ -290,6 +290,9 @@ class BaseParams(object):
     def getUpperBounds(self):
         return []
 
+    def getMaxStep(self):
+        return []
+
     def getGaussianPriors(self):
         return []
 
@@ -307,6 +310,7 @@ class ScalarParam(BaseParams):
         self.val = val
         self.lower = None
         self.upper = None
+        self.maxstep = None
 
     def __str__(self):
         return getClassName(self) + ': ' + self.strformat % self.val
@@ -364,6 +368,8 @@ class ScalarParam(BaseParams):
     def getUpperBounds(self):
         return [self.upper]
 
+    def getMaxStep(self):
+        return [self.maxstep]
 
 def _isint(i):
     # return type(i) in [int, np.int64]
@@ -703,6 +709,7 @@ class ParamList(GaussianPriorsMixin, NamedParams, BaseParams):
         self.vals = list(args)
         self.lowers = [None for v in self.vals]
         self.uppers = [None for v in self.vals]
+        self.maxstep = [None for v in self.vals]
         super(ParamList, self).__init__()
 
     def copy(self):
@@ -787,6 +794,9 @@ class ParamList(GaussianPriorsMixin, NamedParams, BaseParams):
 
     def getUpperBounds(self):
         return list(self._getLiquidArray(self.uppers))
+
+    def getMaxStep(self):
+        return list(self._getLiquidArray(self.maxstep))
 
     def __len__(self):
         ''' len(): of liquid params '''
@@ -1168,6 +1178,12 @@ class MultiParams(BaseParams, NamedParams):
         p = []
         for s in self._getActiveSubs():
             p.extend(s.getUpperBounds())
+        return p
+
+    def getMaxStep(self):
+        p = []
+        for s in self._getActiveSubs():
+            p.extend(s.getMaxStep())
         return p
 
     def getGaussianPriors(self):

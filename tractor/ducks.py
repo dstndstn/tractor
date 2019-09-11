@@ -97,6 +97,14 @@ class Params(object):
     def getUpperBounds(self):
         return []
 
+    def getMaxStep(self):
+        '''
+        Returns the largest step we should take in this parameter.  Use for nonlinear
+        params where making a large change will take us outside the linear optimization
+        regime.
+        '''
+        return None
+
     def getGaussianPriors(self):
         '''
         Returns a list of

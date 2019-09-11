@@ -391,13 +391,13 @@ class PixPos(ParamList):
     def __init__(self, *args):
         super(PixPos, self).__init__(*args)
         self.stepsizes = [0.1, 0.1]
+        self.maxstep = [1., 1.]
 
     def __str__(self):
         return 'pixel (%.2f, %.2f)' % (self.x, self.y)
 
     def getDimension(self):
         return 2
-
 
 class RaDecPos(ArithmeticParams, ParamList):
     '''

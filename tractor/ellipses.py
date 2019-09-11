@@ -45,6 +45,7 @@ class EllipseE(ParamList):
         # Parameter limits
         self.lowers = [0., -1., -1.]
         self.uppers = [None, 1., 1.]
+        self.maxstep = [1., 0.1, 0.1]
 
     @staticmethod
     def fromEllipseESoft(esoft, maxe=0.999999):

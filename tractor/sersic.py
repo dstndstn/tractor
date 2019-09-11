@@ -43,6 +43,7 @@ class SersicMixture(object):
         (0.3, 0.42, [
             # amp prior std=2
             # (with amp prior std=1 -- the two positive components become degenerate)
+            (0.29 , [ 29.7333, 10.0627, -32.1111,  ], [ 0.400918, 0.223734, 0.29063,  ]),
             (0.30 , [ 28.1273, 8.97218, -29.3501,  ], [ 0.410641, 0.227158, 0.29584,  ]),
             (0.31 , [ 26.5807, 7.94616, -26.7126,  ], [ 0.420884, 0.230796, 0.301292,  ]),
             (0.32 , [ 25.0955, 6.98467, -24.2006,  ], [ 0.431669, 0.234678, 0.307003,  ]),
@@ -224,9 +225,17 @@ class SersicIndex(ScalarParam):
     def __init__(self, val=0):
         super(SersicIndex, self).__init__(val=val)
         # Bounds
-        self.lower = 0.3
-        self.upper = 6.0
+        self.lower = 0.29
+        self.upper = 6.3
+        self.maxstep = 0.1
 
+    def isLegal(self):
+        return self.val <= self.upper and self.val >= self.lower
+
+    def getLogPrior(self):
+        if not self.isLegal():
+            return -np.inf
+        return 0.
 
 class SersicGalaxy(HoggGalaxy):
     nre = 8.
@@ -278,12 +287,20 @@ class SersicGalaxy(HoggGalaxy):
         counts = img.getPhotoCal().brightnessToCounts(self.brightness)
 
         # derivatives wrt Sersic index
-        isteps = self.sersicindex.getStepSizes()
+        steps = self.sersicindex.getStepSizes()
         if not self.isParamFrozen('sersicindex'):
             inames = self.sersicindex.getParamNames()
             oldvals = self.sersicindex.getParams()
-            for i, istep in enumerate(isteps):
-                oldval = self.sersicindex.setParam(i, oldvals[i] + istep)
+            ups = self.sersicindex.getUpperBounds()
+            for i,step in enumerate(steps):
+                # Assume step is positive, and check whether stepping
+                # would exceed the upper bound.
+                newval = oldvals[i] + step
+                if newval > ups[i]:
+                    step *= -1.
+                    newval = oldvals[i] + step
+
+                oldval = self.sersicindex.setParam(i, newval)
                 patchx = self.getUnitFluxModelPatch(
                     img, px=px0, py=py0, modelMask=modelMask)
                 self.sersicindex.setParam(i, oldval)
@@ -292,11 +309,11 @@ class SersicGalaxy(HoggGalaxy):
                     print('  ', self)
                     print('  stepping galaxy sersicindex',
                           self.sersicindex.getParamNames()[i])
-                    print('  stepped', isteps[i])
+                    print('  stepped', step)
                     print('  to', self.sersicindex.getParams()[i])
                     derivs.append(None)
 
-                dx = (patchx - patch0) * (counts / istep)
+                dx = (patchx - patch0) * (counts / step)
                 dx.setName('d(%s)/d(%s)' % (self.dname, inames[i]))
                 derivs.append(dx)
         return derivs
@@ -360,6 +377,94 @@ if __name__ == '__main__':
     #3.0, 3.1, 3.2,
     #4., 5., 6., 6.19
     #]
+
+    if True:
+        ps = PlotSequence('ser', format='%03i')
+
+        #import logging
+        #import sys
+        #logging.basicConfig(level=logging.DEBUG, format='%(message)s', stream=sys.stdout)
+        
+        re = 15.0
+        W,H = 100,100
+
+        #sersics = np.linspace(0.35, 5.5, 21)
+        sersics = [4.]
+
+        true_ser = []
+        fit_ser = []
+        fit_dser = []
+        fit_allparams = []
+        fit_alld = []
+
+        noise_sigma = 1.
+
+        img = Image(data=np.zeros((H,W)), inverr=np.ones((H,W), np.float32) / noise_sigma,
+                    psf=GaussianMixturePSF(1., 0., 0., 4., 4., 0.))
+        tim = img
+
+        from tractor.constrained_optimizer import ConstrainedOptimizer
+
+        for i,si in enumerate(sersics):
+            pixel_scale = 1.0
+            gs_psf = galsim.Gaussian(flux=1., sigma=2.)
+            gs_gal = galsim.Sersic(n=si, half_light_radius=re)
+            gs_gal = gs_gal.shear(galsim.Shear(g1=0.1, g2=0.0))
+            gs_gal = gs_gal.shift(0.5, 0.5)
+            gs_final = galsim.Convolve([gs_gal, gs_psf])
+            gs_image = gs_final.drawImage(scale=pixel_scale, method='sb')
+            gs_image = gs_image.array
+            iy,ix = np.unravel_index(np.argmax(gs_image), gs_image.shape)
+            gs_image = gs_image[iy-H//2:, ix-W//2:][:H,:W]
+            print('gs_image:', np.sum(gs_image))
+            
+            flux = 10000.
+            # + 3.*(float(si) / max(1, len(sersics)-1))
+            #flux *= 50.
+
+            for j in range(5):
+                tim.setImage(flux * gs_image + np.random.normal(size=(H,W), scale=noise_sigma))
+                print('Max:', tim.getImage().max(), 'Sum:', tim.getImage().sum())
+                gal = SersicGalaxy(PixPos(50.3, 49.7), Flux(1.),
+                                   EllipseE(re*0.5, 0.0, 0.0), SersicIndex(2.5))
+                #gal = DevGalaxy(PixPos(50., 50.), Flux(1.), EllipseE(re, 0.0, 0.0))
+                tr = Tractor([tim], [gal], optimizer=ConstrainedOptimizer())
+                tr.freezeParam('images')
+                #tr.printThawedParams()
+                try:
+                    tr.optimize_loop(dchisq=0.1, shared_params=False)
+                    v = tr.optimize(variance=True, just_variance=True, shared_params=False)
+                except:
+                    print('Failed', si)
+                    import traceback
+                    traceback.print_exc()
+                    continue
+                dser = np.sqrt(v[-1])
+
+                print('Fit galaxy:', gal)
+                
+                plt.clf()
+                plt.subplot(1,2,1)
+                sig1 = noise_sigma
+                ima = dict(vmin=-2.*sig1, vmax=5.*sig1, interpolation='nearest', origin='lower')
+                plt.imshow(tim.getImage(), **ima)
+                #plt.colorbar()
+                plt.subplot(1,2,2)
+                plt.imshow(tr.getModelImage(0), **ima)
+                ps.savefig()
+                continue
+            
+                #print('ser', si, 'trial', j, '->', gal.sersicindex.getValue(), '+-', dser)
+                if dser == 0:
+                    ### HACK FIXME
+                    continue
+                true_ser.append(si)
+                fit_ser.append(gal.sersicindex.getValue())
+                fit_dser.append(dser)
+                fit_allparams.append(gal.getParams())
+                fit_alld.append(np.sqrt(v))
+        import sys
+        sys.exit(0)
 
     if False:
         #sersics = np.logspace(np.log10(0.3001), np.log10(6.19), 1000)

@@ -270,6 +270,7 @@ class LsqrOptimizer(Optimizer):
                                     scale_columns=scale_columns,
                                     shared_params=shared_params,
                                     variance=variance)
+        #print('Update:', X)
         if X is None:
             # Failure
             return (0., None, 0.)
@@ -294,6 +295,7 @@ class LsqrOptimizer(Optimizer):
         #logverb('  Tderiv', tderivs)
         #logverb('  Topt  ', topt)
         #logverb('  Tstep ', tstep)
+        # print('Stepped alpha=', alpha, 'for dlogprob', dlogprob)
         if variance:
             return dlogprob, X, alpha, var
         return dlogprob, X, alpha
