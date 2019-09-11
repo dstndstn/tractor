@@ -381,6 +381,8 @@ if __name__ == '__main__':
     if True:
         ps = PlotSequence('ser', format='%03i')
 
+        #np.random.seed(12)
+        
         #import logging
         #import sys
         #logging.basicConfig(level=logging.DEBUG, format='%(message)s', stream=sys.stdout)
@@ -418,7 +420,7 @@ if __name__ == '__main__':
             gs_image = gs_image[iy-H//2:, ix-W//2:][:H,:W]
             print('gs_image:', np.sum(gs_image))
             
-            flux = 10000.
+            flux = 1000.
             # + 3.*(float(si) / max(1, len(sersics)-1))
             #flux *= 50.
 
