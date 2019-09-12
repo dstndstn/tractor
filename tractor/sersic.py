@@ -38,11 +38,10 @@ class SersicMixture(object):
         # A set of ranges [ser_lo, ser_hi], plus a list of fit parameters
         # that have a constant number of components.
         fits = [
-        # 0.3 to 0.4+: 3 components
-        #(0.3, 0.42, [
-        (0.3, 0.42, [
+        # 3 components
+        (0.29, 0.42, [
             # amp prior std=2
-            # (with amp prior std=1 -- the two positive components become degenerate)
+            # (with amp prior std=1, the two positive components become degenerate)
             (0.29 , [ 29.7333, 10.0627, -32.1111,  ], [ 0.400918, 0.223734, 0.29063,  ]),
             (0.30 , [ 28.1273, 8.97218, -29.3501,  ], [ 0.410641, 0.227158, 0.29584,  ]),
             (0.31 , [ 26.5807, 7.94616, -26.7126,  ], [ 0.420884, 0.230796, 0.301292,  ]),
@@ -50,13 +49,16 @@ class SersicMixture(object):
             (0.34 , [ 22.3149, 5.25392, -19.5576,  ], [ 0.454958, 0.243336, 0.319275,  ]),
             (0.36 , [ 19.7907, 3.76919, -15.4161,  ], [ 0.480685, 0.253583, 0.332854,  ]),
             (0.38 , [ 17.5149, 2.50552, -11.7434,  ], [ 0.509045, 0.266156, 0.348058,  ]),
-            (0.40 , [ 15.4473, 1.43828, -8.47514,  ], [ 0.540383, 0.28262, 0.365116,  ]),
-            (0.41 , [ 14.4933, 0.921142, -6.93744,  ], [ 0.557234, 0.292441, 0.37502,  ]),
-            (0.42 , [ 13.5581, 0.433215, -5.44774,  ], [ 0.575113, 0.304653, 0.385431,  ]),
+            # Now we start kicking in a prior on the amplitude to force the second component to zero.
+            (0.39 , [ 16.5252, 1.55052, -9.73179,  ], [ 0.524296, 0.26729, 0.359764,  ]),
+            (0.40 , [ 15.5942, 0.836228, -8.01953,  ], [ 0.540194, 0.267179, 0.372381,  ]),
+            (0.41 , [ 14.7227, 0.344169, -6.58915,  ], [ 0.556667, 0.265585, 0.385658,  ]),
+            # from the 2-component fit
+            (0.42 , [ 14.0586, 0.0, -5.51399,  ], [ 0.572984, 0.265585, 0.403086,  ]),
             ]),
-        # 0.4 to 0.6: 2 components
-        (0.4, 0.6, [
-            (0.40 , [ 17.438, -9.0197,  ], [ 0.538194, 0.410385,  ]),
+        # 0.42 to 0.6: 2 components
+        (0.42, 0.6, [
+            #(0.40 , [ 17.438, -9.0197,  ], [ 0.538194, 0.410385,  ]),
             (0.41 , [ 15.7428, -7.26198,  ], [ 0.55406, 0.408598,  ]),
             (0.42 , [ 14.0586, -5.51399,  ], [ 0.572984, 0.403086,  ]),
             (0.43 , [ 12.5707, -3.96071,  ], [ 0.594559, 0.393181,  ]),
@@ -378,10 +380,10 @@ if __name__ == '__main__':
     #4., 5., 6., 6.19
     #]
 
-    if True:
+    if False:
         ps = PlotSequence('ser', format='%03i')
 
-        #np.random.seed(12)
+        np.random.seed(13)
         
         #import logging
         #import sys
@@ -391,7 +393,7 @@ if __name__ == '__main__':
         W,H = 100,100
 
         #sersics = np.linspace(0.35, 5.5, 21)
-        sersics = [4.]
+        sersics = [6.]
 
         true_ser = []
         fit_ser = []
@@ -420,14 +422,14 @@ if __name__ == '__main__':
             gs_image = gs_image[iy-H//2:, ix-W//2:][:H,:W]
             print('gs_image:', np.sum(gs_image))
             
-            flux = 1000.
+            flux = 2000.
             # + 3.*(float(si) / max(1, len(sersics)-1))
             #flux *= 50.
 
-            for j in range(5):
+            for j in range(1):
                 tim.setImage(flux * gs_image + np.random.normal(size=(H,W), scale=noise_sigma))
                 print('Max:', tim.getImage().max(), 'Sum:', tim.getImage().sum())
-                gal = SersicGalaxy(PixPos(50.3, 49.7), Flux(1.),
+                gal = SersicGalaxy(PixPos(50.3, 49.7), Flux(100.),
                                    EllipseE(re*0.5, 0.0, 0.0), SersicIndex(2.5))
                 #gal = DevGalaxy(PixPos(50., 50.), Flux(1.), EllipseE(re, 0.0, 0.0))
                 tr = Tractor([tim], [gal], optimizer=ConstrainedOptimizer())
@@ -468,10 +470,10 @@ if __name__ == '__main__':
         import sys
         sys.exit(0)
 
-    if False:
+    if True:
         #sersics = np.logspace(np.log10(0.3001), np.log10(6.19), 1000)
         #sersics = np.logspace(np.log10(0.3001), np.log10(0.6), 500)
-        sersics = np.linspace(0.39, 0.42, 101)
+        sersics = np.linspace(0.35, 0.5, 101)
 
         plt.figure(figsize=(12,5))
         plt.clf()
@@ -495,8 +497,8 @@ if __name__ == '__main__':
         #import sys
         #sys.exit(0)
 
-    sersics = np.logspace(np.log10(0.3001), np.log10(6.19), 200)
-    #sersics = np.linspace(0.39, 0.42, 13)
+    #sersics = np.logspace(np.log10(0.3001), np.log10(6.19), 200)
+    sersics = np.linspace(0.35, 0.5, 25)
     
     ps = PlotSequence('ser', format='%03i')
 

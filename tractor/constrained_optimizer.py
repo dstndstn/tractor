@@ -16,6 +16,7 @@ class ConstrainedOptimizer(LsqrOptimizer):
         self.hitLimit = False
         self.stepLimited = False
         for step in range(steps):
+            #print('Opt loop step', step)
             dlnp,_,_ = self.optimize(tractor, **kwargs)
             if not self.stepLimited and dlnp <= dchisq:
                 break
@@ -81,8 +82,8 @@ class ConstrainedOptimizer(LsqrOptimizer):
                     #       X[i]*alpha, 'would exceed max step', m, '; max alpha', a)
                     maxalpha = min(maxalpha, a)
 
-            if maxalpha < 1e-8:
-                #print('Tiny maxalpha; bailing out without parameter update')
+            if maxalpha < 1e-8 and not self.stepLimited:
+                # print('Tiny maxalpha; bailing out without parameter update')
                 self.hitLimit = True
                 break
 
@@ -111,9 +112,9 @@ class ConstrainedOptimizer(LsqrOptimizer):
             tractor.setParams(pa)
             pAfter = tractor.getLogProb()
 
-            #print('Stepped params for dlogprob:', pAfter-pBefore)
-            #for s in tractor.catalog:
-            #    print(s)
+            # print('Stepped params for dlogprob:', pAfter-pBefore)
+            # for s in tractor.catalog:
+            #     print(s)
             #tractor.printThawedParams()
             #print('dlogprob:', pAfter-pBefore)
             #print('log-prob:', pAfter, 'delta', pAfter-pBefore)
