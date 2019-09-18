@@ -104,7 +104,7 @@ setup(
     cmdclass={'build': CustomBuild},
     name="tractor",
     version="git",
-    author="Dustin Lang (UToronto) and David W. Hogg (NYU)",
+    author="Dustin Lang (Perimeter Institute) and David W. Hogg (NYU)",
     author_email="dstndstn@gmail.com",
     packages=['tractor', 'wise'],
     ext_modules = mods,

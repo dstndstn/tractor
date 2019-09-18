@@ -73,6 +73,7 @@ TRACTOR_INSTALL := __init__.py version.py basics.py brightness.py cache.py \
 	sdss.py sersic.py sfd.py shifted.py sky.py source_extractor.py \
 	splinesky.py tractortime.py utils.py wcs.py \
 	optimize.py lsqr_optimizer.py ceres_optimizer.py \
+	constrained_optimizer.py \
 	mix.py _mix$(PYTHON_SO_EXT) \
 	emfit.py _emfit$(PYTHON_SO_EXT) \
 	mp_fourier.py _mp_fourier$(PYTHON_SO_EXT)

@@ -436,10 +436,19 @@ if __name__ == '__main__':
     # plt.savefig('serfits.png')
 
     import galsim
-
+    from tractor.psf import *
+    
     H,W = 100,100
-    tim = Image(data=np.zeros((H,W)), inverr=np.ones((H,W)),
-                psf=GaussianMixturePSF(1., 0., 0., 2., 2., 0.))
+
+    xx,yy = np.meshgrid(np.arange(25),np.arange(25))
+    psf_sigma = 2.
+    psf_img = np.exp(-0.5 * ((xx-12)**2 + (yy-12)**2) / psf_sigma**2)
+    psf_img /= np.sum(psf_img)
+    gausspsf = GaussianMixturePSF(1., 0., 0., psf_sigma**2, psf_sigma**2, 0.)
+    pixpsf = PixelizedPSF(psf_img)
+    hpsf = HybridPixelizedPSF(pixpsf, gauss=gausspsf)    
+
+    tim = Image(data=np.zeros((H,W)), inverr=np.ones((H,W)), psf=hpsf)
     SersicIndex.stepsize = 0.001
     re = 15.0
     cx = 50
@@ -574,7 +583,8 @@ if __name__ == '__main__':
         #sersics = np.logspace(np.log10(0.3001), np.log10(0.6), 500)
         #sersics = np.linspace(0.35, 0.5, 101)
         slo,shi = 0.3, 6.2
-        sersics = np.linspace(slo, shi, 101)
+        #sersics = np.linspace(slo, shi, 101)
+        sersics = np.logspace(np.log10(slo), np.log10(shi), 1000).clip(slo,shi)
 
         plt.figure(figsize=(12,5))
         plt.clf()
@@ -595,13 +605,18 @@ if __name__ == '__main__':
         plt.xlabel('Sersic index')
         plt.ylabel('Mixture variances')
         plt.savefig('mix.png')
-        #import sys
-        #sys.exit(0)
+
+        plt.subplot(1,2,1)
+        plt.xscale('log')
+        plt.subplot(1,2,2)
+        plt.xscale('log')
+        plt.savefig('mix2.png')
 
     #sersics = np.logspace(np.log10(0.3001), np.log10(6.19), 200)
     #sersics = np.linspace(0.35, 0.5, 25)
     #sersics = np.linspace(slo, shi, 33)
-    sersics = np.linspace(slo, shi, 101)
+    #sersics = np.linspace(slo, shi, 101)
+    sersics = np.logspace(np.log10(slo), np.log10(shi), 101).clip(slo,shi)
     
     ps = PlotSequence('ser', format='%03i')
 
@@ -609,13 +624,18 @@ if __name__ == '__main__':
     plt.subplots_adjust(left=0.05, right=0.98, bottom=0.1, top=0.85)
     
     pixel_scale = 1.0
-    gs_psf = galsim.Gaussian(flux=1., sigma=np.sqrt(2.))
+    draw_args = dict(scale=pixel_scale)
+
+    #gs_psf = galsim.Gaussian(flux=1., sigma=psf_sigma)
+    pim = galsim.Image(psf_img)
+    gs_psf = galsim.InterpolatedImage(pim, scale=pixel_scale)
+    draw_args.update(method='no_pixel')
     
     for i,si in enumerate(sersics):
         gs_gal = galsim.Sersic(si, half_light_radius=re)
         gs_gal = gs_gal.shift(0.5, 0.5)
         gs_final = galsim.Convolve([gs_gal, gs_psf])
-        gs_image = gs_final.drawImage(scale=pixel_scale)
+        gs_image = gs_final.drawImage(**draw_args)
         gs_image = gs_image.array
         iy,ix = np.unravel_index(np.argmax(gs_image), gs_image.shape)
         gs_image = gs_image[iy-H//2:, ix-W//2:][:H,:W]
@@ -627,30 +647,31 @@ if __name__ == '__main__':
         gs_gal = galsim.Sersic(si + step, half_light_radius=re)
         gs_gal = gs_gal.shift(0.5, 0.5)
         gs_final2 = galsim.Convolve([gs_gal, gs_psf])
-        gs_image2 = gs_final2.drawImage(scale=pixel_scale)
+        gs_image2 = gs_final2.drawImage(**draw_args)
         gs_image2 = gs_image2.array
         iy,ix = np.unravel_index(np.argmax(gs_image2), gs_image2.shape)
         gs_image2 = gs_image2[iy-cy:, ix-cx:][:H,:W]
 
-        # SB method
-        gs_image3 = gs_final.drawImage(scale=pixel_scale, method='sb')
-        gs_image3 = gs_image3.array
-        iy,ix = np.unravel_index(np.argmax(gs_image3), gs_image3.shape)
-        gs_image3 = gs_image3[iy-H//2:, ix-W//2:][:H,:W]
+        # # SB method
+        # gs_image3 = gs_final.drawImage(scale=pixel_scale, method='sb')
+        # gs_image3 = gs_image3.array
+        # iy,ix = np.unravel_index(np.argmax(gs_image3), gs_image3.shape)
+        # gs_image3 = gs_image3[iy-H//2:, ix-W//2:][:H,:W]
+        # 
+        # gs_image4 = gs_final2.drawImage(scale=pixel_scale, method='sb')
+        # gs_image4 = gs_image4.array
+        # iy,ix = np.unravel_index(np.argmax(gs_image4), gs_image4.shape)
+        # gs_image4 = gs_image4[iy-H//2:, ix-W//2:][:H,:W]
         
-        gs_image4 = gs_final2.drawImage(scale=pixel_scale, method='sb')
-        gs_image4 = gs_image4.array
-        iy,ix = np.unravel_index(np.argmax(gs_image4), gs_image4.shape)
-        gs_image4 = gs_image4[iy-H//2:, ix-W//2:][:H,:W]
-        
-        #ds = (gs_image2 - gs_image) / (serstep)
+        ds = (gs_image2 - gs_image) / step
         # galsim derivative estimate
-        ds = (gs_image4 - gs_image3) / (step)
+        #ds = (gs_image4 - gs_image3) / (step)
 
         # galsim model estimate
-        gsim = gs_image3
-        gs = gs_image3[H//2,:]
-        
+        #gsim = gs_image3
+        gsim = gs_image
+        gs = gsim[H//2,:]
+
         gal.sersicindex.setValue(si)
         derivs = gal.getParamDerivatives(tim)
         assert(len(derivs) == 1)
@@ -678,7 +699,7 @@ if __name__ == '__main__':
 
         scale = 1000.
         #plt.plot(scale * gs_image[H//2,:], label='galsim')
-        plt.plot(scale * gs, label='galsim(sb)')
+        plt.plot(scale * gs, label='galsim')
         plt.plot(scale * mod[H//2,:], label='tractor')
         plt.legend()
         plt.title('Model')
@@ -696,6 +717,7 @@ if __name__ == '__main__':
         plt.axhline(0., color='k', alpha=0.1)
         plt.axhline(mx*0.1, color='k', alpha=0.1)
         plt.axhline(mx, color='k', alpha=0.1)
+        plt.axhline(mx*-0.1, color='k', alpha=0.1)
         plt.title('Difference')
         
         #plt.clf()
