@@ -66,14 +66,16 @@ PY_INSTALL_DIR ?= $(INSTALL_DIR)/lib/python
 
 TRACTOR_INSTALL_DIR := $(PY_INSTALL_DIR)/tractor
 
-TRACTOR_INSTALL := __init__.py version.py basics.py brightness.py cache.py \
+TRACTOR_INSTALL_PY := __init__.py version.py basics.py brightness.py cache.py \
 	ducks.py ellipses.py engine.py fitpsf.py galaxy.py \
 	image.py imageutils.py mixture_profiles.py motion.py \
 	multiproc.py ordereddict.py patch.py pointsource.py psf.py psfex.py \
 	sdss.py sersic.py sfd.py shifted.py sky.py source_extractor.py \
 	splinesky.py tractortime.py utils.py wcs.py \
 	optimize.py lsqr_optimizer.py ceres_optimizer.py \
-	constrained_optimizer.py \
+	constrained_optimizer.py
+
+TRACTOR_INSTALL := $(TRACTOR_INSTALL_PY) \
 	mix.py _mix$(PYTHON_SO_EXT) \
 	emfit.py _emfit$(PYTHON_SO_EXT) \
 	mp_fourier.py _mp_fourier$(PYTHON_SO_EXT)
@@ -94,6 +96,18 @@ install: version
 	$(MAKE) mix emfit
 	mkdir -p $(TRACTOR_INSTALL_DIR)
 	@for x in $(TRACTOR_INSTALL); do \
+		echo cp tractor/$$x '$(TRACTOR_INSTALL_DIR)/'$$x; \
+		cp tractor/$$x '$(TRACTOR_INSTALL_DIR)/'$$x; \
+	done
+	mkdir -p $(WISE_INSTALL_DIR)
+	@for x in $(WISE_INSTALL); do \
+		echo cp wise/$$x '$(WISE_INSTALL_DIR)/'$$x; \
+		cp wise/$$x '$(WISE_INSTALL_DIR)/'$$x; \
+	done
+
+install-py: version
+	mkdir -p $(TRACTOR_INSTALL_DIR)
+	@for x in $(TRACTOR_INSTALL_PY); do \
 		echo cp tractor/$$x '$(TRACTOR_INSTALL_DIR)/'$$x; \
 		cp tractor/$$x '$(TRACTOR_INSTALL_DIR)/'$$x; \
 	done
