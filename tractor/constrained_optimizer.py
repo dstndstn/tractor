@@ -14,9 +14,9 @@ class ConstrainedOptimizer(LsqrOptimizer):
     def optimize_loop(self, tractor, dchisq=0., steps=50, **kwargs):
         R = {}
         self.hitLimit = False
-        self.stepLimited = False
         for step in range(steps):
             #print('Opt loop step', step)
+            self.stepLimited = False
             dlnp,_,_ = self.optimize(tractor, **kwargs)
             if not self.stepLimited and dlnp <= dchisq:
                 break
