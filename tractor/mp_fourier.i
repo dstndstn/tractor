@@ -462,6 +462,12 @@ static void gaussian_fourier_transform_zero_mean(
                 double b = vars[offset + 1];
                 double d = vars[offset + 3];
 
+                // Special case delta function
+                if ((a == 0.0) && (b == 0.0) && (d == 0.0)) {
+                    sum += amps[k];
+                    continue;
+                }
+
                 sum += amps[k] * exp(negtwopisquare *
                                      (a *  v_i_sqr + 2. * b * v_i * w_j + d * w_j_sqr));
             }

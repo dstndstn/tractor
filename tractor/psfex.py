@@ -468,9 +468,9 @@ class PixelizedPsfEx(PixelizedPSF):
         return ('PixelizedPsfEx', self.fn, self.ext)
 
     def copy(self):
-        s = self.__class__(None)
-        s.psfex = self.psfex.copy()
-        return s
+        psfex = self.psfex.copy()
+        psfex.fwhm = self.psfex.fwhm
+        return self.__class__(None, psfex=psfex)
 
     def getShifted(self, dx, dy):
         psfex = self.psfex.shifted(dx, dy)

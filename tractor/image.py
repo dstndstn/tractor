@@ -66,6 +66,16 @@ class Image(MultiParams):
     def __str__(self):
         return 'Image ' + str(self.name)
 
+    def copy(self):
+        return self.__class__(data=self.data.copy(),
+                              inverr=self.inverr.copy(),
+                              wcs=self.wcs.copy(),
+                              psf=self.psf.copy(),
+                              sky=self.sky.copy(),
+                              photocal=self.photocal.copy(),
+                              name=self.name,
+                              time=self.time.copy())
+
     def subimage(self, x0, x1, y0, y1):
         slc = (slice(y0, y1), slice(x0, x1))
         subtim = Image(data=self.data[slc].copy(),

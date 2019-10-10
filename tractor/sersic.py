@@ -351,6 +351,10 @@ class SersicGalaxy(HoggGalaxy):
         return (super(SersicGalaxy, self).__str__() +
                 ', Sersic index %.3f' % self.sersicindex.val)
 
+    def __repr__(self):
+        return super(SersicGalaxy, self).__repr__().replace(
+            ')', ', sersicindex=%.3f)' % self.sersicindex.val)
+
     def getName(self):
         return 'SersicGalaxy'
 

@@ -107,7 +107,7 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         return ('PixelizedPSF', tuple(self.img.ravel()))
 
     def copy(self):
-        return PixelizedPSF(self.img.copy())
+        return self.__class__(self.img.copy())
 
     def getShifted(self, x0, y0):
         # not spatially varying
@@ -509,6 +509,10 @@ class HybridPixelizedPSF(HybridPSF):
         return ('HybridPixelizedPSF: Gaussian sigma %.2f, Pix %s' %
                 (np.sqrt(self.gauss.mog.var[0, 0, 0]), str(self.pix)))
 
+    def copy(self):
+        s = self.__class__(self.pix.copy(), self.gauss.copy())
+        return s
+        
     def getMixtureOfGaussians(self, **kwargs):
         return self.gauss.getMixtureOfGaussians(**kwargs)
 

@@ -330,6 +330,9 @@ class LinearPhotoCal(ScalarParam, ducks.ImageCalibration):
         super(LinearPhotoCal, self).__init__(scale)
         self.band = band
 
+    def copy(self):
+        return self.__class__(self.getValue(), band=self.band)
+
     def getScale(self):
         return self.val
 
