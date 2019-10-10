@@ -30,6 +30,16 @@ dev_var = np.array([2.23759216e-04,   1.00220099e-03,   4.18731126e-03,   1.6943
                     6.84850479e-02,   2.87207080e-01,   1.33320254e+00,   8.40215071e+00])
 dev_amp /= np.sum(dev_amp)
 
+
+###################
+# Delta function core to correct for softening
+
+dev_var = np.append(dev_var, 0.)
+dev_amp = np.append(dev_amp, 0.0102)
+dev_amp /= np.sum(dev_amp)
+
+####################
+
 def get_exp_mixture():
     return MixtureOfGaussians(exp_amp, np.zeros((exp_amp.size, 2)), exp_var)
 
