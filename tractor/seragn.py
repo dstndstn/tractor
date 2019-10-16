@@ -87,6 +87,8 @@ class SersicAgnGalaxy(MultiParams, BasicSource):
             s.freezeParam('brightness')
         if self.isParamFrozen('shape'):
             s.freezeParam('shape')
+        if self.isParamFrozen('sersicindex'):
+            s.freezeParam('sersicindex')
         if self.isParamFrozen('brightnessPsf'):
             p.freezeParam('brightness')
 
