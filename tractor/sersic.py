@@ -666,7 +666,7 @@ if __name__ == '__main__':
         ax2.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
         plt.savefig('mix2.png')
         print('Wrote mix2.png')
-        sys.exit(0)
+        #sys.exit(0)
     #sersics = np.logspace(np.log10(0.3001), np.log10(6.19), 200)
     #sersics = np.linspace(0.35, 0.5, 25)
     #sersics = np.linspace(slo, shi, 33)
