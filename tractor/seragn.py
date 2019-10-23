@@ -3,7 +3,7 @@ from tractor.galaxy import *
 from tractor.pointsource import PointSource
 from tractor.sersic import SersicGalaxy, SersicIndex
 
-class SersicAgnGalaxy(MultiParams, BasicSource):
+class SersicCoreGalaxy(MultiParams, BasicSource):
     '''
     A galaxy with Sersic plus central point source components.
 
@@ -19,7 +19,7 @@ class SersicAgnGalaxy(MultiParams, BasicSource):
         return dict(pos=0, brightness=1, shape=2, sersicindex=3, brightnessPsf=4)
 
     def getName(self):
-        return 'SersicAgnGalaxy'
+        return 'SersicCoreGalaxy'
 
     def __str__(self):
         return (self.name + ' at ' + str(self.pos)
@@ -78,8 +78,8 @@ class SersicAgnGalaxy(MultiParams, BasicSource):
         p = PointSource(self.pos, self.brightnessPsf)
         if hasattr(self, 'halfsize'):
             s.halfsize = self.halfsize
-        s.dname = 'seragn.ser'
-        p.dname = 'seragn.psf'
+        s.dname = 'sercore.ser'
+        p.dname = 'sercore.psf'
         if self.isParamFrozen('pos'):
             s.freezeParam('pos')
             p.freezeParam('pos')
@@ -104,7 +104,7 @@ class SersicAgnGalaxy(MultiParams, BasicSource):
             for i in range(npos):
                 dpos = add_patches(ds[i], dp[i])
                 if dpos is not None:
-                    dpos.setName('d(seragn)/d(pos%i)' % i)
+                    dpos.setName('d(sercore)/d(pos%i)' % i)
                 derivs.append(dpos)
             derivs.extend(ds[npos:])
             derivs.extend(dp[npos:])

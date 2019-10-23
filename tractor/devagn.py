@@ -2,7 +2,7 @@ from tractor.utils import *
 from tractor.galaxy import *
 from tractor.pointsource import PointSource
 
-class DevAgnGalaxy(MultiParams, BasicSource):
+class DevCoreGalaxy(MultiParams, BasicSource):
     '''
     A galaxy with deVauc and central point source components.
 
@@ -18,7 +18,7 @@ class DevAgnGalaxy(MultiParams, BasicSource):
         return dict(pos=0, brightnessDev=1, shapeDev=2, brightnessPsf=3)
 
     def getName(self):
-        return 'DevAgnGalaxy'
+        return 'DevCoreGalaxy'
 
     def __str__(self):
         return (self.name + ' at ' + str(self.pos)
@@ -75,8 +75,8 @@ class DevAgnGalaxy(MultiParams, BasicSource):
         p = PointSource(self.pos, self.brightnessPsf)
         if hasattr(self, 'halfsize'):
             d.halfsize = self.halfsize
-        d.dname = 'devagn.dev'
-        p.dname = 'devagn.psf'
+        d.dname = 'devcore.dev'
+        p.dname = 'devcore.psf'
         if self.isParamFrozen('pos'):
             d.freezeParam('pos')
             p.freezeParam('pos')
@@ -99,7 +99,7 @@ class DevAgnGalaxy(MultiParams, BasicSource):
             for i in range(npos):
                 dpos = add_patches(dd[i], dp[i])
                 if dpos is not None:
-                    dpos.setName('d(devagn)/d(pos%i)' % i)
+                    dpos.setName('d(devcore)/d(pos%i)' % i)
                 derivs.append(dpos)
             derivs.extend(dd[npos:])
             derivs.extend(dp[npos:])
