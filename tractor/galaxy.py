@@ -744,7 +744,6 @@ class DevGalaxy(HoggGalaxy):
     def getProfile(self):
         return DevGalaxy.profile
 
-
 class FracDev(ScalarParam):
     stepsize = 0.01
 

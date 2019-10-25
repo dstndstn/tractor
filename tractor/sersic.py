@@ -210,9 +210,38 @@ class SersicMixture(object):
         ]),
 
         ]
-
         self.orig_fits = fits
-        
+
+        # Core flux omitted by softening.
+        # specifically, these values are  1. - soft/true
+        self.cores = [
+            (1.00, 0.000000),
+            (1.25, 0.000070),
+            (1.50, 0.000202),
+            (1.75, 0.000425),
+            (2.00, 0.000769),
+            (2.25, 0.001262),
+            (2.50, 0.001928),
+            (2.75, 0.002788),
+            (3.00, 0.003853),
+            (3.25, 0.005130),
+            (3.50, 0.006622),
+            (3.75, 0.008325),
+            (4.00, 0.010233),
+            (4.25, 0.011748),
+            (4.50, 0.013358),
+            (4.75, 0.015057),
+            (5.00, 0.016839),
+            (5.25, 0.018698),
+            (5.50, 0.020628),
+            (5.75, 0.022625),
+            (6.00, 0.024683),
+            (6.25, 0.026796),
+            (6.50, 0.028961),
+        ]
+        self.core_func = InterpolatedUnivariateSpline([s for s,c in self.cores],
+                                                      [c for s,c in self.cores], k=3)
+
         self.fits = []
         for lo, hi, grid in fits:
             (s,a,v) = grid[0]
@@ -302,16 +331,20 @@ class SersicMixture(object):
             amps1 /= amps1.sum()
             amps = np.append((1.-ramp_frac)*amps0, ramp_frac*amps1)
             varr = np.exp(np.array([f(sindex) for f in v0 + v1]))
-            #print('amps', amps, 'sum', amps.sum())
         else:
             assert(len(matches) == 1)
             lo,hi,amp_funcs,logvar_funcs = matches[0]
             amps = np.array([f(sindex) for f in amp_funcs])
             amps /= amps.sum()
             varr = np.exp(np.array([f(sindex) for f in logvar_funcs]))
-            #print('amps', amps, 'sum', amps.sum())
 
-        # print('varr', varr)
+        # Core
+        if sindex > 1.:
+            core = self.core_func(sindex)
+            amps *= (1. - core) / amps.sum()
+            amps = np.append(amps, core)
+            varr = np.append(varr, 0.)
+
         return mp.MixtureOfGaussians(amps, np.zeros((len(amps), 2)), varr)
 
 class SersicIndex(ScalarParam):
@@ -633,7 +666,7 @@ if __name__ == '__main__':
         ax2.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
         plt.savefig('mix2.png')
         print('Wrote mix2.png')
-        sys.exit(0)
+        #sys.exit(0)
     #sersics = np.logspace(np.log10(0.3001), np.log10(6.19), 200)
     #sersics = np.linspace(0.35, 0.5, 25)
     #sersics = np.linspace(slo, shi, 33)
