@@ -8,7 +8,7 @@ from tractor import ducks
 class SplineSky(ParamList, ducks.ImageCalibration):
 
     @staticmethod
-    def BlantonMethod(image, mask, gridsize):
+    def BlantonMethod(image, mask, gridsize, estimator=np.median):
         '''
         mask: True to use pixel.  None for no masking.
         '''
@@ -33,7 +33,7 @@ class SplineSky(ParamList, ducks.ImageCalibration):
                 if mask is not None:
                     im = im[mask[ylo:yhi, xlo:xhi]]
                 if len(im):
-                    grid[iy, ix] = np.median(im)
+                    grid[iy, ix] = estimator(im)
 
         return SplineSky(xgrid, ygrid, grid)
 
