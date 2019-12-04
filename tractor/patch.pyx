@@ -1,6 +1,51 @@
 import numpy as np
 
-from astrometry.util.miscutils import get_overlapping_region
+#from astrometry.util.miscutils import get_overlapping_region
+
+def get_overlapping_region(xlo, xhi, xmin, xmax):
+    '''
+    Given a range of integer coordinates that you want to, eg, cut out
+    of an image, [xlo, xhi], and bounds for the image [xmin, xmax],
+    returns the range of coordinates that are in-bounds, and the
+    corresponding region within the desired cutout.
+
+    For example, say you have an image of shape H,W and you want to
+    cut out a region of halfsize "hs" around pixel coordinate x,y, but
+    so that coordinate x,y is centered in the cutout even if x,y is
+    close to the edge.  You can do:
+
+    cutout = np.zeros((hs*2+1, hs*2+1), img.dtype)
+    iny,outy = get_overlapping_region(y-hs, y+hs, 0, H-1)
+    inx,outx = get_overlapping_region(x-hs, x+hs, 0, W-1)
+    cutout[outy,outx] = img[iny,inx]
+    
+    '''
+    if xlo > xmax or xhi < xmin or xlo > xhi or xmin > xmax:
+        return ([], [])
+
+    assert(xlo <= xhi)
+    assert(xmin <= xmax)
+
+    xloclamp = max(xlo, xmin)
+    Xlo = xloclamp - xlo
+
+    xhiclamp = min(xhi, xmax)
+    Xhi = Xlo + (xhiclamp - xloclamp)
+
+    #print 'xlo, xloclamp, xhiclamp, xhi', xlo, xloclamp, xhiclamp, xhi
+    assert(xloclamp >= xlo)
+    assert(xloclamp >= xmin)
+    assert(xloclamp <= xmax)
+    assert(xhiclamp <= xhi)
+    assert(xhiclamp >= xmin)
+    assert(xhiclamp <= xmax)
+    #print 'Xlo, Xhi, (xmax-xmin)', Xlo, Xhi, xmax-xmin
+    assert(Xlo >= 0)
+    assert(Xhi >= 0)
+    assert(Xlo <= (xhi-xlo))
+    assert(Xhi <= (xhi-xlo))
+
+    return (slice(xloclamp, xhiclamp+1), slice(Xlo, Xhi+1))
 
 
 class ModelMask(object):
