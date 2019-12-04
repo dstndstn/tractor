@@ -2,7 +2,22 @@ import numpy as np
 
 #from astrometry.util.miscutils import get_overlapping_region
 
-def get_overlapping_region(xlo, xhi, xmin, xmax):
+cdef intmax(int a, int b):
+    if a >= b:
+        return a
+    return b
+cdef intmin(int a, int b):
+    if a <= b:
+        return a
+    return b
+cdef intclip(int a, int lo, int hi):
+    if a < lo:
+        return lo
+    if a > hi:
+        return hi
+    return a
+
+def get_overlapping_region(int xlo, int xhi, int xmin, int xmax):
     '''
     Given a range of integer coordinates that you want to, eg, cut out
     of an image, [xlo, xhi], and bounds for the image [xmin, xmax],
@@ -20,16 +35,18 @@ def get_overlapping_region(xlo, xhi, xmin, xmax):
     cutout[outy,outx] = img[iny,inx]
     
     '''
+    cdef int xloclamp, xhiclamp, Xlo, Xhi
+
     if xlo > xmax or xhi < xmin or xlo > xhi or xmin > xmax:
         return ([], [])
 
     assert(xlo <= xhi)
     assert(xmin <= xmax)
 
-    xloclamp = max(xlo, xmin)
+    xloclamp = intmax(xlo, xmin)
     Xlo = xloclamp - xlo
 
-    xhiclamp = min(xhi, xmax)
+    xhiclamp = intmin(xhi, xmax)
     Xhi = Xlo + (xhiclamp - xloclamp)
 
     #print 'xlo, xloclamp, xhiclamp, xhi', xlo, xloclamp, xhiclamp, xhi
@@ -336,13 +353,15 @@ class Patch(object):
         return True
 
     def getSlice(self, parent=None):
+        cdef int ph, pw, H, W
+
         if self.patch is None:
             return ([], [])
         (ph, pw) = self.patch.shape
         if parent is not None:
             (H, W) = parent.shape
-            return (slice(np.clip(self.y0, 0, H), np.clip(self.y0 + ph, 0, H)),
-                    slice(np.clip(self.x0, 0, W), np.clip(self.x0 + pw, 0, W)))
+            return (slice(intclip(self.y0, 0, H), intclip(self.y0 + ph, 0, H)),
+                    slice(intclip(self.x0, 0, W), intclip(self.x0 + pw, 0, W)))
         return (slice(self.y0, self.y0 + ph),
                 slice(self.x0, self.x0 + pw))
 
