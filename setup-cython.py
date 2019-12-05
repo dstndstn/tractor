@@ -75,7 +75,14 @@ cymod1 = cythonize([
         'tractor/tractortime.py',
         'tractor/utils.py',
         'tractor/wcs.py',
-        ], annotate=True, compiler_directives=comdir1)
+        ],
+                   annotate=True,
+                   compiler_directives=comdir1)
+
+# Reach into the distutils.core.Extension objects and set the compiler options...
+for ext in cymod1 + cymod2:
+    for k,v in kwargs.items():
+        setattr(ext, k, v)
 
 setup(
 name="tractor",

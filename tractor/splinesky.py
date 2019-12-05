@@ -34,6 +34,7 @@ class SplineSky(ParamList, ducks.ImageCalibration):
                     im = im[mask[ylo:yhi, xlo:xhi]]
                 if len(im):
                     grid[iy, ix] = estimator(im)
+                    assert(np.isfinite(grid[iy,ix]))
 
         return SplineSky(xgrid, ygrid, grid)
 

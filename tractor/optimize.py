@@ -57,13 +57,15 @@ class Optimizer(object):
         srcs = list(tractor.catalog.getThawedSources())
 
         # Render unit-flux models for each source.
-        #t0 = Time()
+        t0 = Time()
         (umodels, umodtosource, umodsforsource
          ) = self._get_umodels(tractor, srcs, imgs, minsb, rois)
         for umods in umodels:
             assert(len(umods) == Nsourceparams)
-        #tmods = Time() - t0
-        #logverb('forced phot: getting unit-flux models:', tmods)
+        tmods = Time() - t0
+        #print('forced phot: getting unit-flux models:', tmods)
+        #print('Number of sources:', len(srcs))
+        #print('Number of source params:', Nsourceparams)
 
         subimgs = []
         if rois is not None:
@@ -115,12 +117,14 @@ class Optimizer(object):
         if fitstats:
             wantims1 = True
 
+        t0 = Time()
         self._optimize_forcedphot_core(
             tractor, result, umodels, imlist, mod0, scales, skyderivs, minFlux,
             nonneg=nonneg, wantims0=wantims0, wantims1=wantims1,
             negfluxval=negfluxval, rois=rois, priors=priors, sky=sky,
             justims0=justims0, subimgs=subimgs, damp=damp, alphas=alphas,
             Nsky=Nsky, mindlnp=mindlnp, shared_params=shared_params, **kwargs)
+        #print('Optimize_forcedphot_core:', Time()-t0)
 
         if variance:
             # Inverse variance
