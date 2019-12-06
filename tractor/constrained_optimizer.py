@@ -11,14 +11,26 @@ class ConstrainedOptimizer(LsqrOptimizer):
         super(ConstrainedOptimizer, self).__init__(*args, **kwargs)
         self.stepLimited = False
     
-    def optimize_loop(self, tractor, dchisq=0., steps=50, **kwargs):
+    def optimize_loop(self, tractor, dchisq=0., steps=50,
+                      dchisq_limited=1e-6, **kwargs):
+        print()
+        print('Optimize_loop:')
+        for s in tractor.catalog:
+            print(s)
         R = {}
         self.hitLimit = False
         for step in range(steps):
-            #print('Opt loop step', step)
+            print('Optimize_loop: step', step)
             self.stepLimited = False
             dlnp,_,_ = self.optimize(tractor, **kwargs)
+            print('Optimize_loop: step', step, 'dlnp', dlnp, 'hit limit:',
+                  self.hitLimit, 'step limit:', self.stepLimited)
+            for s in tractor.catalog:
+                print(s)
+
             if not self.stepLimited and dlnp <= dchisq:
+                break
+            if self.stepLimited and dlnp <= dchisq_limited:
                 break
         R.update(steps=step)
         R.update(hit_limit=self.hitLimit)
@@ -61,6 +73,7 @@ class ConstrainedOptimizer(LsqrOptimizer):
                     # print('Parameter', i, 'with initial value', p0[i],
                     #        'and update', X[i], 'would hit lower limit', l,
                     #        'with alpha', alpha, '; max alpha', a)
+                    print('Limiting step size to hit lower limit: param', i, 'limit', l, 'step size->', a)
                     maxalpha = min(maxalpha, a)
                 if u is not None and px > u:
                     # This parameter hits the limit; compute the step size
@@ -69,21 +82,22 @@ class ConstrainedOptimizer(LsqrOptimizer):
                     # print('Parameter', i, 'with initial value', p0[i],
                     #       'and update', X[i], 'would hit upper limit', u,
                     #       'with alpha', alpha, '; max alpha', a)
+                    print('Limiting step size to hit upper limit: param', i, 'limit', u, 'step size->', a)
                     maxalpha = min(maxalpha, a)
 
             for i,(d,m) in enumerate(zip(X, maxsteps)):
                 if m is None:
                     continue
-                #print('param', i, '
                 if alpha * np.abs(d) > m:
                     self.stepLimited = True
                     a = m / np.abs(d)
                     # print('Parameter', i, 'with update', X[i], 'x alpha', alpha, '=',
                     #       X[i]*alpha, 'would exceed max step', m, '; max alpha', a)
                     maxalpha = min(maxalpha, a)
+                    print('Limiting step size for param max-step: param', i, 'max-step', m, 'step size->', a)
 
             if maxalpha < 1e-8 and not self.stepLimited:
-                # print('Tiny maxalpha; bailing out without parameter update')
+                print('Tiny maxalpha; bailing out without parameter update')
                 self.hitLimit = True
                 break
 

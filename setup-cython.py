@@ -36,34 +36,38 @@ module_em = Extension('tractor._emfit',
 
 mods = [module_mix, module_em, module_fourier]
 
+nthreads = 4
 comdir2 = dict(language_level=3,
                profile=True)
 
-cymod2 = cythonize(['tractor/galaxy.py',],
-                   annotate=True, compiler_directives=comdir2)
+cymod2 = cythonize(
+    ['tractor/galaxy.py',],
+    annotate=True,
+    compiler_directives=comdir2,
+    nthreads=nthreads)
 
 comdir1 = dict(language_level=3,
                infer_types=True,
                profile=True)
-cymod1 = cythonize([
+cymod1 = cythonize(
+    [
         'tractor/patch.pyx',
-
         #'tractor/galaxy.py',
+        #'tractor/patch.py',
         'tractor/basics.py',
         'tractor/brightness.py',
         'tractor/ceres_optimizer.py',
+        'tractor/constrained_optimizer.py',
+        'tractor/dense_optimizer.py',
         'tractor/ducks.py',
         'tractor/ellipses.py',
         'tractor/engine.py',
-
-        'tractor/sersic.py',
         'tractor/image.py',
         'tractor/imageutils.py',
         'tractor/lsqr_optimizer.py',
         'tractor/mixture_profiles.py',
         'tractor/motion.py',
         'tractor/optimize.py',
-        #'tractor/patch.py',
         'tractor/pointsource.py',
         'tractor/psf.py',
         'tractor/psfex.py',
@@ -75,9 +79,10 @@ cymod1 = cythonize([
         'tractor/tractortime.py',
         'tractor/utils.py',
         'tractor/wcs.py',
-        ],
-                   annotate=True,
-                   compiler_directives=comdir1)
+    ],
+    annotate=True,
+    compiler_directives=comdir1,
+    nthreads=nthreads)
 
 # Reach into the distutils.core.Extension objects and set the compiler options...
 for ext in cymod1 + cymod2:
