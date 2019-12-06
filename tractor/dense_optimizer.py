@@ -138,7 +138,7 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
         # 'B' holds the chi values
         B = np.zeros(Nrows, np.float32)
 
-        colscales = np.ones(Ncols)
+        colscales2 = np.ones(Ncols)
         for col,param in enumerate(allderivs):
             scale2 = 0.
             for (deriv, img) in param:
@@ -156,11 +156,12 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
                     # accumulate L2 norm
                     scale2 += np.dot(dimg, dimg)
                 A[rows, col] = dimg
+                del dimg
             if scale_columns:
-                scale = np.sqrt(scale2)
-                if scale > 0:
-                    colscales[col] = scale
-                    A[:,col] /= scale
+                colscales2[col] = scale2
+                #scale = np.sqrt(scale2)
+                #if scale > 0:
+                #    A[:,col] /= scale
 
         #print('Colscales:', colscales)
         if Npriors > 0:
@@ -168,11 +169,16 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
             #print('Priors: pb', pb, 'mub', mub)
             for ri,ci,vi,bi in zip(rA, cA, vA, pb):
                 if scale_columns:
-                    A[Npixels + ri, ci] = vi / colscales[ci]
-                else:
-                    A[Npixels + ri, ci] = vi
+                    colscales2[col] += np.dot(vi, vi)
+                A[Npixels + ri, ci] = vi
                 B[Npixels + ri] += bi
-            del priorVals
+            del priorVals, rA, cA, vA, pb, mub
+
+        if scale_columns:
+            for col,scale2 in enumerate(colscales2):
+                if scale2 > 0:
+                    A[:,col] /= np.sqrt(scale2)
+            colscales = np.sqrt(colscales2)
 
         chimap = {}
         if chiImages is not None:
