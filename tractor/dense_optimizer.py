@@ -8,9 +8,9 @@ from tractor.constrained_optimizer import ConstrainedOptimizer
 
 from numpy.linalg import lstsq
 
-from astrometry.util.plotutils import PlotSequence
-ps = PlotSequence('opt')
-import pylab as plt
+# from astrometry.util.plotutils import PlotSequence
+# ps = PlotSequence('opt')
+# import pylab as plt
 
         
 class ConstrainedDenseOptimizer(ConstrainedOptimizer):
@@ -62,8 +62,8 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
         # Parameters to optimize go in the columns of matrix A
         # Pixels go in the rows.
 
-        print('Getting update direction:')
-        tractor.printThawedParams()
+        #print('Getting update direction:')
+        #tractor.printThawedParams()
         
         # Keep track of row offsets for each image.
         imgoffs = {}
@@ -114,7 +114,7 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
                 Npriors = max(Npriors, max([1+max(r) for r in rA]))
                 #print('Priors: rows', rA)
                 #print('Cols:', cA)
-                print('Number of prior "pixels":', Npriors)
+                #print('Number of prior "pixels":', Npriors)
                 #assert(False)
                 # sprows.extend([ri + Nrows for ri in rA])
                 # spcols.extend(cA)
@@ -133,7 +133,7 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
                 # b[oldnrows:] = np.hstack(pb)
 
         Nrows = Npixels + Npriors
-        logmsg('Allocating', Nrows, 'x', Ncols, 'matrix for update direction')
+        #logmsg('Allocating', Nrows, 'x', Ncols, 'matrix for update direction')
         A = np.zeros((Nrows, Ncols), np.float32)
         # 'B' holds the chi values
         B = np.zeros(Nrows, np.float32)
@@ -165,7 +165,7 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
         #print('Colscales:', colscales)
         if Npriors > 0:
             rA, cA, vA, pb, mub = priorVals
-            print('Priors: pb', pb, 'mub', mub)
+            #print('Priors: pb', pb, 'mub', mub)
             for ri,ci,vi,bi in zip(rA, cA, vA, pb):
                 if scale_columns:
                     A[Npixels + ri, ci] = vi / colscales[ci]
@@ -191,45 +191,51 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
         # X, resids, rank, singular_vals
         X,_,_,_ = lstsq(A, B, rcond=None)
 
+        if False:
+            Aold = super(ConstrainedDenseOptimizer, self).getUpdateDirection(
+                tractor, allderivs, damp=damp, priors=priors,
+                scale_columns=scale_columns,
+                get_A_matrix=True, shared_params=False)
+            Aold = Aold.toarray()
+    
+            print('Sparse A matrix:', Aold.shape)
+            if Aold.shape == A.shape:
+                print('Average relative difference in matrix elements:',
+                      100. * np.mean(np.abs((A - Aold) / np.maximum(1e-6, Aold))), 'percent')
+    
+            plt.clf()
+            plt.plot(Aold.ravel(), A.ravel(), 'b.')
+            plt.xlabel('Old matrix element')
+            plt.ylabel('New matrix element')
+            plt.title('scale columns: %s, priors: %i' % (scale_columns, Npriors))
+            ps.savefig()
+    
+            plt.clf()
+            plt.plot(Aold.ravel(), A.ravel(), 'b.')
+            plt.xscale('symlog', linthreshx=1e-6)
+            plt.yscale('symlog', linthreshy=1e-6)
+            plt.xlabel('Old matrix element')
+            plt.ylabel('New matrix element')
+            ps.savefig()
 
-        Aold = super(ConstrainedDenseOptimizer, self).getUpdateDirection(
-            tractor, allderivs, damp=damp, priors=priors,
-            scale_columns=scale_columns,
-            get_A_matrix=True, shared_params=False)
-        Aold = Aold.toarray()
-
-        print('Sparse A matrix:', Aold.shape)
-        if Aold.shape == A.shape:
-            print('Average relative difference in matrix elements:',
-                  100. * np.mean(np.abs((A - Aold) / np.maximum(1e-6, Aold))), 'percent')
-
-        plt.clf()
-        plt.plot(Aold.ravel(), A.ravel(), 'b.')
-        plt.xlabel('Old matrix element')
-        plt.ylabel('New matrix element')
-        plt.title('scale columns: %s, priors: %i' % (scale_columns, Npriors))
-        ps.savefig()
-
-        plt.clf()
-        plt.plot(Aold.ravel(), (A-Aold).ravel(), 'b.')
-        plt.xlabel('Old matrix element')
-        plt.ylabel('New-Old matrix element')
-        #plt.title('scale columns: %s, priors: %i' % (scale_columns, Npriors))
-        ps.savefig()
+            # plt.clf()
+            # plt.plot(Aold.ravel(), (A-Aold).ravel(), 'b.')
+            # plt.xlabel('Old matrix element')
+            # plt.ylabel('New-Old matrix element')
+            # #plt.title('scale columns: %s, priors: %i' % (scale_columns, Npriors))
+            # ps.savefig()
+                
+            plt.clf()
+            #plt.plot(Aold.ravel(), A.ravel(), 'b.')
+            reldif = ((A-Aold)/np.maximum(1e-6, Aold)).ravel()
+            mx = reldif.max()
+            plt.plot(Aold.ravel(), reldif, 'b.')
+            plt.xlabel('Old matrix element')
+            #plt.ylabel('New matrix element')
+            plt.ylabel('Relative change in New matrix element')
+            plt.ylim(-mx, mx)
+            ps.savefig()
             
-        plt.clf()
-        #plt.plot(Aold.ravel(), A.ravel(), 'b.')
-        reldif = ((A-Aold)/np.maximum(1e-6, Aold)).ravel()
-        mx = reldif.max()
-        plt.plot(Aold.ravel(), reldif, 'b.')
-        plt.xlabel('Old matrix element')
-        #plt.ylabel('New matrix element')
-        plt.ylabel('Relative change in New matrix element')
-        plt.ylim(-mx, mx)
-        ps.savefig()
-            
-        
-
         del A
         del B
 
@@ -237,15 +243,14 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
             #X[colscales > 0] /= colscales[colscales > 0]
             X /= colscales
 
-        print('Returning:  ', X)
-
-        Xold = super(ConstrainedDenseOptimizer, self).getUpdateDirection(
-            tractor, allderivs, damp=damp, priors=priors,
-            scale_columns=scale_columns, chiImages=chiImages, variance=variance,
-            shared_params=False)
-        print('COpt result:', Xold)
-
-        print('Relative difference:', ', '.join(['%.1f' % d for d in 100.*((X - Xold) / np.maximum(1e-18, np.abs(Xold)))]), 'percent')
+        if False:
+            print('Returning:  ', X)
+            Xold = super(ConstrainedDenseOptimizer, self).getUpdateDirection(
+                tractor, allderivs, damp=damp, priors=priors,
+                scale_columns=scale_columns, chiImages=chiImages, variance=variance,
+                shared_params=False)
+            print('COpt result:', Xold)
+            print('Relative difference:', ', '.join(['%.1f' % d for d in 100.*((X - Xold) / np.maximum(1e-18, np.abs(Xold)))]), 'percent')
 
         return X
 

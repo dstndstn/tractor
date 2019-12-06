@@ -470,8 +470,8 @@ class LsqrOptimizer(Optimizer):
                 sprows.extend([ri + Nrows for ri in rA])
                 spcols.extend(cA)
                 spvals.extend([vi / colscales[ci] for vi, ci in zip(vA, cA)])
-                print('Prior: adding sparse vals', [vi / colscales[ci] for vi, ci in zip(vA, cA)])
-                print(' with b', pb)
+                #print('Prior: adding sparse vals', [vi / colscales[ci] for vi, ci in zip(vA, cA)])
+                #print(' with b', pb)
                 oldnrows = Nrows
                 nr = listmax(rA, -1) + 1
                 Nrows += nr
