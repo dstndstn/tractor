@@ -192,7 +192,7 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
             chi = chi.flat
             #npix = len(chi)
             B[row0: row0 + npix] = chi
-        del chi
+            del chi
 
         # X, resids, rank, singular_vals
         X,_,_,_ = lstsq(A, B, rcond=None)
