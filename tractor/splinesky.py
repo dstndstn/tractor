@@ -190,32 +190,13 @@ class SplineSky(ParamList, ducks.ImageCalibration):
             derivs.append(False)
         return derivs
 
-    def write_fits(self, filename, hdr=None, primhdr=None):
-        tt = type(self)
-        sky_type = '%s.%s' % (tt.__module__, tt.__name__)
-        if hdr is None:
-            import fitsio
-            hdr = fitsio.FITSHDR()
-
-        if primhdr is None:
-            import fitsio
-            primhdr = fitsio.FITSHDR()
-        hdr.add_record(dict(name='SKY', value=sky_type,
-                            comment='Sky class'))
-
-        primhdr.add_record(dict(name='SKY', value=sky_type,
-                                comment='Sky class'))
-        # hdr.add_record(dict(name='SPL_ORD', value=self.order,
-        #                    comment='Spline sky order'))
-        # this writes all params as header cards
-        #self.toFitsHeader(hdr, prefix='SKY_')
-
-        #fits = fitsio.FITS(filename, 'rw')
-        #fits.write(None, header=primhdr, clobber=True)
-        #fits.write(self.c, header=hdr)
-        # fits.close()
+    def to_fits_table(self):
+        # Returns a single-row FITS table
         from astrometry.util.fits import fits_table
         T = fits_table()
+        tt = type(self)
+        sky_type = '%s.%s' % (tt.__module__, tt.__name__)
+        T.skyclass = np.array([sky_type])
         T.gridw = np.atleast_1d(self.W).astype(np.int32)
         T.gridh = np.atleast_1d(self.H).astype(np.int32)
         T.xgrid = np.atleast_2d(self.xgrid).astype(np.int32)
@@ -226,6 +207,22 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         T.gridvals = np.array([gridvals]).astype(np.float32)
         T.order = np.atleast_1d(self.order).astype(np.uint8)
         assert(len(T) == 1)
+        return T
+
+    def write_fits(self, filename, hdr=None, primhdr=None):
+        if hdr is None:
+            import fitsio
+            hdr = fitsio.FITSHDR()
+        if primhdr is None:
+            import fitsio
+            primhdr = fitsio.FITSHDR()
+        T = self.to_fits_table()
+        sky_type = T.skyclass[0].strip()
+        hdr.add_record(dict(name='SKY', value=sky_type,
+                            comment='Sky class'))
+        primhdr.add_record(dict(name='SKY', value=sky_type,
+                                comment='Sky class'))
+        T = fits_table()
         T.writeto(filename, header=hdr, primheader=primhdr)
 
     @classmethod
