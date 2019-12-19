@@ -72,10 +72,9 @@ if eigen_inc is None:
 inc = eigen_inc.split()
 
 ceres_inc = os.environ.get('CERES_INC', None)
-ceres_lib = os.environ.get('CERES_LIB', None)
+ceres_lib = os.environ.get('CERES_LIB', '-lceres')
 if ceres_inc is not None:
     inc.append(ceres_inc)
-
 link = []
 if ceres_lib is not None:
     link.append(ceres_lib)
