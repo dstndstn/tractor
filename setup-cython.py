@@ -153,7 +153,7 @@ for ext in cymod1 + cymod2:
         setattr(ext, k, v)
 
 os.system('echo "version = \'$(git describe)\'" > tractor/version.py')
-py_modules.append('tractor.version')
+pymods.append('tractor.version')
 
 # print('MyDistribution:', MyDistribution)
 # print('isinst:', isinstance(        
