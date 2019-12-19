@@ -2,6 +2,22 @@ import os
 from distutils.core import setup, Extension
 from distutils.dist import Distribution
 from Cython.Build import cythonize
+#from setuptools.command.install import install
+
+# from http://stackoverflow.com/questions/12491328/python-distutils-not-include-the-swig-generated-module
+from distutils.command.build import build
+class CustomBuild(build):
+    sub_commands = [
+        ('build_ext', build.has_ext_modules),
+        ('build_py', build.has_pure_modules),
+        ('build_clib', build.has_c_libraries),
+        ('build_scripts', build.has_scripts),
+    ]
+
+# class CustomInstall(install):
+#     def run(self):
+#         self.run_command('build_ext')
+#         self.do_egg_install()
 
 import numpy as np
 numpy_inc = [np.get_include()]
@@ -18,12 +34,14 @@ module_fourier = Extension('tractor._mp_fourier',
                            sources = ['tractor/mp_fourier.i'],
                            include_dirs = numpy_inc,
                            undef_macros=['NDEBUG'],
+                           swig_opts=['-outdir', 'tractor'],
                            **kwargs)
 module_mix = Extension('tractor._mix',
                        sources = ['tractor/mix.i'],
                        include_dirs = numpy_inc,
                        extra_objects = [],
                        undef_macros=['NDEBUG'],
+                       swig_opts=['-outdir', 'tractor'],
     )
 #extra_compile_args=['-O0','-g'],
 #extra_link_args=['-O0', '-g'],
@@ -33,9 +51,11 @@ module_em = Extension('tractor._emfit',
                       include_dirs = numpy_inc,
                       extra_objects = [],
                       undef_macros=['NDEBUG'],
+                      swig_opts=['-outdir', 'tractor'],
                       )
 
 mods = [module_mix, module_em, module_fourier]
+pymods = ['tractor.mix', 'tractor.emfit', 'tractor.mp_fourier']
 
 ## Ceres module
 import sys
@@ -66,7 +86,7 @@ module_ceres = Extension('tractor._ceres',
                          extra_compile_args = inc,
                          extra_link_args = link,
                          language = 'c++',
-                         swig_opts=['-c++'],
+                         swig_opts=['-c++', '-outdir', 'tractor'],
                          )
 class MyDistribution(Distribution):
     display_options = Distribution.display_options + [
@@ -76,7 +96,7 @@ key = '--with-ceres'
 if key in sys.argv:
     sys.argv.remove(key)
     mods.append(module_ceres)
-    #pymods.append('tractor.ceres')
+    pymods.append('tractor.ceres')
 
 ##end Ceres
 
@@ -133,12 +153,18 @@ for ext in cymod1 + cymod2:
     for k,v in kwargs.items():
         setattr(ext, k, v)
 
+# print('MyDistribution:', MyDistribution)
+# print('isinst:', isinstance(        
 setup(
     name="tractor",
     distclass=MyDistribution,
+#cmdclass={'build': CustomBuild, 'install': CustomInstall},
+    cmdclass={'build': CustomBuild},
     version="git",
     packages=['tractor', 'wise'],
     package_dir={'wise':'wise', 'tractor':'tractor'},
     package_data={'wise':['wise-psf-avg.fits', 'allsky-atlas.fits']},
-    ext_modules = cymod1 + cymod2 + mods,
+    ext_modules = mods + cymod1 + cymod2,
+    py_modules = pymods,
+    #zip_safe=False,   # we hates it
     )
