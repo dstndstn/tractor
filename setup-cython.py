@@ -152,6 +152,9 @@ for ext in cymod1 + cymod2:
     for k,v in kwargs.items():
         setattr(ext, k, v)
 
+os.system('echo "version = \'$(git describe)\'" > tractor/version.py')
+py_modules.append('tractor.version')
+
 # print('MyDistribution:', MyDistribution)
 # print('isinst:', isinstance(        
 setup(
