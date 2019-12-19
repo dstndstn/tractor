@@ -92,7 +92,8 @@ for ext in cymod1 + cymod2:
 setup(
 name="tractor",
     version="git",
-    packages=['tractor'], #, 'wise'],
+    packages=['tractor', 'wise'],
     package_dir={'wise':'wise', 'tractor':'tractor'},
+    package_data={'wise':['wise-psf-avg.fits', 'allsky-atlas.fits']},
     ext_modules = cymod1 + cymod2 + mods,
     )

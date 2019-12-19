@@ -110,15 +110,15 @@ class LsqrOptimizer(Optimizer):
                                         priors=priors,
                                         scale_columns=False, chiImages=chis0,
                                         shared_params=shared_params)
+            if X is None or len(X) == 0:
+                print('Error getting update direction')
+                break
+
             #topt = Time() - t0
             #logverb('forced phot: opt:', topt)
             #print('forced phot: update', X)
             if rois is not None:
                 tractor.images = realims
-
-            if len(X) == 0:
-                print('Error getting update direction')
-                break
 
             # tryUpdates():
             if alphas is None:
