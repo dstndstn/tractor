@@ -1,5 +1,6 @@
 import os
 from distutils.core import setup, Extension
+from distutils.dist import Distribution
 from Cython.Build import cythonize
 
 import numpy as np
@@ -35,6 +36,49 @@ module_em = Extension('tractor._emfit',
                       )
 
 mods = [module_mix, module_em, module_fourier]
+
+## Ceres module
+import sys
+from subprocess import check_output
+
+eigen_inc = os.environ.get('EIGEN_INC', None)
+if eigen_inc is None:
+    try:
+        eigen_inc = check_output(['pkg-config', '--cflags', 'eigen3']).strip()
+        # py3
+        eigen_inc = eigen_inc.decode()
+    except:
+        eigen_inc = ''
+inc = eigen_inc.split()
+
+ceres_inc = os.environ.get('CERES_INC', None)
+ceres_lib = os.environ.get('CERES_LIB', None)
+if ceres_inc is not None:
+    inc.append(ceres_inc)
+
+link = []
+if ceres_lib is not None:
+    link.append(ceres_lib)
+
+module_ceres = Extension('tractor._ceres',
+                         sources=['tractor/ceres-tractor.cc', 'tractor/ceres.i'],
+                         include_dirs = numpy_inc,
+                         extra_compile_args = inc,
+                         extra_link_args = link,
+                         language = 'c++',
+                         swig_opts=['-c++'],
+                         )
+class MyDistribution(Distribution):
+    display_options = Distribution.display_options + [
+        ('with-ceres', None, 'build Ceres module?'),
+        ]
+key = '--with-ceres'
+if key in sys.argv:
+    sys.argv.remove(key)
+    mods.append(module_ceres)
+    #pymods.append('tractor.ceres')
+
+##end Ceres
 
 nthreads = 4
 comdir2 = dict(language_level=3,
@@ -90,7 +134,8 @@ for ext in cymod1 + cymod2:
         setattr(ext, k, v)
 
 setup(
-name="tractor",
+    name="tractor",
+    distclass=MyDistribution,
     version="git",
     packages=['tractor', 'wise'],
     package_dir={'wise':'wise', 'tractor':'tractor'},
