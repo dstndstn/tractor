@@ -24,12 +24,13 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
                            shared_params=True,
                            get_A_matrix=False):
 
+        if shared_params or scales_only or damp>0 or variance:
+            raise RuntimeError('Not implemented')
         # I don't want to deal with this right now!
         assert(shared_params == False)
         assert(scales_only == False)
         assert(damp == 0.)
         assert(variance == False)
-        #assert(priors == False)
 
         # Returns: numpy array containing update direction.
         # If *variance* is True, return    (update,variance)
@@ -112,25 +113,6 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
             if priorVals is not None:
                 rA, cA, vA, pb, mub = priorVals
                 Npriors = max(Npriors, max([1+max(r) for r in rA]))
-                #print('Priors: rows', rA)
-                #print('Cols:', cA)
-                #print('Number of prior "pixels":', Npriors)
-                #assert(False)
-                # sprows.extend([ri + Nrows for ri in rA])
-                # spcols.extend(cA)
-                # spvals.extend([vi / colscales[ci] for vi, ci in zip(vA, cA)])
-                # oldnrows = Nrows
-                # nr = listmax(rA, -1) + 1
-                # Nrows += nr
-                # logverb('Nrows was %i, added %i rows of priors => %i' %
-                #         (oldnrows, nr, Nrows))
-                # # if len(cA) == 0:
-                # #     Ncols = 0
-                # # else:
-                # #     Ncols = 1 + max(cA)
-                # 
-                # b = np.zeros(Nrows)
-                # b[oldnrows:] = np.hstack(pb)
 
         Nrows = Npixels + Npriors
         if Nrows == 0:
@@ -157,13 +139,15 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
                 if scale_columns:
                     # accumulate L2 norm
                     scale2 += np.dot(dimg, dimg)
+
+                assert(np.all(np.isfinite(dimg)))
+                #print('Derivative', col, 'in image', img, 'gave non-finite value!')
+                #tractor.printThawedParams()
+
                 A[rows, col] = dimg
                 del dimg
             if scale_columns:
                 colscales2[col] = scale2
-                #scale = np.sqrt(scale2)
-                #if scale > 0:
-                #    A[:,col] /= scale
 
         #print('Colscales:', colscales)
         if Npriors > 0:
@@ -180,6 +164,9 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
             for col,scale2 in enumerate(colscales2):
                 if scale2 > 0:
                     A[:,col] /= np.sqrt(scale2)
+                else:
+                    # Set to safe value...
+                    colscales2[col] = 1.
             colscales = np.sqrt(colscales2)
 
         chimap = {}
@@ -248,7 +235,6 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
         del B
 
         if scale_columns:
-            #X[colscales > 0] /= colscales[colscales > 0]
             X /= colscales
 
         if False:
@@ -259,6 +245,9 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
                 shared_params=False)
             print('COpt result:', Xold)
             print('Relative difference:', ', '.join(['%.1f' % d for d in 100.*((X - Xold) / np.maximum(1e-18, np.abs(Xold)))]), 'percent')
+
+
+        assert(np.all(np.isfinite(X)))
 
         return X
 

@@ -222,7 +222,7 @@ class SplineSky(ParamList, ducks.ImageCalibration):
                             comment='Sky class'))
         primhdr.add_record(dict(name='SKY', value=sky_type,
                                 comment='Sky class'))
-        T = fits_table()
+        from astrometry.util.fits import fits_table
         T.writeto(filename, header=hdr, primheader=primhdr)
 
     @classmethod
