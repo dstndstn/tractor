@@ -29,7 +29,7 @@ cython-clean:
 	@for x in basics brightness ceres_optimizer ducks ellipses engine galaxy \
 		image imageutils lsqr_optimizer mixture_profiles motion optimize patch \
 		pointsource psf psfex sersic sfd shifted sky splinesky tractortime \
-		utils wcs; do \
+		utils wcs constrained_optimizer dense_optimizer; do \
 		rm tractor/$$x.c tractor/$$x.cpython*.so; \
 	done
 
@@ -73,7 +73,7 @@ TRACTOR_INSTALL_PY := __init__.py version.py basics.py brightness.py cache.py \
 	sdss.py sersic.py sfd.py shifted.py sky.py source_extractor.py \
 	splinesky.py tractortime.py utils.py wcs.py \
 	optimize.py lsqr_optimizer.py ceres_optimizer.py \
-	constrained_optimizer.py
+	constrained_optimizer.py dense_optimizer.py
 
 TRACTOR_INSTALL := $(TRACTOR_INSTALL_PY) \
 	mix.py _mix$(PYTHON_SO_EXT) \
