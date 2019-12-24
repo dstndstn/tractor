@@ -1,6 +1,5 @@
 from __future__ import print_function
 import numpy as np
-from astrometry.util.ttime import Time
 from tractor.engine import logverb, isverbose, logmsg
 from tractor.optimize import Optimizer
 from tractor.lsqr_optimizer import LsqrOptimizer
@@ -11,7 +10,6 @@ from numpy.linalg import lstsq
 # from astrometry.util.plotutils import PlotSequence
 # ps = PlotSequence('opt')
 # import pylab as plt
-
         
 class ConstrainedDenseOptimizer(ConstrainedOptimizer):
 
@@ -126,23 +124,27 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
         for col,param in enumerate(allderivs):
             scale2 = 0.
             for (deriv, img) in param:
+                if deriv.patch is None:
+                    continue
                 inverrs = img.getInvError()
                 H,W = img.shape
                 row0,npix = imgoffs[img]
                 rows = slice(row0, row0+npix)
 
-                # FIXME -- shortcut if deriv bounds == img bounds?
-                dimg = np.zeros((H,W), np.float32)
-                deriv.addTo(dimg)
-                dimg *= inverrs
-                dimg = dimg.flat
-                if scale_columns:
-                    # accumulate L2 norm
-                    scale2 += np.dot(dimg, dimg)
-
+                # shortcut for deriv bounds == img bounds
+                if deriv.x0 == 0 and deriv.y0 == 0 and deriv.patch.shape==(H,W):
+                    dimg = (deriv.patch * inverrs).flat
+                else:
+                    dimg = np.zeros((H,W), np.float32)
+                    deriv.addTo(dimg)
+                    dimg *= inverrs
+                    dimg = dimg.flat
                 assert(np.all(np.isfinite(dimg)))
                 #print('Derivative', col, 'in image', img, 'gave non-finite value!')
                 #tractor.printThawedParams()
+                if scale_columns:
+                    # accumulate L2 norm
+                    scale2 += np.dot(dimg, dimg)
 
                 A[rows, col] = dimg
                 del dimg
