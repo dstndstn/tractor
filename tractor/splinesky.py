@@ -34,6 +34,7 @@ class SplineSky(ParamList, ducks.ImageCalibration):
                     im = im[mask[ylo:yhi, xlo:xhi]]
                 if len(im):
                     grid[iy, ix] = estimator(im)
+                    assert(np.isfinite(grid[iy,ix]))
 
         return SplineSky(xgrid, ygrid, grid)
 
@@ -221,7 +222,6 @@ class SplineSky(ParamList, ducks.ImageCalibration):
                             comment='Sky class'))
         primhdr.add_record(dict(name='SKY', value=sky_type,
                                 comment='Sky class'))
-        T = fits_table()
         T.writeto(filename, header=hdr, primheader=primhdr)
 
     @classmethod

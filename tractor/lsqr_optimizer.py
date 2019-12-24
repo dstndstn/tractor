@@ -110,15 +110,15 @@ class LsqrOptimizer(Optimizer):
                                         priors=priors,
                                         scale_columns=False, chiImages=chis0,
                                         shared_params=shared_params)
+            if X is None or len(X) == 0:
+                print('Error getting update direction')
+                break
+
             #topt = Time() - t0
             #logverb('forced phot: opt:', topt)
             #print('forced phot: update', X)
             if rois is not None:
                 tractor.images = realims
-
-            if len(X) == 0:
-                print('Error getting update direction')
-                break
 
             # tryUpdates():
             if alphas is None:
@@ -381,7 +381,7 @@ class LsqrOptimizer(Optimizer):
 
         # FIXME -- shared_params should share colscales!
 
-        colscales = np.ones(len(allderivs))
+        colscales = np.ones(Ncols)
         for col, param in enumerate(allderivs):
             RR = []
             VV = []
@@ -470,6 +470,8 @@ class LsqrOptimizer(Optimizer):
                 sprows.extend([ri + Nrows for ri in rA])
                 spcols.extend(cA)
                 spvals.extend([vi / colscales[ci] for vi, ci in zip(vA, cA)])
+                #print('Prior: adding sparse vals', [vi / colscales[ci] for vi, ci in zip(vA, cA)])
+                #print(' with b', pb)
                 oldnrows = Nrows
                 nr = listmax(rA, -1) + 1
                 Nrows += nr
