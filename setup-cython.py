@@ -2,7 +2,6 @@ import os
 from distutils.core import setup, Extension
 from distutils.dist import Distribution
 from Cython.Build import cythonize
-#from setuptools.command.install import install
 
 # from http://stackoverflow.com/questions/12491328/python-distutils-not-include-the-swig-generated-module
 from distutils.command.build import build
@@ -14,21 +13,18 @@ class CustomBuild(build):
         ('build_scripts', build.has_scripts),
     ]
 
-# class CustomInstall(install):
-#     def run(self):
-#         self.run_command('build_ext')
-#         self.do_egg_install()
-
 import numpy as np
 numpy_inc = [np.get_include()]
 
-kwargs = {}
 if os.environ.get('CC') == 'icc':
-    kwargs.update(extra_compile_args=['-g', '-xhost', '-axMIC-AVX512'],
-                  extra_link_args=['-g', '-lsvml'])
+    compile_args = ['-g', '-xhost', '-axMIC-AVX512']
+    link_args = ['-g', '-lsvml']
 else:
-    kwargs.update(extra_compile_args=['-g', '-std=c99'],
-                  extra_link_args=['-g'])
+    compile_args = ['-g', '-std=c99']
+    link_args = ['-g']
+
+kwargs = dict(extra_compile_args=compile_args,
+              extra_link_args=link_args)
 
 module_fourier = Extension('tractor._mp_fourier',
                            sources = ['tractor/mp_fourier.i'],
@@ -42,9 +38,7 @@ module_mix = Extension('tractor._mix',
                        extra_objects = [],
                        undef_macros=['NDEBUG'],
                        swig_opts=['-outdir', 'tractor'],
-    )
-#extra_compile_args=['-O0','-g'],
-#extra_link_args=['-O0', '-g'],
+                       **kwargs)
 
 module_em = Extension('tractor._emfit',
                       sources = ['tractor/emfit.i' ],
@@ -52,7 +46,7 @@ module_em = Extension('tractor._emfit',
                       extra_objects = [],
                       undef_macros=['NDEBUG'],
                       swig_opts=['-outdir', 'tractor'],
-                      )
+                      **kwargs)
 
 mods = [module_mix, module_em, module_fourier]
 pymods = ['tractor.mix', 'tractor.emfit', 'tractor.mp_fourier']
@@ -82,8 +76,8 @@ if ceres_lib is not None:
 module_ceres = Extension('tractor._ceres',
                          sources=['tractor/ceres-tractor.cc', 'tractor/ceres.i'],
                          include_dirs = numpy_inc,
-                         extra_compile_args = inc,
-                         extra_link_args = link,
+                         extra_compile_args = compile_args + inc,
+                         extra_link_args = link_args + link,
                          language = 'c++',
                          swig_opts=['-c++', '-outdir', 'tractor'],
                          )
@@ -103,6 +97,7 @@ nthreads = 4
 comdir2 = dict(language_level=3,
                profile=True)
 
+# galaxy.py for some reason can't handle infer_types.
 cymod2 = cythonize(
     ['tractor/galaxy.py',],
     annotate=True,
@@ -115,8 +110,7 @@ comdir1 = dict(language_level=3,
 cymod1 = cythonize(
     [
         'tractor/patch.pyx',
-        #'tractor/galaxy.py',
-        #'tractor/patch.py',
+
         'tractor/basics.py',
         'tractor/brightness.py',
         'tractor/ceres_optimizer.py',
@@ -155,12 +149,9 @@ for ext in cymod1 + cymod2:
 os.system('echo "version = \'$(git describe)\'" > tractor/version.py')
 pymods.append('tractor.version')
 
-# print('MyDistribution:', MyDistribution)
-# print('isinst:', isinstance(        
 setup(
     name="tractor",
     distclass=MyDistribution,
-#cmdclass={'build': CustomBuild, 'install': CustomInstall},
     cmdclass={'build': CustomBuild},
     version="git",
     packages=['tractor', 'wise'],
@@ -169,4 +160,4 @@ setup(
     ext_modules = mods + cymod1 + cymod2,
     py_modules = pymods,
     #zip_safe=False,   # we hates it
-    )
+)
