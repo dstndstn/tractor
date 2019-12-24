@@ -1,8 +1,6 @@
 from __future__ import print_function
 import numpy as np
-from tractor.engine import logverb, isverbose, logmsg
-from tractor.optimize import Optimizer
-from tractor.lsqr_optimizer import LsqrOptimizer
+from tractor.engine import logverb
 from tractor.constrained_optimizer import ConstrainedOptimizer
 
 from numpy.linalg import lstsq
