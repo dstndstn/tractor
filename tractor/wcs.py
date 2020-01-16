@@ -255,6 +255,17 @@ class ConstantFitsWcs(ParamList, ducks.ImageCalibration):
         '''
         return self.pixscale
 
+    def pixelDerivsToPositionDerivs(self, pos, src, counts0, patch0,
+                                    patchdx, patchdy):
+        # Convert x,y derivatives to Position derivatives
+        derivs = []
+        for i,pname in pos.getThawedParamIndicesAndName():
+            deriv = (patchdx * self.cd_inverse[0, i] +
+                     patchdy * self.cd_inverse[1, i]) * counts0
+            deriv.setName('d(ptsrc)/d(pos.%s)' % pname)
+            derivs.append(deriv)
+        return derivs
+
     def toStandardFitsHeader(self, hdr):
         if self.x0 != 0 or self.y0 != 0:
             wcs = self.wcs.get_subimage(self.x0, self.y0,
