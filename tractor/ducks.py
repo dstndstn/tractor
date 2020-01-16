@@ -414,7 +414,7 @@ class WCS(ImageCalibration, Params):
         cdi = self.cdInverseAtPosition(pos, src=src)
         # Get thawed Position parameter indices
         derivs = []
-        for i,pname in pos.getThawedParamIndicesAndName():
+        for i,pname in pos.getThawedParamIndicesAndNames():
             deriv = (patchdx * cdi[0, i] +
                      patchdy * cdi[1, i]) * counts0
             deriv.setName('d(ptsrc)/d(pos.%s)' % pname)

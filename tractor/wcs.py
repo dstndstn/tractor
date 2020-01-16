@@ -42,16 +42,6 @@ class NullWCS(BaseParams, ducks.WCS):
     def cdInverseAtPosition(self, pos, src=None):
         return self.cd_inverse
 
-    def pixelDerivsToPositionDerivs(self, pos, src, counts0, patch0, patchdx, patchdy):
-        # Convert x,y derivatives to Position derivatives
-        derivs = []
-        for i,pname in pos.getThawedParamIndicesAndName():
-            deriv = (patchdx * self.cd_inverse[0, i] +
-                     patchdy * self.cd_inverse[1, i]) * counts0
-            deriv.setName('d(ptsrc)/d(pos.%s)' % pname)
-            derivs.append(deriv)
-        return derivs
-
     def pixscale_at(self, x, y):
         return self.pixscale
 
@@ -158,7 +148,7 @@ class WcslibWcs(BaseParams, ducks.ImageCalibration):
                          [dec1 - dec0,        dec2 - dec0]])
 
 
-class ConstantFitsWcs(ParamList, ducks.ImageCalibration):
+class ConstantFitsWcs(ParamList, ducks.WCS):
     '''
     A WCS implementation that wraps a FITS WCS object (with a pixel
     offset).
@@ -254,17 +244,6 @@ class ConstantFitsWcs(ParamList, ducks.ImageCalibration):
         in *arcseconds* per pixel.
         '''
         return self.pixscale
-
-    def pixelDerivsToPositionDerivs(self, pos, src, counts0, patch0,
-                                    patchdx, patchdy):
-        # Convert x,y derivatives to Position derivatives
-        derivs = []
-        for i,pname in pos.getThawedParamIndicesAndName():
-            deriv = (patchdx * self.cd_inverse[0, i] +
-                     patchdy * self.cd_inverse[1, i]) * counts0
-            deriv.setName('d(ptsrc)/d(pos.%s)' % pname)
-            derivs.append(deriv)
-        return derivs
 
     def toStandardFitsHeader(self, hdr):
         if self.x0 != 0 or self.y0 != 0:
