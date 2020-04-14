@@ -4,11 +4,21 @@ import scipy.interpolate as interp
 from tractor.utils import ParamList
 from tractor import ducks
 
+def median_estimator(pix, mask, min_fraction=None, **kwargs):
+    N = len(pix)
+    if mask is not None:
+        pix = pix[mask]
+    if len(pix) == 0:
+        return 0.
+    if min_fraction is not None:
+        if len(pix) <= (N * min_fraction):
+            return 0.
+    return np.median(pix)
 
 class SplineSky(ParamList, ducks.ImageCalibration):
 
     @staticmethod
-    def BlantonMethod(image, mask, gridsize, estimator=np.median):
+    def BlantonMethod(image, mask, gridsize, estimator=median_estimator, **kwargs):
         '''
         mask: True to use pixel.  None for no masking.
         '''
@@ -31,10 +41,12 @@ class SplineSky(ParamList, ducks.ImageCalibration):
                 xlo, xhi = int(max(0, x - halfbox)), int(min(W, x + halfbox))
                 im = image[ylo:yhi, xlo:xhi]
                 if mask is not None:
-                    im = im[mask[ylo:yhi, xlo:xhi]]
-                if len(im):
-                    grid[iy, ix] = estimator(im)
-                    assert(np.isfinite(grid[iy,ix]))
+                    msk = mask[ylo:yhi, xlo:xhi]
+                g = estimator(im, msk, **kwargs)
+                assert(np.isfinite(g))
+                grid[iy, ix] = g
+                #print('box [%4i, %4i], [%4i, %4i]: %6i/%6i (%3.0f %%) unmasked pix -> %8.3f' %
+                #(xlo, xhi, ylo, yhi, len(im), (yhi-ylo)*(xhi-xlo), 100. * len(im) / ((yhi-ylo)*(xhi-xlo)), grid[iy,ix]))
 
         return SplineSky(xgrid, ygrid, grid)
 
