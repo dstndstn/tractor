@@ -57,6 +57,8 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         self.order = order
         self.spl = interp.RectBivariateSpline(X, Y, bg.T,
                                               kx=order, ky=order)
+        # NOTE, the "c" here are NOT equal to the original "bg" grid values.
+        # To get back grid values, run spl(X,Y).
         (tx, ty, c) = self.spl.tck
         super(SplineSky, self).__init__(*c)
         # override -- "c" is a list, so this should work as expected
