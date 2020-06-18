@@ -434,24 +434,54 @@ class ProfileGalaxy(object):
         fftmix = amix
         mogmix = None
 
+        #mogweights = None
+        #fftweights = None
         #print('Galaxy affine profile:', amix)
 
         if hybrid:
             # Split "amix" into terms that we will evaluate using MoG
             # vs FFT.
             vv = amix.var[:, 0, 0] + amix.var[:, 1, 1]
-            nsigma = 3.
-            # Terms that will wrap-around significantly...
-            I = ((vv * nsigma**2) > (pW**2))
-            if np.any(I):
-                # print('Evaluating', np.sum(I), 'terms as MoGs')
-                mogmix = mp.MixtureOfGaussians(amix.amp[I],
-                                               amix.mean[I, :] + np.array([px, py])[np.newaxis, :],
-                                               amix.var[I, :, :], quick=True)
-            I = np.logical_not(I)
-            if np.any(I):
-                # print('Evaluating', np.sum(I), 'terms with FFT')
-                fftmix = mp.MixtureOfGaussians(amix.amp[I], amix.mean[I, :], amix.var[I, :, :],
+            # Ramp between:
+            nsigma1 = 3.
+            nsigma2 = 4.
+            # Terms that will wrap-around significantly if evaluated with FFT...
+            # We want to know: at the outer edge of this patch, how many sigmas
+            # out are we?  If small, render w/ MoG.
+            IM = ((pW/2)**2 < (nsigma2**2 * vv))
+            IF = ((pW/2)**2 > (nsigma1**2 * vv))
+            #print('Evaluating', np.sum(IM), 'terms as MoG,', np.sum(IF), 'with FFT,',
+            #      np.sum(IM) + np.sum(IF) - len(IM), 'with both')
+            #print('  sizes vs PSF size', pW, ':', ', '.join(['%.3g' % s for s in np.sqrt(vv)]))
+            ramp = np.any(IM*IF)
+
+            if np.any(IM):
+                #print('Evaluating', np.sum(I), 'terms as MoGs')
+                #mogweights = np.min(1., (nsigma2 - ns[IM]) / (nsigma2 - nsigma1))
+                amps = amix.amp[IM]
+                if ramp:
+                    ns = (pW/2) / np.maximum(1e-6, np.sqrt(vv))
+                    #print('N sigmas:', ns)
+                    mogweights = np.minimum(1., (nsigma2 - ns[IM]) / (nsigma2 - nsigma1))
+                    #print('MOG weights:', mogweights)
+                    fftweights = np.minimum(1., (ns[IF] - nsigma1) / (nsigma2 - nsigma1))
+                    #print('FFT weights:', fftweights)
+                    assert(np.all(mogweights > 0.))
+                    assert(np.all(mogweights <= 1.))
+                    assert(np.all(fftweights > 0.))
+                    assert(np.all(fftweights <= 1.))
+                    amps *= mogweights
+
+                mogmix = mp.MixtureOfGaussians(amps,
+                                               amix.mean[IM, :] + np.array([px, py])[np.newaxis, :],
+                                               amix.var[IM, :, :], quick=True)
+
+            if np.any(IF):
+                # print('Evaluating', np.sum(IF), 'terms with FFT')
+                amps = amix.amp[IF]
+                if ramp:
+                    amps *= fftweights
+                fftmix = mp.MixtureOfGaussians(amps, amix.mean[IF, :], amix.var[IF, :, :],
                                                 quick=True)
             else:
                 fftmix = None
