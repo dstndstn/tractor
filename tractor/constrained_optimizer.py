@@ -75,6 +75,7 @@ class ConstrainedOptimizer(LsqrOptimizer):
                     #        'with alpha', alpha, '; max alpha', a)
                     #print('Limiting step size to hit lower limit: param', i, 'limit', l, 'step size->', a)
                     maxalpha = min(maxalpha, a)
+                    self.hitLimit = True
                 if u is not None and px > u:
                     # This parameter hits the limit; compute the step size
                     # to just hit the limit.
@@ -84,6 +85,7 @@ class ConstrainedOptimizer(LsqrOptimizer):
                     #       'with alpha', alpha, '; max alpha', a)
                     #print('Limiting step size to hit upper limit: param', i, 'limit', u, 'step size->', a)
                     maxalpha = min(maxalpha, a)
+                    self.hitLimit = True
 
             for i,(d,m) in enumerate(zip(X, maxsteps)):
                 if m is None:
@@ -107,7 +109,7 @@ class ConstrainedOptimizer(LsqrOptimizer):
                 # Here, we "want" to hit the limit, but we won't necessarily
                 # accept the update that hits the limit.  Still want this flag
                 # set, or wait to check whether it improves the log-prob?
-                self.hitLimit = True
+                #self.hitLimit = True
                 # We could just multiply by alpha, but in case of numerical
                 # instability, clip values right to limits.
                 pa = []
