@@ -18,13 +18,14 @@ class ConstrainedOptimizer(LsqrOptimizer):
         # for s in tractor.catalog:
         #     print(s)
         R = {}
-        self.hitLimit = False
+        self.hit_limit = False
+        self.last_step_hit_limit = False
         for step in range(steps):
             #print('Optimize_loop: step', step)
             self.stepLimited = False
             dlnp,_,_ = self.optimize(tractor, **kwargs)
             #print('Optimize_loop: step', step, 'dlnp', dlnp, 'hit limit:',
-            #      self.hitLimit, 'step limit:', self.stepLimited)
+            #      self.hit_limit, 'step limit:', self.stepLimited)
             #for s in tractor.catalog:
             #    print(s)
 
@@ -33,7 +34,8 @@ class ConstrainedOptimizer(LsqrOptimizer):
             if self.stepLimited and dlnp <= dchisq_limited:
                 break
         R.update(steps=step)
-        R.update(hit_limit=self.hitLimit)
+        R.update(hit_limit=self.last_step_hit_limit,
+                 ever_hit_limit=self.hit_limit)
         return R
 
     def tryUpdates(self, tractor, X, alphas=None):
@@ -56,13 +58,14 @@ class ConstrainedOptimizer(LsqrOptimizer):
 
         maxsteps = tractor.getMaxStep()
         #print('Max step sizes:', maxsteps)
-        
+
         for alpha in alphas:
             #print('Stepping with alpha =', alpha)
             #logverb('  Stepping with alpha =', alpha)
             pa = [p + alpha * d for p, d in zip(p0, X)]
 
             # Check parameter limits
+            step_hit_limit = False
             maxalpha = alpha
             bailout = False
             for i,(l,u,px) in enumerate(zip(lowers, uppers, pa)):
@@ -75,7 +78,8 @@ class ConstrainedOptimizer(LsqrOptimizer):
                     #        'with alpha', alpha, '; max alpha', a)
                     #print('Limiting step size to hit lower limit: param', i, 'limit', l, 'step size->', a)
                     maxalpha = min(maxalpha, a)
-                    self.hitLimit = True
+                    step_hit_limit = True
+                    self.hit_limit = True
                 if u is not None and px > u:
                     # This parameter hits the limit; compute the step size
                     # to just hit the limit.
@@ -85,8 +89,19 @@ class ConstrainedOptimizer(LsqrOptimizer):
                     #       'with alpha', alpha, '; max alpha', a)
                     #print('Limiting step size to hit upper limit: param', i, 'limit', u, 'step size->', a)
                     maxalpha = min(maxalpha, a)
-                    self.hitLimit = True
+                    step_hit_limit = True
+                    self.hit_limit = True
 
+            if maxalpha < 1e-8:
+                # Here, we're ceasing line-search because we're very
+                # close to (or up against) a limit.  This can only
+                # happen on the first line-search step, so alphaBest
+                # is None and we're going to return quickly.
+                self.last_step_hit_limit = True
+                self.hit_limit = True
+                break
+
+            # Check parameter step-size limits
             for i,(d,m) in enumerate(zip(X, maxsteps)):
                 if m is None:
                     continue
@@ -98,18 +113,11 @@ class ConstrainedOptimizer(LsqrOptimizer):
                     maxalpha = min(maxalpha, a)
                     #print('Limiting step size for param max-step: param', i, 'max-step', m, 'step size->', a)
 
-            if maxalpha < 1e-8 and not self.stepLimited:
-                #print('Tiny maxalpha; bailing out without parameter update')
-                self.hitLimit = True
-                break
-
             if maxalpha < alpha:
                 alpha = maxalpha
+                # Cease line search (further steps want to exceed a limit, or have
+                # parameter step sizes that are significantly non-linear).
                 bailout = True
-                # Here, we "want" to hit the limit, but we won't necessarily
-                # accept the update that hits the limit.  Still want this flag
-                # set, or wait to check whether it improves the log-prob?
-                #self.hitLimit = True
                 # We could just multiply by alpha, but in case of numerical
                 # instability, clip values right to limits.
                 pa = []
@@ -144,9 +152,12 @@ class ConstrainedOptimizer(LsqrOptimizer):
                 break
 
             if pAfter < (pBest - 1.):
+                # We're getting significantly worse -- quit line search
                 break
 
             if pAfter > pBest:
+                # Best we've found so far -- accept this step!
+                self.last_step_hit_limit = step_hit_limit
                 alphaBest = alpha
                 pBest = pAfter
 
