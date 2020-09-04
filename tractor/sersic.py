@@ -15,8 +15,6 @@ if __name__ == '__main__':
 
 import numpy as np
 
-from scipy.interpolate import InterpolatedUnivariateSpline, UnivariateSpline, interp1d
-
 from tractor import mixture_profiles as mp
 from tractor.engine import *
 from tractor.utils import *
@@ -33,6 +31,7 @@ class SersicMixture(object):
         return SersicMixture.singleton._getProfile(sindex)
 
     def __init__(self):
+        from scipy.interpolate import InterpolatedUnivariateSpline, inter1d
         # GalSim: supports n=0.3 to 6.2.
 
         # A set of ranges [ser_lo, ser_hi], plus a list of fit parameters
