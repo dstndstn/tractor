@@ -19,6 +19,7 @@ def main():
 
     if os.environ.get('CC') == 'icc':
         compile_args = ['-g', '-xhost', '-axMIC-AVX512']
+        cpp_compile_args = compile_args
         link_args = ['-g', '-lsvml']
     else:
         compile_args = ['-g', '-std=c99']
