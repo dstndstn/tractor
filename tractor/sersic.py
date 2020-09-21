@@ -31,7 +31,7 @@ class SersicMixture(object):
         return SersicMixture.singleton._getProfile(sindex)
 
     def __init__(self):
-        from scipy.interpolate import InterpolatedUnivariateSpline, inter1d
+        from scipy.interpolate import InterpolatedUnivariateSpline, interp1d
         # GalSim: supports n=0.3 to 6.2.
 
         # A set of ranges [ser_lo, ser_hi], plus a list of fit parameters
