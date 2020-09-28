@@ -400,6 +400,16 @@ class Optimizer(object):
                 um.addTo(mm)
                 x0, y0 = um.x0, um.y0
                 uh, uw = um.shape
+                # If the unit-flux model stars off this image (x0,y0<0),
+                # trim the slice.
+                # (slice indexing correctly handles when the umod extends off
+                # the positive end)
+                if x0 < 0:
+                    uw += x0
+                    x0 = 0
+                if y0 < 0:
+                    uh += y0
+                    y0 = 0
                 slc = slice(y0, y0 + uh), slice(x0, x0 + uw)
                 dchi2 = np.sum((mm[slc] * scale * ie[slc]) ** 2)
                 IV[Nsky + ui] += dchi2
