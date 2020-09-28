@@ -39,11 +39,14 @@ class CeresOptimizer(Optimizer):
         x = self._ceres_forced_photom(tractor, result, *args, **kwargs)
         result.ceres_status = x
 
-    def optimize(self, tractor, **kwargs):
-        X = self._ceres_opt(tractor, **kwargs)
+    def optimize(self, tractor, variance=False, **kwargs):
+        X = self._ceres_opt(tractor, variance=variance, **kwargs)
         #print('optimize:', X)
         chisq0 = X['initial_cost']
         chisq1 = X['final_cost']
+        if variance:
+            # dlnp, dparams, alpha, variance
+            return chisq0 - chisq1, None, 1, X['variance']
         # dlnp, dparams, alpha
         return chisq0 - chisq1, None, 1
 
@@ -96,15 +99,15 @@ class CeresOptimizer(Optimizer):
         if bounds:
             lowers = tractor.getLowerBounds()
             uppers = tractor.getUpperBounds()
-            print('Lower bounds:', lowers)
-            print('Upper bounds:', uppers)
+            #print('Lower bounds:', lowers)
+            #print('Upper bounds:', uppers)
             assert(len(lowers) == len(pp))
             assert(len(uppers) == len(pp))
             lubounds = ([(i, float(b), True) for i, b in enumerate(lowers)
                          if b is not None] +
                         [(i, float(b), False) for i, b in enumerate(uppers)
                          if b is not None])
-            print('lubounds:', lubounds)
+            #print('lubounds:', lubounds)
 
         R = ceres_opt(trwrapper, tractor.getNImages(), params, variance_out,
                       (1 if scale_columns else 0),
@@ -115,7 +118,7 @@ class CeresOptimizer(Optimizer):
             R['variance'] = variance_out
 
         if scaled:
-            print('Opt. in scaled space:', params)
+            #print('Opt. in scaled space:', params)
             tractor.setParams(p0 + params * scales)
             if variance:
                 variance_out *= scales**2
@@ -129,7 +132,7 @@ class CeresOptimizer(Optimizer):
     # This function is called-back by _ceres_opt; it is called from
     # ceres-tractor.cc via ceres.i .
     def _getOneImageDerivs(self, tractor, imgi):
-        from tractor.patches import Patch
+        from tractor.patch import Patch
         # Returns:
         #     [  (param-index, deriv_x0, deriv_y0, deriv), ... ]
         # not necessarily in order of param-index
@@ -373,11 +376,11 @@ class CeresTractorAdapter(object):
         self.scale = scales
 
     def getImage(self, i):
-        print('CeresTractorAdapter: getImage(%i)' % i)
+        #print('CeresTractorAdapter: getImage(%i)' % i)
         return self.tractor.getImage(i)
 
     def getChiImage(self, i):
-        print('CeresTractorAdapter: getChiImage(%i)' % i)
+        #print('CeresTractorAdapter: getChiImage(%i)' % i)
         return self.tractor.getChiImage(i)
 
     def _getOneImageDerivs(self, i):
@@ -387,5 +390,5 @@ class CeresTractorAdapter(object):
         return derivs
 
     def setParams(self, p):
-        print('CeresTractorAdapter: setParams:', self.offset + self.scale * p)
+        #print('CeresTractorAdapter: setParams:', self.offset + self.scale * p)
         return self.tractor.setParams(self.offset + self.scale * p)
