@@ -379,6 +379,9 @@ class LsqrOptimizer(Optimizer):
         del nextrow
         Ncols = len(allderivs)
 
+        if variance:
+            var = np.zeros(Ncols, np.float32)
+
         # FIXME -- shared_params should share colscales!
 
         colscales = np.ones(Ncols)
@@ -442,6 +445,9 @@ class LsqrOptimizer(Optimizer):
             colscales[col] = scale
             if scales_only:
                 continue
+
+            if variance:
+                var[col] = scale**2
 
             sprows.append(rows)
             spcols.append(col)
@@ -590,8 +596,6 @@ class LsqrOptimizer(Optimizer):
             return A
 
         lsqropts = dict(show=isverbose(), damp=damp)
-        if variance:
-            lsqropts.update(calc_var=True)
 
         # Run lsqr()
         logverb('LSQR: %i cols (%i unique), %i elements' %
@@ -607,7 +611,7 @@ class LsqrOptimizer(Optimizer):
             # lsqr can trigger floating-point errors
             oldsettings = np.seterr(all='print')
             (X, istop, niters, r1norm, r2norm, anorm, acond,
-             arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
+             arnorm, xnorm, lsqrvar) = lsqr(A, b, **lsqropts)
         except ZeroDivisionError:
             print('ZeroDivisionError caught.  Returning zero.')
             bail = True
@@ -656,9 +660,7 @@ class LsqrOptimizer(Optimizer):
                 # Unapply shared parameter map.
                 var = var[paramindexmap]
 
-            if scale_columns:
-                var[colscales > 0] /= colscales[colscales > 0]**2
-            return X, var
+            return X, 1./np.array(var)
 
         return X
 
