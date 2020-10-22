@@ -83,7 +83,8 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         - *Lorder* is the order of the Lanczos interpolant used for
            shifting the image to subpixel positions.
         '''
-        # align
+        # ensure float32 and align
+        img = img.astype(np.float32)
         self.img = np.require(img, requirements=['A'])
         H,W = img.shape
         assert((H % 2) == 1)
