@@ -62,14 +62,16 @@ def main():
             eigen_inc = eigen_inc.decode()
         except:
             eigen_inc = ''
-    inc = eigen_inc.split()
+
+    import shlex
+    inc = shlex.split(eigen_inc)
     ceres_inc = os.environ.get('CERES_INC', None)
     ceres_lib = os.environ.get('CERES_LIB', '-lceres')
     if ceres_inc is not None:
-        inc.append(ceres_inc)
+        inc.extend(shlex.split(ceres_inc))
     link = []
     if ceres_lib is not None:
-        link.append(ceres_lib)
+        link.extend(shlex.split(ceres_lib))
     module_ceres = Extension('tractor._ceres',
                              sources=['tractor/ceres-tractor.cc', 'tractor/ceres.i'],
                              include_dirs = numpy_inc,
