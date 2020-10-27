@@ -37,7 +37,7 @@ directory.  But if you want to install it:
 
 There is a test script that renders SDSS images:
 
-    python example/tractor-sdss-synth.py
+    python examples/tractor-sdss-synth.py
 
 
 Prereqs:
