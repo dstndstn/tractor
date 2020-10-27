@@ -930,9 +930,11 @@ class SdssWcs(ParamList):
         # if not None, cd_at_pixel() returns this constant value; set via
         # setConstantCd()
         self.constant_cd = None
+        self.constant_cdi = None
 
     def setConstantCd(self, x, y):
         self.constant_cd = self.cdAtPixel(x, y)
+        self.constant_cdi = np.linalg.inv(self.constant_cd)
 
     def _setThing(self, i, val):
         N = len(SdssWcs.pnames)
@@ -990,6 +992,12 @@ class SdssWcs(ParamList):
         if self.constant_cd is not None:
             return self.constant_cd
         return self.astrans.cd_at_pixel(x + self.x0, y + self.y0)
+
+    def cdInverseAtPixel(self, x, y):
+        if self.constant_cdi is not None:
+            return self.constant_cdi
+        cd = self.astrans.cd_at_pixel(x + self.x0, y + self.y0)
+        return np.linalg.inv(cd)
 
     def pixscale_at(self, x, y):
         cd = self.cdAtPixel(x, y)

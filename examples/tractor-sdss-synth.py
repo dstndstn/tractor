@@ -232,7 +232,8 @@ def main():
         opt.curl = True
         tune.extend([('i',[1,1]), ('n',1)])
         if opt.roi is None:
-            opt.roi = [100,600,100,600]
+            #opt.roi = [100,600,100,600]
+            opt.roi = [200,500,100,400]
         print()
         print('Demo mode: grabbing Run/Camcol/Field/Band %i/%i/%i/%s' % (run, camcol, field, opt.band))
         print('Using SDSS DR9 data')
@@ -325,7 +326,7 @@ def main():
         print('Scaling images by', opt.scale)
         tims = [st.scale_sdss_image(tim, opt.scale) for tim in tims]
 
-    sources = getsrc(run, camcol, field, bandname, bands=bands, curl=opt.curl, roi=opt.roi, sdss=sdss, retrieve=False)
+    sources = getsrc(run, camcol, field, bandname, bands=bands, curl=opt.curl, roi=opt.roi, sdss=sdss, retrieve=True)
     tractor = Tractor(tims, sources)
 
     sa = dict(debug=opt.debug, plotAll=opt.plotAll, roi=opt.roi)
@@ -462,7 +463,7 @@ def makeflipbook(opt, prefix,tune,numSrcs,bands):
     tex += r'\end{document}' + '\n'
     fn = 'flip-' + prefix + '.tex'
     print('Writing', fn)
-    open(fn, 'wb').write(tex)
+    open(fn, 'w').write(tex)
     os.system("pdflatex '%s'" % fn)
 
 if __name__ == '__main__':
