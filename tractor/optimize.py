@@ -357,7 +357,7 @@ class Optimizer(object):
                                                   * sourcecounts) / scale) * np.abs(srcmod[slc])).flat[nz])
                 fs.npix[si] += len(nz)
 
-                fracin_num[si] += np.sum(srcmod[slc])
+                fracin_num[si] += np.sum(np.abs(srcmod[slc]))
                 fracin_den[si] += 1.
 
                 for key, extraims in extras:
