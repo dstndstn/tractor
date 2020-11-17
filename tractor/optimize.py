@@ -358,7 +358,7 @@ class Optimizer(object):
                 fs.npix[si] += len(nz)
 
                 fracin_num[si] += np.sum(srcmod[slc])
-                fracin_dev[si] += 1.
+                fracin_den[si] += 1.
 
                 for key, extraims in extras:
                     x = getattr(fs, key)
