@@ -271,6 +271,9 @@ class Optimizer(object):
         # total number of pixels touched by this source
         fs.npix = np.zeros(len(srcs), int)
 
+        fracin_num = np.zeros(len(srcs))
+        fracin_den = np.zeros(len(srcs))
+
         for key, x in extras:
             setattr(fs, key, np.zeros(len(srcs)))
 
@@ -354,6 +357,9 @@ class Optimizer(object):
                                                   * sourcecounts) / scale) * np.abs(srcmod[slc])).flat[nz])
                 fs.npix[si] += len(nz)
 
+                fracin_num[si] += np.sum(np.abs(srcmod[slc]))
+                fracin_den[si] += 1.
+
                 for key, extraims in extras:
                     x = getattr(fs, key)
                     x[si] += np.sum(np.abs(srcmod[slc].flat[nz])
@@ -362,6 +368,7 @@ class Optimizer(object):
                 srcmod[slc] = 0.
 
         fs.profracflux = fracflux_num / np.maximum(1, fracflux_den)
+        fs.fracin = fracin_num / np.maximum(1, fracin_den)
 
         # re-add sky
         for tim, (img, mod, ie, chi, roi) in zip(imlist, imsBest):

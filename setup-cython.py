@@ -42,6 +42,7 @@ def main():
                            undef_macros=['NDEBUG'],
                            swig_opts=['-outdir', 'tractor'],
                            **kwargs)
+
     module_em = Extension('tractor._emfit',
                           sources = ['tractor/emfit.i' ],
                           include_dirs = numpy_inc,
