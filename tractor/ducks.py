@@ -137,7 +137,7 @@ class Params(object):
         mub: has shape N
 
         rowA: list of iterables of ints
-        colA: list of iterables of ints
+        colA: list of ints
         valA: list of iterables of floats
         pb:   list of iterables of floats
         mub:  list of iterables of floats

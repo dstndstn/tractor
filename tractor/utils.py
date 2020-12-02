@@ -102,6 +102,13 @@ class _GaussianPriors(object):
         return [(i, mu, sigma) for name, i, mu, sigma in self.terms]
 
     def getDerivs(self, param=None):
+        '''
+        This has to return
+        r,c,v,b,mu
+        where
+        c is a list-of-ints
+        r,v,b,mu are each a list-of-iterables-of-{int,float}
+        '''
         if param is None:
             param = self.param
         rows = []
@@ -117,11 +124,11 @@ class _GaussianPriors(object):
             # frozen:
             if i == -1:
                 continue
-            cols.append(np.array([i]))
-            vals.append(np.array([1. / sigma]))
-            rows.append(np.array([row0]))
-            bs.append(np.array([-(p[i] - mu) / sigma]))
-            mus.append(np.array([mu]))
+            cols.append(i)
+            vals.append([1. / sigma])
+            rows.append([row0])
+            bs.append([-(p[i] - mu) / sigma])
+            mus.append([mu])
             row0 += 1
         return rows, cols, vals, bs, mus
 
@@ -1243,7 +1250,7 @@ class MultiParams(BaseParams, NamedParams):
                 c0 += s.numberOfParams()
                 continue
             (r, c, v, b, m) = X
-            rA.extend([ri + r0 for ri in r])
+            rA.extend([[rij + r0 for rij in ri] for ri in r])
             cA.extend([ci + c0 for ci in c])
             vA.extend(v)
             pb.extend(b)
