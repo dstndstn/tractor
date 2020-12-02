@@ -70,12 +70,12 @@ class CeresOptimizer(Optimizer):
 
             if dynamic_scale:
                 scales = self.getDynamicScales(tractor)
-                # print('Dynamic scales:', scales)
             else:
                 scales = np.array(tractor.getStepSizes())
+            # print('parameter scales:', scales)
 
             # Offset all the parameters so that Ceres sees them all
-            # with value 1.0
+            # with value 1.0 (they'll later get scaled by 1/scales)
             p0 -= scales
             params = np.ones_like(p0)
 

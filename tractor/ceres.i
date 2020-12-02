@@ -341,13 +341,14 @@ protected:
 
 class DlnpCallback : public ceres::IterationCallback {
 public:
-    DlnpCallback(double dlnp) : _dlnp(dlnp) {}
+    DlnpCallback(double dlnp, bool verbose) : _dlnp(dlnp), _verbose(verbose) {}
     virtual ~DlnpCallback() {}
 
     virtual ceres::CallbackReturnType operator()
     (const ceres::IterationSummary& summary) {
         //printf("Cost change: %g\n", summary.cost_change);
-        printf("Callback: step size %g, line search evals %i,%i,%i, linear solver iters %i\n",
+        if (_verbose)
+            printf("Callback: step size %g, line search evals %i,%i,%i, linear solver iters %i\n",
                summary.step_size, summary.line_search_function_evaluations,
                summary.line_search_gradient_evaluations,
                summary.line_search_iterations,
@@ -359,6 +360,7 @@ public:
     }
 protected:
     const double _dlnp;
+    const bool _verbose;
 };
 
 
@@ -397,7 +399,7 @@ static PyObject* ceres_opt(PyObject* tractor,
     int nparams;
     int get_variance;
     int variance_ok = 0;
-    DlnpCallback cb(dlnp);
+    DlnpCallback cb(dlnp, (print_progress!=0));
     PyArrayObject *np_params, *np_variance=NULL;
 
     assert(PyArray_Check(py_params));
@@ -502,6 +504,7 @@ static PyObject* ceres_opt(PyObject* tractor,
             A(0,0) = 1. / sigma;
             Eigen::VectorXd mu(1);
             mu[0] = mean;
+
             //printf("Adding Gaussian prior on parameter %i (current value "
             //"%f): mean %f, sigma %f\n", index, params[index], mean, sigma);
             //printf("A size: %i, %i.  Mu size: %i\n", 
@@ -553,8 +556,8 @@ static PyObject* ceres_opt(PyObject* tractor,
             int islower = (pyl == Py_True);
             Py_DECREF(pyl);
 
-            printf("Bound on element %i, bound %g, %s bound\n",
-                   index, bound, (islower ? "lower" : "upper"));
+            //printf("Bound on element %i, bound %g, %s bound\n",
+            //index, bound, (islower ? "lower" : "upper"));
 
             if (islower)
                 problem.SetParameterLowerBound(params + index, 0, bound);
@@ -583,8 +586,7 @@ static PyObject* ceres_opt(PyObject* tractor,
     Solver::Summary summary;
     Solve(options, &problem, &summary);
     //printf("%s\n", summary.BriefReport().c_str());
-
-    printf("%s\n", summary.FullReport().c_str());
+    //printf("%s\n", summary.FullReport().c_str());
 
     if (get_variance && (summary.termination_type == ceres::CONVERGENCE)) {
         if (!PyArray_Check(py_variance)) {
