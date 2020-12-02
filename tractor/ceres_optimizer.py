@@ -93,20 +93,37 @@ class CeresOptimizer(Optimizer):
         gpriors = None
         if priors:
             gpriors = tractor.getGaussianPriors()
-            # print('Gaussian priors:', gpriors)
+            #print('Gaussian priors:', gpriors)
+            if scaled:
+                scaled_gpriors = []
+                for i,mu,sig in gpriors:
+                    # Apply scaling!
+                    mu = (mu - p0[i]) / scales[i]
+                    sig = sig / scales[i]
+                    scaled_gpriors.append((i, mu, sig))
+                gpriors = scaled_gpriors
 
         lubounds = None
         if bounds:
             lowers = tractor.getLowerBounds()
             uppers = tractor.getUpperBounds()
-            #print('Lower bounds:', lowers)
-            #print('Upper bounds:', uppers)
+            # print('Lower bounds:', lowers)
+            # print('Upper bounds:', uppers)
             assert(len(lowers) == len(pp))
             assert(len(uppers) == len(pp))
+
+            if scaled:
+                lowers = [(b - p0[i]) / scales[i] if b is not None else None
+                          for i,b in enumerate(lowers)]
+                uppers = [(b - p0[i]) / scales[i] if b is not None else None
+                          for i,b in enumerate(uppers)]
+                # print('Scaled lower bounds:', lowers)
+                # print('Scaled upper bounds:', uppers)
+
             lubounds = ([(i, float(b), True) for i, b in enumerate(lowers)
                          if b is not None] +
-                        [(i, float(b), False) for i, b in enumerate(uppers)
-                         if b is not None])
+                         [(i, float(b), False) for i, b in enumerate(uppers)
+                          if b is not None])
             #print('lubounds:', lubounds)
 
         R = ceres_opt(trwrapper, tractor.getNImages(), params, variance_out,
