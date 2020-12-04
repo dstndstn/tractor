@@ -156,8 +156,9 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
             for ri,ci,vi,bi in zip(rA, cA, vA, pb):
                 if scale_columns:
                     colscales2[col] += np.dot(vi, vi)
-                A[Npixels + ri, ci] = vi
-                B[Npixels + ri] += bi
+                for rij,vij,bij in zip(ri, vi, bi):
+                    A[Npixels + rij, ci] = vij
+                    B[Npixels + rij] += bij
             del priorVals, rA, cA, vA, pb, mub
 
         if scale_columns:
