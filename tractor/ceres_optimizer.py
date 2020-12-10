@@ -170,7 +170,8 @@ class CeresOptimizer(Optimizer):
             for i in tractor.images.getThawedParamIndices():
                 if i == imgi:
                     # Give the image a chance to compute its own derivs
-                    derivs = img.getParamDerivatives(tractor, cat)
+                    derivs = img.getParamDerivatives(tractor, cat,
+                                                     **tractor.model_kwargs)
                     needj = []
                     for j, deriv in enumerate(derivs):
                         if deriv is None:

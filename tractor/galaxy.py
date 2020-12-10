@@ -143,7 +143,7 @@ class Galaxy(MultiParams, SingleProfileSource):
 
     # returns [ Patch, Patch, ... ] of length numberOfParams().
     # Galaxy.
-    def getParamDerivatives(self, img, modelMask=None):
+    def getParamDerivatives(self, img, modelMask=None, **kwargs):
         pos0 = self.getPosition()
         (px0, py0) = img.getWcs().positionToPixel(pos0, self)
         counts = img.getPhotoCal().brightnessToCounts(self.brightness)
@@ -155,7 +155,7 @@ class Galaxy(MultiParams, SingleProfileSource):
             minval = None
 
         patch0 = self.getUnitFluxModelPatch(img, px=px0, py=py0, minval=minval,
-                                            modelMask=modelMask)
+                                            modelMask=modelMask, **kwargs)
         if patch0 is None:
             return [None] * self.numberOfParams()
         derivs = []
@@ -179,7 +179,8 @@ class Galaxy(MultiParams, SingleProfileSource):
                 (px, py) = img.getWcs().positionToPixel(pos0, self)
                 pos0.setParam(i, oldval)
                 patchx = self.getUnitFluxModelPatch(
-                    img, px=px, py=py, minval=minval, modelMask=modelMask)
+                    img, px=px, py=py, minval=minval, modelMask=modelMask,
+                    **kwargs)
                 if patchx is None or patchx.getImage() is None:
                     derivs.append(None)
                     continue
@@ -210,7 +211,8 @@ class Galaxy(MultiParams, SingleProfileSource):
             for i, gstep in enumerate(gsteps):
                 oldval = self.shape.setParam(i, oldvals[i] + gstep)
                 patchx = self.getUnitFluxModelPatch(
-                    img, px=px0, py=py0, minval=minval, modelMask=modelMask)
+                    img, px=px0, py=py0, minval=minval, modelMask=modelMask,
+                    **kwargs)
                 self.shape.setParam(i, oldval)
                 if patchx is None:
                     print('patchx is None:')
@@ -253,16 +255,20 @@ class ProfileGalaxy(object):
         return 0
 
     def getUnitFluxModelPatch(self, img, px=None, py=None, minval=0.0,
-                              modelMask=None):
+                              modelMask=None, **kwargs):
         if px is None or py is None:
             (px, py) = img.getWcs().positionToPixel(self.getPosition(), self)
         patch = self._realGetUnitFluxModelPatch(
-            img, px, py, minval, modelMask=modelMask)
+            img, px, py, minval, modelMask=modelMask, **kwargs)
         if patch is not None and modelMask is not None:
             assert(patch.shape == modelMask.shape)
         return patch
 
-    def _realGetUnitFluxModelPatch(self, img, px, py, minval, modelMask=None):
+    def _realGetUnitFluxModelPatch(self, img, px, py, minval, modelMask=None,
+                                   inner_real_nsigma = 3.,
+                                   outer_real_nsigma = 4.,
+                                   force_halfsize=None,
+                                   **kwargs):
         if modelMask is not None:
             x0, y0 = modelMask.x0, modelMask.y0
         else:
@@ -301,6 +307,8 @@ class ProfileGalaxy(object):
             '''
             if amix is None:
                 amix = self._getAffineProfile(img, px, py)
+            print('Evaluating MoG mixture:', len(amix.amp))
+            print('amps:', amix.amp)
             if mm is None:
                 mm = modelMask
             # now convolve with the PSF, analytically
@@ -346,7 +354,8 @@ class ProfileGalaxy(object):
             psfh, psfw = psf.shape
             halfsize = max(halfsize, max(psfw / 2., psfh / 2.))
             #print('Halfsize:', halfsize)
-
+            if force_halfsize is not None:
+                halfsize = force_halfsize
             # is the source center outside the modelMask?
             sourceOut = (px < x0 or px > x1 - 1 or py < y0 or py > y1 - 1)
             # print('mh,mw', mh,mw, 'sourceout?', sourceOut)
@@ -434,13 +443,13 @@ class ProfileGalaxy(object):
         fftmix = amix
         mogmix = None
 
-        if hybrid:
+        if hybrid and inner_real_nsigma is not None and outer_real_nsigma is not None:
             # Split "amix" into terms that we will evaluate using MoG
             # vs FFT.
             vv = amix.var[:, 0, 0] + amix.var[:, 1, 1]
             # Ramp between:
-            nsigma1 = 3.
-            nsigma2 = 4.
+            nsigma1 = inner_real_nsigma
+            nsigma2 = outer_real_nsigma
             # Terms that will wrap-around significantly if evaluated
             # with FFT...  We want to know: at the outer edge of this
             # patch, how many sigmas out are we?  If small (ie, the
@@ -478,6 +487,8 @@ class ProfileGalaxy(object):
                 fftmix = None
 
         if fftmix is not None:
+            print('Evaluating FFT mixture:', len(fftmix.amp), 'components in size', pH,pW)
+            print('Amps:', fftmix.amp)
             Fsum = fftmix.getFourierTransform(v, w, zero_mean=True)
             # In Intel's mkl_fft library, the irfftn code path is faster than irfft2
             # (the irfft2 version sets args (to their default values) which triggers padding
@@ -942,7 +953,7 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy, SingleProfileSource):
                      self.shapeExp.hashkey(),
                      self.fracDev.hashkey()))
 
-    def getParamDerivatives(self, img, modelMask=None):
+    def getParamDerivatives(self, img, modelMask=None, **kwargs):
         e = ExpGalaxy(self.pos, self.brightness, self.shapeExp)
         d = DevGalaxy(self.pos, self.brightness, self.shapeDev)
         e.dname = 'fcomp.exp'
@@ -960,8 +971,8 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy, SingleProfileSource):
             e.halfsize = self.halfsize
             d.halfsize = self.halfsize
 
-        dexp = e.getParamDerivatives(img, modelMask=modelMask)
-        ddev = d.getParamDerivatives(img, modelMask=modelMask)
+        dexp = e.getParamDerivatives(img, modelMask=modelMask, **kwargs)
+        ddev = d.getParamDerivatives(img, modelMask=modelMask, **kwargs)
 
         # print('FixedCompositeGalaxy.getParamDerivatives.')
         # print('tim shape', img.shape)
@@ -1008,8 +1019,8 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy, SingleProfileSource):
                 derivs.append(None)
             else:
                 # FIXME -- should be possible to avoid recomputing these...
-                ue = e.getUnitFluxModelPatch(img, modelMask=modelMask)
-                ud = d.getUnitFluxModelPatch(img, modelMask=modelMask)
+                ue = e.getUnitFluxModelPatch(img, modelMask=modelMask, **kwargs)
+                ud = d.getUnitFluxModelPatch(img, modelMask=modelMask, **kwargs)
 
                 df = self.fracDev.derivative()
 
@@ -1076,24 +1087,24 @@ class CompositeGalaxy(MultiParams, BasicSource):
     def getBrightnesses(self):
         return [self.brightnessExp, self.brightnessDev]
 
-    def _getModelPatches(self, img, minsb=0., modelMask=None):
+    def _getModelPatches(self, img, minsb=0., modelMask=None, **kwargs):
         e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
         d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
-        if minsb == 0. or minsb is None:
-            kw = {}
-        else:
-            kw = dict(minsb=minsb / 2.)
+        kw = kwargs.copy()
+        if minsb:
+            kw.update(minsb=minsb / 2.)
         if hasattr(self, 'halfsize'):
             e.halfsize = d.halfsize = self.halfsize
         pe = e.getModelPatch(img, modelMask=modelMask, **kw)
         pd = d.getModelPatch(img, modelMask=modelMask, **kw)
         return (pe, pd)
 
-    def getModelPatch(self, img, minsb=0., modelMask=None):
-        pe, pd = self._getModelPatches(img, minsb=minsb, modelMask=modelMask)
+    def getModelPatch(self, img, minsb=0., modelMask=None, **kwargs):
+        pe, pd = self._getModelPatches(img, minsb=minsb, modelMask=modelMask,
+                                       **kwargs)
         return add_patches(pe, pd)
 
-    def getUnitFluxModelPatches(self, img, minval=0., modelMask=None):
+    def getUnitFluxModelPatches(self, img, minval=0., modelMask=None, **kwargs):
         # Needed for forced photometry
         if minval > 0:
             # allow each component half the error
@@ -1103,14 +1114,14 @@ class CompositeGalaxy(MultiParams, BasicSource):
         if hasattr(self, 'halfsize'):
             e.halfsize = d.halfsize = self.halfsize
         return (e.getUnitFluxModelPatches(img, minval=minval,
-                                          modelMask=modelMask) +
+                                          modelMask=modelMask, **kwargs) +
                 d.getUnitFluxModelPatches(img, minval=minval,
-                                          modelMask=modelMask))
+                                          modelMask=modelMask, **kwargs))
 
     # MAGIC: ORDERING OF EXP AND DEV PARAMETERS
     # MAGIC: ASSUMES EXP AND DEV SHAPES SAME LENGTH
     # CompositeGalaxy.
-    def getParamDerivatives(self, img, modelMask=None):
+    def getParamDerivatives(self, img, modelMask=None, **kwargs):
         e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
         d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
         if hasattr(self, 'halfsize'):
@@ -1129,8 +1140,8 @@ class CompositeGalaxy(MultiParams, BasicSource):
         if self.isParamFrozen('shapeDev'):
             d.freezeParam('shape')
 
-        de = e.getParamDerivatives(img, modelMask=modelMask)
-        dd = d.getParamDerivatives(img, modelMask=modelMask)
+        de = e.getParamDerivatives(img, modelMask=modelMask, **kwargs)
+        dd = d.getParamDerivatives(img, modelMask=modelMask, **kwargs)
 
         if self.isParamFrozen('pos'):
             derivs = de + dd

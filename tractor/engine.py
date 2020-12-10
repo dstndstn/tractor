@@ -113,7 +113,8 @@ class Tractor(MultiParams):
     def getNamedParams():
         return dict(images=0, catalog=1)
 
-    def __init__(self, images=None, catalog=None, optimizer=None):
+    def __init__(self, images=None, catalog=None, optimizer=None,
+                 model_kwargs=None):
         '''
         - `images:` list of Image objects (data)
         - `catalog:` list of Source objects
@@ -135,6 +136,10 @@ class Tractor(MultiParams):
             self.optimizer = LsqrOptimizer()
         else:
             self.optimizer = optimizer
+
+        if model_kwargs is None:
+            model_kwargs = {}
+        self.model_kwargs = model_kwargs
 
     def __str__(self):
         s = ('%s with %i sources and %i images' % (
@@ -267,7 +272,7 @@ class Tractor(MultiParams):
         '''
         return self.optimizer.optimize_loop(self, **kwargs)
 
-    def getDerivs(self):
+    def getDerivs(self, **kwargs):
         '''
         Computes model-image derivatives for each parameter.
 
@@ -291,20 +296,23 @@ class Tractor(MultiParams):
 
         allsrcs = self.catalog
 
+        kw = self.model_kwargs.copy()
+        kw.update(kwargs)
+
         if not self.isParamFrozen('images'):
             for i in self.images.getThawedParamIndices():
                 img = self.images[i]
-                derivs = img.getParamDerivatives(self, allsrcs)
+                derivs = img.getParamDerivatives(self, allsrcs, **kw)
                 mod0 = None
                 for di, deriv in enumerate(derivs):
                     if deriv is False:
                         if mod0 is None:
-                            mod0 = self.getModelImage(img)
+                            mod0 = self.getModelImage(img, **kwargs)
                             p0 = img.getParams()
                             stepsizes = img.getStepSizes()
                             paramnames = img.getParamNames()
                         oldval = img.setParam(di, p0[di] + stepsizes[di])
-                        mod = self.getModelImage(img)
+                        mod = self.getModelImage(img, **kwargs)
                         img.setParam(di, oldval)
                         deriv = Patch(0, 0, (mod - mod0) / stepsizes[di])
                         deriv.name = 'd(im%i)/d(%s)' % (i, paramnames[di])
@@ -314,7 +322,7 @@ class Tractor(MultiParams):
         for src in srcs:
             srcderivs = [[] for i in range(src.numberOfParams())]
             for img in self.images:
-                derivs = self._getSourceDerivatives(src, img)
+                derivs = self._getSourceDerivatives(src, img, **kwargs)
                 for k, deriv in enumerate(derivs):
                     if deriv is None:
                         continue
@@ -404,11 +412,12 @@ class Tractor(MultiParams):
         # HACK -- assume no mask -> no overlap
         if self.expectModelMasks and mask is None:
             return None
-
-        mod = src.getModelPatch(img, modelMask=mask, **kwargs)
+        kw = self.model_kwargs.copy()
+        kw.update(kwargs)
+        mod = src.getModelPatch(img, modelMask=mask, **kw)
         return mod
 
-    def getModelImage(self, img, srcs=None, sky=True, minsb=None):
+    def getModelImage(self, img, srcs=None, sky=True, minsb=None, **kwargs):
         '''
         Create a model image for the given "tractor image", including
         the sky level.  If "srcs" is specified (a list of sources),
@@ -425,7 +434,7 @@ class Tractor(MultiParams):
         for src in srcs:
             if src is None:
                 continue
-            patch = self.getModelPatch(img, src, minsb=minsb)
+            patch = self.getModelPatch(img, src, minsb=minsb, **kwargs)
             if patch is None:
                 continue
             patch.addTo(mod)
@@ -435,14 +444,14 @@ class Tractor(MultiParams):
         for img in self.images:
             yield self.getModelImage(img, **kwargs)
 
-    def getChiImages(self):
+    def getChiImages(self, **kwargs):
         for img in self.images:
-            yield self.getChiImage(img=img)
+            yield self.getChiImage(img=img, **kwargs)
 
-    def getChiImage(self, imgi=-1, img=None, srcs=None, minsb=0.):
+    def getChiImage(self, imgi=-1, img=None, srcs=None, minsb=0., **kwargs):
         if img is None:
             img = self.getImage(imgi)
-        mod = self.getModelImage(img, srcs=srcs, minsb=minsb)
+        mod = self.getModelImage(img, srcs=srcs, minsb=minsb, **kwargs)
         chi = (img.getImage() - mod) * img.getInvError()
         if not np.all(np.isfinite(chi)):
             print('Chi not finite')
@@ -459,20 +468,20 @@ class Tractor(MultiParams):
             print('psf:', img.getPsf())
         return chi
 
-    def getLogLikelihood(self):
+    def getLogLikelihood(self, **kwargs):
         chisq = 0.
-        for i, chi in enumerate(self.getChiImages()):
+        for i, chi in enumerate(self.getChiImages(**kwargs)):
             chisq += (chi.astype(float) ** 2).sum()
         return -0.5 * chisq
 
-    def getLogProb(self):
+    def getLogProb(self, **kwargs):
         '''
         Return the posterior log PDF, evaluated at the current parameters.
         '''
         lnprior = self.getLogPrior()
         if lnprior == -np.inf:
             return lnprior
-        lnl = self.getLogLikelihood()
+        lnl = self.getLogLikelihood(**kwargs)
         lnp = lnprior + lnl
         if np.isnan(lnp):
             print('Tractor.getLogProb() returning NaN.')

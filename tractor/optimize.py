@@ -181,7 +181,7 @@ class Optimizer(object):
                     mv = minsb / counts
                 mask = tractor._getModelMaskFor(img, src)
                 ums = src.getUnitFluxModelPatches(
-                    img, minval=mv, modelMask=mask)
+                    img, minval=mv, modelMask=mask, **kwargs)
 
                 isvalid = False
                 isallzero = False

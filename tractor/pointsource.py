@@ -33,7 +33,7 @@ class SingleProfileSource(BasicSource):
     def getUnitFluxModelPatches(self, *args, **kwargs):
         return [self.getUnitFluxModelPatch(*args, **kwargs)]
 
-    def getModelPatch(self, img, minsb=None, modelMask=None):
+    def getModelPatch(self, img, minsb=None, modelMask=None, **kwargs):
         counts = img.getPhotoCal().brightnessToCounts(self.brightness)
         if counts == 0:
             return None
@@ -44,7 +44,7 @@ class SingleProfileSource(BasicSource):
             minsb = img.modelMinval
         minval = minsb / counts
         upatch = self.getUnitFluxModelPatch(img, minval=minval,
-                                            modelMask=modelMask)
+                                            modelMask=modelMask, **kwargs)
 
         if upatch is None:
             return None
@@ -100,7 +100,7 @@ class PointSource(MultiParams, SingleProfileSource):
                 repr(self.brightness) + ')')
 
     def getUnitFluxModelPatch(self, img, minval=0., derivs=False,
-                              modelMask=None):
+                              modelMask=None, **kwargs):
         (px, py) = img.getWcs().positionToPixel(self.getPosition(), self)
         H, W = img.shape
         psf = self._getPsf(img)
@@ -127,7 +127,8 @@ class PointSource(MultiParams, SingleProfileSource):
     def _getPsf(self, img):
         return img.getPsf()
 
-    def getParamDerivatives(self, img, fastPosDerivs=True, modelMask=None):
+    def getParamDerivatives(self, img, fastPosDerivs=True, modelMask=None,
+                            **kwargs):
         '''
         returns [ Patch, Patch, ... ] of length numberOfParams().
         '''
@@ -167,7 +168,8 @@ class PointSource(MultiParams, SingleProfileSource):
         if derivs:
             patches = self.getUnitFluxModelPatch(img, minval=minval,
                                                  derivs=True,
-                                                 modelMask=modelMask)
+                                                 modelMask=modelMask,
+                                                 **kwargs)
             if patches is None:
                 return [None] * self.numberOfParams()
             if not isinstance(patches, tuple):
@@ -176,7 +178,8 @@ class PointSource(MultiParams, SingleProfileSource):
                 patch0, patchdx, patchdy = patches
         else:
             patch0 = self.getUnitFluxModelPatch(img, minval=minval,
-                                                modelMask=modelMask)
+                                                modelMask=modelMask,
+                                                **kwargs)
 
         if patch0 is None:
             return [None] * self.numberOfParams()
@@ -203,11 +206,13 @@ class PointSource(MultiParams, SingleProfileSource):
                     p0 = patch0
                     oldval = pos.setParam(i, pvals[i] + pstep)
                     patchx = self.getUnitFluxModelPatch(img, minval=minval,
-                                                        modelMask=modelMask)
+                                                        modelMask=modelMask,
+                                                        **kwargs)
                     if getattr(pos, 'symmetric_derivs', False):
                         pos.setParam(i, pvals[i] - pstep)
                         patchmx = self.getUnitFluxModelPatch(img, minval=minval,
-                                                             modelMask=modelMask)
+                                                             modelMask=modelMask,
+                                                             **kwargs)
                         p0 = patchmx
                         pdiff = pstep * 2
 

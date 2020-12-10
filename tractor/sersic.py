@@ -404,14 +404,15 @@ class SersicGalaxy(HoggGalaxy):
                      self.shape.hashkey(),
                      self.sersicindex.hashkey()))
 
-    def getParamDerivatives(self, img, modelMask=None):
+    def getParamDerivatives(self, img, modelMask=None, **kwargs):
         # superclass produces derivatives wrt pos, brightness, and shape.
         derivs = super(SersicGalaxy, self).getParamDerivatives(
-            img, modelMask=modelMask)
+            img, modelMask=modelMask, **kwargs)
 
         pos0 = self.getPosition()
         (px0, py0) = img.getWcs().positionToPixel(pos0, self)
-        patch0 = self.getUnitFluxModelPatch(img, px=px0, py=py0, modelMask=modelMask)
+        patch0 = self.getUnitFluxModelPatch(img, px=px0, py=py0,
+                                            modelMask=modelMask, **kwargs)
         if patch0 is None:
             derivs.append(None)
             return derivs
@@ -433,7 +434,7 @@ class SersicGalaxy(HoggGalaxy):
 
                 oldval = self.sersicindex.setParam(i, newval)
                 patchx = self.getUnitFluxModelPatch(
-                    img, px=px0, py=py0, modelMask=modelMask)
+                    img, px=px0, py=py0, modelMask=modelMask, **kwargs)
                 self.sersicindex.setParam(i, oldval)
                 if patchx is None:
                     print('patchx is None:')

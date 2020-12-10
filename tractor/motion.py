@@ -115,14 +115,14 @@ class MovingPointSource(PointSource):
         r, d = xyztoradec(xyz)
         return RaDecPos(r, d)
 
-    def getUnitFluxModelPatch(self, img, minval=0., modelMask=None):
+    def getUnitFluxModelPatch(self, img, minval=0., modelMask=None, **kwargs):
         pos = self.getPositionAtTime(img.getTime())
         (px, py) = img.getWcs().positionToPixel(pos)
         patch = img.getPsf().getPointSourcePatch(
-            px, py, minval=minval, modelMask=modelMask)
+            px, py, minval=minval, modelMask=modelMask, **kwargs)
         return patch
 
-    def getParamDerivatives(self, img, modelMask=None):
+    def getParamDerivatives(self, img, modelMask=None, **kwargs):
         '''
         MovingPointSource derivatives.
 

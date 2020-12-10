@@ -662,8 +662,8 @@ class GaussianMixtureEllipsePSF(GaussianMixturePSF):
         tr = Tractor([tim], [src])
         tr.freezeParam('catalog')
         tim.freezeAllBut('psf')
-        # print 'Fitting:'
-        # tr.printThawedParams()
+        print('Fitting:')
+        tr.printThawedParams()
         tim.modelMinval = approx
         alphas = [0.1, 0.3, 1.0]
         for step in range(50):
@@ -673,7 +673,7 @@ class GaussianMixtureEllipsePSF(GaussianMixturePSF):
             # print 'X', X
             if dlnp < 1e-6:
                 break
-            # print 'psf', psf
+            print('psf', psf)
         return psf
 
 

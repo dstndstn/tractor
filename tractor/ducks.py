@@ -239,7 +239,7 @@ class Source(Params):
     that the Tractor uses.
     '''
 
-    def getModelPatch(self, img, minsb=0., modelMask=None):
+    def getModelPatch(self, img, minsb=0., modelMask=None, **kwargs):
         '''
         Returns a Patch object containing a rendering of this Source
         into the given `Image` object.  This will probably use the
@@ -255,7 +255,7 @@ class Source(Params):
         '''
         pass
 
-    def getParamDerivatives(self, img, modelMask=None):
+    def getParamDerivatives(self, img, modelMask=None, **kwargs):
         '''
         Returns [ Patch, Patch, ... ], of length numberOfParams(),
         containing the derivatives in the given `Image` for each
@@ -266,7 +266,8 @@ class Source(Params):
     def getBrightnesses(self):
         return []
 
-    def getUnitFluxModelPatches(self, img, minval=0., modelMask=None):
+    def getUnitFluxModelPatches(self, img, minval=0., modelMask=None,
+                                **kwargs):
         '''
         Returns a list the same length as getBrightnesses(), each
         containing a Patch whose sum is ~ unity.
