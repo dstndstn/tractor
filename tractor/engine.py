@@ -235,7 +235,9 @@ class Tractor(MultiParams):
         PRIORS probably don't work because we don't setParams() when
         evaluating likelihood or prior!
         '''
-        return self.optimizer.forced_photometry(self, **kwargs)
+        kw = self.model_kwargs.copy()
+        kw.update(kwargs)
+        return self.optimizer.forced_photometry(self, **kw)
 
     # alphas=None, damp=0, priors=True, scale_columns=True,
     # shared_params=True, variance=False, just_variance=False):
@@ -262,7 +264,9 @@ class Tractor(MultiParams):
         same length as the number of images, giving the ROI in which
         the chi value (and derivatives) will be evaluated.
         '''
-        return self.optimizer.optimize(self, **kwargs)
+        kw = self.model_kwargs.copy()
+        kw.update(kwargs)
+        return self.optimizer.optimize(self, **kw)
 
     def optimize_loop(self, **kwargs):
         '''
@@ -270,7 +274,9 @@ class Tractor(MultiParams):
 
         Returns a dict of results (exact contents varying by optimizer).
         '''
-        return self.optimizer.optimize_loop(self, **kwargs)
+        kw = self.model_kwargs.copy()
+        kw.update(kwargs)
+        return self.optimizer.optimize_loop(self, **kw)
 
     def getDerivs(self, **kwargs):
         '''

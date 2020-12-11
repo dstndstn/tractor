@@ -59,7 +59,7 @@ class Optimizer(object):
         # Render unit-flux models for each source.
         #t0 = Time()
         (umodels, umodtosource, umodsforsource
-         ) = self._get_umodels(tractor, srcs, imgs, minsb, rois)
+         ) = self._get_umodels(tractor, srcs, imgs, minsb, rois, **kwargs)
         for umods in umodels:
             assert(len(umods) == Nsourceparams)
         #tmods = Time() - t0
@@ -145,7 +145,7 @@ class Optimizer(object):
             #logverb('forced phot: fit stats:', Time() - t0)
         return result
 
-    def _get_umodels(self, tractor, srcs, imgs, minsb, rois):
+    def _get_umodels(self, tractor, srcs, imgs, minsb, rois, **kwargs):
         # Here we build up the "umodels" nested list, which has shape
         # (if it were a numpy array) of (len(images), len(Nsrcparams))
         # where each element is None, or a Patch with the unit-flux
