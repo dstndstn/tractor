@@ -49,9 +49,10 @@ def lanczos_shift_image(img, dx, dy, inplace=False, force_python=False):
         return outimg
 
     outimg = np.empty(img.shape, np.float32)
-    mp_fourier.lanczos_shift_3f(img, outimg, dx, dy, work_corr7f)
-    # yuck!  (don't change this without ensuring the "restrict" keyword still applies
-    # in lanczos_shift_3f!)
+    mp_fourier.lanczos_shift_3f(img.astype(np.float32), outimg, dx, dy,
+                                work_corr7f)
+    # yuck!  (don't change this without ensuring the "restrict"
+    # keyword still applies in lanczos_shift_3f!)
     if inplace:
         img[:,:] = outimg
     return outimg
