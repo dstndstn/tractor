@@ -84,6 +84,14 @@ class EllipseE(ParamList):
         '''
         return math.atan2(self.e2, self.e1) / 2.
 
+    @property
+    def ab(self):
+        '''
+        Returns minor/major axis ratio.
+        '''
+        e = self.e
+        return (1. - e) / (1. + e)
+
     def __repr__(self):
         return 're=%g, e1=%g, e2=%g' % (self.re, self.e1, self.e2)
 
