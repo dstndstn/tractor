@@ -307,8 +307,8 @@ class ProfileGalaxy(object):
             '''
             if amix is None:
                 amix = self._getAffineProfile(img, px, py)
-            print('Evaluating MoG mixture:', len(amix.amp))
-            print('amps:', amix.amp)
+            #print('Evaluating MoG mixture:', len(amix.amp))
+            #print('amps:', amix.amp)
             if mm is None:
                 mm = modelMask
             # now convolve with the PSF, analytically
@@ -487,8 +487,8 @@ class ProfileGalaxy(object):
                 fftmix = None
 
         if fftmix is not None:
-            print('Evaluating FFT mixture:', len(fftmix.amp), 'components in size', pH,pW)
-            print('Amps:', fftmix.amp)
+            #print('Evaluating FFT mixture:', len(fftmix.amp), 'components in size', pH,pW)
+            #print('Amps:', fftmix.amp)
             Fsum = fftmix.getFourierTransform(v, w, zero_mean=True)
             # In Intel's mkl_fft library, the irfftn code path is faster than irfft2
             # (the irfft2 version sets args (to their default values) which triggers padding
