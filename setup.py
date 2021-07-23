@@ -77,9 +77,16 @@ module_fourier = Extension('tractor._mp_fourier',
                            undef_macros=['NDEBUG'],
                            **kwargs)
 
+module_tsnnls = Extension('tractor._tsnnls',
+                           sources = ['tractor/tsnnls.i'],
+                           include_dirs = numpy_inc,
+                           undef_macros=['NDEBUG'],
+                           **kwargs)
+
 class MyDistribution(Distribution):
     display_options = Distribution.display_options + [
         ('with-ceres', None, 'build Ceres module?'),
+        ('with-tsnnls', None, 'build TSNNLS non-neg least-squares module?'),
         ]
 
 
@@ -93,6 +100,11 @@ if key in sys.argv:
     sys.argv.remove(key)
     mods.append(module_ceres)
     pymods.append('tractor.ceres')
+key = '--with-tsnnls'
+if key in sys.argv:
+    sys.argv.remove(key)
+    mods.append(module_tsnnls)
+    pymods.append('tractor.tsnnls')
 
 # Record current version number....
 cmd = 'echo "version = \'$(git describe)\'" > tractor/version.py'

@@ -343,6 +343,8 @@ def main():
         im.freezeAllParams()
         im.thawParam('sky')
 
+    optargs = dict(shared_params=False)
+
     for count, each in enumerate(tune):
         if each[0]=='n':
             tractor.catalog.thawAllParams()
@@ -351,7 +353,8 @@ def main():
                 if opt.lbfgsb:
                     tractor.optimize_lbfgsb()
                 else:
-                    tractor.optimize()
+                    tractor.printThawedParams()
+                    tractor.optimize(**optargs)
                 for j,band in enumerate(bands):
                     save('tune-%d-%d-%s-' % (count+1, i+1,band) + prefix, tractor, imgi=j, **sa)
                 lnp1 = tractor.getLogProb()
@@ -376,7 +379,7 @@ def main():
                         if opt.lbfgsb:
                             tractor.optimize_lbfgsb(plotfn='synt-opt-i%i-s%04i.png' % (i,j))
                         else:
-                            tractor.optimize()
+                            tractor.optimize(**optargs)
 
                     src.unfreezeParam('pos')
 
