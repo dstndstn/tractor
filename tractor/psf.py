@@ -72,10 +72,14 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
 
     Galaxies will be rendered using FFT convolution.
 
+    Also handles the case where the PSF model is sampled at a
+    different pixel spacing than the native pixel, eg, an oversampled
+    model to be used when the image itself is undersampled.
+
     FIXME -- currently this class claims to have no params.
     '''
 
-    def __init__(self, img, Lorder=3):
+    def __init__(self, img, sampling=1., Lorder=3):
         '''
         Creates a new PixelizedPSF object from the given *img* (numpy
         array) image of the PSF.
@@ -94,6 +98,11 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         self.H, self.W = H, W
         self.Lorder = Lorder
         self.fftcache = {}
+        self.sampling = sampling
+        if sampling != 1.:
+            # The size of PSF image we will return.
+            self.nativeW = int(np.ceil(self.W * self.sampling))
+            self.nativeH = int(np.ceil(self.H * self.sampling))
 
     def __str__(self):
         return 'PixelizedPSF'
@@ -127,11 +136,13 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
 
     def getPointSourcePatch(self, px, py, minval=0., modelMask=None,
                             radius=None, **kwargs):
+        if self.sampling != 1.:
+            return self._getOversampledPointSourcePatch(px, py, minval=minval,
+                                                        modelMask=modelMask,
+                                                        radius=radius, **kwargs)
+
         from astrometry.util.miscutils import get_overlapping_region
 
-        #print('getPointSourcePatch: %.2f,%.2f,' % (px,py), 'modelMask', modelMask,
-        #      'radius', radius)
-        
         # get PSF image at desired pixel location
         img = self.getImage(px, py)
 
@@ -142,8 +153,6 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
             cy = H//2
             img = img[max(cy-R, 0) : min(cy+R+1,H-1),
                       max(cx-R, 0) : min(cx+R+1,W-1)]
-
-        #print('img shape', img.shape, 'radius', radius)
             
         H, W = img.shape
         # float() required because builtin round(np.float64(11.0)) returns 11.0 !!
@@ -239,6 +248,9 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         *v,w*: v=np.fft.rfftfreq(imw), w=np.fft.fftfreq(imh)
 
         '''
+        if self.sampling != 1.:
+            return self._getOversampledFourierTransform(px, py, radius)
+
         sz = self.getFourierTransformSize(radius)
         # print 'PixelizedPSF FFT size', sz
         if sz in self.fftcache:
@@ -253,6 +265,93 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         w = np.fft.fftfreq(pH)
         rtn = P, (cx, cy), (pH, pW), (v, w)
         self.fftcache[sz] = rtn
+        return rtn
+
+    # The following routines are used when sampling != 1.0
+
+    def _sampleImage(self, img, dx, dy,
+                     xlo=None, ylo=None, width=None, height=None):
+        from astrometry.util.util import lanczos3_interpolate_grid
+        if img is None:
+            img = self.img
+        if xlo is None:
+            xlo = -(self.nativeW//2)
+        if ylo is None:
+            ylo = -(self.nativeH//2)
+        if width is None:
+            width = self.nativeW
+        if height is None:
+            height = self.nativeH
+
+        H,W = img.shape
+        cx = W//2
+        cy = H//2
+
+        xstep = 1./self.sampling
+        ystep = 1./self.sampling
+        xstart = (cx - dx/self.sampling) + xlo * xstep
+        ystart = (cy - dy/self.sampling) + ylo * ystep
+
+        native_img = np.zeros((height, width), np.float32)
+        lanczos3_interpolate_grid(xstart, xstep, ystart, ystep,
+                                  native_img, img)
+        return xlo, ylo, native_img
+
+    def _getOversampledPointSourcePatch(self, px, py, minval=0., modelMask=None,
+                                        radius=None, **kwargs):
+        # get PSF image at desired pixel location
+        img = self.getImage(px, py)
+
+        ix = round(float(px))
+        iy = round(float(py))
+        dx = px - ix
+        dy = py - iy
+
+        if modelMask is not None:
+            mh, mw = modelMask.shape
+            mx0, my0 = modelMask.x0, modelMask.y0
+            xl,yl,native_img = self._sampleImage(img, dx, dy, xlo=mx0-ix, ylo=my0-iy,
+                                                 width=mw, height=mh)
+            return Patch(xl+ix, yl+iy, native_img)
+
+        xl,yl,img = self._sampleImage(img, dx, dy)
+        x0 = ix + xl
+        y0 = iy + yl
+
+        if radius is not None:
+            R = int(np.ceil(radius))
+            H,W = img.shape
+            cx = W//2
+            cy = H//2
+            xlo = max(cx-R, 0)
+            ylo = max(cy-R, 0)
+            img = img[ylo : min(cy+R+1,H-1),
+                      xlo : min(cx+R+1,W-1)]
+            x0 += xlo
+            y0 += ylo
+
+        return Patch(x0, y0, img)
+
+    def _getOversampledFourierTransform(self, px, py, radius):
+        sz = self.getFourierTransformSize(radius)
+        key = (sz, px, py)
+        if key in self.fftcache:
+            return self.fftcache[key]
+        # shift by fractional pixel
+        dx = px - int(px)
+        dy = py - int(py)
+        _, _, img = self._sampleImage(None, dx, dy)
+        pad, cx, cy = self._padInImage(sz, sz, img=img)
+        cx += dx
+        cy += dy
+        # cx,cy: coordinate of the PSF center in *pad*
+        P = np.fft.rfft2(pad)
+        P = P.astype(np.complex64)
+        pH, pW = pad.shape
+        v = np.fft.rfftfreq(pW)
+        w = np.fft.fftfreq(pH)
+        rtn = P, (cx, cy), (pH, pW), (v, w)
+        self.fftcache[key] = rtn
         return rtn
 
 class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
@@ -824,110 +923,3 @@ try:
     getCircularMog = functools.lru_cache(maxsize=16)(getCircularMog)
 except:
     pass
-
-
-class OversampledPixelizedPSF(PixelizedPSF):
-    '''
-    This class represents a pixelized PSF model where the model
-    sampling is finer than the native pixel sampling.  Unlike
-    PixelizedPSF, we cannot first instantiate the model at a pixel
-    center and then lanczos-resample it into the desired subpixel
-    location; instead, we must sample the fine-resolution image at the
-    desired subpixel locations.
-    '''
-    def __init__(self, img, sampling, **kwargs):
-        '''
-        *sampling*: eg 0.5; the native pixel spacing of *img*.
-        '''
-        super().__init__(img, **kwargs)
-
-        self.sampling = sampling
-        self.nativeW = int(np.ceil(self.W * self.sampling))
-        self.nativeH = int(np.ceil(self.H * self.sampling))
-
-    def _sampleImage(self, img, dx, dy,
-                     xlo=None, ylo=None, width=None, height=None):
-        from astrometry.util.util import lanczos3_interpolate_grid
-        if img is None:
-            img = self.img
-        if xlo is None:
-            xlo = -(self.nativeW//2)
-        if ylo is None:
-            ylo = -(self.nativeH//2)
-        if width is None:
-            width = self.nativeW
-        if height is None:
-            height = self.nativeH
-
-        H,W = img.shape
-        cx = W//2
-        cy = H//2
-
-        xstep = 1./self.sampling
-        ystep = 1./self.sampling
-        xstart = (cx - dx/self.sampling) + xlo * xstep
-        ystart = (cy - dy/self.sampling) + ylo * ystep
-
-        native_img = np.zeros((height, width), np.float32)
-        lanczos3_interpolate_grid(xstart, xstep, ystart, ystep,
-                                  native_img, img)
-        return xlo, ylo, native_img
-
-    def getPointSourcePatch(self, px, py, minval=0., modelMask=None,
-                            radius=None, **kwargs):
-        from astrometry.util.util import lanczos3_interpolate_grid
-
-        # get PSF image at desired pixel location
-        img = self.getImage(px, py)
-
-        ix = round(float(px))
-        iy = round(float(py))
-        dx = px - ix
-        dy = py - iy
-
-        if modelMask is not None:
-            mh, mw = modelMask.shape
-            mx0, my0 = modelMask.x0, modelMask.y0
-            xl,yl,native_img = self._sampleImage(img, dx, dy, xlo=mx0-ix, ylo=my0-iy,
-                                                 width=mw, height=mh)
-            return Patch(xl+ix, yl+iy, native_img)
-
-        xl,yl,img = self._sampleImage(img, dx, dy)
-        x0 = ix + xl
-        y0 = iy + yl
-
-        if radius is not None:
-            R = int(np.ceil(radius))
-            H,W = img.shape
-            cx = W//2
-            cy = H//2
-            xlo = max(cx-R, 0)
-            ylo = max(cy-R, 0)
-            img = img[ylo : min(cy+R+1,H-1),
-                      xlo : min(cx+R+1,W-1)]
-            x0 += xlo
-            y0 += ylo
-
-        return Patch(x0, y0, img)
-
-    def getFourierTransform(self, px, py, radius):
-        sz = self.getFourierTransformSize(radius)
-        key = (sz, px, py)
-        if key in self.fftcache:
-            return self.fftcache[key]
-        # shift by fractional pixel
-        dx = px - int(px)
-        dy = py - int(py)
-        _, _, img = self._sampleImage(None, dx, dy)
-        pad, cx, cy = self._padInImage(sz, sz, img=img)
-        cx += dx
-        cy += dy
-        # cx,cy: coordinate of the PSF center in *pad*
-        P = np.fft.rfft2(pad)
-        P = P.astype(np.complex64)
-        pH, pW = pad.shape
-        v = np.fft.rfftfreq(pW)
-        w = np.fft.fftfreq(pH)
-        rtn = P, (cx, cy), (pH, pW), (v, w)
-        self.fftcache[key] = rtn
-        return rtn

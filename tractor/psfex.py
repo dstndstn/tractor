@@ -344,7 +344,7 @@ class PsfExModel(object):
     def fft_at(self, x, y):
         pass
 
-    def at(self, x, y, nativeScale=True):
+    def at(self, x, y):
         '''
         Returns an image of the PSF at the given pixel coordinates.
         '''
@@ -357,12 +357,12 @@ class PsfExModel(object):
             #print('basis image sum:', np.sum(base))
             psf += term * base
 
-        if nativeScale and self.sampling != 1:
-            from scipy.ndimage.interpolation import affine_transform
-            ny, nx = psf.shape
-            spsf = affine_transform(psf, [1. / self.sampling] * 2,
-                                    offset=nx // 2 * (self.sampling - 1.))
-            return spsf
+        # if nativeScale and self.sampling != 1:
+        #     from scipy.ndimage.interpolation import affine_transform
+        #     ny, nx = psf.shape
+        #     spsf = affine_transform(psf, [1. / self.sampling] * 2,
+        #                             offset=nx // 2 * (self.sampling - 1.))
+        #     return spsf
 
         return psf
 
@@ -452,14 +452,13 @@ class PixelizedPsfEx(PixelizedPSF):
             self.psfex = psfexmodel(fn=fn, ext=ext)
         if psfex is not None:
             self.psfex = psfex
-        #print('PsfEx x0,y0', self.psfex.x0, self.psfex.y0)
         self.fwhm = self.psfex.fwhm
         # meh
         self.fn = fn
         self.ext = ext
         #
         img = self.psfex.bases()[0, :, :]
-        super(PixelizedPsfEx, self).__init__(img)
+        super().__init__(img, sampling=self.psfex.sampling)
 
     def __str__(self):
         return 'PixelizedPsfEx'
@@ -491,7 +490,7 @@ class PixelizedPsfEx(PixelizedPSF):
     def constantPsfAt(self, x, y):
         #print('ConstantPsfAt', (x,y))
         pix = self.psfex.at(x, y)
-        return PixelizedPSF(pix)
+        return PixelizedPSF(pix, sampling=self.sampling)
 
     def getRadius(self):
         return self.radius
@@ -502,6 +501,13 @@ class PixelizedPsfEx(PixelizedPSF):
     # getPointSourcePatch is inherited from PixelizedPSF
 
     def getFourierTransform(self, px, py, radius):
+        if self.sampling != 1.:
+            # The method below assumes that the eigenPSF bases can be
+            # Fourier-transformed and combined; that doesn't work for
+            # oversampled models.  Fall back (which does mean that
+            # we're evaluating the PSF model image every time and FFT'ing).
+            return super().getFourierTransform(px, py, radius)
+
         sz = self.getFourierTransformSize(radius)
 
         if sz in self.fftcache:
@@ -569,8 +575,8 @@ class VaryingGaussianPsfEx(VaryingGaussianPSF):
     #         psf.scale(self.sampling)
     #     return psf
 
-    def instantiateAt(self, x, y, nativeScale=False):
-        psf = self.psfex.at(x, y, nativeScale=(nativeScale or self.scale))
+    def instantiateAt(self, x, y): #, nativeScale=False):
+        psf = self.psfex.at(x, y) #, nativeScale=(nativeScale or self.scale))
         return psf
 
     @staticmethod
