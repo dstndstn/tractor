@@ -146,7 +146,7 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         #print('img shape', img.shape, 'radius', radius)
             
         H, W = img.shape
-        # required because builtin round(np.float64(11.0)) returns 11.0 !!
+        # float() required because builtin round(np.float64(11.0)) returns 11.0 !!
         ix = round(float(px))
         iy = round(float(py))
         dx = px - ix
@@ -824,3 +824,89 @@ try:
     getCircularMog = functools.lru_cache(maxsize=16)(getCircularMog)
 except:
     pass
+
+
+class OversampledPixelizedPSF(PixelizedPSF):
+    '''
+    This class represents a pixelized PSF model where the model
+    sampling is finer than the native pixel sampling.  Unlike
+    PixelizedPSF, we cannot first instantiate the model at a pixel
+    center and then lanczos-resample it into the desired subpixel
+    location; instead, we must sample the fine-resolution image at the
+    desired subpixel locations.
+    '''
+    def __init__(self, img, sampling, **kwargs):
+        '''
+        *sampling*: eg 0.5; the native pixel spacing of *img*.
+        '''
+        super().__init__(img, **kwargs)
+
+        self.sampling = sampling
+
+        # reset self.W,H ?
+        self.nativeW = int(np.ceil(self.W * self.sampling))
+        self.nativeH = int(np.ceil(self.H * self.sampling))
+
+    #def getImage(self, px, py):
+    #fineimg = super().getImage(px, py)
+    #return self.subsample(
+
+    def getPointSourcePatch(self, px, py, minval=0., modelMask=None,
+                            radius=None, **kwargs):
+        from astrometry.util.util import lanczos3_interpolate_grid
+
+        # get PSF image at desired pixel location
+        img = self.getImage(px, py)
+        H,W = img.shape
+        cx = W//2
+        cy = H//2
+
+        ix = round(float(px))
+        iy = round(float(py))
+        dx = px - ix
+        dy = py - iy
+
+        if modelMask is not None:
+            mh, mw = modelMask.shape
+            mx0, my0 = modelMask.x0, modelMask.y0
+
+            xstep = 1./self.sampling
+            ystep = 1./self.sampling
+            xstart = (cx - dx/self.sampling) - (ix - mx0) * xstep
+            ystart = (cy - dy/self.sampling) - (iy - my0) * ystep
+
+            native_img = np.zeros((mh, mw), np.float32)
+            lanczos3_interpolate_grid(xstart, xstep, ystart, ystep,
+                                      native_img, img)
+            return Patch(mx0, my0, native_img)
+
+        xstep = 1./self.sampling
+        xstart = (cx - dx/self.sampling) - self.nativeW//2 * xstep
+        ystep = 1./self.sampling
+        ystart = (cy - dy/self.sampling) - self.nativeH//2 * ystep
+
+        #print('dx %.3f, xstart %f, xstep %f' % (dx, xstart, xstep))
+        #print('dy %.3f, ystart %f, ystep %f' % (dy, ystart, ystep))
+
+        native_img = np.zeros((self.nativeH, self.nativeW), np.float32)
+
+        lanczos3_interpolate_grid(xstart, xstep, ystart, ystep,
+                                  native_img, img)
+        img = native_img
+
+        if radius is not None:
+            R = int(np.ceil(radius))
+            H,W = img.shape
+            cx = W//2
+            cy = H//2
+            img = img[max(cy-R, 0) : min(cy+R+1,H-1),
+                      max(cx-R, 0) : min(cx+R+1,W-1)]
+
+        H, W = img.shape
+        # float() required because builtin round(np.float64(11.0)) returns 11.0 !!
+        ix = round(float(px))
+        iy = round(float(py))
+        x0 = ix - W // 2
+        y0 = iy - H // 2
+
+        return Patch(x0, y0, img)
