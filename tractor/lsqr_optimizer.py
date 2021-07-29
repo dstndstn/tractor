@@ -396,7 +396,7 @@ class LsqrOptimizer(Optimizer):
                 deriv.clipTo(W, H)
                 pix = deriv.getPixelIndices(img)
                 if len(pix) == 0:
-                    #print('This param does not influence this image!')
+                    logverb('Col %i: this param does not influence this image!' % col)
                     continue
 
                 assert(np.all(pix < img.numberOfPixels()))
@@ -405,6 +405,7 @@ class LsqrOptimizer(Optimizer):
                 nz = np.flatnonzero(dimg)
                 #print('  source', j, 'derivative', p, 'has', len(nz), 'non-zero entries')
                 if len(nz) == 0:
+                    logverb('Col %i: all derivs are zero')
                     continue
                 rows = row0 + pix[nz]
                 #print('Adding derivative', deriv.getName(), 'for image', img.name)
@@ -647,6 +648,8 @@ class LsqrOptimizer(Optimizer):
             #         np.count_nonzero(X), 'non-zero entries')
             # logverb('paramindexmap: len', len(paramindexmap),
             #         'range', paramindexmap.min(), paramindexmap.max())
+            print('sparse columns:', Ncols, 'rows', Nrows)
+            print('len(X)', len(X))
             X = X[paramindexmap]
             # logverb('shared_params: after, X len', len(X), 'with',
             #         np.count_nonzero(X), 'non-zero entries')

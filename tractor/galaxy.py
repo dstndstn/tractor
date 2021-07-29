@@ -505,7 +505,8 @@ class ProfileGalaxy(object):
             # pixelized PSFs.
             from tractor.psf import lanczos_shift_image
             G = G.astype(np.float32)
-            lanczos_shift_image(G, mux, muy, inplace=True)
+            if mux != 0.0 or muy != 0.0:
+                lanczos_shift_image(G, mux, muy, inplace=True)
         else:
             G = np.zeros((pH, pW), np.float32)
 

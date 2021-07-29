@@ -842,14 +842,36 @@ class OversampledPixelizedPSF(PixelizedPSF):
         super().__init__(img, **kwargs)
 
         self.sampling = sampling
-
-        # reset self.W,H ?
         self.nativeW = int(np.ceil(self.W * self.sampling))
         self.nativeH = int(np.ceil(self.H * self.sampling))
 
-    #def getImage(self, px, py):
-    #fineimg = super().getImage(px, py)
-    #return self.subsample(
+    def _sampleImage(self, img, dx, dy,
+                     xlo=None, ylo=None, width=None, height=None):
+        from astrometry.util.util import lanczos3_interpolate_grid
+        if img is None:
+            img = self.img
+        if xlo is None:
+            xlo = -(self.nativeW//2)
+        if ylo is None:
+            ylo = -(self.nativeH//2)
+        if width is None:
+            width = self.nativeW
+        if height is None:
+            height = self.nativeH
+
+        H,W = img.shape
+        cx = W//2
+        cy = H//2
+
+        xstep = 1./self.sampling
+        ystep = 1./self.sampling
+        xstart = (cx - dx/self.sampling) + xlo * xstep
+        ystart = (cy - dy/self.sampling) + ylo * ystep
+
+        native_img = np.zeros((height, width), np.float32)
+        lanczos3_interpolate_grid(xstart, xstep, ystart, ystep,
+                                  native_img, img)
+        return xlo, ylo, native_img
 
     def getPointSourcePatch(self, px, py, minval=0., modelMask=None,
                             radius=None, **kwargs):
@@ -857,9 +879,6 @@ class OversampledPixelizedPSF(PixelizedPSF):
 
         # get PSF image at desired pixel location
         img = self.getImage(px, py)
-        H,W = img.shape
-        cx = W//2
-        cy = H//2
 
         ix = round(float(px))
         iy = round(float(py))
@@ -869,44 +888,46 @@ class OversampledPixelizedPSF(PixelizedPSF):
         if modelMask is not None:
             mh, mw = modelMask.shape
             mx0, my0 = modelMask.x0, modelMask.y0
+            xl,yl,native_img = self._sampleImage(img, dx, dy, xlo=mx0-ix, ylo=my0-iy,
+                                                 width=mw, height=mh)
+            return Patch(xl+ix, yl+iy, native_img)
 
-            xstep = 1./self.sampling
-            ystep = 1./self.sampling
-            xstart = (cx - dx/self.sampling) - (ix - mx0) * xstep
-            ystart = (cy - dy/self.sampling) - (iy - my0) * ystep
-
-            native_img = np.zeros((mh, mw), np.float32)
-            lanczos3_interpolate_grid(xstart, xstep, ystart, ystep,
-                                      native_img, img)
-            return Patch(mx0, my0, native_img)
-
-        xstep = 1./self.sampling
-        xstart = (cx - dx/self.sampling) - self.nativeW//2 * xstep
-        ystep = 1./self.sampling
-        ystart = (cy - dy/self.sampling) - self.nativeH//2 * ystep
-
-        #print('dx %.3f, xstart %f, xstep %f' % (dx, xstart, xstep))
-        #print('dy %.3f, ystart %f, ystep %f' % (dy, ystart, ystep))
-
-        native_img = np.zeros((self.nativeH, self.nativeW), np.float32)
-
-        lanczos3_interpolate_grid(xstart, xstep, ystart, ystep,
-                                  native_img, img)
-        img = native_img
+        xl,yl,img = self._sampleImage(img, dx, dy)
+        x0 = ix + xl
+        y0 = iy + yl
 
         if radius is not None:
             R = int(np.ceil(radius))
             H,W = img.shape
             cx = W//2
             cy = H//2
-            img = img[max(cy-R, 0) : min(cy+R+1,H-1),
-                      max(cx-R, 0) : min(cx+R+1,W-1)]
-
-        H, W = img.shape
-        # float() required because builtin round(np.float64(11.0)) returns 11.0 !!
-        ix = round(float(px))
-        iy = round(float(py))
-        x0 = ix - W // 2
-        y0 = iy - H // 2
+            xlo = max(cx-R, 0)
+            ylo = max(cy-R, 0)
+            img = img[ylo : min(cy+R+1,H-1),
+                      xlo : min(cx+R+1,W-1)]
+            x0 += xlo
+            y0 += ylo
 
         return Patch(x0, y0, img)
+
+    def getFourierTransform(self, px, py, radius):
+        sz = self.getFourierTransformSize(radius)
+        key = (sz, px, py)
+        if key in self.fftcache:
+            return self.fftcache[key]
+        # shift by fractional pixel
+        dx = px - int(px)
+        dy = py - int(py)
+        _, _, img = self._sampleImage(None, dx, dy)
+        pad, cx, cy = self._padInImage(sz, sz, img=img)
+        cx += dx
+        cy += dy
+        # cx,cy: coordinate of the PSF center in *pad*
+        P = np.fft.rfft2(pad)
+        P = P.astype(np.complex64)
+        pH, pW = pad.shape
+        v = np.fft.rfftfreq(pW)
+        w = np.fft.fftfreq(pH)
+        rtn = P, (cx, cy), (pH, pW), (v, w)
+        self.fftcache[key] = rtn
+        return rtn
