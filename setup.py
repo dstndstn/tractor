@@ -41,7 +41,7 @@ if ceres_lib is not None:
 module_ceres = Extension('tractor._ceres',
                          sources=['tractor/ceres-tractor.cc', 'tractor/ceres.i'],
                          include_dirs = numpy_inc,
-                         extra_compile_args = inc,
+                         extra_compile_args = inc + ['-std=c++14'],
                          extra_link_args = link,
                          language = 'c++',
                          swig_opts=['-c++'],

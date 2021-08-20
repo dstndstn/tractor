@@ -172,7 +172,8 @@ static PyObject* real_ceres_forced_phot(PyObject* blocks,
     if (nthreads) {
         options.num_threads = nthreads;
         // deprecated as of ceres 1.14 (controlled by num_threads)
-        options.num_linear_solver_threads = nthreads;
+        // (and gone in ceres 2.0.0)
+        //options.num_linear_solver_threads = nthreads;
     }
     //options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
     options.linear_solver_type = ceres::SPARSE_SCHUR;
@@ -428,7 +429,8 @@ static PyObject* ceres_opt(PyObject* tractor,
             (tractor, i, nparams, np_params);
         CostFunction* cost = NULL;
         if (numeric) {
-#if CERES_VERSION_MINOR >= 12
+#if ( ((CERES_VERSION_MAJOR == 1) && (CERES_VERSION_MINOR >= 12)) || \
+      (CERES_VERSION_MAJOR == 2) )
             ceres::NumericDiffOptions numopts;
             numopts.relative_step_size = numeric_stepsize;
             
