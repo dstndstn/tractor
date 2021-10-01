@@ -119,7 +119,7 @@ CERES_LIB ?= -L$(CERES_LIB_DIR) -l$(CERES_LIB_NAME) $(GLOG_LIB) $(SUITESPARSE_LI
 #
 
 ceres.py: ceres.i
-	swig -python -c++ $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $(GLOG_INC) $(GFLAGS_INC) $<
+	swig -python -c++ $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $(GLOG_INC) $(GFLAGS_INC) $(PYMOD_INC) $<
 
 CXX ?= g++
 CXXFLAGS ?= -Wall -fPIC -O3
@@ -133,7 +133,7 @@ CXXLINKFLAGS ?=
 CERES_EXTRA_LIB ?=
 
 _ceres$(PYTHON_SO_EXT): ceres.i ceres-tractor.h ceres-tractor.cc
-	swig -python -c++ $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $<
+	swig -python -c++ $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $(GLOG_INC) $(GFLAGS_INC) $(PYMOD_INC) $<
 	$(CXX) $(CXXFLAGS) -c ceres_wrap.cxx $(PYMOD_INC) $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $(GLOG_INC) $(GFLAGS_INC)
 	$(CXX) $(CXXFLAGS) -c ceres-tractor.cc $(PYMOD_INC) $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $(GLOG_INC) $(GFLAGS_INC)
 	$(CXX) $(CXXFLAGS) $(CXXLINKFLAGS) -o $@ -shared ceres_wrap.o ceres-tractor.o $(CERES_LIB) $(PYMOD_LIB) $(CERES_EXTRA_LIB)
