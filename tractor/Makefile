@@ -123,6 +123,8 @@ ceres.py: ceres.i
 
 CXX ?= g++
 CXXFLAGS ?= -Wall -fPIC -O3
+# Ceres 2.0: -std=c++14
+
 # DEBUG
 #CXXFLAGS += -O0 -g
 #CXXFLAGS += 
