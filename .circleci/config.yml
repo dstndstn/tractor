@@ -87,6 +87,7 @@ jobs:
       - run:
           name: Unit tests
           command: |
+              export PYTHONPATH=.:${PYTHONPATH}
               coverage run --concurrency=multiprocessing test/test_tractor.py
               coverage run --concurrency=multiprocessing -a test/test_galaxy.py
               coverage run --concurrency=multiprocessing -a test/test_sdss.py
