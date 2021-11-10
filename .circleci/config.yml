@@ -79,6 +79,7 @@ jobs:
       - run:
           name: Unit tests
           command: |
+              export PYTHONPATH=${PYTHONPATH}:/usr/local/tractor/lib/python
               coverage run --concurrency=multiprocessing -a test/test_tractor.py
               coverage run --concurrency=multiprocessing -a test/test_galaxy.py
               coverage run --concurrency=multiprocessing -a test/test_sdss.py
@@ -100,7 +101,7 @@ jobs:
           command: |
               export PYTHONPATH=${PYTHONPATH}:$(pwd)
               python3.8 -c "import sys; print(sys.path)"
-              python3.8 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
+              python3.8 -c "import sys; import os; [os.system('ls %s' % p) for p in sys.path]"
               export PYTHON=python3.8
               export PYTHON_CONFIG=python3.8-config
               make
@@ -110,6 +111,10 @@ jobs:
       - run:
           name: Unit tests
           command: |
+              echo "PYTHONPATH: ${PYTHONPATH}"
+              ls /usr/local/tractor
+              ls /usr/local/tractor/lib/python
+              export PYTHONPATH=${PYTHONPATH}:/usr/local/tractor/lib/python
               python3.8 test/test_tractor.py
               python3.8 test/test_galaxy.py
               python3.8 test/test_sdss.py
@@ -130,15 +135,13 @@ jobs:
               export PYTHONPATH=${PYTHONPATH}:$(pwd)
               python3.9 -c "import sys; print(sys.path)"
               python3.9 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
-              export PYTHON=python3.9
-              export PYTHON_CONFIG=python3.9-config
-              make
-              make cython
-              make ceres
-              make install
+              python3.9 setup-cython.py --with-ceres install --home /usr/local
+              make version
+              cp tractor/version.py /usr/local/lib/python/tractor/
       - run:
           name: Unit tests
           command: |
+              export PYTHONPATH=${PYTHONPATH}:/usr/local/tractor/lib/python
               python3.9 test/test_tractor.py
               python3.9 test/test_galaxy.py
               python3.9 test/test_sdss.py
