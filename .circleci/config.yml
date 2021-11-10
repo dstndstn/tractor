@@ -12,6 +12,7 @@ jobs:
           name: Unit tests
           command: |
               export PYTHONPATH=${PYTHONPATH}:$(pwd)
+              make version
               python3.6 -c "import sys; print(sys.path)"
               python3.6 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
               python3.6 test/test_tractor.py
@@ -31,6 +32,7 @@ jobs:
           name: Unit tests
           command: |
               export PYTHONPATH=${PYTHONPATH}:$(pwd)
+              make version
               python3.7 -c "import sys; print(sys.path)"
               python3.7 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
               coverage run --concurrency=multiprocessing -a test/test_tractor.py
@@ -53,6 +55,7 @@ jobs:
           name: Unit tests
           command: |
               export PYTHONPATH=${PYTHONPATH}:$(pwd)
+              make version
               python3.8 -c "import sys; print(sys.path)"
               python3.8 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
               python3.8 test/test_tractor.py
@@ -72,6 +75,7 @@ jobs:
           name: Unit tests
           command: |
               export PYTHONPATH=${PYTHONPATH}:$(pwd)
+              make version
               python3.8 -c "import sys; print(sys.path)"
               python3.8 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
               python3.8 test/test_tractor.py
@@ -91,6 +95,7 @@ jobs:
           name: Unit tests
           command: |
               export PYTHONPATH=${PYTHONPATH}:$(pwd)
+              make version
               python3.9 -c "import sys; print(sys.path)"
               python3.9 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
               python3.9 test/test_tractor.py
