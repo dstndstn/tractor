@@ -88,6 +88,7 @@ jobs:
           name: Unit tests
           command: |
               export PYTHONPATH=.:${PYTHONPATH}
+              python3.8 setup.py build_ext --inplace
               coverage run --concurrency=multiprocessing test/test_tractor.py
               coverage run --concurrency=multiprocessing -a test/test_galaxy.py
               coverage run --concurrency=multiprocessing -a test/test_sdss.py
