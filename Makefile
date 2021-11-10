@@ -21,8 +21,10 @@ cov:
 # coverage run -a examples/tractor-sdss-synth.py --roi 100 200 100 200 --no-flipbook
 .PHONY: cov
 
+PYTHON ?= python
+
 cython:
-	python setup-cython.py build_ext --inplace
+	$(PYTHON) setup-cython.py build_ext --inplace
 .PHONY: cython
 
 cython-clean:
@@ -55,8 +57,6 @@ _callgrind.so: callgrind.i
 
 refcnt: _refcnt.so refcnt.py
 .PHONY: refcnt
-
-PYTHON ?= python
 
 PYTHON_SO_EXT ?= $(shell $(PYTHON) -c "from distutils import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX') or sysconfig.get_config_var('SO'))")
 

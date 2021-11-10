@@ -8,7 +8,7 @@ Probabilistic astronomical source detection & measurement
 
 ## authors & license
 
-Copyright 2011-2016 Dustin Lang (University of Toronto) & David W. Hogg (NYU)
+Copyright 2011-2021 Dustin Lang (Perimeter Institute) & David W. Hogg (NYU/Flatiron)
 
 Licensed under GPLv2; see LICENSE.
 
@@ -44,7 +44,7 @@ Prereqs:
 
 * scipy (> 0.7; 0.9 works)
 * numpy (>= 1.4)
-* astrometry.net (often svn trunk is required)
+* astrometry.net
 
 Other packages used in various places include:
 
