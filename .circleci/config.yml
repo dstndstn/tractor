@@ -8,13 +8,17 @@ jobs:
           name: CPU info
           command: cat /proc/cpuinfo
       - checkout
+              python3.9 setup-cython.py --with-ceres install --home /usr/local
+      - run:
+          name: Build
+          command: |
+              export PYTHONPATH=${PYTHONPATH}:$(pwd)
+              python3.6 -c "import sys; print(sys.path)"
+              python3.6 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
       - run:
           name: Unit tests
           command: |
-              export PYTHONPATH=${PYTHONPATH}:$(pwd)
-              make version
-              python3.6 -c "import sys; print(sys.path)"
-              python3.6 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
+
               python3.6 test/test_tractor.py
               python3.6 test/test_galaxy.py
               python3.6 test/test_sdss.py
@@ -29,12 +33,14 @@ jobs:
           command: cat /proc/cpuinfo
       - checkout
       - run:
-          name: Unit tests
+          name: Build
           command: |
-              export PYTHONPATH=${PYTHONPATH}:$(pwd)
-              make version
               python3.7 -c "import sys; print(sys.path)"
               python3.7 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
+              python3.7 setup-cython.py --with-ceres install --home /usr/local
+      - run:
+          name: Unit tests
+          command: |
               python3.7 test/test_tractor.py
               python3.7 test/test_galaxy.py
               python3.7 test/test_sdss.py
@@ -49,12 +55,14 @@ jobs:
           command: cat /proc/cpuinfo
       - checkout
       - run:
-          name: Unit tests
+          name: Build
           command: |
-              export PYTHONPATH=${PYTHONPATH}:$(pwd)
-              make version
               python3.8 -c "import sys; print(sys.path)"
               python3.8 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
+              python3.8 setup-cython.py --with-ceres install --home /usr/local
+      - run:
+          name: Unit tests
+          command: |
               python3.8 test/test_tractor.py
               python3.8 test/test_galaxy.py
               python3.8 test/test_sdss.py
@@ -74,13 +82,12 @@ jobs:
               python3.8 -c "import sys; print(sys.path)"
               python3.8 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
               python3.8 setup-cython.py --with-ceres install --home /usr/local
-              make version
-              cp tractor/version.py /usr/local/lib/python/tractor/
+              #make version
+              #cp tractor/version.py /usr/local/lib/python/tractor/
       - run:
           name: Unit tests
           command: |
-              export PYTHONPATH=${PYTHONPATH}:/usr/local/tractor/lib/python
-              coverage run --concurrency=multiprocessing -a test/test_tractor.py
+              coverage run --concurrency=multiprocessing test/test_tractor.py
               coverage run --concurrency=multiprocessing -a test/test_galaxy.py
               coverage run --concurrency=multiprocessing -a test/test_sdss.py
               coverage run --concurrency=multiprocessing -a test/test_psfex.py
@@ -107,14 +114,13 @@ jobs:
               make
               make cython
               make ceres
-              make install
+              make install INSTALL_DIR=/usr/local
       - run:
           name: Unit tests
           command: |
               echo "PYTHONPATH: ${PYTHONPATH}"
               ls /usr/local/tractor
               ls /usr/local/tractor/lib/python
-              export PYTHONPATH=${PYTHONPATH}:/usr/local/tractor/lib/python
               python3.8 test/test_tractor.py
               python3.8 test/test_galaxy.py
               python3.8 test/test_sdss.py
@@ -136,12 +142,11 @@ jobs:
               python3.9 -c "import sys; print(sys.path)"
               python3.9 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
               python3.9 setup-cython.py --with-ceres install --home /usr/local
-              make version
-              cp tractor/version.py /usr/local/lib/python/tractor/
+              #make version
+              #cp tractor/version.py /usr/local/lib/python/tractor/
       - run:
           name: Unit tests
           command: |
-              export PYTHONPATH=${PYTHONPATH}:/usr/local/tractor/lib/python
               python3.9 test/test_tractor.py
               python3.9 test/test_galaxy.py
               python3.9 test/test_sdss.py
