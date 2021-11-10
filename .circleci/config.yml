@@ -35,13 +35,10 @@ jobs:
               make version
               python3.7 -c "import sys; print(sys.path)"
               python3.7 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
-              coverage run --concurrency=multiprocessing -a test/test_tractor.py
-              coverage run --concurrency=multiprocessing -a test/test_galaxy.py
-              coverage run --concurrency=multiprocessing -a test/test_sdss.py
-              coverage run --concurrency=multiprocessing -a test/test_psfex.py
-              coverage combine
-              coveralls
-              ./codecov-upload.sh
+              python3.7 test/test_tractor.py
+              python3.7 test/test_galaxy.py
+              python3.7 test/test_sdss.py
+              python3.7 test/test_psfex.py
 
   build-from-docker-u1804-py3.8:
     docker:
@@ -82,10 +79,13 @@ jobs:
       - run:
           name: Unit tests
           command: |
-              python3.8 test/test_tractor.py
-              python3.8 test/test_galaxy.py
-              python3.8 test/test_sdss.py
-              python3.8 test/test_psfex.py
+              coverage run --concurrency=multiprocessing -a test/test_tractor.py
+              coverage run --concurrency=multiprocessing -a test/test_galaxy.py
+              coverage run --concurrency=multiprocessing -a test/test_sdss.py
+              coverage run --concurrency=multiprocessing -a test/test_psfex.py
+              coverage combine
+              coveralls
+              codecov -t ${CODECOV_TOKEN}
 
   build-from-docker-u2004-py3.8-make:
     docker:
@@ -96,7 +96,7 @@ jobs:
           command: cat /proc/cpuinfo
       - checkout
       - run:
-          name: Unit tests
+          name: Build
           command: |
               export PYTHONPATH=${PYTHONPATH}:$(pwd)
               python3.8 -c "import sys; print(sys.path)"
@@ -107,6 +107,9 @@ jobs:
               make cython
               make ceres
               make install
+      - run:
+          name: Unit tests
+          command: |
               python3.8 test/test_tractor.py
               python3.8 test/test_galaxy.py
               python3.8 test/test_sdss.py
@@ -122,12 +125,20 @@ jobs:
           command: cat /proc/cpuinfo
       - checkout
       - run:
-          name: Unit tests
+          name: Build
           command: |
               export PYTHONPATH=${PYTHONPATH}:$(pwd)
-              make version
               python3.9 -c "import sys; print(sys.path)"
               python3.9 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
+              export PYTHON=python3.9
+              export PYTHON_CONFIG=python3.9-config
+              make
+              make cython
+              make ceres
+              make install
+      - run:
+          name: Unit tests
+          command: |
               python3.9 test/test_tractor.py
               python3.9 test/test_galaxy.py
               python3.9 test/test_sdss.py
