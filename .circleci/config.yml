@@ -41,7 +41,7 @@ jobs:
               coveralls
               ./codecov-upload.sh
 
-  build-from-docker-py3.8:
+  build-from-docker-u1804-py3.8:
     docker:
       - image: dstndstn/tractor-circleci-build-ubuntu18.04
     steps:
