@@ -119,13 +119,10 @@ jobs:
           name: Unit tests
           command: |
               echo "PYTHONPATH: ${PYTHONPATH}"
-              ls /usr/local/tractor
-              ls /usr/local/tractor/lib/python
               python3.8 test/test_tractor.py
               python3.8 test/test_galaxy.py
               python3.8 test/test_sdss.py
               python3.8 test/test_psfex.py
-
 
   build-from-docker-u2004-py3.9:
     docker:
