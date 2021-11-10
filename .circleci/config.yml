@@ -8,13 +8,13 @@ jobs:
           name: CPU info
           command: cat /proc/cpuinfo
       - checkout
-              python3.9 setup-cython.py --with-ceres install --home /usr/local
       - run:
           name: Build
           command: |
               export PYTHONPATH=${PYTHONPATH}:$(pwd)
               python3.6 -c "import sys; print(sys.path)"
               python3.6 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
+              python3.6 setup-cython.py --with-ceres install --home /usr/local
       - run:
           name: Unit tests
           command: |
