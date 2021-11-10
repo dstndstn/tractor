@@ -95,7 +95,8 @@ jobs:
               coverage run --concurrency=multiprocessing -a test/test_psfex.py
               coverage combine
               coveralls
-              codecov -t ${CODECOV_TOKEN}
+              coveralls --output coverage.report
+              codecov -t $CODECOV_TOKEN -f coverage.report
 
   build-from-docker-u2004-py3.8-setup:
     docker:
