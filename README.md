@@ -2,7 +2,7 @@
 
 Probabilistic astronomical source detection & measurement
 
-[![Build Status](https://travis-ci.org/dstndstn/tractor.svg?branch=master)](https://travis-ci.org/dstndstn/tractor)
+[![Build status (CircleCI)](https://circleci.com/gh/dstndstn/tractor/tree/main.svg?style=svg)](https://circleci.com/gh/dstndstn/tractor/tree/main)
 [![Docs](https://readthedocs.org/projects/thetractor/badge/?version=latest)](http://thetractor.readthedocs.org/en/latest/)
 [![Coverage](https://coveralls.io/repos/github/dstndstn/tractor/badge.svg?branch=master)](https://coveralls.io/github/dstndstn/tractor)
 
