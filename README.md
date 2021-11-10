@@ -4,7 +4,7 @@ Probabilistic astronomical source detection & measurement
 
 [![Build status (CircleCI)](https://circleci.com/gh/dstndstn/tractor/tree/main.svg?style=shield)](https://circleci.com/gh/dstndstn/tractor/tree/main)
 [![Docs](https://readthedocs.org/projects/thetractor/badge/?version=latest)](http://thetractor.readthedocs.org/en/latest/)
-[![Coverage](https://coveralls.io/repos/github/dstndstn/tractor/badge.svg?branch=master)](https://coveralls.io/github/dstndstn/tractor)
+[![Coverage](https://coveralls.io/repos/github/dstndstn/tractor/badge.svg?branch=main)](https://coveralls.io/github/dstndstn/tractor)
 
 ## authors & license
 
