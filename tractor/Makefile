@@ -4,6 +4,9 @@ PYTHON ?= python
 PYTHON_CONFIG ?= python-config
 PYTHON_SO_EXT ?= $(shell $(PYTHON) -c "from distutils import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX') or sysconfig.get_config_var('SO'))")
 
+# creaky old CentOS 7 has gcc 4.8.5 that doesn't believe in C99
+CPPFLAGS ?= -std=c99
+
 ceres: _ceres$(PYTHON_SO_EXT) ceres.py
 .PHONY: ceres
 

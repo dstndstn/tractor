@@ -1,4 +1,4 @@
-all: mix emfit mpf
+all: mix emfit mpf version
 
 FORCE:
 
