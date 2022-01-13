@@ -247,8 +247,8 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
             print('COpt result:', Xold)
             print('Relative difference:', ', '.join(['%.1f' % d for d in 100.*((X - Xold) / np.maximum(1e-18, np.abs(Xold)))]), 'percent')
 
-
-        assert(np.all(np.isfinite(X)))
+        if not np.all(np.isfinite(X)):
+            return None
 
         return X
 

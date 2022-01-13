@@ -648,8 +648,8 @@ class LsqrOptimizer(Optimizer):
             #         np.count_nonzero(X), 'non-zero entries')
             # logverb('paramindexmap: len', len(paramindexmap),
             #         'range', paramindexmap.min(), paramindexmap.max())
-            print('sparse columns:', Ncols, 'rows', Nrows)
-            print('len(X)', len(X))
+            #print('sparse columns:', Ncols, 'rows', Nrows)
+            #print('len(X)', len(X))
             X = X[paramindexmap]
             # logverb('shared_params: after, X len', len(X), 'with',
             #         np.count_nonzero(X), 'non-zero entries')
