@@ -4,6 +4,9 @@ PYTHON ?= python
 PYTHON_CONFIG ?= python-config
 PYTHON_SO_EXT ?= $(shell $(PYTHON) -c "from distutils import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX') or sysconfig.get_config_var('SO'))")
 
+# creaky old CentOS 7 has gcc 4.8.5 that doesn't believe in C99
+CPPFLAGS ?= -std=c99
+
 ceres: _ceres$(PYTHON_SO_EXT) ceres.py
 .PHONY: ceres
 
@@ -119,10 +122,12 @@ CERES_LIB ?= -L$(CERES_LIB_DIR) -l$(CERES_LIB_NAME) $(GLOG_LIB) $(SUITESPARSE_LI
 #
 
 ceres.py: ceres.i
-	swig -python -c++ $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $(GLOG_INC) $(GFLAGS_INC) $<
+	swig -python -c++ $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $(GLOG_INC) $(GFLAGS_INC) $(PYMOD_INC) $<
 
 CXX ?= g++
 CXXFLAGS ?= -Wall -fPIC -O3
+# Ceres 2.0: -std=c++14
+
 # DEBUG
 #CXXFLAGS += -O0 -g
 #CXXFLAGS += 
@@ -133,7 +138,7 @@ CXXLINKFLAGS ?=
 CERES_EXTRA_LIB ?=
 
 _ceres$(PYTHON_SO_EXT): ceres.i ceres-tractor.h ceres-tractor.cc
-	swig -python -c++ $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $<
+	swig -python -c++ $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $(GLOG_INC) $(GFLAGS_INC) $(PYMOD_INC) $<
 	$(CXX) $(CXXFLAGS) -c ceres_wrap.cxx $(PYMOD_INC) $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $(GLOG_INC) $(GFLAGS_INC)
 	$(CXX) $(CXXFLAGS) -c ceres-tractor.cc $(PYMOD_INC) $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $(GLOG_INC) $(GFLAGS_INC)
 	$(CXX) $(CXXFLAGS) $(CXXLINKFLAGS) -o $@ -shared ceres_wrap.o ceres-tractor.o $(CERES_LIB) $(PYMOD_LIB) $(CERES_EXTRA_LIB)

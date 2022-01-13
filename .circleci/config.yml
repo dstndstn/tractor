@@ -1,0 +1,189 @@
+version: 2
+jobs:
+  build-from-docker-u1804-py3.6:
+    docker:
+      - image: dstndstn/tractor-circleci-build-ubuntu18.04
+    steps:
+      - run:
+          name: CPU info
+          command: cat /proc/cpuinfo
+      - checkout
+      - run:
+          name: Build
+          command: |
+              export PYTHONPATH=${PYTHONPATH}:$(pwd)
+              python3.6 -c "import sys; print(sys.path)"
+              python3.6 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
+              python3.6 setup-cython.py --with-ceres install --home /usr/local
+      - run:
+          name: Unit tests
+          command: |
+
+              python3.6 test/test_tractor.py
+              python3.6 test/test_galaxy.py
+              python3.6 test/test_sdss.py
+              python3.6 test/test_psfex.py
+
+  build-from-docker-u1804-py3.7:
+    docker:
+      - image: dstndstn/tractor-circleci-build-ubuntu18.04
+    steps:
+      - run:
+          name: CPU info
+          command: cat /proc/cpuinfo
+      - checkout
+      - run:
+          name: Build
+          command: |
+              python3.7 -c "import sys; print(sys.path)"
+              python3.7 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
+              python3.7 setup-cython.py --with-ceres install --home /usr/local
+      - run:
+          name: Unit tests
+          command: |
+              python3.7 test/test_tractor.py
+              python3.7 test/test_galaxy.py
+              python3.7 test/test_sdss.py
+              python3.7 test/test_psfex.py
+
+  build-from-docker-u1804-py3.8:
+    docker:
+      - image: dstndstn/tractor-circleci-build-ubuntu18.04
+    steps:
+      - run:
+          name: CPU info
+          command: cat /proc/cpuinfo
+      - checkout
+      - run:
+          name: Build
+          command: |
+              python3.8 -c "import sys; print(sys.path)"
+              python3.8 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
+              python3.8 setup-cython.py --with-ceres install --home /usr/local
+      - run:
+          name: Unit tests
+          command: |
+              python3.8 test/test_tractor.py
+              python3.8 test/test_galaxy.py
+              python3.8 test/test_sdss.py
+              python3.8 test/test_psfex.py
+
+  build-from-docker-u2004-py3.8:
+    docker:
+      - image: dstndstn/tractor-circleci-build-ubuntu20.04
+    steps:
+      - run:
+          name: CPU info
+          command: cat /proc/cpuinfo
+      - checkout
+      - run:
+          name: Build
+          command: |
+              python3.8 -c "import sys; print(sys.path)"
+              python3.8 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
+              python3.8 setup-cython.py --with-ceres install --home /usr/local
+              #make version
+              #cp tractor/version.py /usr/local/lib/python/tractor/
+      - run:
+          name: Unit tests
+          command: |
+              export PYTHONPATH=.:${PYTHONPATH}
+              python3.8 setup.py build_ext --inplace
+              coverage run --concurrency=multiprocessing test/test_tractor.py
+              coverage run --concurrency=multiprocessing -a test/test_galaxy.py
+              coverage run --concurrency=multiprocessing -a test/test_sdss.py
+              coverage run --concurrency=multiprocessing -a test/test_psfex.py
+              coverage combine
+              coveralls
+              coveralls --output coverage.report
+              codecov -t $CODECOV_TOKEN -f coverage.report
+
+  build-from-docker-u2004-py3.8-setup:
+    docker:
+      - image: dstndstn/tractor-circleci-build-ubuntu20.04
+    steps:
+      - run:
+          name: CPU info
+          command: cat /proc/cpuinfo
+      - checkout
+      - run:
+          name: Build
+          command: |
+              export PYTHONPATH=${PYTHONPATH}:$(pwd)
+              python3.8 -c "import sys; print(sys.path)"
+              python3.8 -c "import sys; import os; [os.system('ls %s' % p) for p in sys.path]"
+              python3.8 setup.py --with-ceres install --home /usr/local
+      - run:
+          name: Unit tests
+          command: |
+              echo "PYTHONPATH: ${PYTHONPATH}"
+              python3.8 test/test_tractor.py
+              python3.8 test/test_galaxy.py
+              python3.8 test/test_sdss.py
+              python3.8 test/test_psfex.py
+
+  build-from-docker-u2004-py3.8-make:
+    docker:
+      - image: dstndstn/tractor-circleci-build-ubuntu20.04
+    steps:
+      - run:
+          name: CPU info
+          command: cat /proc/cpuinfo
+      - checkout
+      - run:
+          name: Build
+          command: |
+              export PYTHONPATH=${PYTHONPATH}:$(pwd)
+              python3.8 -c "import sys; print(sys.path)"
+              python3.8 -c "import sys; import os; [os.system('ls %s' % p) for p in sys.path]"
+              export PYTHON=python3.8
+              export PYTHON_CONFIG=python3.8-config
+              make
+              make cython
+              make ceres
+              make install INSTALL_DIR=/usr/local
+      - run:
+          name: Unit tests
+          command: |
+              echo "PYTHONPATH: ${PYTHONPATH}"
+              python3.8 test/test_tractor.py
+              python3.8 test/test_galaxy.py
+              python3.8 test/test_sdss.py
+              python3.8 test/test_psfex.py
+
+  build-from-docker-u2004-py3.9:
+    docker:
+      - image: dstndstn/tractor-circleci-build-ubuntu20.04
+    steps:
+      - run:
+          name: CPU info
+          command: cat /proc/cpuinfo
+      - checkout
+      - run:
+          name: Build
+          command: |
+              export PYTHONPATH=${PYTHONPATH}:$(pwd)
+              python3.9 -c "import sys; print(sys.path)"
+              python3.9 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
+              python3.9 setup-cython.py --with-ceres install --home /usr/local
+              #make version
+              #cp tractor/version.py /usr/local/lib/python/tractor/
+      - run:
+          name: Unit tests
+          command: |
+              python3.9 test/test_tractor.py
+              python3.9 test/test_galaxy.py
+              python3.9 test/test_sdss.py
+              python3.9 test/test_psfex.py
+
+workflows:
+  version: 2
+  build:
+    jobs:
+      - "build-from-docker-u2004-py3.8"
+      - "build-from-docker-u2004-py3.8-make"
+      - "build-from-docker-u2004-py3.8-setup"
+      - "build-from-docker-u2004-py3.9"
+      - "build-from-docker-u1804-py3.6"
+      - "build-from-docker-u1804-py3.7"
+      - "build-from-docker-u1804-py3.8"

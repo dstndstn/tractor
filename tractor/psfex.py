@@ -488,7 +488,6 @@ class PixelizedPsfEx(PixelizedPSF):
         self.psfex.shift(dx, dy)
 
     def constantPsfAt(self, x, y):
-        #print('ConstantPsfAt', (x,y))
         pix = self.psfex.at(x, y)
         return PixelizedPSF(pix, sampling=self.sampling)
 

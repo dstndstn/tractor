@@ -2,13 +2,14 @@
 
 Probabilistic astronomical source detection & measurement
 
-[![Build Status](https://travis-ci.org/dstndstn/tractor.svg?branch=master)](https://travis-ci.org/dstndstn/tractor)
+[![Build status (CircleCI)](https://circleci.com/gh/dstndstn/tractor/tree/main.svg?style=shield)](https://circleci.com/gh/dstndstn/tractor/tree/main)
 [![Docs](https://readthedocs.org/projects/thetractor/badge/?version=latest)](http://thetractor.readthedocs.org/en/latest/)
-[![Coverage](https://coveralls.io/repos/github/dstndstn/tractor/badge.svg?branch=master)](https://coveralls.io/github/dstndstn/tractor)
+[![Coverage](https://coveralls.io/repos/github/dstndstn/tractor/badge.svg?branch=main)](https://coveralls.io/github/dstndstn/tractor)
+[![codecov](https://codecov.io/gh/dstndstn/tractor/branch/main/graph/badge.svg?token=FvbnHgYbxp)](https://codecov.io/gh/dstndstn/tractor)
 
 ## authors & license
 
-Copyright 2011-2016 Dustin Lang (University of Toronto) & David W. Hogg (NYU)
+Copyright 2011-2021 Dustin Lang (Perimeter Institute) & David W. Hogg (NYU/Flatiron)
 
 Licensed under GPLv2; see LICENSE.
 
@@ -44,7 +45,7 @@ Prereqs:
 
 * scipy (> 0.7; 0.9 works)
 * numpy (>= 1.4)
-* astrometry.net (often svn trunk is required)
+* astrometry.net
 
 Other packages used in various places include:
 

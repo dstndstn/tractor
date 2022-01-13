@@ -81,6 +81,18 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         self.x0 = 0
         self.y0 = 0
 
+    def copy(self):
+        c = type(self)(self.xgrid, self.ygrid, self.get_grid(), order=self.order)
+        c.x0 = self.x0
+        c.y0 = self.y0
+        # ParamList
+        c.liquid = [l for l in self.liquid]
+        return c
+
+    def get_grid(self):
+        gridvals = self.spl(self.xgrid, self.ygrid).T
+        return gridvals
+
     def shift(self, x0, y0):
         self.x0 += x0
         self.y0 += y0
@@ -217,7 +229,7 @@ class SplineSky(ParamList, ducks.ImageCalibration):
         T.ygrid = np.atleast_2d(self.ygrid).astype(np.int32)
         T.x0 = np.atleast_1d(self.x0).astype(np.int32)
         T.y0 = np.atleast_1d(self.y0).astype(np.int32)
-        gridvals = self.spl(self.xgrid, self.ygrid).T
+        gridvals = self.get_grid()
         T.gridvals = np.array([gridvals]).astype(np.float32)
         T.order = np.atleast_1d(self.order).astype(np.uint8)
         assert(len(T) == 1)
