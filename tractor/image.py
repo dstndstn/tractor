@@ -67,6 +67,9 @@ class Image(MultiParams):
         return 'Image ' + str(self.name)
 
     def copy(self):
+        time = self.time
+        if self.time is not None:
+            time = time.copy()
         return self.__class__(data=self.data.copy(),
                               inverr=self.inverr.copy(),
                               wcs=self.wcs.copy(),
@@ -74,7 +77,7 @@ class Image(MultiParams):
                               sky=self.sky.copy(),
                               photocal=self.photocal.copy(),
                               name=self.name,
-                              time=self.time.copy())
+                              time=time)
 
     def subimage(self, x0, x1, y0, y1):
         slc = (slice(y0, y1), slice(x0, x1))
