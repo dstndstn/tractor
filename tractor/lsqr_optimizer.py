@@ -476,7 +476,10 @@ class LsqrOptimizer(Optimizer):
                 rA, cA, vA, pb, mub = X
                 sprows.extend([[rij + Nrows for rij in ri] for ri in rA])
                 spcols.extend(cA)
-                spvals.extend([vi / colscales[ci] for vi, ci in zip(vA, cA)])
+                if scale_columns:
+                    spvals.extend([vi / colscales[ci] for vi, ci in zip(vA, cA)])
+                else:
+                    spvals.extend(vA)
                 #print('Prior: adding sparse vals', [vi / colscales[ci] for vi, ci in zip(vA, cA)])
                 #print(' with b', pb)
                 oldnrows = Nrows

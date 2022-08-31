@@ -36,7 +36,6 @@ class Optimizer(object):
 
         result = OptResult()
 
-        assert(not priors)
         scales = []
         imgs = tractor.getImages()
         for img in imgs:
