@@ -45,7 +45,7 @@ static int em_fit_1d_samples_reg(PyObject* po_x,
 
     PyArray_Descr* dtype = PyArray_DescrFromType(NPY_DOUBLE);
     int req = NPY_ARRAY_C_CONTIGUOUS | NPY_ARRAY_ALIGNED;
-    int reqout = req | NPY_ARRAY_WRITEABLE | NPY_ARRAY_UPDATEIFCOPY;
+    int reqout = req | NPY_ARRAY_WRITEABLE | NPY_ARRAY_WRITEBACKIFCOPY;
 
     PyArrayObject *np_x, *np_amp, *np_mean, *np_var;
 
@@ -264,7 +264,7 @@ static int em_fit_2d_reg(PyObject* po_img, int x0, int y0,
 
     PyArray_Descr* dtype = PyArray_DescrFromType(NPY_DOUBLE);
     int req = NPY_ARRAY_C_CONTIGUOUS | NPY_ARRAY_ALIGNED;
-    int reqout = req | NPY_ARRAY_WRITEABLE | NPY_ARRAY_UPDATEIFCOPY;
+    int reqout = req | NPY_ARRAY_WRITEABLE | NPY_ARRAY_WRITEBACKIFCOPY;
 
     PyArrayObject *np_img, *np_amp, *np_mean, *np_var;
 

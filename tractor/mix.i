@@ -165,7 +165,7 @@ static int get_np(PyObject* ob_amp,
                   PyArray_Descr* dtype) {
     PyArray_Descr* btype = NULL;
     int req = NPY_ARRAY_C_CONTIGUOUS | NPY_ARRAY_ALIGNED;
-    int reqout = req | NPY_ARRAY_WRITEABLE | NPY_ARRAY_UPDATEIFCOPY;
+    int reqout = req | NPY_ARRAY_WRITEABLE | NPY_ARRAY_WRITEBACKIFCOPY;
     const int D = 2;
     if (!dtype)
         dtype = PyArray_DescrFromType(NPY_DOUBLE);
@@ -302,7 +302,7 @@ static int c_gauss_2d(PyObject* ob_pos, PyObject* ob_amp,
     double *pos, *amp, *mean, *var, *result;
     PyArray_Descr* dtype = PyArray_DescrFromType(NPY_DOUBLE);
     int req = NPY_ARRAY_C_CONTIGUOUS | NPY_ARRAY_ALIGNED;
-    int reqout = req | NPY_ARRAY_WRITEABLE | NPY_ARRAY_UPDATEIFCOPY;
+    int reqout = req | NPY_ARRAY_WRITEABLE | NPY_ARRAY_WRITEBACKIFCOPY;
     double tpd;
     PyArrayObject *np_pos=NULL, *np_amp=NULL, *np_mean=NULL, *np_var=NULL, *np_result=NULL;
     double *scale=NULL, *ivar=NULL;

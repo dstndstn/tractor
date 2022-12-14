@@ -15,7 +15,7 @@ static int em_fit_2d_reg2(PyObject* po_img, int x0, int y0,
 
     PyArray_Descr* dtype = PyArray_DescrFromType(NPY_DOUBLE);
     int req = NPY_ARRAY_C_CONTIGUOUS | NPY_ARRAY_ALIGNED;
-    int reqout = req | NPY_ARRAY_WRITEABLE | NPY_ARRAY_UPDATEIFCOPY;
+    int reqout = req | NPY_ARRAY_WRITEABLE | NPY_ARRAY_WRITEBACKIFCOPY;
 
     double* amp;
     double* mean;
