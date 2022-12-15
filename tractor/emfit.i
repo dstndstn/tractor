@@ -45,7 +45,7 @@ static int em_fit_1d_samples_reg(PyObject* po_x,
 
     PyArray_Descr* dtype = PyArray_DescrFromType(NPY_DOUBLE);
     int req = NPY_ARRAY_C_CONTIGUOUS | NPY_ARRAY_ALIGNED;
-    int reqout = req | NPY_ARRAY_WRITEABLE | NPY_ARRAY_UPDATEIFCOPY;
+    int reqout = req | NPY_ARRAY_WRITEABLE | NPY_ARRAY_WRITEBACKIFCOPY;
 
     PyArrayObject *np_x, *np_amp, *np_mean, *np_var;
 
@@ -217,8 +217,32 @@ static int em_fit_1d_samples_reg(PyObject* po_x,
     free(ivar);
 
     Py_DECREF(np_x);
+
+    if (PyArray_ResolveWritebackIfCopy(np_amp) == -1) {
+        PyErr_SetString(PyExc_ValueError, "Failed to write-back amp array values!");
+        Py_DECREF(np_amp);
+        Py_DECREF(np_mean);
+        Py_DECREF(np_var);
+        Py_DECREF(dtype);
+        return -1;
+    }
     Py_DECREF(np_amp);
+
+    if (PyArray_ResolveWritebackIfCopy(np_mean) == -1) {
+        PyErr_SetString(PyExc_ValueError, "Failed to write-back mean array values!");
+        Py_DECREF(np_mean);
+        Py_DECREF(np_var);
+        Py_DECREF(dtype);
+        return -1;
+    }
     Py_DECREF(np_mean);
+
+    if (PyArray_ResolveWritebackIfCopy(np_var) == -1) {
+        PyErr_SetString(PyExc_ValueError, "Failed to write-back var array values!");
+        Py_DECREF(np_var);
+        Py_DECREF(dtype);
+        return -1;
+    }
     Py_DECREF(np_var);
     Py_DECREF(dtype);
 
@@ -264,7 +288,7 @@ static int em_fit_2d_reg(PyObject* po_img, int x0, int y0,
 
     PyArray_Descr* dtype = PyArray_DescrFromType(NPY_DOUBLE);
     int req = NPY_ARRAY_C_CONTIGUOUS | NPY_ARRAY_ALIGNED;
-    int reqout = req | NPY_ARRAY_WRITEABLE | NPY_ARRAY_UPDATEIFCOPY;
+    int reqout = req | NPY_ARRAY_WRITEABLE | NPY_ARRAY_WRITEBACKIFCOPY;
 
     PyArrayObject *np_img, *np_amp, *np_mean, *np_var;
 
@@ -497,9 +521,34 @@ static int em_fit_2d_reg(PyObject* po_img, int x0, int y0,
     free(ivar);
 
     Py_DECREF(np_img);
+
+    if (PyArray_ResolveWritebackIfCopy(np_amp) == -1) {
+        PyErr_SetString(PyExc_ValueError, "Failed to write-back amp array values!");
+        Py_DECREF(np_amp);
+        Py_DECREF(np_mean);
+        Py_DECREF(np_var);
+        Py_DECREF(dtype);
+        return -1;
+    }
     Py_DECREF(np_amp);
+
+    if (PyArray_ResolveWritebackIfCopy(np_mean) == -1) {
+        PyErr_SetString(PyExc_ValueError, "Failed to write-back mean array values!");
+        Py_DECREF(np_mean);
+        Py_DECREF(np_var);
+        Py_DECREF(dtype);
+        return -1;
+    }
     Py_DECREF(np_mean);
+
+    if (PyArray_ResolveWritebackIfCopy(np_var) == -1) {
+        PyErr_SetString(PyExc_ValueError, "Failed to write-back var array values!");
+        Py_DECREF(np_var);
+        Py_DECREF(dtype);
+        return -1;
+    }
     Py_DECREF(np_var);
+
     Py_DECREF(dtype);
 
     return result;
