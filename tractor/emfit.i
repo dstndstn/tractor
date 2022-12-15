@@ -115,8 +115,7 @@ static int em_fit_1d_samples_reg(PyObject* po_x,
 
     for (step=0; step<steps; step++) {
         double wsum[K];
-        double qsum = 0.0;
-
+        //double qsum = 0.0;
         /*
          printf("step=%i\n", step);
          printf("weights ");
@@ -168,9 +167,11 @@ static int em_fit_1d_samples_reg(PyObject* po_x,
             if (zsum == 0)
                 continue;
             for (k=0; k<K; k++) {
-                if (Z[i*K+k] > 0) {
-                    qsum += log(Z[i*K+k]) * Z[i*K+k] / zsum;
-                }
+                /*
+                 if (Z[i*K+k] > 0) {
+                 qsum += log(Z[i*K+k]) * Z[i*K+k] / zsum;
+                 }
+                 */
                 Z[i*K + k] /= zsum;
             }
         }
@@ -367,8 +368,7 @@ static int em_fit_2d_reg(PyObject* po_img, int x0, int y0,
     for (step=0; step<steps; step++) {
         double x,y;
         double wsum[K];
-        double qsum = 0.0;
-
+        //double qsum = 0.0;
         /*              {
          int d;
          printf("step=%i: ", step);
@@ -444,12 +444,14 @@ static int em_fit_2d_reg(PyObject* po_img, int x0, int y0,
                 if (zsum == 0)
                     continue;
                 for (k=0; k<K; k++) {
-                    if (Z[i*K+k] > 0) {
-                        // umm, I'm not certain this is correct... for one, it doesn't
-                        // seem to increase uniformly!
-                        qsum += log(Z[i*K+k]) * img[i] * Z[i*K+k] / zsum;
-                        //printf("lnp %g, Zfrac %g, qsum %g\n", log(Z[i*K+k]), Z[i*K+k]/zsum, qsum);
-                    }
+                    /*
+                     if (Z[i*K+k] > 0) {
+                     // umm, I'm not certain this is correct... for one, it doesn't
+                     // seem to increase uniformly!
+                     qsum += log(Z[i*K+k]) * img[i] * Z[i*K+k] / zsum;
+                     //printf("lnp %g, Zfrac %g, qsum %g\n", log(Z[i*K+k]), Z[i*K+k]/zsum, qsum);
+                     }
+                     */
                     Z[i*K + k] /= zsum;
                     // printf("normalized Z(i=%i, k=%i) = %g\n", i, k, Z[i*K+k]);
                 }
