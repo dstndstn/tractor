@@ -1,7 +1,7 @@
 from distutils.core import setup, Extension
-from numpy.distutils.misc_util import get_numpy_include_dirs
+import numpy
 
-numpy_inc = get_numpy_include_dirs()
+numpy_inc = [numpy.get_include()]
 
 #sources = ['mix_wrap.c' ],
 c_swig_module = Extension('_mix',

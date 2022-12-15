@@ -33,7 +33,7 @@ mix.py _mix$(PYTHON_SO_EXT): mix.i approx3.c gauss_masked.c setup-mix.py
 _emfit$(PYTHON_SO_EXT): emfit.i emfit2.c setup-emfit.py
 	$(PYTHON) setup-emfit.py build_ext --inplace
 
-NUMPY_INC := $(shell $(PYTHON) -c "from __future__ import print_function; from numpy.distutils.misc_util import get_numpy_include_dirs as d; print(' '.join('-I'+x for x in d()))")
+NUMPY_INC := $(shell $(PYTHON) -c "from __future__ import print_function; import numpy; print('-I'+numpy.get_include())")
 
 PYMOD_LIB ?= -L$(shell $(PYTHON_CONFIG) --prefix)/lib $(shell $(PYTHON_CONFIG) --libs)
 PYMOD_INC ?= $(shell $(PYTHON_CONFIG) --includes)

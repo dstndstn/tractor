@@ -1,8 +1,8 @@
 from distutils.core import setup, Extension
-from numpy.distutils.misc_util import get_numpy_include_dirs
+import numpy
 import os
 
-numpy_inc = get_numpy_include_dirs()
+numpy_inc = [numpy.get_include()]
 
 cflags = os.environ.get('CFLAGS')
 
