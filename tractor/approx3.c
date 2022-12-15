@@ -444,6 +444,10 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
 
 #undef SET
     }
+
+    if (finish_np(np_result, np_xderiv, np_yderiv))
+        rtn = -1;
+
 bailout:
     Py_XDECREF(np_amp);
     Py_XDECREF(np_mean);

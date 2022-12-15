@@ -146,6 +146,28 @@ static double eval_all_dxy_f(int K, float* scales, float* I, float* means,
 #define ERR(x, ...) printf(x, ## __VA_ARGS__)
 // PyErr_SetString(PyExc_ValueError, x, __VA_ARGS__)
 
+static int finish_np(PyArrayObject *np_result,
+                     PyArrayObject *np_xderiv,
+                     PyArrayObject *np_yderiv) {
+    if (PyArray_ResolveWritebackIfCopy(np_result) == -1) {
+        PyErr_SetString(PyExc_ValueError, "Failed to write-back result array values!");
+        return -1;
+    }
+
+    if (np_xderiv)
+        if (PyArray_ResolveWritebackIfCopy(np_xderiv) == -1) {
+            PyErr_SetString(PyExc_ValueError, "Failed to write-back xderiv array values!");
+            return -1;
+        }
+
+    if (np_yderiv)
+        if (PyArray_ResolveWritebackIfCopy(np_yderiv) == -1) {
+            PyErr_SetString(PyExc_ValueError, "Failed to write-back yderiv array values!");
+            return -1;
+        }
+    return 0;
+}
+
 static int get_np(PyObject* ob_amp,
                   PyObject* ob_mean,
                   PyObject* ob_var,
@@ -165,7 +187,7 @@ static int get_np(PyObject* ob_amp,
                   PyArray_Descr* dtype) {
     PyArray_Descr* btype = NULL;
     int req = NPY_ARRAY_C_CONTIGUOUS | NPY_ARRAY_ALIGNED;
-    int reqout = req | NPY_ARRAY_WRITEABLE | NPY_ARRAY_UPDATEIFCOPY;
+    int reqout = req | NPY_ARRAY_WRITEABLE | NPY_ARRAY_WRITEBACKIFCOPY;
     const int D = 2;
     if (!dtype)
         dtype = PyArray_DescrFromType(NPY_DOUBLE);
@@ -302,7 +324,7 @@ static int c_gauss_2d(PyObject* ob_pos, PyObject* ob_amp,
     double *pos, *amp, *mean, *var, *result;
     PyArray_Descr* dtype = PyArray_DescrFromType(NPY_DOUBLE);
     int req = NPY_ARRAY_C_CONTIGUOUS | NPY_ARRAY_ALIGNED;
-    int reqout = req | NPY_ARRAY_WRITEABLE | NPY_ARRAY_UPDATEIFCOPY;
+    int reqout = req | NPY_ARRAY_WRITEABLE | NPY_ARRAY_WRITEBACKIFCOPY;
     double tpd;
     PyArrayObject *np_pos=NULL, *np_amp=NULL, *np_mean=NULL, *np_var=NULL, *np_result=NULL;
     double *scale=NULL, *ivar=NULL;
@@ -408,6 +430,11 @@ static int c_gauss_2d(PyObject* ob_pos, PyObject* ob_amp,
     }
     rtn = 0;
 
+    if (PyArray_ResolveWritebackIfCopy(np_result) == -1) {
+        PyErr_SetString(PyExc_ValueError, "Failed to write-back result array values!");
+        return -1;
+    }
+
 bailout:
     free(scale);
     free(ivar);
@@ -484,6 +511,9 @@ static int c_gauss_2d_grid(int x0, int x1, int y0, int y1, double fx, double fy,
         }
         rtn = 0;
     }
+
+    if (finish_np(np_result, NULL, NULL))
+        rtn = -1;
 
 bailout:
     Py_XDECREF(np_amp);
@@ -603,7 +633,11 @@ static int c_gauss_2d_approx(int x0, int x1, int y0, int y1,
         }
     }
     rtn = 0;
-bailout:
+
+    if (finish_np(np_result, NULL, NULL))
+        rtn = -1;
+
+ bailout:
     Py_XDECREF(np_amp);
     Py_XDECREF(np_mean);
     Py_XDECREF(np_var);
@@ -1034,6 +1068,9 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
     rtn = 0;
 
 #undef SET
+
+    if (finish_np(np_result, NULL, NULL))
+        rtn = -1;
 
 bailout:
     free(doT);
