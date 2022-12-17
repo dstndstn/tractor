@@ -20,7 +20,12 @@ class SFDMap(object):
     # not vetted beyond 2 micron).
     # These coefficients are A / E(B-V) = 0.184, 0.113, 0.0241, 0.00910.
     #
+    # See https://github.com/dstndstn/tractor/issues/99 for a discussion
+    # of the GALEX extinction values.
+    #
     extinctions = {
+        'FUV': 6.793,
+        'NUV': 6.620,
         'SDSS u': 4.239,
         'DES u': 3.995,
         'DES g': 3.214,
