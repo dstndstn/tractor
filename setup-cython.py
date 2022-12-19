@@ -155,7 +155,7 @@ def main():
         package_data={'wise':['wise-psf-avg.fits', 'allsky-atlas.fits']},
         ext_modules = mods + cymod1 + cymod2,
         py_modules = pymods,
-        #zip_safe=False,   # we hates it
+        zip_safe = False,
     )
 
 if __name__ == '__main__':
