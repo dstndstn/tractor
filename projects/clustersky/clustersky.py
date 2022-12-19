@@ -1412,7 +1412,7 @@ def find():
 def find_clusters(tractor, tim):
 	# Find connected clusters of sources
 	# [ (mask patch, [src,src]), ... ]
-	dtype = np.int
+	dtype = np.int_
 	clusters = []
 	for i,src in enumerate(tractor.getCatalog()):
 		print('Clustering source', i)
@@ -4333,7 +4333,7 @@ class RunAbell(object):
 				if p is None:
 					continue
 				nz = p.getNonZeroMask()
-				dtype = np.int
+				dtype = np.int_
 				nz.patch = nz.patch.astype(dtype)
 				if nzsum is None:
 					nzsum = nz

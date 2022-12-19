@@ -319,7 +319,7 @@ class Patch(object):
 
     def getPixelIndices(self, parent):
         if self.patch is None:
-            return np.array([], np.int)
+            return np.array([], np.int_)
         (h, w) = self.shape
         (H, W) = parent.shape
         return ((np.arange(w) + self.x0)[np.newaxis, :] +
