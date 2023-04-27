@@ -23,7 +23,10 @@ Then grab the Tractor code:
 
     git clone git@github.com:dstndstn/tractor.git
     cd tractor
+
     make
+    # OR
+    python3 setup.py build_ext --inplace --with-ceres --with-cython
 
 It is possible to run directly out of the checked-out *tractor*
 directory.  But if you want to install it, you can use pip, optionally with flags to enable Ceres Solver (requires the Ceres library), and Cython:

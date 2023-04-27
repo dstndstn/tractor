@@ -122,7 +122,7 @@ jobs:
               python3.8 test/test_sdss.py
               python3.8 test/test_psfex.py
 
-  build-from-docker-u2004-py3.8-make:
+  build-from-docker-u2004-py3.8-pip:
     docker:
       - image: dstndstn/tractor-circleci-build-ubuntu20.04
     steps:
@@ -138,10 +138,7 @@ jobs:
               python3.8 -c "import sys; import os; [os.system('ls %s' % p) for p in sys.path]"
               export PYTHON=python3.8
               export PYTHON_CONFIG=python3.8-config
-              make
-              make cython
-              make ceres
-              make install INSTALL_DIR=/usr/local
+              pip install -v --install-option="--with-ceres" --install-option="--with-cython" .
       - run:
           name: Unit tests
           command: |
@@ -181,7 +178,7 @@ workflows:
   build:
     jobs:
       - "build-from-docker-u2004-py3.8"
-      - "build-from-docker-u2004-py3.8-make"
+      - "build-from-docker-u2004-py3.8-pip"
       - "build-from-docker-u2004-py3.8-setup"
       - "build-from-docker-u2004-py3.9"
       - "build-from-docker-u1804-py3.6"
