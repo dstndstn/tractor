@@ -1,30 +1,9 @@
-from __future__ import print_function
-
 import numpy as np
-# import numpy.fft_intel.libifft as m
-# def irfftn_numpy(x, s=None, axes=None):
-#     a = np.asarray(x)
-#     no_trim = (s is None) and (axes is None)
-#     s, axes = m._cook_nd_args(a, s, axes, invreal=True)
-#     la = axes[-1]
-#     ovr_x = False
-#     if len(s) > 1:
-#         if not no_trim:
-#             a = m._fix_dimensions(a, s, axes)
-#         for ii in range(len(axes)-1):
-#             a = m.ifft(a, s[ii], axes[ii], overwrite_x=ovr_x)
-#             ovr_x = True
-#     a = m.irfft_numpy(a, n = s[-1], axis=la)
-#     return a
-# m.irfftn_numpy  = irfftn_numpy
 
 from tractor.utils import MultiParams, getClassName
 from tractor.psf import GaussianMixturePSF, PixelizedPSF
 from tractor import mixture_profiles as mp
 from tractor import ducks
-
-from astrometry.util.fits import fits_table
-
 
 class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
     '''

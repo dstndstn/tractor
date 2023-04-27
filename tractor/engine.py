@@ -13,8 +13,6 @@ import logging
 
 import numpy as np
 
-from astrometry.util.ttime import Time
-
 from tractor.utils import MultiParams, _isint, get_class_from_name
 from tractor.patch import Patch, ModelMask
 from tractor.image import Image

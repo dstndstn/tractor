@@ -1,8 +1,5 @@
 import numpy as np
 
-from astrometry.util.miscutils import get_overlapping_region
-
-
 class ModelMask(object):
     def __init__(self, x0, y0, *args):
         '''
@@ -172,6 +169,7 @@ class Patch(object):
         return self.overlapsBbox(oext)
 
     def hasNonzeroOverlapWith(self, other):
+        from astrometry.util.miscutils import get_overlapping_region
         if not self.hasBboxOverlapWith(other):
             return False
         ext = self.getExtent()
@@ -308,6 +306,7 @@ class Patch(object):
         Returns (spatch, sparent), slices that yield the overlapping regions
         in this Patch and the given image.
         '''
+        from astrometry.util.miscutils import get_overlapping_region
         (ph, pw) = self.shape
         (ih, iw) = shape
         (outx, inx) = get_overlapping_region(
@@ -329,6 +328,7 @@ class Patch(object):
     plotnum = 0
 
     def addTo(self, img, scale=1.):
+        from astrometry.util.miscutils import get_overlapping_region
         if self.patch is None:
             return
         (ih, iw) = img.shape

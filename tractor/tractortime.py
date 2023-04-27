@@ -1,9 +1,6 @@
 import numpy as np
 
-from astrometry.util.starutil_numpy import datetomjd, J2000
-
 from tractor.utils import ScalarParam, ArithmeticParams
-
 
 class TAITime(ScalarParam, ArithmeticParams):
     '''
@@ -20,10 +17,14 @@ class TAITime(ScalarParam, ArithmeticParams):
     equinox = 53084.28  # mjd of the spring equinox in 2004
     daysperyear = 365.25  # Julian years, by definition
 
-    mjd2k = datetomjd(J2000)
+    @classmethod
+    def mjd2k():
+        from astrometry.util.starutil_numpy import datetomjd, J2000
+        return datetomjd(J2000)
 
     def __init__(self, t, mjd=None, date=None):
         if t is None:
+            from astrometry.util.starutil_numpy import datetomjd
             if date is not None:
                 mjd = datetomjd(date)
             if mjd is not None:
@@ -45,4 +46,4 @@ class TAITime(ScalarParam, ArithmeticParams):
 
     def toYear(self):
         ''' to proper year '''
-        return self.toYears() - TAITime(None, mjd=TAITime.mjd2k).toYears() + 2000.0
+        return self.toYears() - TAITime(None, mjd=TAITime.mjd2k()).toYears() + 2000.0

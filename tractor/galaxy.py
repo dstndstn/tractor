@@ -12,12 +12,7 @@ These use the slightly modified versions of the exp and dev profiles
 from the SDSS /Photo/ software; we use multi-Gaussian approximations
 of these.
 """
-from __future__ import print_function
-from __future__ import division
-
 import numpy as np
-
-from astrometry.util.miscutils import get_overlapping_region
 
 from tractor import mixture_profiles as mp
 from tractor.utils import ParamList, MultiParams, ScalarParam, BaseParams
@@ -269,6 +264,7 @@ class ProfileGalaxy(object):
                                    outer_real_nsigma = 4.,
                                    force_halfsize=None,
                                    **kwargs):
+        from astrometry.util.miscutils import get_overlapping_region
         if modelMask is not None:
             x0, y0 = modelMask.x0, modelMask.y0
         else:
