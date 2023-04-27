@@ -9,32 +9,26 @@ Probabilistic astronomical source detection & measurement
 
 ## authors & license
 
-Copyright 2011-2021 Dustin Lang (Perimeter Institute) & David W. Hogg (NYU/Flatiron)
+Copyright 2011-2023 Dustin Lang (Perimeter Institute) & David W. Hogg (NYU/Flatiron)
 
 Licensed under GPLv2; see LICENSE.
 
 ## install
 
-To check out and build the code in a *tractor* directory:
+First, install the Astrometry.net code.  (https://astrometry.net/downloads or https://github.com/dstndstn/astrometry.net/tags).  You can do this by grabbing the code and using "make", or you can install the python code directly using pip:
 
-    wget -O - https://raw.github.com/dstndstn/tractor/master/checkout.sh | bash
-    cd tractor
+    pip install git+https://github.com/dstndstn/astrometry.net.git
 
-Or if you prefer:
+Then grab the Tractor code:
 
-    #
-    # Grab and install the Astrometry.net code (http://astrometry.net/downloads)
-    # and then...
-    #
     git clone git@github.com:dstndstn/tractor.git
     cd tractor
     make
 
 It is possible to run directly out of the checked-out *tractor*
-directory.  But if you want to install it:
+directory.  But if you want to install it, you can use pip, optionally with flags to enable Ceres Solver (requires the Ceres library), and Cython:
 
-    make
-    python setup.py install # --prefix=/some/place    or maybe --home=/your/place
+    pip install -v --install-option="--with-ceres" --install-option="--with-cython" .
 
 There is a test script that renders SDSS images:
 
@@ -43,8 +37,8 @@ There is a test script that renders SDSS images:
 
 Prereqs:
 
-* scipy (> 0.7; 0.9 works)
-* numpy (>= 1.4)
+* scipy
+* numpy
 * astrometry.net
 
 Other packages used in various places include:
