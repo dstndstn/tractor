@@ -14,7 +14,7 @@ jobs:
               export PYTHONPATH=${PYTHONPATH}:$(pwd)
               python3.6 -c "import sys; print(sys.path)"
               python3.6 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
-              python3.6 setup-cython.py --with-ceres install --home /usr/local
+              python3.6 setup.py --with-ceres install --home /usr/local
       - run:
           name: Unit tests
           command: |
@@ -37,7 +37,7 @@ jobs:
           command: |
               python3.7 -c "import sys; print(sys.path)"
               python3.7 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
-              python3.7 setup-cython.py --with-ceres install --home /usr/local
+              python3.7 setup.py --with-ceres install --home /usr/local
       - run:
           name: Unit tests
           command: |
@@ -59,7 +59,7 @@ jobs:
           command: |
               python3.8 -c "import sys; print(sys.path)"
               python3.8 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
-              python3.8 setup-cython.py --with-ceres install --home /usr/local
+              python3.8 setup.py --with-ceres install --home /usr/local
       - run:
           name: Unit tests
           command: |
@@ -81,7 +81,7 @@ jobs:
           command: |
               python3.8 -c "import sys; print(sys.path)"
               python3.8 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
-              python3.8 setup-cython.py --with-ceres install --home /usr/local
+              python3.8 setup.py --with-ceres install --home /usr/local
               #make version
               #cp tractor/version.py /usr/local/lib/python/tractor/
       - run:
@@ -165,7 +165,7 @@ jobs:
               export PYTHONPATH=${PYTHONPATH}:$(pwd)
               python3.9 -c "import sys; print(sys.path)"
               python3.9 -c "import sys; import os; os.system('ls {' + ','.join(sys.path) + '}')"
-              python3.9 setup-cython.py --with-ceres install --home /usr/local
+              python3.9 setup.py --with-ceres install --home /usr/local
               #make version
               #cp tractor/version.py /usr/local/lib/python/tractor/
       - run:
