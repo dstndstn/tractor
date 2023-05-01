@@ -160,6 +160,7 @@ def main():
     pymods.append('tractor.version')
     version = '0.0'
     try:
+        sys.path.append('.')
         from tractor.version import version as v
         version = v
         print('Set version', version)
