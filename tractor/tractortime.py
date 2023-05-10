@@ -1,18 +1,7 @@
 import numpy as np
-
 from tractor.utils import ScalarParam, ArithmeticParams
 
-class TAITimeMeta(type):
-    def __getattr__(cls, name):
-        if name == 'mjd2k':
-            if name not in cls.__dict__:
-                from astrometry.util.starutil_numpy import datetomjd, J2000
-                setattr(cls, name, datetomjd(J2000))
-        if not name in cls.__dict__:
-            raise AttributeError()
-        return cls.__dict__[name]
-
-class TAITime(ScalarParam, ArithmeticParams, metaclass=TAITimeMeta):
+class TAITime(ScalarParam, ArithmeticParams):
     '''
     This is TAI as used in the SDSS 'frame' headers; eg
 
@@ -26,6 +15,7 @@ class TAITime(ScalarParam, ArithmeticParams, metaclass=TAITimeMeta):
     '''
     equinox = 53084.28  # mjd of the spring equinox in 2004
     daysperyear = 365.25  # Julian years, by definition
+    mjd2k = 51544.5 # mjd of J2000
 
     def __init__(self, t, mjd=None, date=None):
         if t is None:
@@ -54,11 +44,6 @@ class TAITime(ScalarParam, ArithmeticParams, metaclass=TAITimeMeta):
         return self.toYears() - TAITime(None, mjd=TAITime.mjd2k()).toYears() + 2000.0
 
 if __name__ == '__main__':
-    print(TAITime.mjd2k)
-    print(TAITime.mjd2k)
-    t = TAITime(100.)
-    print(t)
-    print(TAITime.equinox)
-    print(TAITime.daysperyear)
-
-    print(TAITime.xxx)
+    from astrometry.util.starutil_numpy import datetomjd, J2000
+    mjd2k = datetomjd(J2000)
+    assert(mjd2k == TAITime.mjd2k)
