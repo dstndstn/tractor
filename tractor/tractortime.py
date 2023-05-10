@@ -41,7 +41,7 @@ class TAITime(ScalarParam, ArithmeticParams):
 
     def toYear(self):
         ''' to proper year '''
-        return self.toYears() - TAITime(None, mjd=TAITime.mjd2k()).toYears() + 2000.0
+        return self.toYears() - TAITime(None, mjd=TAITime.mjd2k).toYears() + 2000.0
 
 if __name__ == '__main__':
     from astrometry.util.starutil_numpy import datetomjd, J2000
