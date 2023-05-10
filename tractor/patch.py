@@ -317,13 +317,13 @@ class Patch(object):
             return (slice(0, 0), slice(0, 0)), (slice(0, 0), slice(0, 0))
         return (iny, inx), (outy, outx)
 
-    def getPixelIndices(self, parent):
+    def getPixelIndices(self, parent, dtype=np.int32):
         if self.patch is None:
-            return np.array([], np.int_)
+            return np.array([], dtype)
         (h, w) = self.shape
         (H, W) = parent.shape
-        return ((np.arange(w) + self.x0)[np.newaxis, :] +
-                ((np.arange(h) + self.y0) * W)[:, np.newaxis]).ravel()
+        return ( (np.arange(w, dtype=dtype) + dtype(self.x0))[np.newaxis, :] +
+                ((np.arange(h, dtype=dtype) + dtype(self.y0)) * dtype(W))[:, np.newaxis]).ravel()
 
     plotnum = 0
 
