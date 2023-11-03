@@ -396,9 +396,11 @@ class Optimizer(object):
                 IV[di] = dchi2
 
         # source params next
+        D = len(umodels[0]) # number of sources
         for i, (tim, umods, scale) in enumerate(zip(imlist, umodels, scales)):
             mm = np.zeros(tim.shape)
             ie = tim.getInvError()
+            models_cov = np.zeros(shape=(D, tim.shape[0], tim.shape[1])) # a tim.shape image for each source containing only PSF
             for ui, um in enumerate(umods):
                 if um is None:
                     continue
@@ -417,9 +419,25 @@ class Optimizer(object):
                     uh += y0
                     y0 = 0
                 slc = slice(y0, y0 + uh), slice(x0, x0 + uw)
-                dchi2 = np.sum((mm[slc] * scale * ie[slc]) ** 2)
-                IV[Nsky + ui] += dchi2
-                mm[slc] = 0.
+                models_cov[ui][slc] += um.getImage() # add only PSF
+                # dchi2 = np.sum((mm[slc] * scale * ie[slc]) ** 2)
+                # IV[Nsky + ui] += dchi2
+                # mm[slc] = 0.
+                
+        F = np.zeros(shape=(D,D)) # initialize fisher information matrix
+        for i in range(D):
+            for j in range(D):
+                F[i, j] = F[i,j] = -np.sum( models_cov[i]*models_cov[j] * ie**2)
+
+        # Check if F is invertible or not; then invert it if so.
+        if np.linalg.det(F)==0.:
+            print('F is not invertible! Infinity in the covariance.')
+            C = np.inf + np.zeros_like(F) # covariance matrix 
+        else:
+            C = np.linalg.inv(F) # covariance matrix
+        var = -np.diag(C) # diagonal values as variance
+        IV[Nsky:] = 1/var # inverse variance. 
+
         return IV
 
     def tryUpdates(self, tractor, X, alphas=None):
