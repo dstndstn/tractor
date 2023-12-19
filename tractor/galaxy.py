@@ -13,11 +13,17 @@ from the SDSS /Photo/ software; we use multi-Gaussian approximations
 of these.
 """
 import numpy as np
+import cupy as cp
 
 from tractor import mixture_profiles as mp
 from tractor.utils import ParamList, MultiParams, ScalarParam, BaseParams
 from tractor.patch import Patch, add_patches, ModelMask
 from tractor.basics import SingleProfileSource, BasicSource
+
+#Global arrays for quick timer
+import time
+ty = np.zeros(12)
+tc = np.zeros(12, dtype=np.int32)
 
 debug_ps = None
 
@@ -265,6 +271,7 @@ class ProfileGalaxy(object):
                                    force_halfsize=None,
                                    **kwargs):
         from astrometry.util.miscutils import get_overlapping_region
+        tx = time.time()
         if modelMask is not None:
             x0, y0 = modelMask.x0, modelMask.y0
         else:
@@ -310,8 +317,11 @@ class ProfileGalaxy(object):
             # now convolve with the PSF, analytically
             # (note that the psf's center is *not* set to px,py; that's just
             #  the position to use for spatially-varying PSFs)
-            psfmix = psf.getMixtureOfGaussians(px=px, py=py)
-            cmix = amix.convolve(psfmix)
+            ## CW - use_gpu = True
+            psfmix = psf.getMixtureOfGaussians(px=px, py=py, use_gpu=True)
+            #cmix = amix.convolve(psfmix)
+            #CW - use GPU method
+            cmix = amix.convolveGPU(psfmix)
             if mm is None:
                 #print('Mixture to patch: amix', amix, 'psfmix', psfmix, 'cmix', cmix)
                 return mp.mixture_to_patch(cmix, x0, x1, y0, y1, minval)
@@ -329,12 +339,16 @@ class ProfileGalaxy(object):
 
         # Otherwise, FFT:
         imh, imw = img.shape
+        add_to_timer(0, time.time()-tx)
+        tx = time.time()
         if modelMask is None:
             # Avoid huge galaxies -> huge halfsize in a tiny image (blob)
             imsz = max(imh, imw)
             halfsize = min(halfsize, imsz)
             # FIXME -- should take some kind of combination of
             # modelMask, PSF, and Galaxy sizes!
+            #add_to_timer(9, time.time()-tx)
+            #tx = time.time()
 
         else:
             # ModelMask sets the sizes.
@@ -355,6 +369,8 @@ class ProfileGalaxy(object):
             # is the source center outside the modelMask?
             sourceOut = (px < x0 or px > x1 - 1 or py < y0 or py > y1 - 1)
             # print('mh,mw', mh,mw, 'sourceout?', sourceOut)
+            #add_to_timer(8, time.time()-tx)
+            #tx = time.time()
 
             if sourceOut:
                 if hybrid:
@@ -402,10 +418,18 @@ class ProfileGalaxy(object):
                     img, px, py, minval, modelMask=bigMask)
                 return Patch(x0, y0,
                              bigmodel.patch[boffy:boffy + mh, boffx:boffx + mw])
+            #add_to_timer(10, time.time()-tx)
 
+        add_to_timer(1, time.time()-tx)
+        tx = time.time()
         # print('Getting Fourier transform of PSF at', px,py)
         # print('Tim shape:', img.shape)
-        P, (cx, cy), (pH, pW), (v, w) = psf.getFourierTransform(px, py, halfsize)
+        # CW - use GPU method
+        # CODE BLOCK A - this takes over 1s, one of 4 sections of code that does so
+        #P, (cx, cy), (pH, pW), (v, w) = psf.getFourierTransform(px, py, halfsize)
+        P, (cx, cy), (pH, pW), (v, w) = psf.getFourierTransformGPU(px, py, halfsize)
+        add_to_timer(2, time.time()-tx)
+        tx = time.time()
 
         dx = px - cx
         dy = py - cy
@@ -434,15 +458,23 @@ class ProfileGalaxy(object):
         # At this point, mux,muy are both in [-0.5, 0.5]
         assert(np.abs(mux) <= 0.5)
         assert(np.abs(muy) <= 0.5)
+        tx = time.time()
 
-        amix = self._getShearedProfile(img, px, py)
+        # CW - use GPU = true
+        # CODE BLOCK B - Below is over 1s of runtime, another of the 4 most expensive code blocks 
+        amix = self._getShearedProfile(img, px, py, use_gpu=True)
         fftmix = amix
         mogmix = None
+        add_to_timer(3, time.time()-tx)
+        tx = time.time()
 
+        ## CW - changed numpy to cupy and var to gpuvar etc
+        ## CODE BLOCK C - This if block is most expensive section, taking 3s of runtime
         if hybrid and inner_real_nsigma is not None and outer_real_nsigma is not None:
             # Split "amix" into terms that we will evaluate using MoG
             # vs FFT.
-            vv = amix.var[:, 0, 0] + amix.var[:, 1, 1]
+            #vv = amix.var[:, 0, 0] + amix.var[:, 1, 1]
+            vv = amix.gpuvar[:, 0, 0] + amix.gpuvar[:, 1, 1]
             # Ramp between:
             nsigma1 = inner_real_nsigma
             nsigma2 = outer_real_nsigma
@@ -459,38 +491,66 @@ class ProfileGalaxy(object):
             ramp = np.any(IM*IF)
 
             if np.any(IM):
-                amps = amix.amp[IM]
+                amps = amix.gpuamp[IM]
                 if ramp:
-                    ns = (pW/2) / np.maximum(1e-6, np.sqrt(vv))
-                    mogweights = np.minimum(1., (nsigma2 - ns[IM]) / (nsigma2 - nsigma1))
-                    fftweights = np.minimum(1., (ns[IF] - nsigma1) / (nsigma2 - nsigma1))
-                    assert(np.all(mogweights > 0.))
-                    assert(np.all(mogweights <= 1.))
-                    assert(np.all(fftweights > 0.))
-                    assert(np.all(fftweights <= 1.))
+                    #ns = (pW/2) / np.maximum(1e-6, np.sqrt(vv))
+                    #mogweights = np.minimum(1., (nsigma2 - ns[IM]) / (nsigma2 - nsigma1))
+                    #fftweights = np.minimum(1., (ns[IF] - nsigma1) / (nsigma2 - nsigma1))
+                    #assert(np.all(mogweights > 0.))
+                    #assert(np.all(mogweights <= 1.))
+                    #assert(np.all(fftweights > 0.))
+                    #assert(np.all(fftweights <= 1.))
+                    ns = (pW/2) / cp.maximum(1e-6, cp.sqrt(vv))
+                    mogweights = cp.minimum(1., (nsigma2 - ns[IM]) / (nsigma2 - nsigma1))
+                    fftweights = cp.minimum(1., (ns[IF] - nsigma1) / (nsigma2 - nsigma1))
+                    assert(cp.all(mogweights > 0.))
+                    assert(cp.all(mogweights <= 1.))
+                    assert(cp.all(fftweights > 0.))
+                    assert(cp.all(fftweights <= 1.))
                     amps *= mogweights
+                #mogmix = mp.MixtureOfGaussians(amps,
+                #                               amix.mean[IM, :] + np.array([px, py])[np.newaxis, :],
+                #                               amix.var[IM, :, :], quick=True)
+                #CW - call constructor with GPU arrays to avoid re-copying
                 mogmix = mp.MixtureOfGaussians(amps,
-                                               amix.mean[IM, :] + np.array([px, py])[np.newaxis, :],
-                                               amix.var[IM, :, :], quick=True)
+                                               amix.gpumean[IM, :] + cp.array([px, py])[cp.newaxis, :],
+                                               amix.gpuvar[IM, :, :], quick=True)
 
             if np.any(IF):
-                amps = amix.amp[IF]
+                amps = amix.gpuamp[IF]
                 if ramp:
                     amps *= fftweights
-                fftmix = mp.MixtureOfGaussians(amps, amix.mean[IF, :], amix.var[IF, :, :],
+                #fftmix = mp.MixtureOfGaussians(amps, amix.mean[IF, :], amix.var[IF, :, :],
+                #                                quick=True)
+                #CW - call constructor with GPU arrays to avoid re-copying
+                fftmix = mp.MixtureOfGaussians(amps, amix.gpumean[IF, :], amix.gpuvar[IF, :, :],
                                                 quick=True)
             else:
                 fftmix = None
+        add_to_timer(4, time.time()-tx)
+        tx = time.time()
 
         if fftmix is not None:
+            ##CW - CODE BLOCK D - 2nd most expensive block - 2s of runtime 
+            #Use getFourierTransformGPU2 and Cupy FFT
+            tx = time.time()
             #print('Evaluating FFT mixture:', len(fftmix.amp), 'components in size', pH,pW)
             #print('Amps:', fftmix.amp)
-            Fsum = fftmix.getFourierTransform(v, w, zero_mean=True)
+            #Fsum = fftmix.getFourierTransform(v, w, zero_mean=True)
+            Fsum = fftmix.getFourierTransformGPU2(v, w, zero_mean=True)
             # In Intel's mkl_fft library, the irfftn code path is faster than irfft2
             # (the irfft2 version sets args (to their default values) which triggers padding
             #  behavior, changing the FFT size and copying behavior)
             #G = np.fft.irfft2(Fsum * P, s=(pH, pW))
-            G = np.fft.irfftn(Fsum * P)
+            #G = np.fft.irfftn(Fsum * P)
+            Fsump_gpu = cp.asarray(Fsum*P)
+            G = cp.fft.irfft2(Fsump_gpu, s=(pH, pW))
+            #CW - this is as far as I got and copy G back to CPU here so it can
+            #be used for lanczos shift.
+            #Record time for data copy
+            tx2 = time.time()
+            G = G.get()
+            add_to_timer(11, time.time()-tx2)
 
             assert(G.shape == (pH,pW))
             # FIXME -- we could try to be sneaky and Lanczos-interp
@@ -501,10 +561,15 @@ class ProfileGalaxy(object):
             # pixelized PSFs.
             from tractor.psf import lanczos_shift_image
             G = G.astype(np.float32)
+            #G = G.astype(cp.float32)
             if mux != 0.0 or muy != 0.0:
                 lanczos_shift_image(G, mux, muy, inplace=True)
+            #add_to_timer(10, time.time()-tx)
         else:
             G = np.zeros((pH, pW), np.float32)
+            #G = cp.zeros((pH, pW), cp.float32)
+        add_to_timer(5, time.time()-tx)
+        tx = time.time()
 
         if modelMask is not None:
             gh, gw = G.shape
@@ -548,7 +613,12 @@ class ProfileGalaxy(object):
             assert(mogpatch.patch.shape == G.shape)
             G += mogpatch.patch
 
-        return Patch(ix0, iy0, G)
+        add_to_timer(6, time.time()-tx)
+        tx = time.time()
+        z = Patch(ix0, iy0, G)
+        add_to_timer(7, time.time()-tx)
+        #return Patch(ix0, iy0, G)
+        return z
 
 def _fourier_galaxy_debug_plots(G, shG, xi, yi, xo, yo, P, Fsum,
                                 pW, pH, psf):
@@ -677,25 +747,42 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
     def getRadius(self):
         return self.nre * self.shape.re
 
-    def _getAffineProfile(self, img, px, py):
+    def _getAffineProfile(self, img, px, py, use_gpu=False):
         ''' Returns a MixtureOfGaussians profile that has been
         affine-transformed into the pixel space of the image.
+
+        CW - added use_gpu and dot product on GPU
+        Very inefficient to copy [px,py] to GPU
         '''
         galmix = self.getProfile()
         cdinv = img.getWcs().cdInverseAtPixel(px, py)
         G = self.shape.getRaDecBasis()
+        if (use_gpu):
+            import cupy as cp
+            cdinv_gpu = cp.asarray(cdinv)
+            G_gpu = cp.asarray(G)
+            Tinv = cp.dot(cdinv_gpu, G_gpu)
+            return galmix.apply_affine(cp.array([px,px], Tinv), use_gpu=True)
         Tinv = np.dot(cdinv, G)
         amix = galmix.apply_affine(np.array([px, py]), Tinv)
         return amix
 
-    def _getShearedProfile(self, img, px, py):
+    def _getShearedProfile(self, img, px, py, use_gpu=False):
         ''' Returns a MixtureOfGaussians profile that has been
         shear-transformed into the pixel space of the image.
         At px,py (but not offset to px,py).
+
+        CW - added use_gpu and dot product on GPU
         '''
         galmix = self.getProfile()
         cdinv = img.getWcs().cdInverseAtPixel(px, py)
         G = self.shape.getRaDecBasis()
+        if (use_gpu):
+            import cupy as cp
+            cdinv_gpu = cp.asarray(cdinv)
+            G_gpu = cp.asarray(G)
+            Tinv = cp.dot(cdinv_gpu, G_gpu)
+            return galmix.apply_shear(Tinv, use_gpu=True)
         Tinv = np.dot(cdinv, G)
         amix = galmix.apply_shear(Tinv)
         return amix
@@ -1155,3 +1242,12 @@ class CompositeGalaxy(MultiParams, BasicSource):
             derivs.extend(dd[npos:])
 
         return derivs
+
+#Simple dumb timer methods
+def add_to_timer(i, t):
+    ty[i] += t
+    tc[i] += 1
+
+def print_timer():
+    print ("Galaxy Timings: ", ty, ty.sum())
+    print ("Call counts:", tc)

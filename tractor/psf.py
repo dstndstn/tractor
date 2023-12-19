@@ -267,6 +267,43 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         self.fftcache[sz] = rtn
         return rtn
 
+    def getFourierTransformGPU(self, px, py, radius):
+        '''
+        CW - GPU version simply copies pad to GPU and uses Cupy for FFT
+
+        Returns the Fourier Transform of this PSF, with the
+        next-power-of-2 size up from *radius*.
+
+        Returns: (FFT, (x0, y0), (imh,imw), (v,w))
+
+        *FFT*: numpy array, the FFT
+        *xc*: float, pixel location of the PSF /center/ in the PSF subimage
+        *yc*:    ditto
+        *imh,imw*: ints, shape of the padded PSF image
+        *v,w*: v=cp.fft.rfftfreq(imw), w=cp.fft.fftfreq(imh)
+
+        '''
+        import cupy as cp
+        if self.sampling != 1.:
+            return self._getOversampledFourierTransformGPU(px, py, radius)
+
+        sz = self.getFourierTransformSize(radius)
+        # print 'PixelizedPSF FFT size', sz
+        if sz in self.fftcache:
+            return self.fftcache[sz]
+
+        pad, cx, cy = self._padInImage(sz, sz)
+        # cx,cy: coordinate of the PSF center in *pad*
+        pad = cp.asarray(pad)
+        P = cp.fft.rfft2(pad)
+        P = P.astype(cp.complex64)
+        pH, pW = pad.shape
+        v = cp.fft.rfftfreq(pW)
+        w = cp.fft.fftfreq(pH)
+        rtn = P, (cx, cy), (pH, pW), (v, w)
+        self.fftcache[sz] = rtn
+        return rtn
+
     # The following routines are used when sampling != 1.0
 
     def _sampleImage(self, img, dx, dy,
@@ -350,6 +387,33 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         pH, pW = pad.shape
         v = np.fft.rfftfreq(pW)
         w = np.fft.fftfreq(pH)
+        rtn = P, (cx, cy), (pH, pW), (v, w)
+        self.fftcache[key] = rtn
+        return rtn
+
+    def _getOversampledFourierTransformGPU(self, px, py, radius):
+        '''
+        CW - GPU version copies pad to GPU and uses Cupy for FFT
+        '''
+        import cupy as cp
+        sz = self.getFourierTransformSize(radius)
+        key = (sz, px, py)
+        if key in self.fftcache:
+            return self.fftcache[key]
+        # shift by fractional pixel
+        dx = px - int(px)
+        dy = py - int(py)
+        _, _, img = self._sampleImage(None, dx, dy)
+        pad, cx, cy = self._padInImage(sz, sz, img=img)
+        cx += dx
+        cy += dy
+        pad = cp.asarray(pad)
+        # cx,cy: coordinate of the PSF center in *pad*
+        P = cp.fft.rfft2(pad)
+        P = P.astype(cp.complex64)
+        pH, pW = pad.shape
+        v = cp.fft.rfftfreq(pW)
+        w = cp.fft.fftfreq(pH)
         rtn = P, (cx, cy), (pH, pW), (v, w)
         self.fftcache[key] = rtn
         return rtn
@@ -850,10 +914,11 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
         return NCircularGaussianPSF(np.array(self.mysigmas) * factor,
                                     self.myweights)
 
-    def getMixtureOfGaussians(self, px=None, py=None):
+    def getMixtureOfGaussians(self, px=None, py=None, use_gpu=False):
+        #CW - added use_gpu pass through
         amps = tuple(self.myweights)
         sigs = tuple(self.mysigmas)
-        return getCircularMog(amps, sigs)
+        return getCircularMog(amps, sigs, use_gpu=use_gpu)
 
     def hashkey(self):
         hk = ('NCircularGaussianPSF', tuple(self.sigmas), tuple(self.weights))
@@ -909,8 +974,19 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
         mix.mean = oldmean
         return p
 
-def getCircularMog(amps, sigmas):
+def getCircularMog(amps, sigmas, use_gpu=False):
+    #CW - added use_gpu
+    #Would be more efficient if amps and sigmas were already on GPU
     K = len(amps)
+    if (use_gpu):
+        import cupy as cp
+        amps = cp.array(amps).astype(cp.float32)
+        means = cp.zeros((K,2), cp.float32)
+        vars = cp.zeros((K,2,2), cp.float32)
+        sigmas = cp.array(sigmas).astype(cp.float32)
+        vars[:,0,0] = sigmas**2
+        vars[:,1,1] = sigmas**2
+        return mp.MixtureOfGaussians(amps, means, vars, quick=True, use_gpu=True)
     amps = np.array(amps).astype(np.float32)
     means = np.zeros((K, 2), np.float32)
     vars = np.zeros((K, 2, 2), np.float32)

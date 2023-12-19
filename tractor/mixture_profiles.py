@@ -37,6 +37,11 @@ dev_amp = np.append(dev_amp, dev_core)
 dev_var = np.append(dev_var, 0.)
 ####################
 
+#Global arrays for quick timings
+tm = np.zeros(10)
+tc = np.zeros(10)
+import time
+
 def get_exp_mixture():
     return MixtureOfGaussians(exp_amp, np.zeros((exp_amp.size, 2)), exp_var)
 
@@ -46,8 +51,10 @@ def get_dev_mixture():
 class MixtureOfGaussians(object):
 
     # symmetrize is an unnecessary step in principle, but in practice?
-    def __init__(self, amp, mean, var, quick=False):
+    def __init__(self, amp, mean, var, quick=False, use_gpu=False):
         '''
+        CW - add gpuvar, gpumean, gpuamp
+
         amp: shape (K,)
         mean: shape (K,D)
         var: shape (K,D,D)
@@ -63,6 +70,49 @@ class MixtureOfGaussians(object):
             (self.K, self.D) = self.mean.shape
             self.set_var(var)
             self.symmetrize()
+        #CW - earlier version copied over var, mean, amp in constructor
+        #Changed to copy as needed with below properties
+        #import cupy as cp
+        #tx = time.time()
+        #self.gpuvar = cp.asarray(self.var)
+        #self.gpumean = cp.asarray(self.mean)
+        #self.gpuamp = cp.asarray(self.amp)
+        #add_to_tm(9, time.time()-tx)
+        self._gpuvar = None
+        self._gpumean = None
+        self._gpuamp = None
+
+    ## CW - copy over var, amp, mean to GPU as needed
+    # Add to timer to track how long this takes
+    @property
+    def gpuvar(self):
+        if (self._gpuvar is None):
+            #Copy to GPU once
+            import cupy as cp
+            tx = time.time()
+            self._gpuvar = cp.asarray(self.var)
+            add_to_tm(9, time.time()-tx)
+        return self._gpuvar
+
+    @property
+    def gpumean(self):
+        if (self._gpumean is None):
+            #Copy to GPU once
+            import cupy as cp
+            tx = time.time()
+            self._gpumean = cp.asarray(self.mean)
+            add_to_tm(9, time.time()-tx)
+        return self._gpumean
+
+    @property
+    def gpuamp(self):
+        if (self._gpuamp is None):
+            #Copy to GPU once
+            import cupy as cp
+            tx = time.time()
+            self._gpuamp = cp.asarray(self.amp)
+            add_to_tm(9, time.time()-tx)
+        return self._gpuamp
 
     def __str__(self):
         result = "MixtureOfGaussians instance"
@@ -127,8 +177,10 @@ class MixtureOfGaussians(object):
         s.normalize()
         return s
 
-    def apply_affine(self, shift, scale):
+    def apply_affine(self, shift, scale, use_gpu=False):
         '''
+        CW - Added use_gpu bool to use Cupy for dot products
+
         NOTE, "scale" is transposed vs earlier versions of this code!
 
         NOTE, does NOT make a copy of amplitude!!
@@ -138,20 +190,31 @@ class MixtureOfGaussians(object):
         '''
         assert(shift.shape == (self.D,))
         assert(scale.shape == (self.D, self.D))
+        if (use_gpu):
+            import cupy as cp
+            newvar = self.gpuvar.dot(scale).dot(scale.T)
+            newmean = self.gpumean + shift
+            return MixtureOfGaussians(self.gpuamp, newmean, newvar, quick=True)
         newmean = self.mean + shift
         newvar = np.zeros_like(self.var)
         for k in range(self.K):
             newvar[k, :, :] = np.linalg.multi_dot((scale, self.var[k,:,:], scale.T))
         return MixtureOfGaussians(self.amp, newmean, newvar, quick=True)
 
-    def apply_shear(self, scale):
+    def apply_shear(self, scale, use_gpu=False):
         '''
+        CW - Added use_gpu bool to use Cupy for dot products
+
         NOTE, does NOT make a copy of amplitude and mean!!
 
         shift: D-vector offset
         scale: DxD-matrix transformation
         '''
         assert(scale.shape == (self.D, self.D))
+        if (use_gpu):
+            import cupy as cp
+            newvar = self.gpuvar.dot(scale).dot(scale.T)
+            return MixtureOfGaussians(self.gpuamp, self.mean, newvar, quick=True)
         newvar = np.zeros_like(self.var)
         # for k in range(self.K):
         #     newvar[k, :, :] = np.linalg.multi_dot((scale, self.var[k,:,:], scale.T))
@@ -192,6 +255,28 @@ class MixtureOfGaussians(object):
             newmean[newk:nextnewk, :] = self.mean + other.mean[k]
             newvar[newk:nextnewk, :, :] = self.var + other.var[k]
             newk = nextnewk
+        return MixtureOfGaussians(newamp, newmean, newvar, quick=True)
+
+    def convolveGPU(self, other):
+        '''
+        CW - GPU version of convolve
+        '''
+        import cupy as cp
+        assert(self.D == other.D)
+        tx = time.time()
+        newK = self.K * other.K
+        D = self.D
+        newamp = cp.zeros((newK))
+        newmean = cp.zeros((newK, D))
+        newvar = cp.zeros((newK, D, D))
+        newk = 0
+        for k in range(other.K):
+            nextnewk = newk + self.K
+            newamp[newk:nextnewk] = self.gpuamp * other.gpuamp[k]
+            newmean[newk:nextnewk, :] = self.gpumean + other.gpumean[k]
+            newvar[newk:nextnewk, :, :] = self.gpuvar + other.gpuvar[k]
+            newk = nextnewk
+        add_to_tm(4, time.time()-tx)
         return MixtureOfGaussians(newamp, newmean, newvar, quick=True)
 
     def getFourierTransform(self, v, w, use_mp_fourier=True, zero_mean=False):
@@ -239,6 +324,82 @@ class MixtureOfGaussians(object):
                 Fsum += amp * F
 
         return Fsum
+
+    def getFourierTransformGPU(self, v, w, zero_mean=False):
+        '''
+        CW - version 1 of GPU code, still loops over self.k
+        '''
+        import cupy as cp
+        Fsum = None
+        for k in range(self.K):
+            tx = time.time()
+            mu = self.mean[k, :]
+            amp = self.gpuamp[k]
+            a = self.var[k, 0, 0]
+            b = self.var[k, 0, 1]
+            d = self.var[k, 1, 1]
+            add_to_tm(0, time.time()-tx)
+
+            tx = time.time()
+            F = cp.exp(-2. * cp.pi**2 *
+                       (a * v[cp.newaxis, :]**2 +
+                        d * w[:, cp.newaxis]**2 +
+                        2 * b * v[cp.newaxis, :] * w[:, cp.newaxis]))
+            add_to_tm(1, time.time()-tx)
+            tx = time.time()
+            if mu[0] != 0. or mu[1] != 0.:
+                F = F * cp.exp(-2. * cp.pi * 1j * (mu[0] * v[cp.newaxis, :] +
+                                                   mu[1] * w[:, cp.newaxis]))
+            add_to_tm(2, time.time()-tx)
+
+            tx = time.time()
+            if Fsum is None:
+                Fsum = amp * F
+            else:
+                Fsum += amp * F
+            add_to_tm(3, time.time()-tx)
+
+        return Fsum
+
+    def getFourierTransformGPU2(self, v, w, zero_mean=False):
+        '''
+        CW - version 2 of GPU code - parallelizes loop over self.K
+        '''
+        import cupy as cp
+        #print (self.var.shape, v.shape, w.shape)
+        #print (self.amp.shape, self.amp.dtype)
+        tx = time.time()
+        #if (self.gpumean is None):
+        #    self.gpumean = cp.asarray(self.mean)
+        #    self.gpuamp = cp.asarray(self.amp)
+        #    self.gpuvar = cp.asarray(self.var)
+        mu = self.gpumean
+        a = self.gpuvar[:,0,0]
+        b = self.gpuvar[:,0,1]
+        d = self.gpuvar[:,1,1]
+        add_to_tm(0, time.time()-tx)
+        tx = time.time()
+        F = cp.exp(-2. * cp.pi**2*
+                   (a[:,cp.newaxis,cp.newaxis]*v[cp.newaxis,cp.newaxis,:]**2 +
+                    d[:,cp.newaxis,cp.newaxis]*w[cp.newaxis,:,cp.newaxis]**2 +
+                    2*b[:,cp.newaxis,cp.newaxis]*v[cp.newaxis,cp.newaxis,:]*w[cp.newaxis,:,cp.newaxis]))
+        add_to_tm(1, time.time()-tx)
+        tx = time.time()
+        #for k in range(self.K):
+        #    if mu[k,0] != 0. or mu[k,1] != 0.:
+        #        F[k] = F[k] * cp.exp(-2. * cp.pi * 1j * (mu[k,0] * v[cp.newaxis, :] +
+        #                                                 mu[k,1] * w[:, cp.newaxis]))
+        z = cp.logical_or(mu[:,0] != 0, mu[:,1] != 0)
+        if (z.any()):
+            F[z] = F[z] * cp.exp(-2. * cp.pi * 1j * (mu[z,0] * v[cp.newaxis, :] +
+                                               mu[z,1] * w[:, cp.newaxis]))
+        add_to_tm(2, time.time()-tx)
+        tx = time.time()
+        Fsum = (self.gpuamp[:,None,None]*F).sum(axis=0)
+        #print(Fsum.dtype)
+        add_to_tm(3, time.time()-tx) 
+        return Fsum
+
 
     # ideally pos is a numpy array shape (N, self.D)
     # returns a numpy array shape (N)
@@ -295,10 +456,19 @@ class MixtureOfGaussians(object):
         [x0,x1): (int) X values to evaluate
         [y0,y1): (int) Y values to evaluate
         (cx,cy): (float) pixel center of the MoG
+
+        CW - added code to convert Cupy arrays back to numpy
+        for amp, mean, var which avoids crashes.
+        Keeping theses on GPU at higher level in code will be more efficient!
         '''
         from tractor.mix import c_gauss_2d_grid
         assert(self.D == 2)
         result = np.zeros((y1 - y0, x1 - x0))
+        import cupy
+        if (type(self.amp) == cupy.ndarray):
+            self.amp = self.amp.get()
+            self.mean = self.mean.get()
+            self.var = self.var.get()
         rtn = c_gauss_2d_grid(int(x0), int(x1), int(y0), int(y1), cx, cy,
                               self.amp, self.mean, self.var, result)
         if rtn == -1:
@@ -742,3 +912,12 @@ if __name__ == '__main__':
         #       mx = var[0, 0, 1] / var[0, 1, 1] * dy
         #       plt.axvline(mx + S/2)
         #   ps.savefig()
+
+#Simple dumb timer methods
+def add_to_tm(i, t):
+    tm[i] += t
+    tc[i] += 1
+
+def print_tm():
+    print ("Mixture Timings: ", tm, tm.sum())
+    print ("Call counts: ", tc)
