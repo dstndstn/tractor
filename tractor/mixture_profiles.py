@@ -6,6 +6,7 @@ if __name__ == '__main__':
     import pylab as plt
     import matplotlib.cm as cm
 import numpy as np
+import cupy as cp
 
 try:
     from tractor import mp_fourier
@@ -88,7 +89,6 @@ class MixtureOfGaussians(object):
     def gpuvar(self):
         if (self._gpuvar is None):
             #Copy to GPU once
-            import cupy as cp
             tx = time.time()
             self._gpuvar = cp.asarray(self.var)
             add_to_tm(9, time.time()-tx)
@@ -98,7 +98,6 @@ class MixtureOfGaussians(object):
     def gpumean(self):
         if (self._gpumean is None):
             #Copy to GPU once
-            import cupy as cp
             tx = time.time()
             self._gpumean = cp.asarray(self.mean)
             add_to_tm(9, time.time()-tx)
@@ -108,7 +107,6 @@ class MixtureOfGaussians(object):
     def gpuamp(self):
         if (self._gpuamp is None):
             #Copy to GPU once
-            import cupy as cp
             tx = time.time()
             self._gpuamp = cp.asarray(self.amp)
             add_to_tm(9, time.time()-tx)
@@ -191,7 +189,6 @@ class MixtureOfGaussians(object):
         assert(shift.shape == (self.D,))
         assert(scale.shape == (self.D, self.D))
         if (use_gpu):
-            import cupy as cp
             newvar = self.gpuvar.dot(scale).dot(scale.T)
             newmean = self.gpumean + shift
             return MixtureOfGaussians(self.gpuamp, newmean, newvar, quick=True)
@@ -212,7 +209,6 @@ class MixtureOfGaussians(object):
         '''
         assert(scale.shape == (self.D, self.D))
         if (use_gpu):
-            import cupy as cp
             newvar = self.gpuvar.dot(scale).dot(scale.T)
             return MixtureOfGaussians(self.gpuamp, self.mean, newvar, quick=True)
         newvar = np.zeros_like(self.var)
@@ -261,7 +257,6 @@ class MixtureOfGaussians(object):
         '''
         CW - GPU version of convolve
         '''
-        import cupy as cp
         assert(self.D == other.D)
         tx = time.time()
         newK = self.K * other.K
@@ -329,7 +324,6 @@ class MixtureOfGaussians(object):
         '''
         CW - version 1 of GPU code, still loops over self.k
         '''
-        import cupy as cp
         Fsum = None
         for k in range(self.K):
             tx = time.time()
@@ -365,7 +359,6 @@ class MixtureOfGaussians(object):
         '''
         CW - version 2 of GPU code - parallelizes loop over self.K
         '''
-        import cupy as cp
         #print (self.var.shape, v.shape, w.shape)
         #print (self.amp.shape, self.amp.dtype)
         tx = time.time()
@@ -464,8 +457,7 @@ class MixtureOfGaussians(object):
         from tractor.mix import c_gauss_2d_grid
         assert(self.D == 2)
         result = np.zeros((y1 - y0, x1 - x0))
-        import cupy
-        if (type(self.amp) == cupy.ndarray):
+        if (type(self.amp) == cp.ndarray):
             self.amp = self.amp.get()
             self.mean = self.mean.get()
             self.var = self.var.get()

@@ -758,7 +758,6 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
         cdinv = img.getWcs().cdInverseAtPixel(px, py)
         G = self.shape.getRaDecBasis()
         if (use_gpu):
-            import cupy as cp
             cdinv_gpu = cp.asarray(cdinv)
             G_gpu = cp.asarray(G)
             Tinv = cp.dot(cdinv_gpu, G_gpu)
@@ -778,7 +777,6 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
         cdinv = img.getWcs().cdInverseAtPixel(px, py)
         G = self.shape.getRaDecBasis()
         if (use_gpu):
-            import cupy as cp
             cdinv_gpu = cp.asarray(cdinv)
             G_gpu = cp.asarray(G)
             Tinv = cp.dot(cdinv_gpu, G_gpu)

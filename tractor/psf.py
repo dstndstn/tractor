@@ -5,6 +5,7 @@ import sys
 import functools
 
 import numpy as np
+import cupy as cp
 
 from tractor.image import Image
 from tractor.pointsource import PointSource
@@ -283,7 +284,6 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         *v,w*: v=cp.fft.rfftfreq(imw), w=cp.fft.fftfreq(imh)
 
         '''
-        import cupy as cp
         if self.sampling != 1.:
             return self._getOversampledFourierTransformGPU(px, py, radius)
 
@@ -395,7 +395,6 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         '''
         CW - GPU version copies pad to GPU and uses Cupy for FFT
         '''
-        import cupy as cp
         sz = self.getFourierTransformSize(radius)
         key = (sz, px, py)
         if key in self.fftcache:
@@ -979,7 +978,6 @@ def getCircularMog(amps, sigmas, use_gpu=False):
     #Would be more efficient if amps and sigmas were already on GPU
     K = len(amps)
     if (use_gpu):
-        import cupy as cp
         amps = cp.array(amps).astype(cp.float32)
         means = cp.zeros((K,2), cp.float32)
         vars = cp.zeros((K,2,2), cp.float32)
