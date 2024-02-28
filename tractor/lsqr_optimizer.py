@@ -250,10 +250,12 @@ class LsqrOptimizer(Optimizer):
         lnp += -0.5 * chisq
         return lnp, chis, ims
 
-    def optimize(self, tractor, alphas=None, damp=0, priors=True,
-                 scale_columns=True,
-                 shared_params=True, variance=False, just_variance=False,
-                 **nil):
+    def getLinearUpdateDirection(self, tractor,
+                                 damp=0,
+                                 priors=True,
+                                 scale_columns=True,
+                                 shared_params=True,
+                                 variance=False):
         #logverb(tractor.getName() + ': Finding derivs...')
         #t0 = Time()
         allderivs = tractor.getDerivs()
@@ -270,6 +272,15 @@ class LsqrOptimizer(Optimizer):
                                     scale_columns=scale_columns,
                                     shared_params=shared_params,
                                     variance=variance)
+        return X
+
+    def optimize(self, tractor, alphas=None, damp=0, priors=True,
+                 scale_columns=True,
+                 shared_params=True, variance=False, just_variance=False,
+                 **nil):
+        kwa = dict(damp=damp, priors=priors,
+                   scale_columns=scale_columns, shared_params=shared_params)
+        X = self.getLinearUpdateDirection(tractor, **kwa)
         #print('Update:', X)
         if X is None:
             # Failure

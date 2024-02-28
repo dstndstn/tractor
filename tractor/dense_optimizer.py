@@ -16,7 +16,8 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
 
     def getUpdateDirection(self, tractor, allderivs, damp=0., priors=True,
                            scale_columns=True, scales_only=False,
-                           chiImages=None, variance=False,
+                           chiImages=None,
+                           variance=False,
                            shared_params=True,
                            get_A_matrix=False):
 
@@ -25,12 +26,12 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
         # I don't want to deal with this right now!
         assert(shared_params == False)
         assert(scales_only == False)
-        assert(damp == 0.)
         assert(variance == False)
+        assert(damp == 0.)
 
         # Returns: numpy array containing update direction.
         # If *variance* is True, return    (update,variance)
-        # If *get_A_matrix* is True, returns the sparse matrix of derivatives.
+        # If *get_A_matrix* is True, returns the matrix of derivatives.
         # If *scale_only* is True, return column scalings
         # In cases of an empty matrix, returns the list []
         #
@@ -231,8 +232,9 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
             plt.ylabel('Relative change in New matrix element')
             plt.ylim(-mx, mx)
             ps.savefig()
-            
-        del A
+
+        if not get_A_matrix:
+            del A
         del B
 
         if scale_columns:
@@ -249,6 +251,11 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
 
         if not np.all(np.isfinite(X)):
             return None
+
+        if get_A_matrix:
+            if scale_columns:
+                A *= colscales[np.newaxis,:]
+            return X,A
 
         return X
 
