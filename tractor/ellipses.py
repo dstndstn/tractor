@@ -201,7 +201,12 @@ class EllipseESoft(EllipseE):
         e = ell.e
         e = min(e, maxe)
         esoft = -math.log(1. - e)
-        return EllipseESoft(math.log(ell.re), ell.e1 / e * esoft, ell.e2 / e * esoft)
+        if e == 0:
+            e1 = e2 = 0.
+        else:
+            e1 = ell.e1 / e * esoft
+            e2 = ell.e2 / e * esoft
+        return EllipseESoft(math.log(ell.re), e1, e2)
 
     @staticmethod
     def fromCovariance(cov):
