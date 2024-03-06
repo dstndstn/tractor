@@ -1,5 +1,6 @@
 from tractor.dense_optimizer import ConstrainedDenseOptimizer
 from tractor import ProfileGalaxy, HybridPSF
+from tractor import mixture_profiles as mp
 import numpy as np
 
 '''
@@ -56,6 +57,10 @@ class FactoredDenseOptimizer(FactoredOptimizer, ConstrainedDenseOptimizer):
 class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
     def getSingleImageUpdateDirections(self, tr, **kwargs):
+
+        # Assume we're not fitting any of the image parameters.
+        assert(tr.isParamFrozen('images'))
+        
         img_pix = [tim.data for tim in tr.images]
         img_ie  = [tim.getInvError() for tim in tr.images]
         # Assume single source
@@ -80,6 +85,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         inner_real_nsigma = 3.
         outer_real_nsigma = 4.
 
+        mogs = []
+        ffts = []
+        
         #halfsizes = []
         for mm,(px,py),(x0,x1,y0,y1),psf,tim in zip(masks, pxy, extents, psfs, tr.images):
             psfH,psfW = psf.shape
@@ -103,10 +111,31 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             assert(np.abs(mux) <= 0.5)
             assert(np.abs(muy) <= 0.5)
 
-            # Compute the mixture-of-Gaussian components for this galaxy model.
+            # Compute the mixture-of-Gaussian components for this galaxy model
+            # (at its current parameter values)
             amix = src._getShearedProfile(tim, px, py)
 
+            # Get derivatives for each galaxy parameter.
+            # pos0 = src.getPosition()
+            # (px0, py0) = tim.getWcs().positionToPixel(pos0, src)
+            # counts = tim.getPhotoCal().brightnessToCounts(src.brightness)
+
+            # if counts == 0 ......
+
+            # Position derivatives -- get initial model, then build patchdx, patchdy
+            # patches from it, then use
+            # wcs.pixelDerivsToPositionDerivs(pos, src, counts0, patch0,
+            #                                 patchdx, patchdy))
+
+            # Brightness derivative(s) -- see galaxy.py:186
+
+            amixes = src.getDerivativeShearedProfiles(tim, px, py)
+            amixes = [('current', amix, 0.)] + amixes
+
+            #print('Sheared profiles for derivatives:', amixes)
+
             # Split "amix" into terms that we will evaluate using MoG vs FFT.
+            # (we'll use that same split for the derivatives also)
             vv = amix.var[:, 0, 0] + amix.var[:, 1, 1]
             # Ramp between:
             nsigma1 = inner_real_nsigma
@@ -120,8 +149,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             IF = ((pW/2)**2 > (nsigma1**2 * vv))
             ramp = np.any(IM*IF)
 
+            fftweights = 1.
+            mogweights = 1.
             if np.any(IM):
-                amps = amix.amp[IM]
                 if ramp:
                     ns = (pW/2) / np.maximum(1e-6, np.sqrt(vv))
                     mogweights = np.minimum(1., (nsigma2 - ns[IM]) / (nsigma2 - nsigma1))
@@ -130,19 +160,23 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                     assert(np.all(mogweights <= 1.))
                     assert(np.all(fftweights > 0.))
                     assert(np.all(fftweights <= 1.))
-                    amps *= mogweights
-                mogmix = mp.MixtureOfGaussians(amps,
-                                               amix.mean[IM, :] + np.array([px, py])[np.newaxis, :],
-                                               amix.var[IM, :, :], quick=True)
+
+                for name,mix,step in amixes:
+                    mogs.append(mp.MixtureOfGaussians(
+                        mix.amp[IM] * mogweights,
+                        mix.mean[IM, :] + np.array([px, py])[np.newaxis, :],
+                        mix.var[IM, :, :], quick=True))
+
             if np.any(IF):
-                amps = amix.amp[IF]
                 if ramp:
                     amps *= fftweights
-                fftmix = mp.MixtureOfGaussians(amps, amix.mean[IF, :], amix.var[IF, :, :],
-                                                quick=True)
-            else:
-                fftmix = None
 
+                for name,mix,step in amixes:
+                    ffts.append(mp.MixtureOfGaussians(
+                        mix.amp[IF] * fftweights,
+                        mix.mean[IF, :], amix.var[IF, :, :], quick=True))
+
+        print(len(ffts), 'FFT mixtures and', len(mogs), 'MoG mixtures')
             
         return super().getSingleImageUpdateDirections(tr, **kwargs)
 

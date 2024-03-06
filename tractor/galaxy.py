@@ -236,10 +236,17 @@ class ProfileGalaxy(object):
     def getProfile(self):
         return None
 
-    # Here's the main method to override;
+    # Here are the two main methods to override;
     def _getAffineProfile(self, img, px, py):
         ''' Returns a MixtureOfGaussians profile that has been
         affine-transformed into the pixel space of the image.
+        '''
+        return None
+
+    def _getShearedProfile(self, img, px, py):
+        ''' Returns a MixtureOfGaussians profile that has been
+        shear-transformed into the pixel space of the image.
+        At px,py (but not offset to px,py).
         '''
         return None
 
@@ -716,6 +723,21 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
         halfsize = int(np.ceil(halfsize))
         return halfsize
 
+    def getDerivativeShearedProfiles(self, img, px, py):
+        # Returns a list of sheared profiles that will be needed to compute
+        # derivatives for this source; this is assumed in addition to the
+        # sheared profile at the current parameter settings.
+        derivs = []
+        if self.isParamThawed('shape'):
+            gsteps = self.shape.getStepSizes()
+            gnames = self.shape.getParamNames()
+            oldvals = self.shape.getParams()
+            for i, gstep in enumerate(gsteps):
+                oldval = self.shape.setParam(i, oldvals[i] + gstep)
+                pro = self._getShearedProfile(img, px, py)
+                self.shape.setParam(i, oldval)
+                derivs.append(('shape.'+gnames[i], pro, gstep))
+        return derivs
 
 class GaussianGalaxy(HoggGalaxy):
     nre = 6.

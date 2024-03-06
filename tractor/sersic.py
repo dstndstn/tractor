@@ -450,6 +450,29 @@ class SersicGalaxy(HoggGalaxy):
                 derivs.append(dx)
         return derivs
 
+    def getDerivativeShearedProfiles(self, img, px, py):
+        # superclass produces derivatives wrt shape
+        derivs = super().getDerivativeShearedProfiles(img, px, py)
+        # Returns a list of sheared profiles that will be needed to compute
+        # derivatives for this source; this is assumed in addition to the
+        # sheared profile at the current parameter settings.
+        if self.isParamThawed('sersicindex'):
+            steps = self.sersicindex.getStepSizes()
+            inames = self.sersicindex.getParamNames()
+            oldvals = self.sersicindex.getParams()
+            ups = self.sersicindex.getUpperBounds()
+            for i,step in enumerate(steps):
+                # Assume step is positive, and check whether stepping
+                # would exceed the upper bound.
+                newval = oldvals[i] + step
+                if newval > ups[i]:
+                    step *= -1.
+                    newval = oldvals[i] + step
+                oldval = self.sersicindex.setParam(i, newval)
+                pro = self._getShearedProfile(img, px, py)
+                self.sersicindex.setParam(i, oldval)
+                derivs.append(('sersicindex.'+inames[i], pro, step))
+        return derivs
 
 if __name__ == '__main__':
     from basics import *
