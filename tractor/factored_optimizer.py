@@ -187,13 +187,13 @@ if __name__ == '__main__':
     from tractor import ExpGalaxy, PixelizedPSF, HybridPixelizedPSF, GaussianMixturePSF
     from tractor.ellipses import EllipseE, EllipseESoft
     from tractor import ModelMask
-    n_ims = 2
-    sig1s = [3., 10.]
+    n_ims = 10
+    sig1s = [3., 10.] * 5
+    psf_sigmas = [2., 1.] * 5
+    fluxes = [1000., 1000.] * 5
+    shape = [3., 0.5, 0.3] * 5
     H,W = 50,50
     cx,cy = 23,27
-    psf_sigmas = [2., 1.]
-    fluxes = [1000., 1000.]
-    shape = [3., 0.5, 0.3]
     
     tims = []
     for i in range(n_ims):
@@ -238,6 +238,17 @@ if __name__ == '__main__':
     tr2.freezeParam('images')
 
     mods = list(tr.getModelImages())
+
+    fit_kwargs = dict(shared_params=False, priors=False)
+    up1 = tr.optimizer.getLinearUpdateDirection(tr, **fit_kwargs)
+    up2 = tr2.optimizer.getLinearUpdateDirection(tr2, **fit_kwargs)
+    print('Update directions:')
+    print(up1)
+    print(up2)
+    
+    tr.optimize_loop(**fit_kwargs)
+    mods2 = list(tr.getModelImages())
+
     plt.clf()
     for i in range(n_ims):
         ima = dict(interpolation='nearest', origin='lower', vmin=-3.*sig1s[i],
@@ -248,16 +259,6 @@ if __name__ == '__main__':
         plt.imshow(mods[i], **ima)
     plt.savefig('1.png')
 
-    fit_kwargs = dict(shared_params=False, priors=False)
-    up1 = tr.optimizer.getLinearUpdateDirection(tr, **fit_kwargs)
-    up2 = tr2.optimizer.getLinearUpdateDirection(tr2, **fit_kwargs)
-    print('Update directions:')
-    print(up1)
-    print(up2)
-    
-    tr.optimize_loop(**fit_kwargs)
-    
-    mods = list(tr.getModelImages())
     plt.clf()
     for i in range(n_ims):
         ima = dict(interpolation='nearest', origin='lower', vmin=-3.*sig1s[i],
@@ -265,6 +266,6 @@ if __name__ == '__main__':
         plt.subplot(2,2, i*2 + 1)
         plt.imshow(tims[i].data, **ima)
         plt.subplot(2,2, i*2 + 2)
-        plt.imshow(mods[i], **ima)
+        plt.imshow(mods2[i], **ima)
     plt.savefig('2.png')
     
