@@ -200,10 +200,10 @@ class EllipseESoft(EllipseE):
     def fromEllipseE(ell, maxe=0.999999):
         e = ell.e
         e = min(e, maxe)
-        esoft = -math.log(1. - e)
         if e == 0:
             e1 = e2 = 0.
         else:
+            esoft = -math.log(1. - e)
             e1 = ell.e1 / e * esoft
             e2 = ell.e2 / e * esoft
         return EllipseESoft(math.log(ell.re), e1, e2)

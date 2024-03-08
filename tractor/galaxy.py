@@ -515,6 +515,7 @@ class ProfileGalaxy(object):
 
         if modelMask is not None:
             gh, gw = G.shape
+            assert((gw == pW) and (gh == pH))
             if sx != 0 or sy != 0:
                 yi, yo = get_overlapping_region(-sy, -sy + mh - 1, 0, gh - 1)
                 xi, xo = get_overlapping_region(-sx, -sx + mw - 1, 0, gw - 1)

@@ -239,7 +239,7 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         Returns the Fourier Transform of this PSF, with the
         next-power-of-2 size up from *radius*.
 
-        Returns: (FFT, (x0, y0), (imh,imw), (v,w))
+        Returns: (FFT, (xc, yc), (imh,imw), (v,w))
 
         *FFT*: numpy array, the FFT
         *xc*: float, pixel location of the PSF /center/ in the PSF subimage

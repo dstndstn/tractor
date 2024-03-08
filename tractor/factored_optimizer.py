@@ -1,6 +1,8 @@
 from tractor.dense_optimizer import ConstrainedDenseOptimizer
 from tractor import ProfileGalaxy, HybridPSF
 from tractor import mixture_profiles as mp
+from tractor.psf import lanczos_shift_image
+from astrometry.util.miscutils import get_overlapping_region
 import numpy as np
 
 '''
@@ -89,7 +91,13 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         ffts = []
         
         #halfsizes = []
-        for mm,(px,py),(x0,x1,y0,y1),psf,tim in zip(masks, pxy, extents, psfs, tr.images):
+        for mm,(px,py),(x0,x1,y0,y1),psf,pix,ie,tim in zip(
+                masks, pxy, extents, psfs, img_pix, img_ie, tr.images):
+            img_mogs = []
+            img_ffts = []
+            mmpix = pix[mm.y0:mm.y1, mm.x0:mm.x1]
+            mmie =   ie[mm.y0:mm.y1, mm.x0:mm.x1]
+
             psfH,psfW = psf.shape
             halfsize = max([(x1-x0)/2, (y1-y0)/2,
                             1+px-x0, 1+x1-px, 1+py-y0, 1+y1-py,
@@ -97,7 +105,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             #halfsizes.append()
             # PSF Fourier transforms
             P, (cx, cy), (pH, pW), (v, w) = psf.getFourierTransform(px, py, halfsize)
+            mh,mw = mm.shape
             #print('PSF fourier transform size:', pW,pH)
+            #print('P', P.shape)
             # sub-pixel shift we have to do at the end...
             dx = px - cx
             dy = py - cy
@@ -111,6 +121,12 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             assert(np.abs(mux) <= 0.5)
             assert(np.abs(muy) <= 0.5)
 
+            # print('px,py', px,py)
+            # print('cx,cy', cx,cy)
+            # print('dx,dy', dx,dy)
+            # print('mux,muy', mux,muy)
+            # print('sx,sy', sx,sy)
+            
             # Compute the mixture-of-Gaussian components for this galaxy model
             # (at its current parameter values)
             amix = src._getShearedProfile(tim, px, py)
@@ -162,7 +178,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                     assert(np.all(fftweights <= 1.))
 
                 for name,mix,step in amixes:
-                    mogs.append(mp.MixtureOfGaussians(
+                    img_mogs.append(mp.MixtureOfGaussians(
                         mix.amp[IM] * mogweights,
                         mix.mean[IM, :] + np.array([px, py])[np.newaxis, :],
                         mix.var[IM, :, :], quick=True))
@@ -172,12 +188,62 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                     amps *= fftweights
 
                 for name,mix,step in amixes:
-                    ffts.append(mp.MixtureOfGaussians(
+                    img_ffts.append(mp.MixtureOfGaussians(
                         mix.amp[IF] * fftweights,
                         mix.mean[IF, :], amix.var[IF, :, :], quick=True))
 
+            if len(img_mogs):
+                mogs.append((img_mogs,))
+            if len(img_ffts):
+                ffts.append((img_ffts, mmpix, mmie, v, w, P, mux, muy, sx, sy, mh, mw))
+
         print(len(ffts), 'FFT mixtures and', len(mogs), 'MoG mixtures')
-            
+
+        for fft in ffts:
+            (img_ffts, pix, ie, v, w, P, mux, muy, sx, sy, mw, mh) = fft
+            mod0 = None
+            derivs = np.zeros((mh*mw, len(img_ffts)+2), np.float32)
+
+            for ifft,fftmix in enumerate(img_ffts):
+                Fsum = fftmix.getFourierTransform(v, w, zero_mean=True)
+                G = np.fft.irfftn(Fsum * P)
+                G = G.astype(np.float32)
+                if mux != 0.0 or muy != 0.0:
+                    lanczos_shift_image(G, mux, muy, inplace=True)
+
+                # This is ugly.... we *could* embed the image pixels and inverse-errors
+                # in a postage stamp the size of the FFT patch we're using
+                    
+                # Cut out the portion of the Fourier-transformed result that we
+                # care about
+                if sx != 0 or sy != 0:
+                    gh,gw = G.shape
+                    if sx <= 0 and sy <= 0:
+                        G = G[-sy:, -sx:]
+                    else:
+                        # Yuck... can we avoid this in practice??
+                        yi, yo = get_overlapping_region(-sy, -sy + mh - 1, 0, gh - 1)
+                        xi, xo = get_overlapping_region(-sx, -sx + mw - 1, 0, gw - 1)
+                        shG = np.zeros((mh, mw), G.dtype)
+                        shG[yo, xo] = G[yi, xi]
+                        G = shG
+                gh,gw = G.shape
+                if gh > mh or gw > mw:
+                    G = G[:mh, :mw]
+                assert(G.shape == (mh,mw))
+
+                # First set of params = current galaxy model
+                if ifft == 0:
+                    mod0 = G
+
+                    # X derivative
+                    #dx = 
+                    # Current model = flux derivative
+                    derivs[:, 2] = G.ravel()
+
+        for mog in mogs:
+            pass
+        
         return super().getSingleImageUpdateDirections(tr, **kwargs)
 
 if __name__ == '__main__':
