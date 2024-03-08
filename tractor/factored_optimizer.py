@@ -238,10 +238,23 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 if ifft == 0:
                     mod0 = G
 
+                    # CHECK ALL THIS
+                    dd = np.zeros_like(G)
                     # X derivative
-                    #dx = 
-                    # Current model = flux derivative
+                    dd[:,1:-1] = G[:, 2:] - G[:, :-2]
+                    derivs[:, 0] = dd.ravel()
+                    # Y derivative
+                    dd[1:-1, :] = G[2:, :] - G[:-2, :]
+                    derivs[:, 1] = dd.ravel()
+                    # Current model  \propto flux derivative
+                    # Need to compute weighted version of this and weight by IE
+                    # to get to derivative of chi...
                     derivs[:, 2] = G.ravel()
+                else:
+                    derivs[:, ifft + 2] = (G - mod0).ravel()
+
+            # IE weighting to get to chi
+            derivs *= ie.ravel()[:, np.newaxis)
 
         for mog in mogs:
             pass
