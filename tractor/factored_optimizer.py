@@ -232,6 +232,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                     G = G[:mh, :mw]
                 assert(G.shape == (mh,mw))
 
+                #### FIXME --- we also need to implement the MOG components here!
+                
                 # First set of params = current galaxy model
                 if ifft == 0:
                     mod0 = G
