@@ -21,7 +21,6 @@ from tractor.basics import SingleProfileSource, BasicSource
 
 debug_ps = None
 
-
 def get_galaxy_cache():
     return None
 
@@ -485,24 +484,30 @@ class ProfileGalaxy(object):
         if fftmix is not None:
             #print('Evaluating FFT mixture:', len(fftmix.amp), 'components in size', pH,pW)
             #print('Amps:', fftmix.amp)
-            Fsum = fftmix.getFourierTransform(v, w, zero_mean=True)
-            # In Intel's mkl_fft library, the irfftn code path is faster than irfft2
-            # (the irfft2 version sets args (to their default values) which triggers padding
-            #  behavior, changing the FFT size and copying behavior)
-            #G = np.fft.irfft2(Fsum * P, s=(pH, pW))
-            G = np.fft.irfftn(Fsum * P)
 
-            assert(G.shape == (pH,pW))
-            # FIXME -- we could try to be sneaky and Lanczos-interp
-            # after cutting G down to nearly its final size... tricky
-            # tho
+            # # In Intel's mkl_fft library, the irfftn code path is faster than irfft2
+            # # (the irfft2 version sets args (to their default values) which triggers padding
+            # #  behavior, changing the FFT size and copying behavior)
+            # #G = np.fft.irfft2(Fsum * P, s=(pH, pW))
+            # Fsum = fftmix.getFourierTransform(v, w, zero_mean=True)
+            # G = np.fft.irfftn(Fsum * P)
+            # 
+            # assert(G.shape == (pH,pW))
+            # # FIXME -- we could try to be sneaky and Lanczos-interp
+            # # after cutting G down to nearly its final size... tricky
+            # # tho
+            # 
+            # # Lanczos-3 interpolation in ~the same way we do for
+            # # pixelized PSFs.
+            # from tractor.psf import lanczos_shift_image
+            # G = G.astype(np.float32)
+            # if mux != 0.0 or muy != 0.0:
+            #     lanczos_shift_image(G, mux, muy, inplace=True)
 
-            # Lanczos-3 interpolation in ~the same way we do for
-            # pixelized PSFs.
-            from tractor.psf import lanczos_shift_image
-            G = G.astype(np.float32)
-            if mux != 0.0 or muy != 0.0:
-                lanczos_shift_image(G, mux, muy, inplace=True)
+            from mathpipe import tractor_math
+            G = tractor_math.fft_mix_inv_shift(fftmix, v, w, P, mux, muy)
+            Fsum = None
+
         else:
             G = np.zeros((pH, pW), np.float32)
 
