@@ -736,6 +736,8 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
             for i, gstep in enumerate(gsteps):
                 oldval = self.shape.setParam(i, oldvals[i] + gstep)
                 pro = self._getShearedProfile(img, px, py)
+                #print('Param', gnames[i], 'was', oldval, 'stepped to', oldvals[i]+gstep,
+                #      '-> profile', pro.var.ravel())
                 self.shape.setParam(i, oldval)
                 derivs.append(('shape.'+gnames[i], pro, gstep))
         return derivs
