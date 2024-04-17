@@ -333,6 +333,8 @@ if __name__ == '__main__':
     n_ims = 2
     sig1s = [3., 10.] * 5
     psf_sigmas = [2., 1.] * 5
+    #pixscales = [0.25, 0.25] * 5
+    pixscales = [1, 1] * 5
     H,W = 50,50
     cx,cy = 23,27
     # True source...
@@ -368,7 +370,10 @@ if __name__ == '__main__':
         psf = HybridPixelizedPSF(pix, gauss=gpsf)
 
         c,s = np.cos(wcs_rot[i]), np.sin(wcs_rot[i])
-        tan = Tan(ra, dec, float(cx+i), float(cy), c, s, -s, c, float(W), float(H))
+        ps = pixscales[i] / 3600.
+        tan = Tan(ra, dec, float(cx+i), float(cy), c*ps, s*ps, -s*ps, c*ps,
+                  float(W), float(H))
+        #print('Pixel scale:', tan.pixel_scale())
         wcs = ConstantFitsWcs(tan)
 
         tims.append(Image(data=data, inverr=np.ones_like(data) / sig1s[i],
@@ -380,11 +385,11 @@ if __name__ == '__main__':
 
     #src = PointSource(PixPos(W//2, H//2), Flux(100.))
     e = EllipseE(2., 0., 0.)
-    src = ExpGalaxy(RaDecPos(ra, dec), Flux(100.), EllipseESoft.fromEllipseE(e))
+    src  = ExpGalaxy(RaDecPos(ra, dec), Flux(100.), EllipseESoft.fromEllipseE(e))
     src2 = ExpGalaxy(RaDecPos(ra, dec), Flux(100.), EllipseESoft.fromEllipseE(e))
 
-    opt = GPUFriendlyOptimizer()
-    opt2 = ConstrainedDenseOptimizer()
+    opt = ConstrainedDenseOptimizer()
+    opt2 = GPUFriendlyOptimizer()
 
     tr = Tractor(tims, [src], optimizer=opt)
     tr.setModelMasks([{src: ModelMask(0, 0, W, H)} for tim in tims])
@@ -401,19 +406,36 @@ if __name__ == '__main__':
     up1 = tr.optimizer.getLinearUpdateDirection(tr, **fit_kwargs)
     up2 = tr2.optimizer.getLinearUpdateDirection(tr2, **fit_kwargs)
     print('Update directions:')
-    print(up1)
-    print(up2)
+    print('Orig:', up1)
+    print('GPU :', up2)
 
     print('True source:', true_src)
     print('Initial source:', src)
-    
-    R = tr.optimize_loop(**fit_kwargs)
-    print('Normal fitter: took', R['steps'], 'steps')
+
+    #R = tr.optimize_loop(**fit_kwargs)
+    #print('Normal fitter: took', R['steps'], 'steps')
+
+    #R2 = tr2.optimize_loop(**fit_kwargs)
+    #print('GPU-friendly fitter: took', R2['steps'], 'steps')
+
+    for step in range(20):
+        dlnp1,x1,alpha1 = tr.optimize(**fit_kwargs)
+        dlnp2,x2,alpha2 = tr2.optimize(**fit_kwargs)
+        print('Step', step)
+        print('  dlnp1:', dlnp1)
+        print('  dlnp2:', dlnp2)
+        print('  alpha1:', alpha1)
+        print('  alpha2:', alpha2)
+        print('  x1:', x1)
+        print('  x2:', x2)
+        print('  step1:', x1*alpha1)
+        print('  step2:', x2*alpha2)
+        print('  Source:', src)
+        print('  Source2:', src2)
+        
     mods_after = list(tr.getModelImages())
     print('Source:', src)
     
-    R2 = tr2.optimize_loop(**fit_kwargs)
-    print('GPU-friendly fitter: took', R2['steps'], 'steps')
     mods2_after = list(tr2.getModelImages())
     print('Source:', src2)
 
