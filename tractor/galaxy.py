@@ -140,7 +140,8 @@ class Galaxy(MultiParams, SingleProfileSource):
     # Galaxy.
     def getParamDerivatives(self, img, modelMask=None, **kwargs):
         pos0 = self.getPosition()
-        (px0, py0) = img.getWcs().positionToPixel(pos0, self)
+        wcs = img.getWcs()
+        (px0, py0) = wcs.positionToPixel(pos0, self)
         counts = img.getPhotoCal().brightnessToCounts(self.brightness)
 
         minsb = img.modelMinval
@@ -162,46 +163,21 @@ class Galaxy(MultiParams, SingleProfileSource):
         # FIXME -- would we be better to do central differences in
         # pixel space, and convert to Position via CD matrix?
         # derivatives wrt position
-        # if not self.isParamFrozen('pos'):
-        #     psteps = pos0.getStepSizes()
-        #     params = pos0.getParams()
-        #     if counts == 0:
-        #         derivs.extend([None] * len(params))
-        #         psteps = []
-        #     for i, pstep in enumerate(psteps):
-        #         oldval = pos0.setParam(i, params[i] + pstep)
-        #         (px, py) = img.getWcs().positionToPixel(pos0, self)
-        #         pos0.setParam(i, oldval)
-        #         patchx = self.getUnitFluxModelPatch(
-        #             img, px=px, py=py, minval=minval, modelMask=modelMask,
-        #             **kwargs)
-        #         if patchx is None or patchx.getImage() is None:
-        #             derivs.append(None)
-        #             continue
-        #         dx = (patchx - patch0) * (counts / pstep)
-        #         dx.setName('d(%s)/d(pos%i)' % (self.dname, i))
-        #         derivs.append(dx)
-
-        # derivatives wrt position
         if not self.isParamFrozen('pos'):
-            psteps = pos0.getStepSizes()
-            params = pos0.getParams()
             if counts == 0:
-                derivs.extend([None] * len(params))
-                psteps = []
-            for i, pstep in enumerate(psteps):
-                oldval = pos0.setParam(i, params[i] + pstep)
-                (px, py) = img.getWcs().positionToPixel(pos0, self)
-                pos0.setParam(i, oldval)
-                patchx = self.getUnitFluxModelPatch(
-                    img, px=px, py=py, minval=minval, modelMask=modelMask,
-                    **kwargs)
-                if patchx is None or patchx.getImage() is None:
-                    derivs.append(None)
-                    continue
-                dx = (patchx - patch0) * (counts / pstep)
-                dx.setName('d(%s)/d(pos%i)' % (self.dname, i))
-                derivs.append(dx)
+                derivs.extend([None] * len(pos0.getParams()))
+            else:
+                p0 = patch0.patch
+                dx = np.zeros_like(p0)
+                dx[:,1:-1] = (p0[:, :-2] - p0[:, 2:]) / 2.
+                patchdx = Patch(patch0.x0, patch0.y0, dx)
+                dy = np.zeros_like(p0)
+                dy[1:-1,:] = (p0[:-2, :] - p0[2:, :]) / 2.
+                patchdy = Patch(patch0.x0, patch0.y0, dy)
+                del dx, dy
+                derivs.extend(wcs.pixelDerivsToPositionDerivs(pos0, self, counts,
+                                                              patch0, patchdx, patchdy))
+                del patchdx, patchdy
 
         # derivatives wrt brightness
         if not self.isParamFrozen('brightness'):

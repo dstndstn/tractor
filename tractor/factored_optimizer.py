@@ -318,7 +318,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #     print('     x', x)
         #     print('real x', realx)
 
-        #return realX
         return Xic
 
 if __name__ == '__main__':
