@@ -285,9 +285,12 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         sub-region within "pix" and "ie" that contain non-zero values.
         I padded "pix" and "ie" out to be the same size as the galaxy
         model (ie, size "w x w", = the size of the ifft(P)) to make
-        life easier in GPU land.
+        life easier in GPU land.  The code below shows how you might use
+        the ROI information to process fewer pixels, but at the expense of
+        shuffling them around a bit.
 
         '''
+        use_roi = False
         Xic = []
         for img_i, (img_derivs, pix, ie, P, mux, muy, mw, mh, counts, cdi, roi) in enumerate(imgs):
             assert(pix.shape == (mh,mw))
@@ -295,7 +298,16 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # rows = number of pixels and cols = number of parameters
             # to update.  We special-case the two spatial derivatives,
             # the rest are in the 'img_derivs' list.
-            A = np.zeros((mh*mw, len(img_derivs)+2), np.float32)
+
+            if use_roi:
+                (rx0,ry0,rw,rh) = roi
+                roi_slice = slice(ry0, ry0+rh), slice(rx0, rx0+rw)
+                pix = pix[roi_slice]
+                ie = ie[roi_slice]
+                A = np.zeros((rh*rw, len(img_derivs)+2), np.float32)
+            else:
+                A = np.zeros((mh*mw, len(img_derivs)+2), np.float32)
+
             w,v = P.shape
             mod0 = None
             for iparam, (name, stepsize, mogs, fftmix) in enumerate(img_derivs):
@@ -306,7 +318,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 lanczos_shift_image(G, mux, muy, inplace=True)
                 del Fsum
                 assert(G.shape == (mh,mw))
-
+                if use_roi:
+                    G = G[roi_slice]
+                
                 # The first element in img_derivs is the current galaxy model parameters.
                 if iparam == 0:
                     mod0 = G
