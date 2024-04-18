@@ -147,28 +147,26 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             assert(np.abs(mux) <= 0.5)
             assert(np.abs(muy) <= 0.5)
 
-            # print('px,py', px,py)
-            # print('cx,cy', cx,cy)
-            # print('dx,dy', dx,dy)
-            # print('mux,muy', mux,muy)
-            # print('sx,sy', sx,sy)
-            
+            # Embed pix and ie in images the same size as pW,pH.
+            padpix = np.zeros((pH,pW), np.float32)
+            padie  = np.zeros((pH,pW), np.float32)
+            assert(sy <= 0 and sx <= 0)
+            padpix[-sy: -sy+mh, -sx: -sx+mw] = mmpix
+            padie [-sy: -sy+mh, -sx: -sx+mw] = mmie
+            roi = (-sx, -sy, mw, mh)
+            mmpix = padpix
+            mmie  = padie
+            sx = sy = 0
+            mh = pH
+            mw = pW
+
             # Compute the mixture-of-Gaussian components for this galaxy model
             # (at its current parameter values)
             amix = src._getShearedProfile(tim, px, py)
 
-            # Get derivatives for each galaxy parameter.
-
-            # Position derivatives -- get initial model, then build patchdx, patchdy
-            # patches from it, then use
-            # wcs.pixelDerivsToPositionDerivs(pos, src, counts0, patch0,
-            #                                 patchdx, patchdy))
-            # Brightness derivative(s) -- see galaxy.py:186
-
+            # Get derivatives for each galaxy shape parameter.
             amixes = src.getDerivativeShearedProfiles(tim, px, py)
             amixes = [('current', amix, 0.)] + amixes
-
-            #print('Sheared profiles for derivatives:', [(n,am.var.ravel()) for n,am,_ in amixes])
 
             # Split "amix" into terms that we will evaluate using MoG vs FFT.
             # (we'll use that same split for the derivatives also)
