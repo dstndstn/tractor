@@ -81,7 +81,6 @@ class FactoredDenseOptimizer(FactoredOptimizer, ConstrainedDenseOptimizer):
 class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
     def getSingleImageUpdateDirections(self, tr, **kwargs):
-
         # Assume we're not fitting any of the image parameters.
         assert(tr.isParamFrozen('images'))
         
@@ -216,81 +215,124 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
                 img_derivs.append((name, step, mogs, ffts))
 
-            imgs.append((img_derivs, mmpix, mmie, v, w, P, mux, muy, sx, sy, mh, mw,
-                         counts, cdi, roi))
+            assert(P.shape == (w,v))
+            assert(sx == 0 and sy == 0)
+
+            imgs.append((img_derivs, mmpix, mmie, P, mux, muy, mh, mw, counts, cdi, roi))
 
         #print(len(imgs), 'images to process, with a total of', np.sum([len(x[0]) for x in imgs]), 'derivatives')
 
-        Xic = []
-        
-        for img_i, (img_derivs, pix, ie, v, w, P, mux, muy, sx, sy, mw, mh, counts, cdi, roi) in enumerate(imgs):
-            mod0 = None
-            A = np.zeros((mh*mw, len(img_derivs)+2), np.float32)
+        Xic = self.computeUpdateDirections(imgs)
 
-            for ifft, (name, step, mogs, fftmix) in enumerate(img_derivs):
+        #realX = super().getSingleImageUpdateDirections(tr, **kwargs)
+        return Xic
+
+    def computeUpdateDirections(self, imgs):
+        '''
+        This is the function you'll want to GPU-ify!
+
+        "imgs" is a list with one element per image to process.  These can all be performed in parallel.
+        A typical length for this would be ~ 10.
+
+        The return value is a list of (vector, matrix) pairs, one per
+        image.  The vector,matrix sizes are roughly (6, 6x6), giving
+        the parameter update direction and its inverse-covariance.
+
+        Each element in "imgs" is a giant tuple:
+
+        (img_derivs, pix, ie, P, mux, muy, mw, mh, counts, cdi, roi)
+
+        - img_derivs is a list (typical length ~ 4) of tuples,
+        describing the parameters that we want to adjust in this
+        parameter update.  (Plus two spatial ones that we handle specially.)
+        Each tuple has (name, stepsize, mogs, fftmix),
+        - name (string) is just the name of the parameter
+        - stepsize (float) is the finite-difference step size we took in this parameter;
+          it is used to scale the derivative
+        - mogs will be None in this setting
+        - fftmix is a MixtureOfGaussians objects (see
+          mixture_profiles.py); in this setting, the "mean" values are
+          zero, so only the "amp" and "var" (variance) fields are
+          relevant.  The elements in this list correspond to the shape
+          of the galaxy at the current parameters, and after stepping in
+          each of a few different galaxy shape parameters.  We evaluate
+          the Fourier transform of this weighted sum of Gaussians,
+          directly in Fourier space; see mp_fourier.i :
+          gaussian_fourier_transform_zero_mean_2 for the implementation.
+
+        - pix is a (float32) matrix of pixels with size = (mh,mw), typically 64x64.
+
+        - ie is a (float32) matrix of inverse-uncertainty ("inverse-error") pixels,
+        same size as "pix".  Some of these will be zero, corresponding to zero-weight pixels.
+
+        - P is the Fourier transform of the point-spread function (how the atmosphere blurs
+        a point source in this image), of shape typically 64x33, and type numpy.complex64
+        (ie, two float32 values for real and imaginary)
+
+        - mux, muy are floating-point values giving the sub-pixel shift to apply to this
+        galaxy.  They will be in the range [-0.5, +0.5].
+
+        - mw, mh are the integer size of the images
+
+        - counts is the floating-point brightness of the galaxy model.
+
+        - cdi is a 2x2 matrix giving the transformation between sky coordinates (RA,Dec) and
+        pixel coordinates.  We use this to produce the parameter update in sky coordinates,
+        but instead of computing the derivatives by finite differences in those parameters,
+        we compute them directly from the model image.
+
+        - roi is a tuple of 4 integers, (x0, y0, w, h), of the
+        sub-region within "pix" and "ie" that contain non-zero values.
+        I padded "pix" and "ie" out to be the same size as the galaxy
+        model (ie, size "w x w", = the size of the ifft(P)) to make
+        life easier in GPU land.
+
+        '''
+        Xic = []
+        for img_i, (img_derivs, pix, ie, P, mux, muy, mw, mh, counts, cdi, roi) in enumerate(imgs):
+            assert(pix.shape == (mh,mw))
+            # We're going to build a tall matrix A, whose number of
+            # rows = number of pixels and cols = number of parameters
+            # to update.  We special-case the two spatial derivatives,
+            # the rest are in the 'img_derivs' list.
+            A = np.zeros((mh*mw, len(img_derivs)+2), np.float32)
+            w,v = P.shape
+            mod0 = None
+            for iparam, (name, stepsize, mogs, fftmix) in enumerate(img_derivs):
                 assert(mogs is None)
                 Fsum = fftmix.getFourierTransform2(v, w, zero_mean=True)
-                #G = np.fft.irfftn(Fsum * P)
-                #G = G.astype(np.float32)
                 # Scipy does float32 * complex64 -> float32
                 G = scipy.fft.irfftn(Fsum * P)
                 lanczos_shift_image(G, mux, muy, inplace=True)
-
-                if False:
-                    # Verify that this new fourier transform method produces the same model as before!
-                    # fstep = 1./w
-                    # va = np.arange(v)*fstep
-                    # wa = np.append(np.arange(w/2) * fstep, (np.arange(w/2) - w/2) * fstep)
-                    # Fsum = fftmix.getFourierTransform(va, wa, zero_mean=True)
-                    # G2 = np.fft.irfftn(Fsum * P)
-                    # G2 = G2.astype(np.float32)
-                    # lanczos_shift_image(G2, mux, muy, inplace=True)
-                    # t3 = time.time()
-                    # G2 = scipy.fft.irfftn(Fsum * P)
-                    # t4 = time.time()
-                    print('G2', G2.dtype)
-                    lanczos_shift_image(G2, mux, muy, inplace=True)
-                    print('Times:', t1-t0, t2-t1, t4-t3)
-                    plt.clf()
-                    plt.subplot(2,2,1)
-                    plt.imshow(G, interpolation='nearest', origin='lower')
-                    plt.colorbar()
-                    plt.subplot(2,2,2)
-                    plt.imshow(G2, interpolation='nearest', origin='lower')
-                    plt.colorbar()
-                    plt.subplot(2,2,3)
-                    plt.imshow(G-G2, interpolation='nearest', origin='lower')
-                    plt.colorbar()
-                    ps.savefig()
-
-                assert(sx == 0 and sy == 0)
-                # (see galaxy.py:513 otherwise...)
+                del Fsum
                 assert(G.shape == (mh,mw))
 
-                # First set of params = current galaxy model
-                if ifft == 0:
+                # The first element in img_derivs is the current galaxy model parameters.
+                if iparam == 0:
                     mod0 = G
-                    # Shift to get X,Y pixel derivatives
+                    # Shift this initial model image to get X,Y pixel derivatives
                     dx = np.zeros_like(G)
-                    # X derivative
+                    # X derivative -- difference between shifted-left and shifted-right arrays
                     dx[:,1:-1] = G[:, 2:] - G[:, :-2]
-                    # Y derivative
+                    # Y derivative -- difference between shifted-down and shifted-up arrays
                     dy = np.zeros_like(G)
                     dy[1:-1, :] = G[2:, :] - G[:-2, :]
-                    # Push through local WCS transformation to get to param derivs
+                    # Push through local WCS transformation to get to RA,Dec param derivatives
                     assert(cdi.shape == (2,2))
-                    #print('CD-inverse:', cdi)
-                    i = 0
-                    for i in range(2):
-                        # divide by 2 because we did +- 1 pixel
-                        # negative because we shifted the *image*, which is opposite
-                        # from shifting the *model*
-                        A[:,i] = -((dx * cdi[0, i] + dy * cdi[1, i]) * counts / 2).ravel()
+                    # divide by 2 because we did +- 1 pixel
+                    # negative because we shifted the *image*, which is opposite
+                    # from shifting the *model*
+                    A[:, 0] = -((dx * cdi[0, 0] + dy * cdi[1, 0]) * counts / 2).ravel()
+                    A[:, 1] = -((dx * cdi[0, 1] + dy * cdi[1, 1]) * counts / 2).ravel()
+                    del dx,dy
 
-                    # Flux derivative = current model
+                    # The derivative with respect to flux (brightness) = the unit-flux current model
                     A[:, 2] = G.ravel()
                 else:
-                    A[:, ifft + 2] = counts / step * (G - mod0).ravel()
+                    # For other parameters, compute the numerical derivative.
+                    # mod0 is the unit-brightness model at the current position
+                    # G is the unit-brightness model after stepping the parameter
+                    A[:, iparam + 2] = counts / stepsize * (G - mod0).ravel()
 
             # We want to minimize:
             #   || chi + (d(chi)/d(params)) * dparams ||^2
@@ -306,8 +348,10 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # Parameters to optimize go in the columns of matrix A
             # Pixels go in the rows.
 
-            # IE weighting to get to units of chi
+            # IE (inverse-error) weighting to get to units of chi
             A *= ie.ravel()[:, np.newaxis]
+            # The current residuals = the observed image "pix" minus the current model (counts*mod0),
+            # weighted by the inverse-errors.
             B = ((pix - counts*mod0) * ie).ravel()
 
             if False:
@@ -319,10 +363,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
             X,_,_,_ = np.linalg.lstsq(A, B, rcond=None)
             Xicov = np.matmul(A.T, A)
-            del A
+            del A,B,G,mod0
             Xic.append((X, Xicov))
-
-        #realX = super().getSingleImageUpdateDirections(tr, **kwargs)
         return Xic
 
 if __name__ == '__main__':
