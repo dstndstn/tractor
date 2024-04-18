@@ -367,6 +367,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             Xic.append((X, Xicov))
         return Xic
 
+class MyAwesomeGpuImplementation(GPUFriendlyOptimizer):
+    def computeUpdateDirections(self, imgs):
+        return super().computeUpdateDirections(imgs)
+
+    
 if __name__ == '__main__':
 
     import pylab as plt
@@ -437,7 +442,8 @@ if __name__ == '__main__':
     src2 = ExpGalaxy(RaDecPos(ra, dec), Flux(100.), EllipseESoft.fromEllipseE(e))
 
     opt = ConstrainedDenseOptimizer()
-    opt2 = GPUFriendlyOptimizer()
+    #opt2 = GPUFriendlyOptimizer()
+    opt2 = MyAwesomeGpuImplementation()
 
     tr = Tractor(tims, [src], optimizer=opt)
     tr.setModelMasks([{src: ModelMask(0, 0, W, H)} for tim in tims])
