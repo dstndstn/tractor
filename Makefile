@@ -7,9 +7,9 @@ setup: FORCE
 	$(PYTHON) setup.py build_ext --inplace --with-ceres --with-cython
 
 cov:
-       coverage erase
-       coverage run -a test/test_galaxy.py
-       coverage html
+	coverage erase
+	coverage run -a test/test_galaxy.py
+	coverage html
 # coverage run test/test_psfex.py
 # coverage run -a test/test_sdss.py
 # coverage run -a test/test_tractor.py

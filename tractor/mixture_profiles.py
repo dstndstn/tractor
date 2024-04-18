@@ -240,6 +240,45 @@ class MixtureOfGaussians(object):
 
         return Fsum
 
+    def getFourierTransform2(self, v, w, use_mp_fourier=True, zero_mean=False):
+        '''
+        v: number of FFT frequencies in the x direction
+        w: number of FFT frequencies in the y direction
+
+        We *assume* the frequency steps will be 1/w!
+
+        If zero_mean is *True*, ignore the *mean* of this mixture of Gaussians.
+        '''
+        if mp_fourier and use_mp_fourier and zero_mean:
+            f = np.zeros((w, v), np.float32)
+            mp_fourier.gaussian_fourier_transform_zero_mean_2(
+                self.amp.astype(np.float32), self.var.astype(np.float32), v, w, f)
+            return f
+
+        Fsum = None
+
+        for k in range(self.K):
+            mu = self.mean[k, :]
+            amp = self.amp[k]
+            a = self.var[k, 0, 0]
+            b = self.var[k, 0, 1]
+            d = self.var[k, 1, 1]
+
+            F = np.exp(-2. * np.pi**2 *
+                       (a * v[np.newaxis, :]**2 +
+                        d * w[:, np.newaxis]**2 +
+                        2 * b * v[np.newaxis, :] * w[:, np.newaxis]))
+            if mu[0] != 0. or mu[1] != 0.:
+                F = F * np.exp(-2. * np.pi * 1j * (mu[0] * v[np.newaxis, :] +
+                                                   mu[1] * w[:, np.newaxis]))
+
+            if Fsum is None:
+                Fsum = amp * F
+            else:
+                Fsum += amp * F
+
+        return Fsum.astype(np.float32)
+
     # ideally pos is a numpy array shape (N, self.D)
     # returns a numpy array shape (N)
     # may fail for self.D == 1

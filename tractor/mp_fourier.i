@@ -17,6 +17,7 @@
     import_array();
 %}
 
+// Handle numpy array inputs for gaussian_fourier_transform_zero_mean
 %apply (double* IN_ARRAY1, int DIM1) {
     (double *amps, int amps_len),
     (double *v, int v_len),
@@ -32,6 +33,16 @@
     (double *out, int out_dim1, int out_dim2)
 };
 
+// Handle numpy array inputs for gaussian_fourier_transform_zero_mean_2
+%apply (float* IN_ARRAY1, int DIM1) {
+    (float *amps, int amps_len)
+};
+%apply (float* IN_ARRAY3, int DIM1, int DIM2, int DIM3) {
+    (float *vars, int vars_dim1, int vars_dim2, int vars_dim3)
+};
+%apply (float* INPLACE_ARRAY2, int DIM1, int DIM2) {
+    (float *out, int out_dim1, int out_dim2)
+};
 
 %apply (double* INPLACE_ARRAY2, int DIM1, int DIM2) {
     (double *work, int work_dim1, int work_dim2)
@@ -470,6 +481,56 @@ static void gaussian_fourier_transform_zero_mean(
 
                 sum += amps[k] * exp(negtwopisquare *
                                      (a *  v_i_sqr + 2. * b * v_i * w_j + d * w_j_sqr));
+            }
+            out[index] = sum;
+        }
+    }
+    return;
+}
+
+static void gaussian_fourier_transform_zero_mean_2(
+    float * restrict amps, int amps_len,
+    float * restrict vars, int vars_dim1, int vars_dim2, int vars_dim3,
+    int NV,
+    int NW,
+    float * restrict out, int out_dim1, int out_dim2)
+{
+    const float negtwopisquare = (float)(-2. * M_PI * M_PI);
+
+    int K = amps_len;
+    int i, j, k;
+    float fstep = 1.0f / NW;
+    int halfNW = NW/2;
+
+    assert(vars_dim1 == K);
+    assert(vars_dim2 == 2);
+    assert(vars_dim3 == 2);
+    assert(out_dim1 == NW);
+    assert(out_dim2 == NV);
+
+    for (j = 0; j < NW; j++) {
+        // f_w = [0, 1, ...,   n/2-1,     -n/2, ..., -1] / (d*n)   if n is even
+        float w_j = (j < halfNW ? fstep * j : fstep * (j - NW));
+        float w_j_sqr = w_j * w_j;
+        for (i = 0; i < NV; i++) {
+            int index = NV * j + i;
+            float v_i = fstep * i;
+            float v_i_sqr = v_i * v_i;
+            float sum = 0.0;
+            for (k = 0; k < K; k++) {
+                int offset = k * 4;
+                float a = vars[offset];
+                float b = vars[offset + 1];
+                float d = vars[offset + 3];
+
+                // Special case delta function
+                if ((a == 0.0) && (b == 0.0) && (d == 0.0)) {
+                    sum += amps[k];
+                    continue;
+                }
+
+                sum += amps[k] * expf(negtwopisquare *
+                                      (a *  v_i_sqr + 2.0f * b * v_i * w_j + d * w_j_sqr));
             }
             out[index] = sum;
         }

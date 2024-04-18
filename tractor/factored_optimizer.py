@@ -5,8 +5,12 @@ from tractor import mixture_profiles as mp
 from tractor.psf import lanczos_shift_image
 from astrometry.util.miscutils import get_overlapping_region
 import numpy as np
+import scipy
+import time
 
 image_counter = 0
+#from astrometry.util.plotutils import PlotSequence
+#ps = PlotSequence('fourier')
 
 '''
 A mixin class for LsqrOptimizer that does the linear update direction step
@@ -116,8 +120,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         outer_real_nsigma = 4.
 
         imgs = []
-
-        #halfsizes = []
         for mm,(px,py),(x0,x1,y0,y1),psf,pix,ie,counts,cdi,tim in zip(
                 masks, pxy, extents, psfs, img_pix, img_ie, img_counts, img_cdi, tr.images):
 
@@ -128,12 +130,14 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             halfsize = max([(x1-x0)/2, (y1-y0)/2,
                             1+px-x0, 1+x1-px, 1+py-y0, 1+y1-py,
                             psfH//2, psfW//2])
-            #halfsizes.append()
             # PSF Fourier transforms
             P, (cx, cy), (pH, pW), (v, w) = psf.getFourierTransform(px, py, halfsize)
             mh,mw = mm.shape
-            #print('PSF fourier transform size:', pW,pH)
-            #print('P', P.shape)
+            assert(pW % 2 == 0)
+            assert(pH % 2 == 0)
+            v = len(v)
+            w = len(w)
+
             # sub-pixel shift we have to do at the end...
             dx = px - cx
             dy = py - cy
@@ -213,43 +217,54 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 img_derivs.append((name, step, mogs, ffts))
 
             imgs.append((img_derivs, mmpix, mmie, v, w, P, mux, muy, sx, sy, mh, mw,
-                         counts, cdi))
+                         counts, cdi, roi))
 
         #print(len(imgs), 'images to process, with a total of', np.sum([len(x[0]) for x in imgs]), 'derivatives')
 
         Xic = []
         
-        for img_i, (img_derivs, pix, ie, v, w, P, mux, muy, sx, sy, mw, mh, counts,cdi) in enumerate(imgs):
+        for img_i, (img_derivs, pix, ie, v, w, P, mux, muy, sx, sy, mw, mh, counts, cdi, roi) in enumerate(imgs):
             mod0 = None
             A = np.zeros((mh*mw, len(img_derivs)+2), np.float32)
 
             for ifft, (name, step, mogs, fftmix) in enumerate(img_derivs):
                 assert(mogs is None)
-                Fsum = fftmix.getFourierTransform(v, w, zero_mean=True)
-                G = np.fft.irfftn(Fsum * P)
-                G = G.astype(np.float32)
-                if mux != 0.0 or muy != 0.0:
-                    lanczos_shift_image(G, mux, muy, inplace=True)
+                Fsum = fftmix.getFourierTransform2(v, w, zero_mean=True)
+                #G = np.fft.irfftn(Fsum * P)
+                #G = G.astype(np.float32)
+                # Scipy does float32 * complex64 -> float32
+                G = scipy.fft.irfftn(Fsum * P)
+                lanczos_shift_image(G, mux, muy, inplace=True)
 
-                # This is ugly.... we *could* embed the image pixels and inverse-errors
-                # in a postage stamp the size of the FFT patch we're using
-                    
-                # Cut out the portion of the Fourier-transformed result that we
-                # care about
-                if sx != 0 or sy != 0:
-                    gh,gw = G.shape
-                    if sx <= 0 and sy <= 0:
-                        G = G[-sy:, -sx:]
-                    else:
-                        # Yuck... can we avoid this in practice??
-                        yi, yo = get_overlapping_region(-sy, -sy + mh - 1, 0, gh - 1)
-                        xi, xo = get_overlapping_region(-sx, -sx + mw - 1, 0, gw - 1)
-                        shG = np.zeros((mh, mw), G.dtype)
-                        shG[yo, xo] = G[yi, xi]
-                        G = shG
-                gh,gw = G.shape
-                if gh > mh or gw > mw:
-                    G = G[:mh, :mw]
+                if False:
+                    # Verify that this new fourier transform method produces the same model as before!
+                    # fstep = 1./w
+                    # va = np.arange(v)*fstep
+                    # wa = np.append(np.arange(w/2) * fstep, (np.arange(w/2) - w/2) * fstep)
+                    # Fsum = fftmix.getFourierTransform(va, wa, zero_mean=True)
+                    # G2 = np.fft.irfftn(Fsum * P)
+                    # G2 = G2.astype(np.float32)
+                    # lanczos_shift_image(G2, mux, muy, inplace=True)
+                    # t3 = time.time()
+                    # G2 = scipy.fft.irfftn(Fsum * P)
+                    # t4 = time.time()
+                    print('G2', G2.dtype)
+                    lanczos_shift_image(G2, mux, muy, inplace=True)
+                    print('Times:', t1-t0, t2-t1, t4-t3)
+                    plt.clf()
+                    plt.subplot(2,2,1)
+                    plt.imshow(G, interpolation='nearest', origin='lower')
+                    plt.colorbar()
+                    plt.subplot(2,2,2)
+                    plt.imshow(G2, interpolation='nearest', origin='lower')
+                    plt.colorbar()
+                    plt.subplot(2,2,3)
+                    plt.imshow(G-G2, interpolation='nearest', origin='lower')
+                    plt.colorbar()
+                    ps.savefig()
+
+                assert(sx == 0 and sy == 0)
+                # (see galaxy.py:513 otherwise...)
                 assert(G.shape == (mh,mw))
 
                 # First set of params = current galaxy model
@@ -293,7 +308,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
             # IE weighting to get to units of chi
             A *= ie.ravel()[:, np.newaxis]
-
             B = ((pix - counts*mod0) * ie).ravel()
 
             if False:
@@ -308,14 +322,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             del A
             Xic.append((X, Xicov))
 
-        realX = super().getSingleImageUpdateDirections(tr, **kwargs)
-
-        # for x,realx in zip(Xic, realX):
-        #     (x,xic) = x
-        #     (realx,realic) = realx
-        #     print('     x', x)
-        #     print('real x', realx)
-
+        #realX = super().getSingleImageUpdateDirections(tr, **kwargs)
         return Xic
 
 if __name__ == '__main__':
@@ -334,6 +341,8 @@ if __name__ == '__main__':
     pixscales = [1, 1] * 5
     H,W = 50,50
     cx,cy = 23,27
+    #H,W = 100,100
+    #cx,cy = 53,47
     # True source...
     true_flux = 1000.
     true_shape = [3., 0.5, 0.3]
@@ -367,8 +376,8 @@ if __name__ == '__main__':
         psf = HybridPixelizedPSF(pix, gauss=gpsf)
 
         c,s = np.cos(wcs_rot[i]), np.sin(wcs_rot[i])
-        ps = pixscales[i] / 3600.
-        tan = Tan(ra, dec, float(cx+i), float(cy), c*ps, s*ps, -s*ps, c*ps,
+        pixsc = pixscales[i] / 3600.
+        tan = Tan(ra, dec, float(cx+i), float(cy), c*pixsc, s*pixsc, -s*pixsc, c*pixsc,
                   float(W), float(H))
         #print('Pixel scale:', tan.pixel_scale())
         wcs = ConstantFitsWcs(tan)
@@ -409,26 +418,26 @@ if __name__ == '__main__':
     print('True source:', true_src)
     print('Initial source:', src)
 
-    #R = tr.optimize_loop(**fit_kwargs)
-    #print('Normal fitter: took', R['steps'], 'steps')
+    R = tr.optimize_loop(**fit_kwargs)
+    print('Normal fitter: took', R['steps'], 'steps')
 
-    #R2 = tr2.optimize_loop(**fit_kwargs)
-    #print('GPU-friendly fitter: took', R2['steps'], 'steps')
+    R2 = tr2.optimize_loop(**fit_kwargs)
+    print('GPU-friendly fitter: took', R2['steps'], 'steps')
 
-    for step in range(20):
-        dlnp1,x1,alpha1 = tr.optimize(**fit_kwargs)
-        dlnp2,x2,alpha2 = tr2.optimize(**fit_kwargs)
-        print('Step', step)
-        print('  dlnp1:', dlnp1)
-        print('  dlnp2:', dlnp2)
-        print('  alpha1:', alpha1)
-        print('  alpha2:', alpha2)
-        print('  x1:', x1)
-        print('  x2:', x2)
-        print('  step1:', x1*alpha1)
-        print('  step2:', x2*alpha2)
-        print('  Source:', src)
-        print('  Source2:', src2)
+    # for step in range(20):
+    #     dlnp1,x1,alpha1 = tr.optimize(**fit_kwargs)
+    #     dlnp2,x2,alpha2 = tr2.optimize(**fit_kwargs)
+    #     print('Step', step)
+    #     print('  dlnp1:', dlnp1)
+    #     print('  dlnp2:', dlnp2)
+    #     print('  alpha1:', alpha1)
+    #     print('  alpha2:', alpha2)
+    #     print('  x1:', x1)
+    #     print('  x2:', x2)
+    #     print('  step1:', x1*alpha1)
+    #     print('  step2:', x2*alpha2)
+    #     print('  Source:', src)
+    #     print('  Source2:', src2)
         
     mods_after = list(tr.getModelImages())
     print('Source:', src)
