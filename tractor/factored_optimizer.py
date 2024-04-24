@@ -6,6 +6,7 @@ from tractor.psf import lanczos_shift_image
 from astrometry.util.miscutils import get_overlapping_region
 import numpy as np
 import scipy
+import scipy.fft
 import time
 
 image_counter = 0
