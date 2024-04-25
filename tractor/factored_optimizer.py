@@ -282,7 +282,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         but instead of computing the derivatives by finite differences in those parameters,
         we compute them directly from the model image.
 
-        - roi is a tuple of 4 integers, (x0, y0, w, h), of the
+        - roi ("region of interest") is a tuple of 4 integers, (x0, y0, w, h), of the
         sub-region within "pix" and "ie" that contain non-zero values.
         I padded "pix" and "ie" out to be the same size as the galaxy
         model (ie, size "w x w", = the size of the ifft(P)) to make
@@ -314,8 +314,16 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             for iparam, (name, stepsize, mogs, fftmix) in enumerate(img_derivs):
                 assert(mogs is None)
                 Fsum = fftmix.getFourierTransform2(v, w, zero_mean=True)
+                # "fftmix" is a MixtureOfGaussians object (see mixture_profiles.py)
+                #  getFourierTransform2 is implemented in C in mp_fourier.i :
+                #  in the gaussian_fourier_transform_zero_mean_2 function
+                #  (or there is a Python implementation in mixture_profiles.py).
+
                 # Scipy does float32 * complex64 -> float32
                 G = scipy.fft.irfftn(Fsum * P)
+
+                # lanczos_shift_image has a Python implementation in psf.py, or
+                # there is a C implementation in mp_fourier.i : lanczos_shift_3f
                 lanczos_shift_image(G, mux, muy, inplace=True)
                 del Fsum
                 assert(G.shape == (mh,mw))
@@ -363,7 +371,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # Parameters to optimize go in the columns of matrix A
             # Pixels go in the rows.
 
-            # IE (inverse-error) weighting to get to units of chi
+            # Scale by IE (inverse-error) weighting to get to units of chi
             A *= ie.ravel()[:, np.newaxis]
             # The current residuals = the observed image "pix" minus the current model (counts*mod0),
             # weighted by the inverse-errors.
@@ -376,7 +384,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                     plt.imshow(A[:,i].reshape((mh,mw)), interpolation='nearest', origin='lower')
                     plt.savefig('gpu-img%i-d%i.png' % (img_i, i))
 
+            # Solve the least-squares problem!
             X,_,_,_ = np.linalg.lstsq(A, B, rcond=None)
+            # Compute the covariance matrix
             Xicov = np.matmul(A.T, A)
             del A,B,G,mod0
             Xic.append((X, Xicov))
