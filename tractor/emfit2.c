@@ -146,7 +146,7 @@ static int em_fit_2d_reg2(PyObject* po_img, int x0, int y0,
         for (k=0; k<K; k++) {
             // ASSUME ordering
             double* V = var + k*D*D;
-            double* I = ivar + k*D*D;
+            double* ivar_k = ivar + k*D*D;
             double det;
             // symmetrize
             double V12 = (V[1] + V[2])/2.;
@@ -157,9 +157,9 @@ static int em_fit_2d_reg2(PyObject* po_img, int x0, int y0,
                 result = -1;
                 goto cleanup;
             }
-            I[0] =  V[3] / det;
-            I[1] = -2. * V12  / det;
-            I[3] =  V[0] / det;
+            ivar_k[0] =  V[3] / det;
+            ivar_k[1] = -2. * V12  / det;
+            ivar_k[3] =  V[0] / det;
             scale[k] = amp[k] / sqrt(tpd * det);
 
             // maxD: we want to allow each component (before
