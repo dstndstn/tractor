@@ -403,13 +403,13 @@ static int c_gauss_2d(PyObject* ob_pos, PyObject* ob_amp,
 
     for (k=0; k<K; k++) {
         double* V = var + k*D*D;
-        double* I = ivar + k*D*D;
+        double* Ik = ivar + k*D*D;
         double det;
         det = V[0]*V[3] - V[1]*V[2];
-        I[0] =  V[3] / det;
-        I[1] = -V[1] / det;
-        I[2] = -V[2] / det;
-        I[3] =  V[0] / det;
+        Ik[0] =  V[3] / det;
+        Ik[1] = -V[1] / det;
+        Ik[2] = -V[2] / det;
+        Ik[3] =  V[0] / det;
         scale[k] = amp[k] / sqrt(tpd * det);
     }
     
@@ -482,12 +482,12 @@ static int c_gauss_2d_grid(int x0, int x1, int y0, int y1, double fx, double fy,
 
         for (k=0; k<K; k++) {
             double* V = var + k*D*D;
-            double* I = ivar + k*3;
+            double* Ik = ivar + k*3;
             double det;
             det = V[0]*V[3] - V[1]*V[2];
-            I[0] =  V[3] / det;
-            I[1] = -(V[1]+V[2]) / det;
-            I[2] =  V[0] / det;
+            Ik[0] =  V[3] / det;
+            Ik[1] = -(V[1]+V[2]) / det;
+            Ik[2] =  V[0] / det;
             scale[k] = amp[k] / sqrt(tpd * det);
         }
 
