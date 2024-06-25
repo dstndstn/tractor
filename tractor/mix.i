@@ -16,10 +16,10 @@
  static int n_fnan = 0;
  */
 
-static double eval_g(double I[3], double dx, double dy) {
-    double dsq = (I[0] * dx * dx +
-                  I[1] * dx * dy +
-                  I[2] * dy * dy);
+static double eval_g(double icov[3], double dx, double dy) {
+    double dsq = (icov[0] * dx * dx +
+                  icov[1] * dx * dy +
+                  icov[2] * dy * dy);
     if (dsq < -100)
         // ~ 1e-44
         return 0.0;
@@ -28,7 +28,7 @@ static double eval_g(double I[3], double dx, double dy) {
 }
 
 
-static double eval_all(int K, double* scales, double* I, double* means,
+static double eval_all(int K, double* scales, double* icov, double* means,
                        double x, double y) {
     double r = 0;
     int k;
@@ -36,12 +36,12 @@ static double eval_all(int K, double* scales, double* I, double* means,
         double dx,dy;
         dx = x - means[2*k+0];
         dy = y - means[2*k+1];
-        r += scales[k] * eval_g(I + 3*k, dx, dy);
+        r += scales[k] * eval_g(icov + 3*k, dx, dy);
     }
     return r;
 }
 
-static double eval_all_dxy(int K, double* scales, double* I, double* means,
+static double eval_all_dxy(int K, double* scales, double* icov, double* means,
                            double x, double y, double* xderiv, double* yderiv,
                            double* maxD) {
     double r = 0;
@@ -54,7 +54,7 @@ static double eval_all_dxy(int K, double* scales, double* I, double* means,
     for (k=0; k<K; k++) {
         double dx,dy;
         double G;
-        double* Ik = I + 3*k;
+        double* Ik = icov + 3*k;
         double dsq;
         dx = x - means[2*k+0];
         dy = y - means[2*k+1];
@@ -82,7 +82,7 @@ static double eval_all_dxy(int K, double* scales, double* I, double* means,
 }
 
 
-static double eval_all_dxy_f(int K, float* scales, float* I, float* means,
+static double eval_all_dxy_f(int K, float* scales, float* icov, float* means,
                              float x, float y, float* xderiv, float* yderiv,
                              float* maxD) {
     float r = 0;
@@ -99,7 +99,7 @@ static double eval_all_dxy_f(int K, float* scales, float* I, float* means,
         float dsq;
         if (scales[k] == 0)
             continue;
-        Ik = I + 3*k;
+        Ik = icov + 3*k;
         dx = x - means[2*k+0];
         dy = y - means[2*k+1];
         dsq = (Ik[0] * dx * dx +
@@ -552,11 +552,11 @@ static int c_gauss_2d_approx(int x0, int x1, int y0, int y1,
 
     for (k=0; k<K; k++) {
         // We symmetrize the covariance matrix,
-        // so V,I just have three elements: x**2, xy, y**2.
-        // We also scale the the I to make the Gaussian evaluation easier
+        // so V,icov just have three elements: x**2, xy, y**2.
+        // We also scale the the icov to make the Gaussian evaluation easier
         int dyabs;
         double V[3];
-        double I[3];
+        double icov[3];
         double det;
         double isc;
         double scale;
@@ -570,10 +570,10 @@ static int c_gauss_2d_approx(int x0, int x1, int y0, int y1,
         det = V[0]*V[2] - V[1]*V[1];
         // we fold the -0.5 in the Gaussian exponent term in here...
         isc = -0.5 / det;
-        I[0] =  V[2] * isc;
+        icov[0] =  V[2] * isc;
         // we also fold in the 2*dx*dy term here
-        I[1] = -V[1] * isc * 2.0;
-        I[2] =  V[0] * isc;
+        icov[1] = -V[1] * isc * 2.0;
+        icov[2] =  V[0] * isc;
         scale = amp[k] / sqrt(tpd * det);
         mx = mean[k*D+0] + fx;
         my = mean[k*D+1] + fy;
@@ -607,7 +607,7 @@ static int c_gauss_2d_approx(int x0, int x1, int y0, int y1,
                 // eval at dx = +- 1, ...
                 // stop altogether if neither are accepted
                 x = xm;
-                g = eval_g(I, x - mx, y - my);
+                g = eval_g(icov, x - mx, y - my);
                 //printf("g = %g vs mv %g\n", g, mv);
                 rrow = result + (y - y0)*W - x0;
                 v = scale * g;
@@ -616,7 +616,7 @@ static int c_gauss_2d_approx(int x0, int x1, int y0, int y1,
                     ngood++;
                 for (dir=0; dir<2; dir++) {
                     for (x = xm + (dir ? 1 : -1); (dir ? x < x1 : x >= x0); dir ? x++ : x--) {
-                        g = eval_g(I, x - mx, y - my);
+                        g = eval_g(icov, x - mx, y - my);
                         //printf("dx %i, g = %g vs mv %g\n", dx, g, mv);
                         v = scale * g;
                         rrow[x] += v;
@@ -691,24 +691,24 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
     scales = malloc(sizeof(double) * K);
 
     // We symmetrize the covariance matrix,
-    // so V,I just have three elements for each K: x**2, xy, y**2.
+    // so V,icov just have three elements for each K: x**2, xy, y**2.
     for (k=0; k<K; k++) {
-        // We also scale the I to make the Gaussian evaluation easier
+        // We also scale the icov to make the Gaussian evaluation easier
         double det;
         double isc;
         double scale;
         double* V = VV + 3*k;
-        double* I = II + 3*k;
+        double* icov = II + 3*k;
         V[0] =  var[k*D*D + 0];
         V[1] = (var[k*D*D + 1] + var[k*D*D + 2])*0.5;
         V[2] =  var[k*D*D + 3];
         det = V[0]*V[2] - V[1]*V[1];
         // we fold the -0.5 in the Gaussian exponent term in here...
         isc = -0.5 / det;
-        I[0] =  V[2] * isc;
+        icov[0] =  V[2] * isc;
         // we also fold in the 2*dx*dy term here
-        I[1] = -V[1] * isc * 2.0;
-        I[2] =  V[0] * isc;
+        icov[1] = -V[1] * isc * 2.0;
+        icov[2] =  V[0] * isc;
         if (det <= 0.) {
             // FIXME -- Abort?
             scales[k] = 0.;
@@ -741,24 +741,24 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
             double maxy = y0;
             double yy, xx, dd;
             double dx, dy;
-            double* I = II + 3*k;
+            double* icov = II + 3*k;
             // outside postage stamp.  Min Mahalanobis distance along
             // four corners of the box.
             //
-            // The I array is the *negative* inverse-covariance
+            // The icov array is the *negative* inverse-covariance
             // so we want to *maximize*:
-            //    dd = I[0]dx**2 + I[1]dx dy + I[2] dy**2
+            //    dd = icov[0]dx**2 + icov[1]dx dy + icov[2] dy**2
             //
             // x = x0
             // dx = x0 - mx,  dy = y - my
-            // dd = I[0]dx**2 + I[1]dx dy + I[2] dy**2
-            // d(dd)/dy = I[1]dx + 2 I[2] dy = 0
-            // dy = -I[1]*dx / (2*I[2])
+            // dd = icov[0]dx**2 + icov[1]dx dy + icov[2] dy**2
+            // d(dd)/dy = icov[1]dx + 2 icov[2] dy = 0
+            // dy = -icov[1]*dx / (2*icov[2])
             // If within bounds, OR min of y0 or y1.
             // x = x0
             xx = x0;
             dx = xx - mx;
-            dy = -I[1] * dx / (2. * I[2]);
+            dy = -icov[1] * dx / (2. * icov[2]);
             yy = dy + my;
             if (yy < y0) {
                 yy = y0;
@@ -767,7 +767,7 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
                 yy = y1-1;
                 dy = yy - my;
             }
-            dd = I[0]*dx*dx + I[1]*dx*dy + I[2]*dy*dy;
+            dd = icov[0]*dx*dx + icov[1]*dx*dy + icov[2]*dy*dy;
             if (dd > maxd) {
                 maxd = dd;
                 maxx = xx;
@@ -776,7 +776,7 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
             // x = right edge
             xx = x1-1;
             dx = xx - mx;
-            dy = -I[1] * dx / (2. * I[2]);
+            dy = -icov[1] * dx / (2. * icov[2]);
             yy = dy + my;
             if (yy < y0) {
                 yy = y0;
@@ -785,7 +785,7 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
                 yy = y1-1;
                 dy = yy - my;
             }
-            dd = I[0]*dx*dx + I[1]*dx*dy + I[2]*dy*dy;
+            dd = icov[0]*dx*dx + icov[1]*dx*dy + icov[2]*dy*dy;
             if (dd > maxd) {
                 maxd = dd;
                 maxx = xx;
@@ -794,7 +794,7 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
             // y = bottom edge
             yy = y0;
             dy = yy - my;
-            dx = -I[1] * dy / (2. * I[0]);
+            dx = -icov[1] * dy / (2. * icov[0]);
             xx = dx + mx;
             if (xx < x0) {
                 xx = x0;
@@ -803,7 +803,7 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
                 xx = x1-1;
                 dx = xx - mx;
             }
-            dd = I[0]*dx*dx + I[1]*dx*dy + I[2]*dy*dy;
+            dd = icov[0]*dx*dx + icov[1]*dx*dy + icov[2]*dy*dy;
             if (dd > maxd) {
                 maxd = dd;
                 maxx = xx;
@@ -812,7 +812,7 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
             // y = top edge
             yy = y1 - 1;
             dy = yy - my;
-            dx = -I[1] * dy / (2. * I[0]);
+            dx = -icov[1] * dy / (2. * icov[0]);
             xx = dx + mx;
             if (xx < x0) {
                 xx = x0;
@@ -821,7 +821,7 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
                 xx = x1-1;
                 dx = xx - mx;
             }
-            dd = I[0]*dx*dx + I[1]*dx*dy + I[2]*dy*dy;
+            dd = icov[0]*dx*dx + icov[1]*dx*dy + icov[2]*dy*dy;
             if (dd > maxd) {
                 maxd = dd;
                 maxx = xx;
