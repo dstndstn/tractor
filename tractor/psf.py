@@ -57,6 +57,23 @@ def lanczos_shift_image(img, dx, dy, inplace=False, force_python=False):
         img[:,:] = outimg
     return outimg
 
+def lanczos_shift_image_batch_gpu(imgs, dxs, dys):
+    """Translated from lanczos_shift_image python version to GPU using cupy
+        and helper functions from tractor.miscutils"""
+    import cupy as cp
+    from tractor.miscutils import gpu_lanczos_filter,batch_correlate1d_gpu
+    L = 3
+    nimg = dxs.size 
+    lr = cp.tile(cp.arange(-L, L+1), (nimg, 1))
+    Lx = gpu_lanczos_filter(L, lr+dxs.reshape((nimg,1)))
+    Ly = gpu_lanczos_filter(L, lr+dys.reshape((nimg,1)))
+    # Normalize the Lanczos interpolants (preserve flux)
+    Lx /= Lx.sum(1).reshape((nimg,1))
+    Ly /= Ly.sum(1).reshape((nimg,1))
+    sx = batch_correlate1d_gpu(imgs, Lx, axis=2, mode='constant')
+    outimg = batch_correlate1d_gpu(sx, Ly, axis=1, mode='constant')
+    return outimg
+
 # GLOBAL scratch array for lanczos_shift_image!
 work_corr7f = np.zeros((4096, 4096), np.float32)
 work_corr7f = np.require(work_corr7f, requirements=['A'])
