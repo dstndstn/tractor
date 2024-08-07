@@ -135,8 +135,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             mh,mw = mm.shape
             assert(pW % 2 == 0)
             assert(pH % 2 == 0)
-            v = len(v)
-            w = len(w)
+            assert(P.shape == (len(w),len(v)))
+            del v,w
 
             # sub-pixel shift we have to do at the end...
             dx = px - cx
@@ -216,7 +216,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
                 img_derivs.append((name, step, mogs, ffts))
 
-            assert(P.shape == (w,v))
             assert(sx == 0 and sy == 0)
 
             imgs.append((img_derivs, mmpix, mmie, P, mux, muy, mh, mw, counts, cdi, roi))
@@ -309,11 +308,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             else:
                 A = np.zeros((mh*mw, len(img_derivs)+2), np.float32)
 
-            w,v = P.shape
+            Nw,Nv = P.shape
             mod0 = None
             for iparam, (name, stepsize, mogs, fftmix) in enumerate(img_derivs):
                 assert(mogs is None)
-                Fsum = fftmix.getFourierTransform2(v, w, zero_mean=True)
+                Fsum = fftmix.getFourierTransform2(Nv, Nw, zero_mean=True)
                 # "fftmix" is a MixtureOfGaussians object (see mixture_profiles.py)
                 #  getFourierTransform2 is implemented in C in mp_fourier.i :
                 #  in the gaussian_fourier_transform_zero_mean_2 function
