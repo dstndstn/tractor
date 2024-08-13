@@ -199,6 +199,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 assert(np.all(fftweights <= 1.))
 
             img_derivs = []
+            print ("TEST")
+            img_derivs_batch = BatchDerivs(amixes)
 
             for name,mix,step in amixes:
                 mogs = None
@@ -218,7 +220,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
             assert(sx == 0 and sy == 0)
 
-            imgs.append((img_derivs, mmpix, mmie, P, mux, muy, mh, mw, counts, cdi, roi))
+            imgs.append((img_derivs_batch, mmpix, mmie, P, mux, muy, mh, mw, counts, cdi, roi))
 
         #print(len(imgs), 'images to process, with a total of', np.sum([len(x[0]) for x in imgs]), 'derivatives')
 
@@ -292,7 +294,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         '''
         use_roi = False
         Xic = []
-        for img_i, (img_derivs, pix, ie, P, mux, muy, mw, mh, counts, cdi, roi) in enumerate(imgs):
+        for img_i, (img_derivs_batch, pix, ie, P, mux, muy, mw, mh, counts, cdi, roi) in enumerate(imgs):
             assert(pix.shape == (mh,mw))
             # We're going to build a tall matrix A, whose number of
             # rows = number of pixels and cols = number of parameters

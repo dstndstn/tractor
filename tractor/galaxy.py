@@ -456,9 +456,9 @@ class ProfileGalaxy(object):
             # render w/ MoG.
             IM = ((pW/2)**2 < (nsigma2**2 * vv))
             IF = ((pW/2)**2 > (nsigma1**2 * vv))
-            #print('Evaluating', np.sum(IM), 'terms as MoG,', np.sum(IF), 'with FFT,',
-            #      np.sum(IM) + np.sum(IF) - len(IM), 'with both')
-            #print('  sizes vs PSF size', pW, ':', ', '.join(['%.3g' % s for s in np.sqrt(vv)]))
+            print('Evaluating', np.sum(IM), 'terms as MoG,', np.sum(IF), 'with FFT,',
+                  np.sum(IM) + np.sum(IF) - len(IM), 'with both')
+            print('  sizes vs PSF size', pW, ':', ', '.join(['%.3g' % s for s in np.sqrt(vv)]))
             ramp = np.any(IM*IF)
 
             if np.any(IM):
