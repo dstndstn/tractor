@@ -299,62 +299,80 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # to update.  We special-case the two spatial derivatives,
             # the rest are in the 'img_derivs' list.
 
+            # number of derivatives
+            Nd = len(img_derivs)
             if use_roi:
                 (rx0,ry0,rw,rh) = roi
                 roi_slice = slice(ry0, ry0+rh), slice(rx0, rx0+rw)
                 pix = pix[roi_slice]
                 ie = ie[roi_slice]
-                A = np.zeros((rh*rw, len(img_derivs)+2), np.float32)
+                A = np.zeros((rh*rw, Nd+2), np.float32)
             else:
-                A = np.zeros((mh*mw, len(img_derivs)+2), np.float32)
+                A = np.zeros((mh*mw, Nd+2), np.float32)
 
             Nw,Nv = P.shape
             mod0 = None
-            for iparam, (name, stepsize, mogs, fftmix) in enumerate(img_derivs):
-                assert(mogs is None)
-                Fsum = fftmix.getFourierTransform2(Nv, Nw, zero_mean=True)
-                # "fftmix" is a MixtureOfGaussians object (see mixture_profiles.py)
-                #  getFourierTransform2 is implemented in C in mp_fourier.i :
-                #  in the gaussian_fourier_transform_zero_mean_2 function
-                #  (or there is a Python implementation in mixture_profiles.py).
+            mix0 = img_derivs[0][3]
+            # number of components in the Gaussian mixture
+            Nc = len(mix0.amp)
+            fftamps = np.zeros((Nd, Nc), np.float32)
+            fftvars = np.zeros((Nd, Nc, 3), np.float32)
+            for i,(_,_,_,mix) in enumerate(img_derivs):
+                fftamps[i,:] = mix.amp
+                fftvars[i,:,0] = mix.var[:,0,0]
+                fftvars[i,:,1] = mix.var[:,0,1]
+                fftvars[i,:,2] = mix.var[:,1,1]
 
-                # Scipy does float32 * complex64 -> float32
-                G = scipy.fft.irfftn(Fsum * P)
+            # from mixture_profiles : getFourierTransform2() with zero_mean=True
+            Fsums = np.zeros((Nd, Nw, Nv), np.float32)
+            w = np.fft.fftfreq(Nw)
+            v = np.fft.rfftfreq(Nw)
+            for i in range(Nd):
+                for k in range(Nc):
+                    amp = fftamps[i,k]
+                    a,b,d = fftvars[i, k, :]
+                    Fsums[i, :, :] += amp * np.exp(
+                        -2. * np.pi**2 *
+                        (a * v[np.newaxis, :]**2 +
+                         d * w[:, np.newaxis]**2 +
+                         2 * b * v[np.newaxis, :] * w[:, np.newaxis]))
 
+            Gs = scipy.fft.irfftn(Fsums * P[np.newaxis,:,:], axes=(1,2))
+            #print('Gs shape:', Gs.shape) --> 4,64,64
+            del Fsums
+            for i in range(Nd):
                 # lanczos_shift_image has a Python implementation in psf.py, or
                 # there is a C implementation in mp_fourier.i : lanczos_shift_3f
-                lanczos_shift_image(G, mux, muy, inplace=True)
-                del Fsum
-                assert(G.shape == (mh,mw))
-                if use_roi:
-                    G = G[roi_slice]
-                
-                # The first element in img_derivs is the current galaxy model parameters.
-                if iparam == 0:
-                    mod0 = G
-                    # Shift this initial model image to get X,Y pixel derivatives
-                    dx = np.zeros_like(G)
-                    # X derivative -- difference between shifted-left and shifted-right arrays
-                    dx[:,1:-1] = G[:, 2:] - G[:, :-2]
-                    # Y derivative -- difference between shifted-down and shifted-up arrays
-                    dy = np.zeros_like(G)
-                    dy[1:-1, :] = G[2:, :] - G[:-2, :]
-                    # Push through local WCS transformation to get to RA,Dec param derivatives
-                    assert(cdi.shape == (2,2))
-                    # divide by 2 because we did +- 1 pixel
-                    # negative because we shifted the *image*, which is opposite
-                    # from shifting the *model*
-                    A[:, 0] = -((dx * cdi[0, 0] + dy * cdi[1, 0]) * counts / 2).ravel()
-                    A[:, 1] = -((dx * cdi[0, 1] + dy * cdi[1, 1]) * counts / 2).ravel()
-                    del dx,dy
+                lanczos_shift_image(Gs[i,:,:], mux, muy, inplace=True)
 
-                    # The derivative with respect to flux (brightness) = the unit-flux current model
-                    A[:, 2] = G.ravel()
-                else:
-                    # For other parameters, compute the numerical derivative.
-                    # mod0 is the unit-brightness model at the current position
-                    # G is the unit-brightness model after stepping the parameter
-                    A[:, iparam + 2] = counts / stepsize * (G - mod0).ravel()
+            # The first element in img_derivs is the current galaxy model parameters.
+            mod0 = Gs[0,:,:]
+
+            # Shift this initial model image to get X,Y pixel derivatives
+            dx = np.zeros_like(mod0)
+            # X derivative -- difference between shifted-left and shifted-right arrays
+            dx[:,1:-1] = mod0[:, 2:] - mod0[:, :-2]
+            # Y derivative -- difference between shifted-down and shifted-up arrays
+            dy = np.zeros_like(mod0)
+            dy[1:-1, :] = mod0[2:, :] - mod0[:-2, :]
+            # Push through local WCS transformation to get to RA,Dec param derivatives
+            assert(cdi.shape == (2,2))
+            # divide by 2 because we did +- 1 pixel
+            # negative because we shifted the *image*, which is opposite
+            # from shifting the *model*
+            A[:, 0] = -((dx * cdi[0, 0] + dy * cdi[1, 0]) * counts / 2).ravel()
+            A[:, 1] = -((dx * cdi[0, 1] + dy * cdi[1, 1]) * counts / 2).ravel()
+            del dx,dy
+
+            # The derivative with respect to flux (brightness) = the unit-flux current model
+            A[:, 2] = mod0.ravel()
+
+            stepsizes = [s for _,s,_,_ in img_derivs]
+            for i in range(1, Nd):
+                # For other parameters, compute the numerical derivative.
+                # mod0 is the unit-brightness model at the current position
+                # G is the unit-brightness model after stepping the parameter
+                A[:, i + 2] = counts / stepsizes[i] * (Gs[i,:,:] - mod0).ravel()
 
             # We want to minimize:
             #   || chi + (d(chi)/d(params)) * dparams ||^2
@@ -387,7 +405,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             X,_,_,_ = np.linalg.lstsq(A, B, rcond=None)
             # Compute the covariance matrix
             Xicov = np.matmul(A.T, A)
-            del A,B,G,mod0
+            del A,B,mod0
+            del Gs
             Xic.append((X, Xicov))
         return Xic
 
