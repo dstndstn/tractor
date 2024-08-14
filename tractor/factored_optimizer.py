@@ -136,7 +136,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             assert(pW % 2 == 0)
             assert(pH % 2 == 0)
             assert(P.shape == (len(w),len(v)))
-            del v,w
 
             # sub-pixel shift we have to do at the end...
             dx = px - cx
@@ -310,7 +309,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             else:
                 A = np.zeros((mh*mw, img_derivs_batch.N+2), np.float32)
 
-            w,v = P.shape
             mod0 = None
 
             assert(img_derivs_batch.mogs is None)
