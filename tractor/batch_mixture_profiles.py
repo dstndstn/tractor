@@ -293,9 +293,13 @@ class BatchMixtureOfGaussians(object):
                 2*b[:,:,cp.newaxis,cp.newaxis]*v[:,cp.newaxis,cp.newaxis,:]*w[:,cp.newaxis,:,cp.newaxis]))
         z = cp.logical_or(mu[:,:,0] != 0, mu[:,:,1] != 0)
         if (z.any()):
-            z2 = cp.where(z)
-            F[z] = F[z] * cp.exp(-2. * cp.pi * 1j * (mu[z,0,cp.newaxis,cp.newaxis] * v[z2[0]][:,cp.newaxis,:] +
-                                                     mu[z,1,cp.newaxis,cp.newaxis] * w[z2[0]][:,:,cp.newaxis]))
+            #z2 = cp.where(z)
+            #F[z] = F[z] * cp.exp(-2. * cp.pi * 1j * (mu[z,0,cp.newaxis,cp.newaxis] * v[z2[0]][:,cp.newaxis,:] +
+            #                                         mu[z,1,cp.newaxis,cp.newaxis] * w[z2[0]][:,:,cp.newaxis]))
+            #This is faster than subscripting multiple times like above
+            F[z] = F[z] * cp.exp(-2. * cp.pi * 1j * (mu[:,:,0,cp.newaxis,cp.newaxis]*v[:,cp.newaxis,cp.newaxis,:] +
+                                    mu[:,:,1,cp.newaxis,cp.newaxis]*w[:,cp.newaxis,:,cp.newaxis])[z])
+
     Fsum = (amps[:,:,None,None]*F).sum(axis=1)
     return Fsum
 
