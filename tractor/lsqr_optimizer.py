@@ -298,6 +298,10 @@ class LsqrOptimizer(Optimizer):
             return 0, X, 0.
         #logverb('X: len', len(X), '; non-zero entries:', np.count_nonzero(X))
         logverb('Finding optimal step size...')
+        #print('Update direction:', X)
+        #print('Tractor params:')
+        #tractor.printThawedParams()
+        assert(len(X) == tractor.numberOfParams())
         #t0 = Time()
         (dlogprob, alpha) = self.tryUpdates(tractor, X, alphas=alphas)
         #tstep = Time() - t0

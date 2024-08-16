@@ -21,6 +21,10 @@ the overall result.
 '''
 class FactoredOptimizer(object):
 
+    def __init__(self, *args, **kwargs):
+        self.ps = None
+        super().__init__(*args, **kwargs)
+
     def getSingleImageUpdateDirection(self, tr, **kwargs):
         allderivs = tr.getDerivs()
         x,A = self.getUpdateDirection(tr, allderivs, get_A_matrix=True, **kwargs)
@@ -35,6 +39,39 @@ class FactoredOptimizer(object):
                 plt.savefig('orig-img%i-d%i.png' % (image_counter, i))
             image_counter += 1
 
+        if self.ps is not None:
+            mod0 = tr.getModelImage(0)
+            tim = tr.getImage(0)
+            B = ((tim.getImage() - mod0) * tim.getInvError()).ravel()
+            import pylab as plt
+            plt.clf()
+            ima = dict(interpolation='nearest', origin='lower')
+            rr,cc = 3,4
+            plt.subplot(rr,cc,1)
+            plt.imshow(mod0, **ima)
+            plt.title('mod0')
+            sh = mod0.shape
+            plt.subplot(rr,cc,2)
+            mx = max(np.abs(B))
+            imx = ima.copy()
+            imx.update(vmin=-mx, vmax=+mx)
+            plt.imshow(B.reshape(sh), **imx)
+            plt.title('B')
+            AX = np.dot(A, x)
+            plt.subplot(rr,cc,3)
+            plt.imshow(AX.reshape(sh), **imx)
+            plt.title('A X')
+            ah,aw = A.shape
+            for i in range(min(aw, 8)):
+                plt.subplot(rr,cc,5+i)
+                plt.imshow(A[:,i].reshape(sh), **ima)
+                if i == 0:
+                    plt.title('dx')
+                elif i == 1:
+                    plt.title('dy')
+                elif i == 2:
+                    plt.title('dflux')
+            self.ps.savefig()
 
         icov = np.matmul(A.T, A)
         del A
@@ -82,13 +119,23 @@ class FactoredDenseOptimizer(FactoredOptimizer, ConstrainedDenseOptimizer):
 class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
     def getSingleImageUpdateDirections(self, tr, **kwargs):
+        if not (tr.isParamFrozen('images') and
+                (len(tr.catalog) == 1) and
+                isinstance(tr.catalog[0], ProfileGalaxy)):
+            p = self.ps
+            self.ps = None
+            R = super().getSingleImageUpdateDirections(tr, **kwargs)
+            self.ps = p
+            return R
+
+        #print('Using GpuFriendly code')
         # Assume we're not fitting any of the image parameters.
         assert(tr.isParamFrozen('images'))
+        # Assume single source
+        assert(len(tr.catalog) == 1)
         
         img_pix = [tim.data for tim in tr.images]
         img_ie  = [tim.getInvError() for tim in tr.images]
-        # Assume single source
-        assert(len(tr.catalog) == 1)
         # Assume galaxy
         src = tr.catalog[0]
         assert(isinstance(src, ProfileGalaxy))
@@ -101,7 +148,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         assert(all([m is not None for m in masks]))
 
         assert(src.isParamThawed('pos'))
-        # TODO -- ASSERT no priors!
+
+        # FIXME -- must handle priors (ellipticity)!!
 
         # Pixel positions
         pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
@@ -403,6 +451,40 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
             # Solve the least-squares problem!
             X,_,_,_ = np.linalg.lstsq(A, B, rcond=None)
+
+            if self.ps is not None:
+                import pylab as plt
+                plt.clf()
+                ima = dict(interpolation='nearest', origin='lower')
+                rr,cc = 3,4
+                plt.subplot(rr,cc,1)
+                plt.imshow(mod0, **ima)
+                plt.title('mod0')
+                sh = mod0.shape
+                plt.subplot(rr,cc,2)
+                mx = max(np.abs(B))
+                imx = ima.copy()
+                imx.update(vmin=-mx, vmax=+mx)
+                plt.imshow(B.reshape(sh), **imx)
+                plt.title('B')
+                AX = np.dot(A, X)
+                plt.subplot(rr,cc,3)
+                plt.imshow(AX.reshape(sh), **imx)
+                plt.title('A X')
+                for i in range(min(Nd+2, 8)):
+                    plt.subplot(rr,cc,5+i)
+                    plt.imshow(A[:,i].reshape(sh), **ima)
+                    if i == 0:
+                        plt.title('dx')
+                    elif i == 1:
+                        plt.title('dy')
+                    elif i == 2:
+                        plt.title('dflux')
+                    else:
+                        plt.title(img_derivs[i-2][0])
+                plt.suptitle('GPU: image %i/%i' % (img_i+1, len(imgs)))
+                self.ps.savefig()
+
             # Compute the covariance matrix
             Xicov = np.matmul(A.T, A)
             del A,B,mod0
