@@ -344,6 +344,7 @@ class SersicMixture(object):
             amps = np.append(amps, core)
             varr = np.append(varr, 0.)
 
+        #print('Sersic with index', sindex, ': mixture with', len(amps), 'components')
         return mp.MixtureOfGaussians(amps, np.zeros((len(amps), 2)), varr)
 
 class SersicIndex(ScalarParam):
@@ -461,15 +462,26 @@ class SersicGalaxy(HoggGalaxy):
             inames = self.sersicindex.getParamNames()
             oldvals = self.sersicindex.getParams()
             ups = self.sersicindex.getUpperBounds()
+            los = self.sersicindex.getLowerBounds()
             for i,step in enumerate(steps):
-                # Assume step is positive, and check whether stepping
-                # would exceed the upper bound.
+                # Check whether stepping would exceed the bounds
                 newval = oldvals[i] + step
-                if newval > ups[i]:
+                if newval > ups[i] or newval < los[i]:
                     step *= -1.
                     newval = oldvals[i] + step
                 oldval = self.sersicindex.setParam(i, newval)
                 pro = self._getShearedProfile(img, px, py)
+                # If we stepped over a boundary, we can get a mixture of a different size.
+                # This makes things harder downstream, so try to avoid it.
+                if len(pro.amp) != len(derivs[0][1].amp):
+                    newval2 = oldvals[i] - step
+                    if newval2 <= ups[i] and newval2 >= los[i]:
+                        self.sersicindex.setParam(i, newval2)
+                        pro2 = self._getShearedProfile(img, px, py)
+                        if len(pro2.amp) == len(derivs[0][1].amp):
+                            #print('Stepped Sersic index in opposite direction to avoid boundary')
+                            pro = pro2
+                            step *= -1.
                 self.sersicindex.setParam(i, oldval)
                 derivs.append(('sersicindex.'+inames[i], pro, step))
         return derivs
