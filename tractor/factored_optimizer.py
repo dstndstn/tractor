@@ -160,6 +160,10 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # Current counts
         img_counts = [tim.getPhotoCal().brightnessToCounts(src.brightness)
                       for tim in tr.images]
+        bands = src.getBrightness().getParamNames()
+        #print('Bands:', bands)
+        img_bands = [bands.index(tim.getPhotoCal().band) for tim in tr.images]
+        #print('ibands', img_bands)
 
         # (x0,x1,y0,y1) in image coordinates
         extents = [mm.extent for mm in masks]
@@ -272,7 +276,73 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         Xic = self.computeUpdateDirections(imgs)
 
-        #realX = super().getSingleImageUpdateDirections(tr, **kwargs)
+        #print('Tractor params')
+        #tr.printThawedParams()
+        nbands = 1 + max(img_bands)
+        if nbands > 1:
+            full_xic = []
+            #print('N bands:', nbands)
+            fullN = tr.numberOfParams()
+            for iband,(x,ic) in zip(img_bands, Xic):
+                assert(fullN == len(x) + nbands - 1)
+                x2 = np.zeros(fullN, np.float32)
+                ic2 = np.zeros((fullN,fullN), np.float32)
+                # source params are ordered: position, brightness, others
+                npos = 2
+                nothers = len(x)-3
+
+                # Where aa is a block of npos elements
+                #       cc is a block of nothers elements
+                #       b is a single element
+                #       z1,z2 are some number of zeros
+                #
+                # x = [ aa b cc ] ---> x2 = [ aa z1 b z2 cc ]
+                
+                # ic = [ A B C ]      ic2 = [ A z B z C ]
+                #      [ B D E ]  -->       [ z z z z z ]
+                #      [ C E F ]            [ B z D z E ]
+                #                           [ z z z z z ]
+                #                           [ C z E z F ]
+
+                # aa
+                x2[:npos] = x[:npos]
+                # b
+                x2[npos + iband] = x[npos]
+                # cc
+                x2[-nothers:] = x[-nothers:]
+
+                # A
+                ic2[:npos,:npos] = ic[:npos,:npos]
+                # B
+                ic2[npos + iband, :npos] = ic[npos, :npos]
+                ic2[:npos, npos + iband] = ic[:npos, npos]
+                # C
+                ic2[:npos, -nothers:] = ic[:npos,    -nothers:]
+                ic2[-nothers:, :npos] = ic[-nothers:, :npos]
+                # D
+                ic2[npos + iband, npos + iband] = ic[npos, npos]
+                # E
+                ic2[npos + iband, -nothers:] = ic[npos, -nothers:]
+                ic2[-nothers:, npos + iband] = ic[-nothers:, npos]
+                # F
+                ic2[-nothers:,-nothers:] = ic[-nothers:,-nothers:]
+
+                # print('x')
+                # print(x)
+                # print('x2')
+                # print(x2)
+                # print('ic')
+                # print(ic)
+                # print('ic2')
+                # print(ic2)
+                
+                full_xic.append((x2,ic2))
+            Xic = full_xic
+
+        #
+        #print('Calling original version...')
+        #sXic = super().getSingleImageUpdateDirections(tr, **kwargs)
+
         return Xic
 
     def computeUpdateDirections(self, imgs):
@@ -416,10 +486,16 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             A[:, 2] = mod0.ravel()
 
             stepsizes = [s for _,s,_,_ in img_derivs]
+            # The first element is mod0, so the stepped parameters start at 1 here.
             for i in range(1, Nd):
                 # For other parameters, compute the numerical derivative.
                 # mod0 is the unit-brightness model at the current position
-                # G is the unit-brightness model after stepping the parameter
+                # Gs[i,*] is the unit-brightness model after stepping the parameter
+                # The i+2 here is because the first two params are the spatial derivs
+                # (A[:,0] and A[:,1] are filled above)
+                # And the next param is the flux deriv
+                # (A[:,2] is filled)
+                # So the first time through this loop, i=1 and we fill column A[:,3]
                 A[:, i + 2] = counts / stepsizes[i] * (Gs[i,:,:] - mod0).ravel()
 
             # We want to minimize:
