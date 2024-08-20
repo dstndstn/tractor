@@ -2,12 +2,14 @@ import sys
 from tractor.dense_optimizer import ConstrainedDenseOptimizer
 from tractor import ProfileGalaxy, HybridPSF
 from tractor import mixture_profiles as mp
-from tractor.psf import lanczos_shift_image
+#from tractor.psf import lanczos_shift_image
 from astrometry.util.miscutils import get_overlapping_region
 import numpy as np
 import scipy
 import scipy.fft
 import time
+
+from tractor.batch_psf import BatchPixelizedPSF, lanczos_shift_image
 
 image_counter = 0
 #from astrometry.util.plotutils import PlotSequence
@@ -120,7 +122,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         outer_real_nsigma = 4.
 
         imgs = []
-        print ("TEST")
+        nimages = len(masks)
+        gpu_px = np.zeros(nimages)
+        gpu_py = np.zeros(nimages)
+        gpu_halfsize = np.zeros(nimages)
+        i = 0
         for mm,(px,py),(x0,x1,y0,y1),psf,pix,ie,counts,cdi,tim in zip(
                 masks, pxy, extents, psfs, img_pix, img_ie, img_counts, img_cdi, tr.images):
 
@@ -131,12 +137,26 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             halfsize = max([(x1-x0)/2, (y1-y0)/2,
                             1+px-x0, 1+x1-px, 1+py-y0, 1+y1-py,
                             psfH//2, psfW//2])
+            gpu_px[i] = px
+            gpu_py[i] = py
+            gpu_halfsize[i] = halfsize
+            i += 1
+
+        # PSF Fourier transforms
+        batch_psf = BatchPixelizedPSF(psfs)
+        P, (cx, cy), (pH, pW), (v, w) = batch_psf.getFourierTransformBatchGPU(gpu_px, gpu_py, gpu_halfsize)
+        assert(pW % 2 == 0)
+        assert(pH % 2 == 0)
+        assert(P.shape == (nimages,len(w),len(v)))
+
+        #Not optimal but for now go back into loop
+        for mm,(px,py),(x0,x1,y0,y1),psf,pix,ie,counts,cdi,tim in zip(
+                masks, pxy, extents, psfs, img_pix, img_ie, img_counts, img_cdi, tr.images):
+
+
             # PSF Fourier transforms
-            P, (cx, cy), (pH, pW), (v, w) = psf.getFourierTransform(px, py, halfsize)
+            #P, (cx, cy), (pH, pW), (v, w) = psf.getFourierTransform(px, py, halfsize)
             mh,mw = mm.shape
-            assert(pW % 2 == 0)
-            assert(pH % 2 == 0)
-            assert(P.shape == (len(w),len(v)))
 
             # sub-pixel shift we have to do at the end...
             dx = px - cx
