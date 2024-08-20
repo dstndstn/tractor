@@ -120,6 +120,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         outer_real_nsigma = 4.
 
         imgs = []
+        batched_amixes = []
         for mm,(px,py),(x0,x1,y0,y1),psf,pix,ie,counts,cdi,tim in zip(
                 masks, pxy, extents, psfs, img_pix, img_ie, img_counts, img_cdi, tr.images):
 
@@ -171,7 +172,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # Get derivatives for each galaxy shape parameter.
             amixes = src.getDerivativeShearedProfiles(tim, px, py)
             amixes = [('current', amix, 0.)] + amixes
-
+            # SSG change to batch amixes
+            batched_amixes.append(amixes)
             # Split "amix" into terms that we will evaluate using MoG vs FFT.
             # (we'll use that same split for the derivatives also)
             vv = amix.var[:, 0, 0] + amix.var[:, 1, 1]
@@ -198,7 +200,16 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 assert(np.all(fftweights > 0.))
                 assert(np.all(fftweights <= 1.))
 
-            img_derivs_batch = BatchDerivs(amixes, IM, IF, vv.shape, mogweights, fftweights, px, py)
+            batched_amixes.append(amixes)
+            batched_IM.append(IM)
+            batched_IF.append(IF)
+            batched_vv.append(vv)
+            batched_mogweights.append(mogweights)
+            batched_fftweights.append(fftweights)
+            #img_derivs_batch = BatchDerivs(amixes, IM, IF, vv.shape, mogweights, fftweights, px, py)
+        mogweights = 1.
+        fftweights = 1.
+        img_derivs_batch = ImageBatch_Derivs(batched_amixes, batched_IM, batched_IF, batched_vv, batched_mogweights, batched_fftweights, pxy) 
 
             """
             for name,mix,step in amixes:
@@ -294,7 +305,37 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         '''
         use_roi = False
         Xic = []
+        mh_max = 64
+        mw_max = 64
+        N_imgs = len(imgs)
+        max_len_img_derivs = 0
+
+        #img_derivs_batch = []
+        pix_batch = np.zeros((N_imgs, mh_max, mw_max), dtype = np.float32 )
+        ie_batch = np.zeros_like(pix_batch)
+        P_batch = np.zeros((N_imgs,P_h, P_w), dtype = np.complex64)
+        muxy_batch = np.zeros((N_imgs, 2), dtype = np.float32)
+        mhw = np.zeros((N_imgs, 2), dtype = np.int)
+        counts_batch = np.zeros(N_imgs)
+        cdi_batch = np.zeros((N_imgs, 2,2), dtype=np.float32)
+        roi_batch = np.zeros((N_imgs, 4), dtype = np.int)
+        Fsum_batch = np.zeros((N_imgs, mh_max, mw_max), dtype = np.complex64 )
+
         for img_i, (img_derivs_batch, pix, ie, P, mux, muy, mw, mh, counts, cdi, roi) in enumerate(imgs):
+            #img_derivs_batch.append(img_derivs)
+            #if (len(img_derivs) > max_len_img_deriv) max_len_img_derivs = len(img_derivs)
+
+            # img_derivs is a complicated thing idk what to do with it yet.
+            pix_batch[img_i, :,:] = np.pad(pix, ((0, mh_max-pix.shape[0]), (0, mw_max-pix.shape[1])), mode='constant',constant_values=(np.float32(0.0),)) 
+            ie_batch[img_i, :,:] = np.pad(ie, ((0, mh_max-ie.shape[0]), (0, mw_max-ie.shape[1])), mode='constant',constant_values=(np.float32(0.0),)) 
+            P_batch[img_i, :,:] = np.pad(P, ((0,P_h-P.shape[0]), (0, P_w-P.shape[1])), mode='constant',constant_values=(np.complex64(0.0),))
+            muxy_batch[img_i,0] = mux 
+            muxy_batch[img_i,1] = muy 
+            mhw_batch[img_i,0] = mh 
+            mhw_batch[img_i,1] = mw 
+            counts_batch[img_i] = counts
+            cdi_batch[img_i] = cdi
+            roi_batch[img_i] = np.asarray(roi, dtype = np.int)
             assert(pix.shape == (mh,mw))
             # We're going to build a tall matrix A, whose number of
             # rows = number of pixels and cols = number of parameters
