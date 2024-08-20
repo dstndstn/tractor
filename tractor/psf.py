@@ -284,6 +284,39 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         self.fftcache[sz] = rtn
         return rtn
 
+    def getFourierTransformBatchGPU(self, px, py, radius):
+        '''
+        Returns the Fourier Transform of this PSF, with the
+        next-power-of-2 size up from *radius*.
+            
+        Returns: (FFT, (xc, yc), (imh,imw), (v,w))
+            
+        *FFT*: numpy array, the FFT
+        *xc*: float, pixel location of the PSF /center/ in the PSF subimage
+        *yc*:    ditto
+        *imh,imw*: ints, shape of the padded PSF image
+        *v,w*: v=np.fft.rfftfreq(imw), w=np.fft.fftfreq(imh)
+            
+        '''
+        if self.sampling != 1.:
+            return self._getOversampledFourierTransform(px, py, radius)
+    
+        sz = self.getFourierTransformSize(radius)
+        # print 'PixelizedPSF FFT size', sz
+        if sz in self.fftcache:
+            return self.fftcache[sz]
+        
+        pad, cx, cy = self._padInImage(sz, sz)
+        # cx,cy: coordinate of the PSF center in *pad*
+        P = np.fft.rfft2(pad)
+        P = P.astype(np.complex64)
+        pH, pW = pad.shape
+        v = np.fft.rfftfreq(pW)
+        w = np.fft.fftfreq(pH)
+        rtn = P, (cx, cy), (pH, pW), (v, w)
+        self.fftcache[sz] = rtn
+        return rtn
+
     # The following routines are used when sampling != 1.0
 
     def _sampleImage(self, img, dx, dy,
