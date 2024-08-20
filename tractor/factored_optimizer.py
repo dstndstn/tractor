@@ -525,8 +525,18 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                     plt.imshow(A[:,i].reshape((mh,mw)), interpolation='nearest', origin='lower')
                     plt.savefig('gpu-img%i-d%i.png' % (img_i, i))
 
+            # Compute the covariance matrix
+            Xicov = np.matmul(A.T, A)
+
+            # Pre-scale the columns of A
+            colscales = np.sqrt(np.diag(Xicov))
+            A /= colscales[np.newaxis, :]
+
             # Solve the least-squares problem!
             X,_,_,_ = np.linalg.lstsq(A, B, rcond=None)
+
+            # Undo pre-scaling
+            X /= colscales
 
             if self.ps is not None:
                 import pylab as plt
@@ -561,8 +571,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 plt.suptitle('GPU: image %i/%i' % (img_i+1, len(imgs)))
                 self.ps.savefig()
 
-            # Compute the covariance matrix
-            Xicov = np.matmul(A.T, A)
             del A,B,mod0
             del Gs
             Xic.append((X, Xicov))
