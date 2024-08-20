@@ -272,16 +272,24 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
             imgs.append((img_derivs, mmpix, mmie, P, mux, muy, mh, mw, counts, cdi, roi))
 
-        #print(len(imgs), 'images to process, with a total of', np.sum([len(x[0]) for x in imgs]), 'derivatives')
+        #nbands = 1 + max(img_bands)
+        nbands = len(bands)
 
-        Xic = self.computeUpdateDirections(imgs)
+        priorVals = tr.getLogPriorDerivatives()
+        if priorVals is not None:
+            # Adjust the priors to handle the single-band case that we consider...
+            bright = src.getBrightness()
+            pnames = bright.getThawedParams()
+            assert(len(pnames) > 0)
+            bright.freezeAllBut(pnames[0])
+            priorVals = tr.getLogPriorDerivatives()
+            print('Prior vals with one band:', priorVals)
+            bright.thawParams(*pnames)
 
-        #print('Tractor params')
-        #tr.printThawedParams()
-        nbands = 1 + max(img_bands)
+        Xic = self.computeUpdateDirections(imgs, priorVals)
+
         if nbands > 1:
             full_xic = []
-            #print('N bands:', nbands)
             fullN = tr.numberOfParams()
             for iband,(x,ic) in zip(img_bands, Xic):
                 assert(fullN == len(x) + nbands - 1)
@@ -345,7 +353,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         return Xic
 
-    def computeUpdateDirections(self, imgs):
+    def computeUpdateDirections(self, imgs, priorVals):
         '''
         This is the function you'll want to GPU-ify!
 
@@ -410,6 +418,12 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         '''
         use_roi = False
         Xic = []
+
+        Npriors = 0
+        if priorVals is not None:
+            rA, cA, vA, pb, mub = priorVals
+            Npriors = max(Npriors, max([1+max(r) for r in rA]))
+
         for img_i, (img_derivs, pix, ie, P, mux, muy, mw, mh, counts, cdi, roi) in enumerate(imgs):
             assert(pix.shape == (mh,mw))
             # We're going to build a tall matrix A, whose number of
@@ -424,9 +438,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 roi_slice = slice(ry0, ry0+rh), slice(rx0, rx0+rw)
                 pix = pix[roi_slice]
                 ie = ie[roi_slice]
-                A = np.zeros((rh*rw, Nd+2), np.float32)
+                Npix = rh*rw
             else:
-                A = np.zeros((mh*mw, Nd+2), np.float32)
+                Npix = mh*mw
+
+            A = np.zeros((Npix + Npriors, Nd+2), np.float32)
 
             Nw,Nv = P.shape
             mod0 = None
@@ -478,12 +494,12 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # divide by 2 because we did +- 1 pixel
             # negative because we shifted the *image*, which is opposite
             # from shifting the *model*
-            A[:, 0] = -((dx * cdi[0, 0] + dy * cdi[1, 0]) * counts / 2).ravel()
-            A[:, 1] = -((dx * cdi[0, 1] + dy * cdi[1, 1]) * counts / 2).ravel()
+            A[:Npix, 0] = -((dx * cdi[0, 0] + dy * cdi[1, 0]) * counts / 2).ravel()
+            A[:Npix, 1] = -((dx * cdi[0, 1] + dy * cdi[1, 1]) * counts / 2).ravel()
             del dx,dy
 
             # The derivative with respect to flux (brightness) = the unit-flux current model
-            A[:, 2] = mod0.ravel()
+            A[:Npix, 2] = mod0.ravel()
 
             stepsizes = [s for _,s,_,_ in img_derivs]
             # The first element is mod0, so the stepped parameters start at 1 here.
@@ -496,7 +512,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 # And the next param is the flux deriv
                 # (A[:,2] is filled)
                 # So the first time through this loop, i=1 and we fill column A[:,3]
-                A[:, i + 2] = counts / stepsizes[i] * (Gs[i,:,:] - mod0).ravel()
+                A[:Npix, i + 2] = counts / stepsizes[i] * (Gs[i,:,:] - mod0).ravel()
 
             # We want to minimize:
             #   || chi + (d(chi)/d(params)) * dparams ||^2
@@ -513,10 +529,19 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # Pixels go in the rows.
 
             # Scale by IE (inverse-error) weighting to get to units of chi
-            A *= ie.ravel()[:, np.newaxis]
+            A[:Npix,:] *= ie.ravel()[:, np.newaxis]
             # The current residuals = the observed image "pix" minus the current model (counts*mod0),
             # weighted by the inverse-errors.
-            B = ((pix - counts*mod0) * ie).ravel()
+            B = np.append(((pix - counts*mod0) * ie).ravel(),
+                          np.zeros(Npriors, np.float32))
+
+            # Append priors
+            if priorVals is not None:
+                rA, cA, vA, pb, mub = priorVals
+                for ri,ci,vi,bi in zip(rA, cA, vA, pb):
+                    for rij,vij,bij in zip(ri, vi, bi):
+                        A[Npix + rij, ci] = vij
+                        B[Npix + rij] += bij
 
             if False:
                 n,m = A.shape
