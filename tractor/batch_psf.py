@@ -71,30 +71,31 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
         '''
         # ensure float32 and align
         N = len(psfs)
-        iH = np.zeros(N) #individual height
-        iW = np.zeros(N) #individual width
+        iH = np.zeros(N, dtype=np.int32) #individual height
+        iW = np.zeros(N, dtype=np.int32) #individual width
 
         #Find max w, h
         for i, psf in enumerate(psfs):
             iH[i], iW[i] = psf.img.shape
         H = np.max(iH)
         W = np.max(iW)
-        img = np.zeros(N, H, W, dtype=np.float32)
+        img = np.zeros((N, H, W), dtype=np.float32)
 
         #Now loop over psfs and copy data into one 3-d zero-padded array
         for i, psf in enumerate(psfs):
             img[i,:iH[i],:iW[i]] = psf.img
         img = cp.asarray(img)
-        self.img = cp.require(img, requirements=['A'])
+        #self.img = cp.require(img, requirements=['A'])
+        self.img = img
         assert((H % 2) == 1)
         assert((W % 2) == 1)
         self.radius = cp.hypot(H / 2., W / 2.)
         self.N, self.H, self.W = N, H, W
         self.iH, self.iW = iH, iW #keep copies of original W and H
-        self.Lorder = psf[0].Lorder
+        self.Lorder = psfs[0].Lorder
         self.fftcache = {}
-        self.sampling = psf[0].sampling
-        if sampling != 1.:
+        self.sampling = psfs[0].sampling
+        if self.sampling != 1.:
             # The size of PSF image we will return.
             self.nativeW = int(np.ceil(self.W * self.sampling))
             self.nativeH = int(np.ceil(self.H * self.sampling))
@@ -186,7 +187,7 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
         import cupy as cp
         px = cp.asarray(px)
         py = cp.asarray(py)
-        radius= = cp.asarray(radius)
+        radius = cp.asarray(radius)
         if self.sampling != 1.:
             return self._getOversampledFourierTransformBatchGPU(px, py, radius)
     

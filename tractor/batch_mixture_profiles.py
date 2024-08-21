@@ -43,12 +43,15 @@ class BatchDerivs(object):
         step = list of amixes.step
     '''
 
-    def __init__(self, amixes, IM, IF, vshape, mogweights, fftweights, px, py):
-        self.N = len(amixes)
-        self.ni = IM.sum()
-        self.nf = IF.sum()
-        self.K = vshape[0]
-        self.D = vshape[1]
+    def __init__(self, amixes, IM, IF, K, D, mogweights, fftweights, px, py):
+        N = len(amixes)
+        ni = IM.sum()
+        nf = IF.sum()
+        self.N = N
+        self.ni = ni
+        self.nf = nf
+        self.K = K 
+        self.D = D
         self.mogs = None
         self.ffts = None
         self.names = []
@@ -58,7 +61,8 @@ class BatchDerivs(object):
             amp = np.zeros((N, ni))
             mean = np.zeros((N, ni, D))
             var = np.zeros((N, ni, D, D))
-            for i, name,mix,step in enumerate(amixes):
+            for i, amix in enumerate(amixes):
+                (name, mix, step) = amix
                 amp[i] = mix.amp[IM] * mogweights
                 mean[i] = mix.mean[IM, :] + np.array([px, py])[np.newaxis, :]
                 var[i] = mix.var[IM, :, :]
@@ -67,12 +71,13 @@ class BatchDerivs(object):
             amp = np.zeros((N, nf))
             mean = np.zeros((N, nf, D))
             var = np.zeros((N, nf, D, D))
-            for i, name,mix,step in enumerate(amixes):
+            for i, amix in enumerate(amixes):
+                (name, mix, step) = amix
                 amp[i] = mix.amp[IF] * fftweights
                 mean[i] = mix.mean[IF, :] + np.array([px, py])[np.newaxis, :]
                 var[i] = mix.var[IF, :, :]
             self.ffts = BatchMixtureOfGaussians(cp.asarray(amp), cp.asarray(mean), cp.asarray(var), quick=True)
-        for i, name,mix,step in enumerate(amixes):
+        for name,mix,step in amixes: 
             self.names.append(name)
             self.steps.append(step)
 
@@ -276,7 +281,7 @@ class BatchMixtureOfGaussians(object):
 ###  --------------- ####
 ###  Batch GPU version below ###
 
-    def getFourierTransformBatchGPU(v,w, zero_mean=False):
+    def getFourierTransformBatchGPU(self,v,w, zero_mean=False):
         #mean = (N, K, D)
         #amps = (N, K)
         #var = (N, K, D, D)
@@ -296,10 +301,11 @@ class BatchMixtureOfGaussians(object):
             F[z] = F[z] * cp.exp(-2. * cp.pi * 1j * (mu[:,:,0,cp.newaxis,cp.newaxis]*v[cp.newaxis,cp.newaxis,cp.newaxis,:] +
                                     mu[:,:,1,cp.newaxis,cp.newaxis]*w[cp.newaxis,cp.newaxis,:,cp.newaxis])[z])
 
-    Fsum = (amps[:,:,None,None]*F).sum(axis=1)
-    return Fsum
+        print ("F", F.shape)
+        Fsum = (self.amp[:,:,None,None]*F).sum(axis=1)
+        return Fsum
 
-    def getFourierTransformImagesBatchGPU(v,w, zero_mean=False):
+    def getFourierTransformImagesBatchGPU(self,v,w, zero_mean=False):
         #Ni = number of images
         #Nd = len of img_derivs == 10
         #mean = (Ni, Nd, K, D)
@@ -322,8 +328,8 @@ class BatchMixtureOfGaussians(object):
             F[z] = F[z] * cp.exp(-2. * cp.pi * 1j * (mu[:,:,:,0,cp.newaxis,cp.newaxis]*v[cp.newaxis,cp.newaxis,cp.newaxis,cp.newaxis,:] +
                                                      mu[:,:,:,1,cp.newaxis,cp.newaxis]*w[cp.newaxis,cp.newaxis,cp.newaxis,:,cp.newaxis])[z])
 
-    Fsum = (amps[:,:,:,None,None]*F).sum(axis=1)
-    return Fsum
+        Fsum = (self.amp[:,:,:,None,None]*F).sum(axis=1)
+        return Fsum
 
     def getFourierTransform2(self, Nv, Nw, use_mp_fourier=True, zero_mean=False):
         '''
