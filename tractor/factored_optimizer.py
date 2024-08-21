@@ -351,9 +351,16 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             else:
                 A = np.zeros((mh*mw, img_derivs_batch.N+2), np.float32)
 
-            w,v = P.shape
+            #w,v = P.shape
             mod0 = None
 
+        (Ni, Nv, Nw) = P.shape
+        assert(img_derivs_batch.ffts is not None)
+        assert(Ni == N_imgs)
+        Fsum = getFourierTransformImageBatchGPU(Ni, Nv, Nw, zero_mean=True)
+        G = cp.fft.irfft2(Fsum*P[:,cp.newaxis,:,:])
+         
+            '''
             assert(img_derivs_batch.mogs is None)
             assert(img_derivs_batch.ffts is not None)
             # "img_derivs_batch.ffts" is a BatchMixtureOfGaussians (see batch_mixture_profiles.py)
@@ -370,6 +377,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             if use_roi:
                 G = G[:,roi_slice]
 
+            '''
 
 #### THIS IS WHERE I HAVE GOTTEN TO AT THE MOMENT -- THE ABOVE CODE REPLACES THE FOLLOWING COMMENTED OUT CODE ###
             """
