@@ -95,15 +95,19 @@ class FactoredOptimizer(object):
     def getLinearUpdateDirection(self, tr, **kwargs):
         #print('getLinearUpdateDirection( kwargs=', kwargs, ')')
         img_opts = self.getSingleImageUpdateDirections(tr, **kwargs)
-        # ~ inverse-covariance-weighted sum of img_opts...
-        xicsum = 0
-        icsum = 0
-        for x,ic in img_opts:
-            print('x:', ', '.join(['%.5g' % xx for xx in x]))
-            xicsum = xicsum + np.dot(ic, x)
-            icsum = icsum + ic
-        C = np.linalg.inv(icsum)
-        x = np.dot(C, xicsum)
+        if len(img_opts) == 1:
+            x,ic = img_opts[0]
+        else:
+            # ~ inverse-covariance-weighted sum of img_opts...
+            xicsum = 0
+            icsum = 0
+            for x,ic in img_opts:
+                print('x:', ', '.join(['%.5g' % xx for xx in x]))
+                xicsum = xicsum + np.dot(ic, x)
+                print('ic:', ic)
+                icsum = icsum + ic
+            C = np.linalg.inv(icsum)
+            x = np.dot(C, xicsum)
 
         #print('icsum:')
         #print(icsum)
