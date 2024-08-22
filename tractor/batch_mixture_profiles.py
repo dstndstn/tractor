@@ -31,6 +31,159 @@ dev_amp = np.append(dev_amp, dev_core)
 dev_var = np.append(dev_var, 0.)
 ####################
 
+class ImageDerivs(object):
+    '''This supercedes the img_dervis list
+        N = number of blobs
+        nmogs = number of mogs
+        nfft = number of ffts
+        K, D = dimensions of mean, var
+        mogs = BatchMixtureOfGaussians
+        ffts = batchMixtureOfGaussians
+        names = list of amixes.name
+        step = list of amixes.step
+    '''
+
+    def __init__(self, amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi):
+        N = len(amixes)
+        nmogs = IM.sum()
+        nfft = IF.sum()
+        self.N = N
+        self.nmogs = nmogs
+        self.nfft = nfft
+        self.K = K
+        self.D = D
+        self.mogs = None
+        self.ffts = None
+        self.names = []
+        self.steps = []
+
+        self.mux = mux
+        self.muy = muy
+        self.mmpix = mmpix
+        self.mmie = mmie
+        self.mh = mh
+        self.mw = mw
+        self.counts = counts
+        self.cdi = cdi
+        self.roi = roi
+
+        if self.nmogs > 0:
+            amp = np.zeros((N, nmogs))
+            mean = np.zeros((N, nmogs, D))
+            var = np.zeros((N, nmogs, D, D))
+            for i, amix in enumerate(amixes):
+                (name, mix, step) = amix
+                amp[i] = mix.amp[IM] * mogweights
+                mean[i] = mix.mean[IM, :] + np.array([px, py])[np.newaxis, :]
+                var[i] = mix.var[IM, :, :]
+            #self.mogs = BatchMixtureOfGaussians(cp.asarray(amp), cp.asarray(mean), cp.asarray(var), quick=True)
+            self.mog_amp = amp
+            self.mog_mean = mean
+            self.mog_var = var
+        if self.nfft > 0:
+            amp = np.zeros((N, nfft))
+            mean = np.zeros((N, nfft, D))
+            var = np.zeros((N, nfft, D, D))
+            for i, amix in enumerate(amixes):
+                (name, mix, step) = amix
+                amp[i] = mix.amp[IF] * fftweights
+                mean[i] = mix.mean[IF, :] + np.array([px, py])[np.newaxis, :]
+                var[i] = mix.var[IF, :, :]
+            #self.ffts = BatchMixtureOfGaussians(cp.asarray(amp), cp.asarray(mean), cp.asarray(var), quick=True)
+            self.fft_amp = amp
+            self.fft_mean = mean
+            self.fft_var = var
+        for name,mix,step in amixes:
+            self.names.append(name)
+            self.steps.append(step)
+
+    def tostr(self):
+        print("****** ImageDerivs *****")
+        print(f'\t{self.N=}, {self.nmogs=}, {self.nfft=}, {self.K=}, {self.D=}')
+        if self.mogs is None:
+            print ("No Mogs")
+        else:
+            print ("Mogs ", self.mogs)
+        if self.ffts is None:
+            print ("No FFTs")
+        else:
+            print("FFTS", self.ffts)
+        print ("Names ", self.names)
+        print ("Steps ", self.steps)
+        print (f'\t{self.mux=}, {self.muy=}, {self.mh=}, {self.mw=}')
+        print (f'\t{self.counts=}, {self.cdi=}, {self.roi=}')
+
+
+class BatchImageParams(object):
+    '''Image Params for a set of images
+        img_derivs = list of ImageDerivs
+        P = 3d array (Nimages, nw, nv)
+        v, w = 1d vectors
+    '''
+
+    def __init__(self, P, v, w):
+        self.P = P
+        self.v = v
+        self.w = w
+
+        self.mogs = None
+        self.ffts = None
+
+        self.Nimages = 0 
+        self.nv = len(v)
+        self.nw = len(w)
+
+        self.maxK = 0
+        self.maxD = 0
+        self.maxNd = 0
+        self.maxNmogs = 0
+        self.maxNfft = 0
+
+        self.img_derivs = []
+        self.mux = None
+        self.muy = None
+
+    def add_image_deriv(self, imderiv):
+        self.img_derivs.append(imderiv)
+        self.Nimages += 1
+
+        self.maxK = max(self.maxK, imderiv.K)
+        self.maxD = max(self.maxD, imderiv.D)
+        self.maxNd = max(self.maxNd, imderiv.N)
+        self.maxNmogs = max(self.maxNmogs, imderiv.nmogs)
+        self.maxNfft = max(self.maxNfft, imderiv.nfft)
+
+    def collect_params(self):
+        self.mux = cp.asarray([imderiv.mux for imderiv in self.img_derivs])
+        self.muy = cp.asarray([imderiv.muy for imderiv in self.img_derivs])
+        if self.maxNmogs > 0:
+            amp = np.zeros((self.Nimages, self.maxNd, self.maxNmogs))
+            mean = np.zeros((self.Nimages, self.maxNd, self.maxNmogs, self.maxD))
+            var = np.zeros((self.Nimages, self.maxNd, self.maxNmogs, self.maxD, self.maxD))
+            for i, imderiv in enumerate(self.img_derivs):
+                if imderiv.nmogs > 0:
+                    amp[i, :imderiv.N, :imderiv.nmogs] = imderiv.mog_amp
+                    mean[i, :imderiv.N, :imderiv.nmogs, :imderiv.D] = imderiv.mog_mean
+                    var[i, :imderiv.N, :imderiv.nmogs, :imderiv.D, :imderiv.D] = imderiv.mog_var
+            self.mogs = BatchMixtureOfGaussians(cp.asarray(amp), cp.asarray(mean), cp.asarray(var), quick=True)
+        if self.maxNfft > 0:
+            amp = np.zeros((self.Nimages, self.maxNd, self.maxNfft))
+            mean = np.zeros((self.Nimages, self.maxNd, self.maxNfft, self.maxD))
+            var = np.zeros((self.Nimages, self.maxNd, self.maxNfft, self.maxD, self.maxD))
+            for i, imderiv in enumerate(self.img_derivs):
+                if imderiv.nfft > 0:
+                    amp[i, :imderiv.N, :imderiv.nfft] = imderiv.fft_amp
+                    mean[i, :imderiv.N, :imderiv.nfft, :imderiv.D] = imderiv.fft_mean
+                    var[i, :imderiv.N, :imderiv.nfft, :imderiv.D, :imderiv.D] = imderiv.fft_var
+            self.ffts = BatchMixtureOfGaussians(cp.asarray(amp), cp.asarray(mean), cp.asarray(var), quick=True)
+        print ("Collected Params")
+        print (f'\t{self.maxNmogs=}, {self.maxNfft=}, {self.mux=}, {self.muy=}')
+
+    def get_imderiv(self, i):
+        assert (i < self.N)
+        return self.img_derivs[i]
+
+
 class BatchDerivs(object):
     '''This supercedes the img_dervis list
         N = number of blobs
@@ -43,7 +196,7 @@ class BatchDerivs(object):
         step = list of amixes.step
     '''
 
-    def __init__(self, amixes, IM, IF, K, D, mogweights, fftweights, px, py):
+    def __init__(self, amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy):
         N = len(amixes)
         ni = IM.sum()
         nf = IF.sum()
@@ -56,6 +209,9 @@ class BatchDerivs(object):
         self.ffts = None
         self.names = []
         self.steps = []
+
+        self.mux = mux
+        self.muy = muy
 
         if self.ni > 0:
             amp = np.zeros((N, ni))
@@ -81,6 +237,83 @@ class BatchDerivs(object):
             self.names.append(name)
             self.steps.append(step)
 
+    def tostr(self):
+        print("****** Batch Derivs *****")
+        print(f'\t{self.N=}, {self.ni=}, {self.nf=}, {self.K=}, {self.D=}')
+        if self.mogs is None:
+            print ("No Mogs")
+        else:
+            print ("Mogs ", self.mogs)
+        if self.ffts is None:
+            print ("No FFTs")
+        else:
+            print("FFTS", self.ffts)
+        print ("Names ", self.names)
+        print ("Steps ", self.steps)
+
+class ImageBatchDerivs(object):
+    '''This supercedes the img_dervis list
+        N = number of blobs
+        ni = number of mogs
+        nf = number of ffts
+        K, D = dimensions of mean, var
+        mogs = BatchMixtureOfGaussians
+        ffts = batchMixtureOfGaussians
+        names = list of amixes.name
+        step = list of amixes.step
+    '''
+
+    def __init__(self, batched_amixes,batched_IM, batched_IF, batched_K, batched_D, batched_mogweights, batched_fftweights, pxy):
+        #Ni = number of images
+        #Nd = len of img_derivs == 10
+        #mean = (Ni, Nd, K, D)
+        #amps = (Ni, Nd, K)
+        #var = (Ni, Nd, K, D, D)
+        self.Ni = len(batched_amixes)
+        self.Nd = len(batched_amixes[0])
+        #self.N = len(amixes)
+        self.batched_nmogs = [IM.sum for IM in batched_IM]
+        #self.ni = IM.sum()
+        self.batched_nffts = [IF.sum for IF in batched_IF]
+        #self.nf = IF.sum() 
+        self.batched_K = batched_K 
+        #self.K = vshape[0]
+        self.batched_D = batched_D
+        #self.D = vshape[1]
+        self.mogs = None
+        self.ffts = None
+        self.batched_names = []
+        self.batched_steps = []
+
+        max_nmogs = max(batched_nmogs)
+        max_nffts = max(batched_nffts)
+        max_K = max(batched_K)
+        max_D = max(batched_D)
+        amp = np.zeros((self.Ni, self.Nd, max_k))
+        mean = np.zeros((self.Ni, self.Nd, max_K, max_D))
+        var = np.zeros((self.Ni, self.Nd, max_K, max_D, max_D))
+        for iimage, amixes in enumerate(batched_amixes):
+            if self.batched_nmogs[iimage] > 0:
+                for i,name,mix,step in enumerate(amixes):
+                    amp[iimage,i,:] = mix.amp[IM] * batched_mogweights[iimage]
+                    mean[iiamge,i,:,:] = mix.mean[IM, :] + np.array(pxy[iimage])[np.newaxis, :]
+                    var[iimages,i,:,:,:] = mix.var[IM, :, :]
+            #self.mogs = ImageBatchMixtureOfGaussians(cp.asarray(amp), cp.asarray(mean), cp.asarray(var), quick=True)
+            if self.batched_nf[iimage] > 0:
+                for i, name,mix,step in enumerate(amixes):
+                    amp[iimage,i,:] = mix.amp[IF] * batched_fftweights[iimage]
+                    mean[iimage,i,:,:] = mix.mean[IF, :] + np.array(pxy[iimage])[np.newaxis, :]
+                var[image,i] = mix.var[IF, :, :]
+        self.ffts = BatchMixtureOfGaussians(cp.asarray(amp), cp.asarray(mean), cp.asarray(var), quick=True)
+        for iimage, amixes in enumerate(batched_amixes):
+            for i, name,mix,step in enumerate(amixes):
+                self.names = []
+                self.steps = []
+                self.names.append(name)
+                self.steps.append(step)
+            self.batched_names[self.names]
+            self.batched_steps[self.steps]
+
 
 class BatchMixtureOfGaussians(object):
 
@@ -90,22 +323,34 @@ class BatchMixtureOfGaussians(object):
         amp: shape (N,K,)
         mean: shape (N,K,D)
         var: shape (N,K,D,D)
+
+        Ni = number of images
+        Nd = len of img_derivs == 10
+        mean = (Ni, Nd, K, D)
+        amps = (Ni, Nd, K)
+        var = (Ni, Nd, K, D, D)
         '''
+        self.ndims = len(var.shape)
+        if self.ndims == 4:
+            (self.Nd, self.K, self.D) = mean.shape
+        else:
+            (self.Ni, self.Nd, self.K, self.D) = mean.shape
         if quick:
             self.amp = amp
             self.mean = mean
             self.var = var
-            (self.N, self.K, self.D) = self.mean.shape
         else:
             self.amp = np.atleast_1d(amp).astype(float)
             self.mean = np.atleast_2d(np.array(mean)).astype(float)
-            (self.N, self.K, self.D) = self.mean.shape
             self.set_var(var)
             self.symmetrize()
 
     def __str__(self):
         result = "BatchMixtureOfGaussians instance"
-        result += " with %d blobs %d components in %d dimensions:\n" % (self.N, self.K, self.D)
+        if self.ndims == 4:
+            result += " with %d derivs %d components in %d dimensions:\n" % (self.Nd, self.K, self.D)
+        else:
+            result += " with %d images %d derivs %d components in %d dimensions:\n" % (self.Ni, self.Nd, self.K, self.D)
         result += " amp  = %s\n" % self.amp.__str__()
         result += " mean = %s\n" % self.mean.__str__()
         result += " var  = %s\n" % self.var.__str__()
@@ -115,171 +360,34 @@ class BatchMixtureOfGaussians(object):
         self.var = cp.asarray(var)
 
     def symmetrize(self):
+        if self.ndims == 4:
+            self.symmetrize4()
+        else:
+            self.symmetrize5()
+
+    def symmetrize5(self):
+        for i in range(self.D):
+            for j in range(i):
+                tmpij = 0.5 * (self.var[:, :, :, i, j] + self.var[:, :, :, j, i])
+                self.var[:, :, :, i, j] = tmpij
+                self.var[:, :, :, j, i] = tmpij
+
+    def symmetrize4(self):
         for i in range(self.D):
             for j in range(i):
                 tmpij = 0.5 * (self.var[:, :, i, j] + self.var[:, :, j, i])
                 self.var[:, :, i, j] = tmpij
                 self.var[:, :, j, i] = tmpij
 
-    # very harsh testing, and expensive
-    def test(self):
-        assert(self.amp.shape == (self.N, self.K, ))
-        assert(self.mean.shape == (self.N, self.K, self.D))
-        assert(self.var.shape == (self.N, self.K, self.D, self.D))
-        for i in range(self.N):
-            for k in range(self.K):
-                thisvar = self.var[i,k]
-                assert(np.sum(thisvar.T - thisvar) == 0.)
-                assert(np.linalg.det(thisvar) >= 0.)
-
-    def copy(self):
-        return BatchMixtureOfGaussians(self.amp, self.mean, self.var, quick=True)
-
-    def normalize(self):
-        self.amp /= cp.sum(self.amp, axis=(1)).reshape(self.N,1)
-
-### Below methods are copied from mixture_profiles but not updated to be vectorized yet ####
-
-    def extend(self, other):
-        assert(self.D == other.D)
-        self.K = self.K + other.K
-        self.amp = np.append(self.amp,  other.amp)
-        self.mean = np.append(self.mean, other.mean, axis=0)
-        self.var = np.append(self.var,  other.var, axis=0)
-        assert(self.amp.shape == (self.K,))
-        assert(self.mean.shape == (self.K, self.D))
-        assert(self.var.shape == (self.K, self.D, self.D))
-
-    def __add__(self, other):
-        assert(self.D == other.D)
-        D = self.D
-        K = self.K + other.K
-        amp = np.append(self.amp,  other.amp)
-        mean = np.append(self.mean, other.mean, axis=0)
-        var = np.append(self.var,  other.var, axis=0)
-        assert(amp.shape == (K,))
-        assert(mean.shape == (K, D))
-        assert(var.shape == (K, D, D))
-        s = MixtureOfGaussians(amp, mean, var, quick=True)
-        s.normalize()
-        return s
-
-    def apply_affine(self, shift, scale):
-        '''
-        NOTE, "scale" is transposed vs earlier versions of this code!
-
-        NOTE, does NOT make a copy of amplitude!!
-
-        shift: D-vector offset
-        scale: DxD-matrix transformation
-        '''
-        assert(shift.shape == (self.D,))
-        assert(scale.shape == (self.D, self.D))
-        newmean = self.mean + shift
-        newvar = np.zeros_like(self.var)
-        for k in range(self.K):
-            newvar[k, :, :] = np.linalg.multi_dot((scale, self.var[k,:,:], scale.T))
-        return MixtureOfGaussians(self.amp, newmean, newvar, quick=True)
-
-    def apply_shear(self, scale):
-        '''
-        NOTE, does NOT make a copy of amplitude and mean!!
-
-        shift: D-vector offset
-        scale: DxD-matrix transformation
-        '''
-        assert(scale.shape == (self.D, self.D))
-        newvar = np.zeros_like(self.var)
-        # for k in range(self.K):
-        #     newvar[k, :, :] = np.linalg.multi_dot((scale, self.var[k,:,:], scale.T))
-
-        a = scale[0,0]
-        b = scale[0,1]
-        c = scale[1,0]
-        d = scale[1,1]
-        for k in range(self.K):
-            e = self.var[k,0,0]
-            f = self.var[k,0,1]
-            g = self.var[k,1,0]
-            h = self.var[k,1,1]
-            # hi I am writing out 2x2 matrix multiplication ftw?
-            t1 = a*e+b*f
-            t2 = c*e+d*f
-            t3 = a*g+b*h
-            t4 = c*g+d*h
-            newvar[k, 0, 0] = a*t1 + b*t3
-            newvar[k, 0, 1] = a*t2 + b*t4
-            newvar[k, 1, 0] = c*t1 + d*t3
-            newvar[k, 1, 1] = c*t2 + d*t4
-
-        return MixtureOfGaussians(self.amp, self.mean, newvar, quick=True)
-
-    # dstn: should this be called "correlate"?
-    def convolve(self, other):
-        assert(self.D == other.D)
-        newK = self.K * other.K
-        D = self.D
-        newamp = np.zeros((newK))
-        newmean = np.zeros((newK, D))
-        newvar = np.zeros((newK, D, D))
-        newk = 0
-        for k in range(other.K):
-            nextnewk = newk + self.K
-            newamp[newk:nextnewk] = self.amp * other.amp[k]
-            newmean[newk:nextnewk, :] = self.mean + other.mean[k]
-            newvar[newk:nextnewk, :, :] = self.var + other.var[k]
-            newk = nextnewk
-        return MixtureOfGaussians(newamp, newmean, newvar, quick=True)
-
-    def getFourierTransform(self, v, w, use_mp_fourier=True, zero_mean=False):
-        '''
-        v: FFT frequencies in the x direction
-        w: FFT frequencies in the y direction
-
-        eg,
-
-        H,W = 100,99
-        img = np.zeros((H,W))
-        F = np.fft.rfft2(img)
-        v = np.fft.rfftfreq(W)
-        w = np.fft.fftfreq(H)
-
-        If zero_mean is *True*, ignore the *mean* of this mixture of Gaussians.
-        
-        '''
-        if mp_fourier and use_mp_fourier and zero_mean:
-            f = np.zeros((len(w), len(v)), np.float64)
-            mp_fourier.gaussian_fourier_transform_zero_mean(
-                self.amp, self.var, v, w, f)
-            return f
-
-        Fsum = None
-
-        for k in range(self.K):
-            mu = self.mean[k, :]
-            amp = self.amp[k]
-            a = self.var[k, 0, 0]
-            b = self.var[k, 0, 1]
-            d = self.var[k, 1, 1]
-
-            F = np.exp(-2. * np.pi**2 *
-                       (a * v[np.newaxis, :]**2 +
-                        d * w[:, np.newaxis]**2 +
-                        2 * b * v[np.newaxis, :] * w[:, np.newaxis]))
-            if mu[0] != 0. or mu[1] != 0.:
-                F = F * np.exp(-2. * np.pi * 1j * (mu[0] * v[np.newaxis, :] +
-                                                   mu[1] * w[:, np.newaxis]))
-
-            if Fsum is None:
-                Fsum = amp * F
-            else:
-                Fsum += amp * F
-
-        return Fsum
-
-
 ###  --------------- ####
 ###  Batch GPU version below ###
+
+    def getFourierTransform(self, v, w, zero_mean=False):
+        if self.ndims == 4:
+            return self.getFourierTransformBatchGPU(v,w, zero_mean)
+        else:
+            return self.getFourierTransformImagesBatchGPU(v,w, zero_mean)
+
 
     def getFourierTransformBatchGPU(self,v,w, zero_mean=False):
         #mean = (N, K, D)
@@ -329,50 +437,4 @@ class BatchMixtureOfGaussians(object):
                                                      mu[:,:,:,1,cp.newaxis,cp.newaxis]*w[cp.newaxis,cp.newaxis,cp.newaxis,:,cp.newaxis])[z])
 
         Fsum = (self.amp[:,:,:,None,None]*F).sum(axis=1)
-        return Fsum
-
-    def getFourierTransform2(self, Nv, Nw, use_mp_fourier=True, zero_mean=False):
-        '''
-        Nv: number of FFT frequencies in the x direction
-        Nw: number of FFT frequencies in the y direction
-
-        For a 64x64 image patch, Nw = 64, Nv = 33.
-
-        We *assume* the frequency steps will be 1/Nw!
-
-        If you want to recompute the "v" and "w" vectors,
-        w = np.fft.fftfreq(Nw)
-        v = np.fft.rfftfreq(Nw) # <---NOTE, Nw *not* Nv... sorry
-        assert(len(v) == Nv)
-        assert(len(w) == Nw)
-
-        If zero_mean is *True*, ignore the *mean* of this mixture of Gaussians.
-        '''
-        if mp_fourier and use_mp_fourier and zero_mean:
-            f = np.zeros((Nw, Nv), np.float32)
-            mp_fourier.gaussian_fourier_transform_zero_mean_2(
-                self.amp.astype(np.float32), self.var.astype(np.float32), Nv, Nw, f)
-            return f
-
-        Fsum = np.zeros((Nw,Nv), np.float32)
-
-        w = np.fft.fftfreq(Nw)
-        v = np.fft.rfftfreq(Nw)
-        for k in range(self.K):
-            amp = self.amp[k]
-            a = self.var[k, 0, 0]
-            b = self.var[k, 0, 1]
-            d = self.var[k, 1, 1]
-
-            F = np.exp(-2. * np.pi**2 *
-                       (a * v[np.newaxis, :]**2 +
-                        d * w[:, np.newaxis]**2 +
-                        2 * b * v[np.newaxis, :] * w[:, np.newaxis]))
-            if not zero_mean:
-                mu = self.mean[k, :]
-                F = F * np.exp(-2. * np.pi * 1j * (mu[0] * v[np.newaxis, :] +
-                                                   mu[1] * w[:, np.newaxis]))
-
-            Fsum += amp * F
-
         return Fsum

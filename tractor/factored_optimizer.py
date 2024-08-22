@@ -9,7 +9,7 @@ import scipy
 import scipy.fft
 import time
 from tractor.batch_psf import BatchPixelizedPSF, lanczos_shift_image_batch_gpu
-from tractor.batch_mixture_profiles import BatchDerivs, BatchMixtureOfGaussians
+from tractor.batch_mixture_profiles import ImageDerivs, BatchImageParams, BatchMixtureOfGaussians
 import cupy as cp
 
 image_counter = 0
@@ -200,6 +200,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         assert(pH % 2 == 0)
         assert(P.shape == (nimages,len(w),len(v)))
 
+        img_params = BatchImageParams(P, v, w)
+
         #Not optimal but for now go back into loop
         for mm,(px,py),(x0,x1,y0,y1),psf,pix,ie,counts,cdi,tim in zip(
                 masks, pxy, extents, psfs, img_pix, img_ie, img_counts, img_cdi, tr.images):
@@ -272,7 +274,10 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
             K = amix.var.shape[0]
             D = amix.var.shape[1]
-            img_derivs_batch = BatchDerivs(amixes, IM, IF, K, D, mogweights, fftweights, px, py)
+            print ("LEN AMIXES ", len(amixes))
+            img_derivs = ImageDerivs(amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi)
+            img_params.add_image_deriv(img_derivs)
+            img_derivs.tostr()
             """
             for name,mix,step in amixes:
                 mogs = None
@@ -293,8 +298,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
             assert(sx == 0 and sy == 0)
 
-            imgs.append((img_derivs_batch, mmpix, mmie, P, mux, muy, mh, mw, counts, cdi, roi, v, w))
+            #imgs.append((img_derivs_batch, mmpix, mmie, P, mux, muy, mh, mw, counts, cdi, roi, v, w))
 
+        img_params.collect_params()
         #nbands = 1 + max(img_bands)
         nbands = len(bands)
 
@@ -309,7 +315,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             print('Prior vals with one band:', priorVals)
             bright.thawParams(*pnames)
 
-        Xic = self.computeUpdateDirections(imgs, priorVals)
+        Xic = self.computeUpdateDirections(img_params, priorVals)
 
         if nbands > 1:
             full_xic = []
@@ -376,7 +382,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         return Xic
 
-    def computeUpdateDirections(self, imgs, priorVals):
+    def computeUpdateDirections(self, img_params, priorVals):
         '''
         This is the function you'll want to GPU-ify!
 
@@ -447,8 +453,32 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             rA, cA, vA, pb, mub = priorVals
             Npriors = max(Npriors, max([1+max(r) for r in rA]))
 
-        for img_i, (img_derivs_batch, pix, ie, P, mux, muy, mw, mh, counts, cdi, roi, v, w) in enumerate(imgs):
+        assert(img_params.mogs is None) 
+        assert(img_params.ffts is not None)
+        assert(img_params.mux is not None)
+        assert(img_params.muy is not None)
+        v = img_params.v
+        w = img_params.w
+        #img_params.ffts is a BatchMixtureOfGaussians (see batch_mixture_profiles.py)
+        Fsum = img_params.ffts.getFourierTransform(v, w, zero_mean=True)
+        #Fsum shape (Nimages, maxNd, nw, nv)
+        # P is created in psf.getFourierTransform - this should be done in batch on GPU
+        # resulting in P already being a CuPy array
+        #P shape (Nimages, nw, nv)
+        P = img_params.P[:,cp.newaxis,:,:]
+        print ("FSUM", Fsum.shape, "P", P.shape)
+        G = cp.fft.irfft2(Fsum*P)
+        ## TODO G should be (nimages, maxNd, nw, nv) and mux and muy should be 1d vectors
+        print ("G", G.shape)
+        lanczos_shift_image_batch_gpu(G, img_params.mux, img_params.muy)
+        del Fsum
+        assert (G.shape == (img_params.Nimages, img_params.maxNd, img_params.nw, img_params.nv))
+
+
+        #for img_i, (img_derivs_batch, pix, ie, P, mux, muy, mw, mh, counts, cdi, roi, v, w) in enumerate(imgs):
         #for img_i, (img_derivs, pix, ie, P, mux, muy, mw, mh, counts, cdi, roi) in enumerate(imgs):
+        for img_i, imderiv in enumerate(img_params.img_derivs):
+            pix, ie, mw, mh, counts, cdi, roi = imderiv.mmpix, imderiv.mmie, imderiv.mw, imderiv.mh, imderiv.counts, imderiv.cdi, imderiv.roi 
             assert(pix.shape == (mh,mw))
             # We're going to build a tall matrix A, whose number of
             # rows = number of pixels and cols = number of parameters
@@ -457,7 +487,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
             # number of derivatives
             #Nd = len(img_derivs)
-            Nd = img_derivs_batch.N
+            #Nd = img_derivs_batch.N
+            Nd = imderiv.N
             if use_roi:
                 (rx0,ry0,rw,rh) = roi
                 roi_slice = slice(ry0, ry0+rh), slice(rx0, rx0+rw)
@@ -469,36 +500,30 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
             A = np.zeros((Npix + Npriors, Nd+2), np.float32)
 
-            Nim,Nw,Nv = P.shape
             mod0 = None
-            #mix0 = img_derivs[0][3]
-            #img_derivs[0][3] = fft for first img_deriv
-            mix0 = img_derivs_batch.ffts
-            # number of components in the Gaussian mixture
-            #Nc is never used???
-            Nc = len(mix0.amp)
 
-            assert(img_derivs_batch.mogs is None)
-            assert(img_derivs_batch.ffts is not None)
-            # "img_derivs_batch.ffts" is a BatchMixtureOfGaussians (see batch_mixture_profiles.py)
-            Fsum = img_derivs_batch.ffts.getFourierTransformBatchGPU(v, w, zero_mean=True)
-            print ("FSUM", Fsum.shape, "P", P.shape)
-            # Copy P to GPU
-            # TODO P is created in psf.getFourierTransform - this should be done in batch on GPU
-            # resulting in P already being a CuPy array
-            P = cp.asarray(P)
-            G = cp.fft.irfft2(Fsum*P[img_i,:,:])
-            # lanczos_shift_image_batch_gpu has a Python implementation in psf.py
-            print ("G", G.shape, mux, muy)
-            ## TODO G should be (nimages, nx, ny) and mux and muy should be 1d vectors
-            lanczos_shift_image_batch_gpu(G, mux, muy)
-            del Fsum
-            assert (G.shape == (img_derivs_batch.N,mh,mw))
+            #assert(img_derivs_batch.mogs is None)
+            #assert(img_derivs_batch.ffts is not None)
+            ## "img_derivs_batch.ffts" is a BatchMixtureOfGaussians (see batch_mixture_profiles.py)
+            #Fsum = img_derivs_batch.ffts.getFourierTransformBatchGPU(v, w, zero_mean=True)
+            #print ("FSUM", Fsum.shape, "P", P.shape)
+            ## Copy P to GPU
+            ## TODO P is created in psf.getFourierTransform - this should be done in batch on GPU
+            ## resulting in P already being a CuPy array
+            #P = cp.asarray(P)
+            #G = cp.fft.irfft2(Fsum*P[img_i,:,:])
+            ## lanczos_shift_image_batch_gpu has a Python implementation in psf.py
+            #print ("G", G.shape, mux, muy)
+            ### TODO G should be (nimages, nx, ny) and mux and muy should be 1d vectors
+            #lanczos_shift_image_batch_gpu(G, mux, muy)
+            #del Fsum
+            Gi = G[img_i]
+            assert (Gi.shape == (Nd,mh,mw))
             if use_roi:
-                G = G[:,roi_slice]
+                Gi = Gi[:,roi_slice]
 
             # The first element in img_derivs is the current galaxy model parameters.
-            mod0 = Gs[0,:,:]
+            mod0 = Gi[0,:,:]
 
             # Shift this initial model image to get X,Y pixel derivatives
             dx = np.zeros_like(mod0)
@@ -524,13 +549,13 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             for i in range(1, Nd):
                 # For other parameters, compute the numerical derivative.
                 # mod0 is the unit-brightness model at the current position
-                # Gs[i,*] is the unit-brightness model after stepping the parameter
+                # G[i,*] is the unit-brightness model after stepping the parameter
                 # The i+2 here is because the first two params are the spatial derivs
                 # (A[:,0] and A[:,1] are filled above)
                 # And the next param is the flux deriv
                 # (A[:,2] is filled)
                 # So the first time through this loop, i=1 and we fill column A[:,3]
-                A[:Npix, i + 2] = counts / stepsizes[i] * (Gs[i,:,:] - mod0).ravel()
+                A[:Npix, i + 2] = counts / stepsizes[i] * (Gi[i,:,:] - mod0).ravel()
 
             # We want to minimize:
             #   || chi + (d(chi)/d(params)) * dparams ||^2
@@ -611,7 +636,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                         plt.title('dflux')
                     else:
                         plt.title(img_derivs[i-2][0])
-                plt.suptitle('GPU: image %i/%i' % (img_i+1, len(imgs)))
+                plt.suptitle('GPU: image %i/%i' % (img_i+1, img_params.N))
                 self.ps.savefig()
 
             del A,B,mod0
