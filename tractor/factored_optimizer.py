@@ -513,11 +513,13 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
             # Shift this initial model image to get X,Y pixel derivatives
             dx = np.zeros_like(mod0)
-            # X derivative -- difference between shifted-left and shifted-right arrays
-            dx[:,1:-1] = mod0[:, 2:] - mod0[:, :-2]
-            # Y derivative -- difference between shifted-down and shifted-up arrays
             dy = np.zeros_like(mod0)
-            dy[1:-1, :] = mod0[2:, :] - mod0[:-2, :]
+            # X derivative -- difference between shifted-left and shifted-right arrays
+            # Y derivative -- difference between shifted-down and shifted-up arrays
+            # Omit a one-pixel boundary on all directions in both arrays!
+            dx[1:-1,1:-1] = mod0[1:-1, 2:] - mod0[1:-1, :-2]
+            dy[1:-1,1:-1] = mod0[2:, 1:-1] - mod0[:-2, 1:-1]
+
             # Push through local WCS transformation to get to RA,Dec param derivatives
             assert(cdi.shape == (2,2))
             # divide by 2 because we did +- 1 pixel
