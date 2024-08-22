@@ -169,10 +169,10 @@ class Galaxy(MultiParams, SingleProfileSource):
             else:
                 p0 = patch0.patch
                 dx = np.zeros_like(p0)
-                dx[:,1:-1] = (p0[:, :-2] - p0[:, 2:]) / 2.
+                dx[1:-1,1:-1] = (p0[1:-1, :-2] - p0[1:-1, 2:]) / 2.
                 patchdx = Patch(patch0.x0, patch0.y0, dx)
                 dy = np.zeros_like(p0)
-                dy[1:-1,:] = (p0[:-2, :] - p0[2:, :]) / 2.
+                dy[1:-1, 1:-1] = (p0[:-2, 1:-1] - p0[2:, 1:-1]) / 2.
                 patchdy = Patch(patch0.x0, patch0.y0, dy)
                 del dx, dy
                 derivs.extend(wcs.pixelDerivsToPositionDerivs(pos0, self, counts,
