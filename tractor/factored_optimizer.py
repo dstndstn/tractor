@@ -868,52 +868,52 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             print('orig A', orig_A.shape)
             print('A     ', A.shape)
 
-            for i,(tag,data) in enumerate(DataRecorder.get().all()):
-                print('saving', tag)
-                import fitsio
-                fitsio.write('data-%02i-%s.fits' % (i,tag), data, overwrite=True)
-
-            data = DataRecorder.get().all()
-
-            _,before_f = data[0]
-            _,before_g = data[4]
-
-            _,after_f = data[1]
-            _,after_g = data[5]
-
-            for name,(ot,oldval),(nt,newval) in [
-                    ('Before L', data[0], data[4]),
-                    ('After  L', data[1], data[5])]:
-                d = newval - oldval
-                print(name, ': max diff', np.max(np.abs(d)), 'cosine dist',
-                      3600. * np.rad2deg(np.arccos(np.sum(oldval * newval) / (np.sqrt(np.sum(oldval**2)) * np.sqrt(np.sum(newval**2))))), 'arcsec')
-                if self.ps is not None:
-                    plt.clf()
-                    mx = np.max(oldval)
-                    dmx = np.max(np.abs(d))
-                    ima = dict(interpolation='nearest', origin='lower', vmin=0, vmax=mx)
-                    imd = dict(interpolation='nearest', origin='lower',
-                               vmin=-dmx, vmax=dmx)
-                    plt.subplot(1,3,1)
-                    plt.imshow(oldval, **ima)
-                    if cb:
-                        plt.colorbar()
-                    plt.title(ot)
-                    plt.subplot(1,3,2)
-                    plt.imshow(newval, **ima)
-                    if cb:
-                        plt.colorbar()
-                    plt.title(nt)
-                    plt.subplot(1,3,3)
-                    plt.imshow(d, **imd)
-                    if cb:
-                        plt.colorbar()
-                    plt.title('diff')
-                    plt.suptitle(name)
-                    self.ps.savefig()
-
-            import sys
-            sys.exit(0)
+            # for i,(tag,data) in enumerate(DataRecorder.get().all()):
+            #     print('saving', tag)
+            #     import fitsio
+            #     fitsio.write('data-%02i-%s.fits' % (i,tag), data, overwrite=True)
+            # 
+            # data = DataRecorder.get().all()
+            # 
+            # _,before_f = data[0]
+            # _,before_g = data[4]
+            # 
+            # _,after_f = data[1]
+            # _,after_g = data[5]
+            # 
+            # for name,(ot,oldval),(nt,newval) in [
+            #         ('Before L', data[0], data[4]),
+            #         ('After  L', data[1], data[5])]:
+            #     d = newval - oldval
+            #     print(name, ': max diff', np.max(np.abs(d)), 'cosine dist',
+            #           3600. * np.rad2deg(np.arccos(np.sum(oldval * newval) / (np.sqrt(np.sum(oldval**2)) * np.sqrt(np.sum(newval**2))))), 'arcsec')
+            #     if self.ps is not None:
+            #         plt.clf()
+            #         mx = np.max(oldval)
+            #         dmx = np.max(np.abs(d))
+            #         ima = dict(interpolation='nearest', origin='lower', vmin=0, vmax=mx)
+            #         imd = dict(interpolation='nearest', origin='lower',
+            #                    vmin=-dmx, vmax=dmx)
+            #         plt.subplot(1,3,1)
+            #         plt.imshow(oldval, **ima)
+            #         if cb:
+            #             plt.colorbar()
+            #         plt.title(ot)
+            #         plt.subplot(1,3,2)
+            #         plt.imshow(newval, **ima)
+            #         if cb:
+            #             plt.colorbar()
+            #         plt.title(nt)
+            #         plt.subplot(1,3,3)
+            #         plt.imshow(d, **imd)
+            #         if cb:
+            #             plt.colorbar()
+            #         plt.title('diff')
+            #         plt.suptitle(name)
+            #         self.ps.savefig()
+            # 
+            # import sys
+            # sys.exit(0)
 
             del A,B,mod0
             Xic.append((X, Xicov))
