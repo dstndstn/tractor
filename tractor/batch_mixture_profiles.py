@@ -121,8 +121,9 @@ class BatchImageParams(object):
         v, w = 1d vectors
     '''
 
-    def __init__(self, P, v, w):
+    def __init__(self, Nimages, P, v, w):
         self._initialized = False
+        self.Nimages = Nimages
         self.P = P
         self.v = v
         self.w = w
@@ -147,6 +148,9 @@ class BatchImageParams(object):
         self.mh = 0
         self.mw = 0
 
+        self.px = []
+        self.py = []
+
     def add_image_deriv(self, imderiv):
         self.img_derivs.append(imderiv)
         self.Nimages += 1
@@ -163,6 +167,13 @@ class BatchImageParams(object):
     def collect_params(self):
         assert(self._initialized is False)
         self._initialized = True
+        self.pix = np.zeros((self.Nimages, self.mh, self.mw), dtype = np.float32 )
+        self.ie = np.zeros_like(pix_batch)
+        self.counts = np.zeros(self.Nimages)
+        self.cdi = np.zeros((self.Nimages, 2,2), dtype=np.float32)
+        self.roi = np.zeros((self.Nimages, 4), dtype = np.int)
+
+
         self.mux = cp.asarray([[imderiv.mux]*self.maxNd for imderiv in self.img_derivs]).ravel()
         self.muy = cp.asarray([[imderiv.muy]*self.maxNd for imderiv in self.img_derivs]).ravel()
         if self.maxNmogs > 0:
@@ -170,6 +181,12 @@ class BatchImageParams(object):
             mean = np.zeros((self.Nimages, self.maxNd, self.maxNmogs, self.maxD))
             var = np.zeros((self.Nimages, self.maxNd, self.maxNmogs, self.maxD, self.maxD))
             for i, imderiv in enumerate(self.img_derivs):
+                self.pix[i, :,:] = np.pad(imderiv.mmpix, ((0, self.mh - imderiv.mmpix.shape[0]), (0, self.mw - imderiv.mmpix.shape[1])), mode='constant',constant_values=(np.float32(0.0),))
+                self.ie[i, :,:] = np.pad(imderiv.mmie, ((0, self.mh - imderiv.mmie.shape[0]), (0, self.mw - imderiv.mmie.shape[1])), mode='constant',constant_values=(np.float32(0.0),))
+                self.counts[i] = imderiv.counts
+                self.cdi[i] = imderiv.cdi
+                self.roi[i] = np.asarray(imderiv.roi, dtype = np.int)
+
                 if imderiv.nmogs > 0:
                     amp[i, :imderiv.N, :imderiv.nmogs] = imderiv.mog_amp
                     mean[i, :imderiv.N, :imderiv.nmogs, :imderiv.D] = imderiv.mog_mean

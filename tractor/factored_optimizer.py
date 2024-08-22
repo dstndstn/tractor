@@ -199,8 +199,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         assert(pW % 2 == 0)
         assert(pH % 2 == 0)
         assert(P.shape == (nimages,len(w),len(v)))
-
-        img_params = BatchImageParams(P, v, w)
+        
+        Nimages = len(img_counts)
+        #max_mh = 64
+        #max_mw = 64
+        img_params = BatchImageParams(Nimages, P, v, w)
 
         #Not optimal but for now go back into loop
         for mm,(px,py),(x0,x1,y0,y1),psf,pix,ie,counts,cdi,tim in zip(
@@ -477,7 +480,31 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         #for img_i, (img_derivs_batch, pix, ie, P, mux, muy, mw, mh, counts, cdi, roi, v, w) in enumerate(imgs):
         #for img_i, (img_derivs, pix, ie, P, mux, muy, mw, mh, counts, cdi, roi) in enumerate(imgs):
-        for img_i, imderiv in enumerate(img_params.img_derivs):
+          
+        Npix = img_params.mh*img_params.mw
+        Nd = img_params.maxNd
+        A = cp.zeros((Npix + Npriors, Nd+2), cp.float32)
+        # The first element in img_derivs is the current galaxy model parameters.
+        mod0 = G[:,0,:,:]
+        # Shift this initial model image to get X,Y pixel derivatives
+        dx = cp.zeros_like(mod0)
+        # X derivative -- difference between shifted-left and shifted-right arrays
+        dx[:,:,1:-1] = mod0[:,:, 2:] - mod0[:,:, :-2]
+        # Y derivative -- difference between shifted-down and shifted-up arrays
+        dy = cp.zeros_like(mod0)
+        dy[:,1:-1, :] = mod0[:,2:, :] - mod0[:,:-2, :]
+        # Push through local WCS transformation to get to RA,Dec param derivatives
+        assert(cdi.shape == (img_params.Nimages,2,2))
+        # divide by 2 because we did +- 1 pixel
+        # negative because we shifted the *image*, which is opposite
+        # from shifting the *model*
+        A[:,:Npix, 0] = cp.reshape(-((dx * cdi[:,0, 0] + dy * cdi[:,1, 0]) * img_params.counts / 2),(img_params.Nimages, -1)) 
+        A[:,:Npix, 1] = cp.reshape(-((dx * cdi[:,0, 1] + dy * cdi[:,1, 1]) * img_params.counts / 2), (img_params.Nimages, -1))
+        del dx,dy
+
+        
+
+         for img_i, imderiv in enumerate(img_params.img_derivs):
             pix, ie, mw, mh, counts, cdi, roi = imderiv.mmpix, imderiv.mmie, imderiv.mw, imderiv.mh, imderiv.counts, imderiv.cdi, imderiv.roi 
             assert(pix.shape == (mh,mw))
             # We're going to build a tall matrix A, whose number of
