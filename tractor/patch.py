@@ -55,6 +55,10 @@ class ModelMask(object):
     def extent(self):
         return (self.x0, self.x0 + self.w, self.y0, self.y0 + self.h)
 
+    @property
+    def slice(self):
+        return slice(self.y0, self.y0 + self.h), slice(self.x0, self.x0 + self.w)
+
 # Adds two patches, handling the case when one is None
 
 

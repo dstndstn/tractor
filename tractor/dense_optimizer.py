@@ -19,7 +19,8 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
                            chiImages=None,
                            variance=False,
                            shared_params=True,
-                           get_A_matrix=False):
+                           get_A_matrix=False,
+                           get_B_vector=False):
 
         if shared_params or scales_only or damp>0 or variance:
             raise RuntimeError('Not implemented')
@@ -70,6 +71,7 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
             for deriv, img in param:
                 if img in imgoffs:
                     continue
+                #print('Image shape', img.shape)
                 npix = img.numberOfPixels()
                 imgoffs[img] = (Npixels, npix)
                 Npixels += npix
@@ -153,7 +155,7 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
         #print('Colscales:', colscales)
         if Npriors > 0:
             rA, cA, vA, pb, mub = priorVals
-            #print('Priors: pb', pb, 'mub', mub)
+            #print('Dense optimizer: Priors: pb', pb, 'mub', mub)
             for ri,ci,vi,bi in zip(rA, cA, vA, pb):
                 if scale_columns:
                     colscales2[col] += np.dot(vi, vi)
@@ -235,7 +237,8 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
 
         if not get_A_matrix:
             del A
-        del B
+        if not get_B_vector:
+            del B
 
         if scale_columns:
             X /= colscales
@@ -255,7 +258,10 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
         if get_A_matrix:
             if scale_columns:
                 A *= colscales[np.newaxis,:]
-            return X,A
+            if get_B_vector:
+                return X,A,B
+            else:
+                return X,A
 
         return X
 

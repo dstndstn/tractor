@@ -30,7 +30,6 @@ class FactoredOptimizer(object):
         x,A = self.getUpdateDirection(tr, allderivs, get_A_matrix=True, **kwargs)
 
         if False:
-            print('Got A matrix:', A.shape)
             global image_counter
             n,m = A.shape
             for i in range(m):
@@ -87,9 +86,7 @@ class FactoredOptimizer(object):
             if mm is not None:
                 tr.modelMasks = [mm[i]]
             x,x_icov = self.getSingleImageUpdateDirection(tr, **kwargs)
-
             #print('FO: X', x, 'x_icov', x_icov)
-
             img_opts.append((x,x_icov))
         tr.images = imgs
         tr.modelMasks = mm
@@ -102,12 +99,17 @@ class FactoredOptimizer(object):
         xicsum = 0
         icsum = 0
         for x,ic in img_opts:
+            print('x:', ', '.join(['%.5g' % xx for xx in x]))
             xicsum = xicsum + np.dot(ic, x)
             icsum = icsum + ic
         C = np.linalg.inv(icsum)
         x = np.dot(C, xicsum)
-        # print('Total opt:')
-        # print(x)
+
+        #print('icsum:')
+        #print(icsum)
+        print('Total opt:')
+        print(x)
+
         return x
 
 
@@ -128,7 +130,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             self.ps = p
             return R
 
-        #print('Using GpuFriendly code')
+        print('Using GpuFriendly code')
         # Assume we're not fitting any of the image parameters.
         assert(tr.isParamFrozen('images'))
         # Assume single source
@@ -142,6 +144,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         psfs = [tim.getPsf() for tim in tr.images]
         # Assume hybrid PSF model
         assert(all([isinstance(psf, HybridPSF) for psf in psfs]))
+        print('Source:', src)
 
         # Assume model masks are set (ie, pixel ROIs of interest are defined)
         masks = [tr._getModelMaskFor(tim, src) for tim in tr.images]
@@ -275,6 +278,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #nbands = 1 + max(img_bands)
         nbands = len(bands)
 
+        #print(len(imgs), 'images to process, with a total of', np.sum([len(x[0]) for x in imgs]), 'derivatives')
         priorVals = tr.getLogPriorDerivatives()
         if priorVals is not None:
             # Adjust the priors to handle the single-band case that we consider...
@@ -286,7 +290,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             print('Prior vals with one band:', priorVals)
             bright.thawParams(*pnames)
 
-        Xic = self.computeUpdateDirections(imgs, priorVals)
+        #Xic = self.computeUpdateDirections(imgs, priorVals, tr)
+        Xic = self.computeUpdateDirections(imgs, priorVals, tr, src, **kwargs)
 
         if nbands > 1:
             full_xic = []
@@ -347,13 +352,19 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 full_xic.append((x2,ic2))
             Xic = full_xic
 
-        #
-        #print('Calling original version...')
-        #sXic = super().getSingleImageUpdateDirections(tr, **kwargs)
+        # print('Calling original version...')
+        # ps = self.ps
+        # self.ps = self.ps_orig
+        # sXic = super().getSingleImageUpdateDirections(tr, **kwargs)
+        # self.ps = ps
+
+        # for (orig_x,orig_cx),(gpu_x,gpu_cx) in zip(Xic, sXic):
+        #     print('Orig x:', orig_x)
+        #     print('GPU  x:', gpu_x)
 
         return Xic
 
-    def computeUpdateDirections(self, imgs, priorVals):
+    def computeUpdateDirections(self, imgs, priorVals, tr, src, **kwargs):
         '''
         This is the function you'll want to GPU-ify!
 
@@ -417,12 +428,14 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         '''
         use_roi = False
+        #use_roi = True
         Xic = []
 
         Npriors = 0
         if priorVals is not None:
             rA, cA, vA, pb, mub = priorVals
             Npriors = max(Npriors, max([1+max(r) for r in rA]))
+            print('Prior vals:', priorVals)
 
         for img_i, (img_derivs, pix, ie, P, mux, muy, mw, mh, counts, cdi, roi) in enumerate(imgs):
             assert(pix.shape == (mh,mw))
@@ -441,6 +454,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 Npix = rh*rw
             else:
                 Npix = mh*mw
+                # HACK -- temp
+                (rx0,ry0,rw,rh) = roi
+                roi_slice = slice(ry0, ry0+rh), slice(rx0, rx0+rw)
+                roi_Npix = rh*rw
+                roi_shape = rh,rw
 
             A = np.zeros((Npix + Npriors, Nd+2), np.float32)
 
@@ -460,6 +478,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # from mixture_profiles : getFourierTransform2() with zero_mean=True
             Fsums = np.zeros((Nd, Nw, Nv), np.float32)
             w = np.fft.fftfreq(Nw)
+            # Note, this "Nw" looks like it might be a bug (should be "Nv"?) but it's not,
+            # I promise.  "v" will end up having length "Nv".  eg, Nw=64, Nv=33.
             v = np.fft.rfftfreq(Nw)
             for i in range(Nd):
                 for k in range(Nc):
@@ -472,7 +492,12 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                          2 * b * v[np.newaxis, :] * w[:, np.newaxis]))
 
             Gs = scipy.fft.irfftn(Fsums * P[np.newaxis,:,:], axes=(1,2))
-            #print('Gs shape:', Gs.shape) --> 4,64,64
+            print('Gs shape:', Gs.shape) #--> 4,64,64
+
+            if use_roi:
+                Gs = Gs[:, roi_slice[0], roi_slice[1]]
+                print('Gs shape:', Gs.shape) #--> eg 2,35,33
+
             del Fsums
             for i in range(Nd):
                 # lanczos_shift_image has a Python implementation in psf.py, or
@@ -514,6 +539,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 # So the first time through this loop, i=1 and we fill column A[:,3]
                 A[:Npix, i + 2] = counts / stepsizes[i] * (Gs[i,:,:] - mod0).ravel()
 
+            del Gs
             # We want to minimize:
             #   || chi + (d(chi)/d(params)) * dparams ||^2
             # So  b = chi
@@ -560,31 +586,39 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # Solve the least-squares problem!
             X,_,_,_ = np.linalg.lstsq(A, B, rcond=None)
 
-            # Undo pre-scaling
-            X /= colscales
+            # (we undo pre-scaling on X, after this plotting...)
 
             if self.ps is not None:
+
+                def new_img(X):
+                    return X[:Npix].reshape(mh,mw)[roi_slice]
+            
                 import pylab as plt
                 plt.clf()
                 ima = dict(interpolation='nearest', origin='lower')
                 rr,cc = 3,4
                 plt.subplot(rr,cc,1)
-                plt.imshow(mod0, **ima)
+                plt.imshow(new_img(mod0), **ima)
                 plt.title('mod0')
-                sh = mod0.shape
+
+                plt.subplot(rr,cc,4)
+                plt.imshow(np.log10(np.maximum(1e-6, new_img(mod0))), **ima)
+                plt.title('log mod0')
+
+                #sh = new_img(mod0).shape
                 plt.subplot(rr,cc,2)
                 mx = max(np.abs(B))
                 imx = ima.copy()
                 imx.update(vmin=-mx, vmax=+mx)
-                plt.imshow(B.reshape(sh), **imx)
+                plt.imshow(new_img(B[:Npix]), **imx)
                 plt.title('B')
                 AX = np.dot(A, X)
                 plt.subplot(rr,cc,3)
-                plt.imshow(AX.reshape(sh), **imx)
+                plt.imshow(new_img(AX[:Npix]), **imx)
                 plt.title('A X')
                 for i in range(min(Nd+2, 8)):
                     plt.subplot(rr,cc,5+i)
-                    plt.imshow(A[:,i].reshape(sh), **ima)
+                    plt.imshow(new_img(A[:Npix,i]), **ima)
                     if i == 0:
                         plt.title('dx')
                     elif i == 1:
@@ -596,8 +630,141 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 plt.suptitle('GPU: image %i/%i' % (img_i+1, len(imgs)))
                 self.ps.savefig()
 
+            # Undo pre-scaling
+            X /= colscales
+
+            # Call orig version
+            print('Calling orig version...')# kwargs=', kwargs)
+            tims = tr.images
+            mms = tr.modelMasks
+            print('mm:', len(mms), 'img_i', img_i)
+            from tractor import Images
+            from legacypipe.oneblob import _get_subtim
+            timshape = tr.images[img_i].shape
+            mm = tr.modelMasks[img_i][src]
+            mmslice = mm.slice
+            orig_Npix = timshape[0]*timshape[1]
+
+            def orig_img(X):
+                return X[:orig_Npix].reshape(timshape)[mmslice]
+            
+            tr.images = Images(tr.images[img_i])
+            tr.modelMasks = [tr.modelMasks[i]]
+
+            # #print('model masks:', tr.modelmasks)
+            # mm = tr.modelmasks[img_i][src]
+            # (x0,x1,y0,y1) = mm.extent
+            # print('extent', x0,x1,y0,y1)
+            # x0,x1,y0,y1 = int(x0),int(x1),int(y0),int(y1)
+            # tr.images = images(_get_subtim(tr.images[img_i], x0,x1,y0,y1))
+            # tr.setmodelmasks(None)
+            allderivs = tr.getDerivs()
+            print('allderivs:', allderivs)
+            orig_x,orig_A,orig_B = self.getUpdateDirection(tr, allderivs, get_A_matrix=True, get_B_vector=True, **kwargs)
+            tr.images = tims
+            tr.modelMasks = mms
+
+            orig_cols = []
+            nr,nc = orig_A.shape
+            for c in range(nc):
+                if np.all(orig_A[:,c] == 0):
+                    continue
+                orig_cols.append(c)
+            orig_cols = np.array(orig_cols)
+
+            orig_A = orig_A[:, orig_cols]
+            orig_x = orig_x[orig_cols]
+            print('cut orig a to', len(orig_cols), 'of', nc, 'columns')
+
+            if self.ps is not None:
+                import pylab as plt
+                plt.clf()
+                ima = dict(interpolation='nearest', origin='lower')
+                rr,cc = 3,4
+                # plt.subplot(rr,cc,1)
+                # plt.imshow(mod0, **ima)
+                # plt.title('mod0')
+                #sh = mod0.shape
+                sh = timshape
+                mx = max(np.abs(B))
+                imx = ima.copy()
+                imx.update(vmin=-mx, vmax=+mx)
+                plt.subplot(rr,cc,2)
+                plt.imshow(orig_img(orig_B), **imx)
+                plt.title('B')
+                AX = np.dot(orig_A, orig_x)
+                plt.subplot(rr,cc,3)
+                plt.imshow(orig_img(AX), **imx)
+                plt.title('A X')
+                ond = orig_A.shape[1]
+                for i in range(ond):
+                    plt.subplot(rr,cc,5+i)
+                    plt.imshow(orig_img(orig_A[:,i]), **ima)
+
+                plt.suptitle('Orig version: image %i/%i' % (img_i+1, len(imgs)))
+                self.ps.savefig()
+
+            if self.ps is not None:
+                import pylab as plt
+                plt.clf()
+                ima = dict(interpolation='nearest', origin='lower')
+                rr,cc = 3,4
+                #plt.subplot(rr,cc,1)
+                #plt.imshow(mod0, **ima)
+                #plt.title('mod0')
+                #sh = mod0.shape
+                sh = roi_shape
+                mx = max(np.abs(B))
+                imx = ima.copy()
+                imx.update(vmin=-mx, vmax=+mx)
+                plt.subplot(rr,cc,2)
+                oldval = orig_img(orig_B)
+                newval = new_img(B)
+                d = newval - oldval
+                mx = np.max(np.abs(d))
+                print('B max diff:', mx, 'rel diff', np.mean(np.abs(d / np.maximum(1e-16, ((np.abs(oldval) + np.abs(newval))/2.)))))
+                plt.imshow(d.reshape(sh), vmin=-mx, vmax=mx, **ima)
+                plt.title('B')
+                AX = new_img(np.dot(A, X * colscales))
+                oAX = orig_img(np.dot(orig_A, orig_x))
+                plt.subplot(rr,cc,3)
+                d = AX - oAX
+                mx = np.max(np.abs(d))
+                print('AX diff:', mx, 'rel diff', np.mean(np.abs(d / np.maximum(1e-16, ((np.abs(AX) + np.abs(oAX))/2.)))))
+                plt.imshow(d.reshape(sh), vmin=-mx, vmax=mx, **ima)
+                plt.title('A X')
+                oNd = orig_A.shape[1]
+                for i in range(oNd):
+                    plt.subplot(rr,cc,5+i)
+                    #print('     A rms:', np.sqrt(np.mean(A[:Npix,i]**2)))
+                    #print('orig_A rms:', np.sqrt(np.mean(orig_A[:Npix,i]**2)))
+                    #print('colscales:', colscales)
+                    oA = orig_img(orig_A[:,i])
+                    nA = new_img(A[:,i] * colscales[i])
+                    d = nA - oA
+                    mx = np.max(np.abs(d))
+                    print('A[:,%i] diff:' % i, mx, 'rel diff', np.mean(np.abs(d / np.maximum(1e-16, ((np.abs(nA) + np.abs(oA))/2)))))
+                    plt.imshow(d.reshape(sh), vmin=-mx, vmax=mx, **ima)
+
+                plt.suptitle('Difference: image %i/%i' % (img_i+1, len(imgs)))
+                self.ps.savefig()
+
+                
+            #j = np.flatnonzero(
+            j = np.all(orig_A == 0, axis=1)
+            from collections import Counter
+            print('all zero rows in orig A:', Counter(j))
+
+            j = np.all(A == 0, axis=1)
+            print('all zero rows in A:', Counter(j))
+            
+            print('X     :', X)
+            print('orig x:', orig_x)
+
+            print('orig A', orig_A.shape)
+            print('A     ', A.shape)
+            
             del A,B,mod0
-            del Gs
             Xic.append((X, Xicov))
         return Xic
 
