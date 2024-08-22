@@ -274,7 +274,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
             K = amix.var.shape[0]
             D = amix.var.shape[1]
-            print ("LEN AMIXES ", len(amixes))
+            print ("LEN AMIXES ", len(amixes), "IM", IM.sum(), "IF", IF.sum())
             img_derivs = ImageDerivs(amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi)
             img_params.add_image_deriv(img_derivs)
             img_derivs.tostr()
@@ -322,8 +322,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             fullN = tr.numberOfParams()
             for iband,(x,ic) in zip(img_bands, Xic):
                 assert(fullN == len(x) + nbands - 1)
-                x2 = np.zeros(fullN, np.float32)
-                ic2 = np.zeros((fullN,fullN), np.float32)
+                x2 = cp.zeros(fullN, cp.float32)
+                ic2 = cp.zeros((fullN,fullN), cp.float32)
                 # source params are ordered: position, brightness, others
                 npos = 2
                 nothers = len(x)-3
@@ -373,7 +373,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 # print('ic2')
                 # print(ic2)
                 
-                full_xic.append((x2,ic2))
+                full_xic.append((x2.get(),ic2.get()))
             Xic = full_xic
 
         #
@@ -472,7 +472,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         print ("G", G.shape)
         lanczos_shift_image_batch_gpu(G, img_params.mux, img_params.muy)
         del Fsum
-        assert (G.shape == (img_params.Nimages, img_params.maxNfft, img_params.mh, img_params.mw))
+        assert (G.shape == (img_params.Nimages, img_params.maxNd, img_params.mh, img_params.mw))
 
 
         #for img_i, (img_derivs_batch, pix, ie, P, mux, muy, mw, mh, counts, cdi, roi, v, w) in enumerate(imgs):
@@ -488,7 +488,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # number of derivatives
             #Nd = len(img_derivs)
             #Nd = img_derivs_batch.N
-            Nd = imderiv.nfft
+            Nd = imderiv.N
             if use_roi:
                 (rx0,ry0,rw,rh) = roi
                 roi_slice = slice(ry0, ry0+rh), slice(rx0, rx0+rw)
@@ -498,7 +498,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             else:
                 Npix = mh*mw
 
-            A = np.zeros((Npix + Npriors, Nd+2), np.float32)
+            A = cp.zeros((Npix + Npriors, Nd+2), cp.float32)
 
             mod0 = None
 
@@ -527,11 +527,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             mod0 = Gi[0,:,:]
 
             # Shift this initial model image to get X,Y pixel derivatives
-            dx = np.zeros_like(mod0)
+            dx = cp.zeros_like(mod0)
             # X derivative -- difference between shifted-left and shifted-right arrays
             dx[:,1:-1] = mod0[:, 2:] - mod0[:, :-2]
             # Y derivative -- difference between shifted-down and shifted-up arrays
-            dy = np.zeros_like(mod0)
+            dy = cp.zeros_like(mod0)
             dy[1:-1, :] = mod0[2:, :] - mod0[:-2, :]
             # Push through local WCS transformation to get to RA,Dec param derivatives
             assert(cdi.shape == (2,2))
@@ -545,7 +545,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # The derivative with respect to flux (brightness) = the unit-flux current model
             A[:Npix, 2] = mod0.ravel()
 
-            stepsizes = [s for _,s,_,_ in img_derivs]
+            #stepsizes = [s for _,s,_,_ in img_derivs]
+            stepsizes = imderiv.steps
+            print ("STEPSIZES", len(stepsizes), Nd, imderiv.N)
             # The first element is mod0, so the stepped parameters start at 1 here.
             for i in range(1, Nd):
                 # For other parameters, compute the numerical derivative.
@@ -573,11 +575,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # Pixels go in the rows.
 
             # Scale by IE (inverse-error) weighting to get to units of chi
-            A[:Npix,:] *= ie.ravel()[:, np.newaxis]
+            A[:Npix,:] *= ie.ravel()[:, cp.newaxis]
             # The current residuals = the observed image "pix" minus the current model (counts*mod0),
             # weighted by the inverse-errors.
-            B = np.append(((pix - counts*mod0) * ie).ravel(),
-                          np.zeros(Npriors, np.float32))
+            B = cp.append(((pix - counts*mod0) * ie).ravel(),
+                          cp.zeros(Npriors, cp.float32))
 
             # Append priors
             if priorVals is not None:
@@ -595,14 +597,14 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                     plt.savefig('gpu-img%i-d%i.png' % (img_i, i))
 
             # Compute the covariance matrix
-            Xicov = np.matmul(A.T, A)
+            Xicov = cp.matmul(A.T, A)
 
             # Pre-scale the columns of A
-            colscales = np.sqrt(np.diag(Xicov))
-            A /= colscales[np.newaxis, :]
+            colscales = cp.sqrt(cp.diag(Xicov))
+            A /= colscales[cp.newaxis, :]
 
             # Solve the least-squares problem!
-            X,_,_,_ = np.linalg.lstsq(A, B, rcond=None)
+            X,_,_,_ = cp.linalg.lstsq(A, B, rcond=None)
 
             # Undo pre-scaling
             X /= colscales
@@ -617,12 +619,12 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 plt.title('mod0')
                 sh = mod0.shape
                 plt.subplot(rr,cc,2)
-                mx = max(np.abs(B))
+                mx = max(cp.abs(B))
                 imx = ima.copy()
                 imx.update(vmin=-mx, vmax=+mx)
                 plt.imshow(B.reshape(sh), **imx)
                 plt.title('B')
-                AX = np.dot(A, X)
+                AX = cp.dot(A, X)
                 plt.subplot(rr,cc,3)
                 plt.imshow(AX.reshape(sh), **imx)
                 plt.title('A X')
@@ -640,8 +642,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 plt.suptitle('GPU: image %i/%i' % (img_i+1, img_params.N))
                 self.ps.savefig()
 
-            del A,B,mod0
-            del Gs
+            del A,B
             Xic.append((X, Xicov))
         return Xic
 

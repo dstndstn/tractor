@@ -59,8 +59,8 @@ class ImageDerivs(object):
 
         self.mux = mux
         self.muy = muy
-        self.mmpix = mmpix
-        self.mmie = mmie
+        self.mmpix = cp.asarray(mmpix)
+        self.mmie = cp.asarray(mmie)
         self.mh = mh
         self.mw = mw
         self.counts = counts
@@ -163,8 +163,8 @@ class BatchImageParams(object):
     def collect_params(self):
         assert(self._initialized is False)
         self._initialized = True
-        self.mux = cp.asarray([[imderiv.mux]*self.maxNfft for imderiv in self.img_derivs]).ravel()
-        self.muy = cp.asarray([[imderiv.muy]*self.maxNfft for imderiv in self.img_derivs]).ravel()
+        self.mux = cp.asarray([[imderiv.mux]*self.maxNd for imderiv in self.img_derivs]).ravel()
+        self.muy = cp.asarray([[imderiv.muy]*self.maxNd for imderiv in self.img_derivs]).ravel()
         if self.maxNmogs > 0:
             amp = np.zeros((self.Nimages, self.maxNd, self.maxNmogs))
             mean = np.zeros((self.Nimages, self.maxNd, self.maxNmogs, self.maxD))
@@ -445,5 +445,5 @@ class BatchMixtureOfGaussians(object):
             F[z] = F[z] * cp.exp(-2. * cp.pi * 1j * (mu[:,:,:,0,cp.newaxis,cp.newaxis]*v[cp.newaxis,cp.newaxis,cp.newaxis,cp.newaxis,:] +
                                                      mu[:,:,:,1,cp.newaxis,cp.newaxis]*w[cp.newaxis,cp.newaxis,cp.newaxis,:,cp.newaxis])[z])
 
-        Fsum = (self.amp[:,:,:,None,None]*F).sum(axis=1)
+        Fsum = (self.amp[:,:,:,None,None]*F).sum(axis=2)
         return Fsum
