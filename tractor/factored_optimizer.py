@@ -9,6 +9,8 @@ import scipy
 import scipy.fft
 import time
 
+from data_recorder import DataRecorder
+
 image_counter = 0
 #from astrometry.util.plotutils import PlotSequence
 #ps = PlotSequence('fourier')
@@ -135,6 +137,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             return R
 
         print('Using GpuFriendly code')
+        print('modelMasks:', tr.modelMasks)
         # Assume we're not fitting any of the image parameters.
         assert(tr.isParamFrozen('images'))
         # Assume single source
@@ -204,6 +207,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             muy = dy - y0
             sx = int(np.round(mux))
             sy = int(np.round(muy))
+            print('GPU: sx,sy', sx,sy)
             # the subpixel portion will be handled with a Lanczos interpolation
             mux -= sx
             muy -= sy
@@ -217,6 +221,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             padpix[-sy: -sy+mh, -sx: -sx+mw] = mmpix
             padie [-sy: -sy+mh, -sx: -sx+mw] = mmie
             roi = (-sx, -sy, mw, mh)
+            print('ROI:', roi)
             mmpix = padpix
             mmie  = padie
             sx = sy = 0
@@ -463,6 +468,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 roi_slice = slice(ry0, ry0+rh), slice(rx0, rx0+rw)
                 roi_Npix = rh*rw
                 roi_shape = rh,rw
+                print('roi_shape:', roi_shape)
 
             A = np.zeros((Npix + Npriors, Nd+2), np.float32)
 
@@ -506,7 +512,10 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             for i in range(Nd):
                 # lanczos_shift_image has a Python implementation in psf.py, or
                 # there is a C implementation in mp_fourier.i : lanczos_shift_3f
+                print('factored_opt Lanczos-shift:', Gs[i,:,:].shape)
+                DataRecorder.get().add('lanczos-factored-before', Gs[i,:,:].copy())
                 lanczos_shift_image(Gs[i,:,:], mux, muy, inplace=True)
+                DataRecorder.get().add('lanczos-factored-after', Gs[i,:,:].copy())
 
             # The first element in img_derivs is the current galaxy model parameters.
             mod0 = Gs[0,:,:]
@@ -515,11 +524,13 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             dx = np.zeros_like(mod0)
             dy = np.zeros_like(mod0)
             # X derivative -- difference between shifted-left and shifted-right arrays
+            #dx[:,1:-1] = mod0[:, 2:] - mod0[:, :-2]
             # Y derivative -- difference between shifted-down and shifted-up arrays
+            #dy[1:-1, :] = mod0[2:, :] - mod0[:-2, :]
             # Omit a one-pixel boundary on all directions in both arrays!
             dx[1:-1,1:-1] = mod0[1:-1, 2:] - mod0[1:-1, :-2]
             dy[1:-1,1:-1] = mod0[2:, 1:-1] - mod0[:-2, 1:-1]
-
+            
             # Push through local WCS transformation to get to RA,Dec param derivatives
             assert(cdi.shape == (2,2))
             # divide by 2 because we did +- 1 pixel
@@ -599,16 +610,21 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 def new_img(X):
                     return X[:Npix].reshape(mh,mw)[roi_slice]
             
+                cb = True
                 import pylab as plt
                 plt.clf()
                 ima = dict(interpolation='nearest', origin='lower')
                 rr,cc = 3,4
                 plt.subplot(rr,cc,1)
                 plt.imshow(new_img(mod0), **ima)
+                if cb:
+                    plt.colorbar()
                 plt.title('mod0')
 
                 plt.subplot(rr,cc,4)
                 plt.imshow(np.log10(np.maximum(1e-6, new_img(mod0))), **ima)
+                if cb:
+                    plt.colorbar()
                 plt.title('log mod0')
 
                 #sh = new_img(mod0).shape
@@ -617,14 +633,20 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 imx = ima.copy()
                 imx.update(vmin=-mx, vmax=+mx)
                 plt.imshow(new_img(B[:Npix]), **imx)
+                if cb:
+                    plt.colorbar()
                 plt.title('B')
                 AX = np.dot(A, X)
                 plt.subplot(rr,cc,3)
                 plt.imshow(new_img(AX[:Npix]), **imx)
+                if cb:
+                    plt.colorbar()
                 plt.title('A X')
                 for i in range(min(Nd+2, 8)):
                     plt.subplot(rr,cc,5+i)
                     plt.imshow(new_img(A[:Npix,i]), **ima)
+                    if cb:
+                        plt.colorbar()
                     if i == 0:
                         plt.title('dx')
                     elif i == 1:
@@ -639,15 +661,19 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # Undo pre-scaling
             X /= colscales
 
+            print('ROI slice:', roi_slice)
+
             # Call orig version
             print('Calling orig version...')# kwargs=', kwargs)
             tims = tr.images
             mms = tr.modelMasks
-            print('mm:', len(mms), 'img_i', img_i)
             from tractor import Images
             from legacypipe.oneblob import _get_subtim
             timshape = tr.images[img_i].shape
             mm = tr.modelMasks[img_i][src]
+            print('orig: tim shape', timshape)
+            print('orig: mm shape', (mm.h,mm.w))
+            print('orig: mm origin', mm.x0, mm.y0)
             mmslice = mm.slice
             orig_Npix = timshape[0]*timshape[1]
 
@@ -655,8 +681,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 return X[:orig_Npix].reshape(timshape)[mmslice]
             
             tr.images = Images(tr.images[img_i])
-            tr.modelMasks = [tr.modelMasks[i]]
+            tr.modelMasks = [tr.modelMasks[img_i]]
 
+            print('Getting orig_mod0...')
+            orig_mod0 = tr.getModelImage(0)[mmslice] / counts
+            print('Got orig_mod0')
             # #print('model masks:', tr.modelmasks)
             # mm = tr.modelmasks[img_i][src]
             # (x0,x1,y0,y1) = mm.extent
@@ -664,6 +693,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # x0,x1,y0,y1 = int(x0),int(x1),int(y0),int(y1)
             # tr.images = images(_get_subtim(tr.images[img_i], x0,x1,y0,y1))
             # tr.setmodelmasks(None)
+            print('Getting orig derivs...')
             allderivs = tr.getDerivs()
             print('allderivs:', allderivs)
             orig_x,orig_A,orig_B = self.getUpdateDirection(tr, allderivs, get_A_matrix=True, get_B_vector=True, **kwargs)
@@ -687,37 +717,99 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 plt.clf()
                 ima = dict(interpolation='nearest', origin='lower')
                 rr,cc = 3,4
-                # plt.subplot(rr,cc,1)
-                # plt.imshow(mod0, **ima)
-                # plt.title('mod0')
-                #sh = mod0.shape
+
+                plt.subplot(rr,cc,1)
+                plt.imshow(orig_mod0, **ima)
+                plt.title('mod0')
+                if cb:
+                    plt.colorbar()
+                plt.subplot(rr,cc,4)
+                plt.imshow(np.log10(np.maximum(1e-6, orig_mod0)), **ima)
+                if cb:
+                    plt.colorbar()
+                plt.title('log mod0')
+
                 sh = timshape
                 mx = max(np.abs(B))
                 imx = ima.copy()
                 imx.update(vmin=-mx, vmax=+mx)
                 plt.subplot(rr,cc,2)
                 plt.imshow(orig_img(orig_B), **imx)
+                if cb:
+                    plt.colorbar()
                 plt.title('B')
                 AX = np.dot(orig_A, orig_x)
                 plt.subplot(rr,cc,3)
                 plt.imshow(orig_img(AX), **imx)
+                if cb:
+                    plt.colorbar()
                 plt.title('A X')
                 ond = orig_A.shape[1]
                 for i in range(ond):
                     plt.subplot(rr,cc,5+i)
                     plt.imshow(orig_img(orig_A[:,i]), **ima)
+                    if cb:
+                        plt.colorbar()
 
                 plt.suptitle('Orig version: image %i/%i' % (img_i+1, len(imgs)))
                 self.ps.savefig()
 
             if self.ps is not None:
                 import pylab as plt
+
+                plt.clf()
+                plt.subplot(2,4,1)
+                ima = dict(interpolation='nearest', origin='lower')
+                plt.imshow(mod0, **ima)
+                plt.colorbar()
+                plt.title('mod0')
+                plt.subplot(2,4,2)
+                plt.imshow(mod0[roi_slice], **ima)
+                plt.title('mod0')
+                plt.colorbar()
+                plt.subplot(2,4,3)
+                plt.imshow(orig_mod0, **ima)
+                plt.title('orig model')
+                plt.colorbar()
+                plt.subplot(2,4,4)
+                plt.imshow(orig_mod0 - mod0[roi_slice], **ima)
+                plt.colorbar()
+                plt.title('diff')
+
+                plt.subplot(2,4,5)
+                om = tr.getModelImage(0) / counts
+                plt.imshow(om, **ima)
+                plt.colorbar()
+                plt.title('orig model (full)')
+
+                plt.subplot(2,4,6)
+                plt.imshow(np.log10(np.maximum(1e-6, mod0[roi_slice])), **ima)
+                plt.title('log mod0')
+                plt.colorbar()
+
+                plt.subplot(2,4,7)
+                plt.imshow(np.log10(np.maximum(1e-6, orig_mod0)), **ima)
+                plt.title('log orig mod0')
+                plt.colorbar()
+
+                plt.subplot(2,4,8)
+                plt.imshow(np.log10(np.maximum(1e-6, om)), **ima)
+                plt.title('log orig mod0 (full)')
+                plt.colorbar()
+
+                self.ps.savefig()
+
+                
                 plt.clf()
                 ima = dict(interpolation='nearest', origin='lower')
                 rr,cc = 3,4
-                #plt.subplot(rr,cc,1)
-                #plt.imshow(mod0, **ima)
-                #plt.title('mod0')
+                d = orig_mod0 - mod0[roi_slice]
+                mx = np.max(np.abs(d))
+                plt.subplot(rr,cc,1)
+                plt.imshow(d, vmin=-mx, vmax=mx, **ima)
+                if cb:
+                    plt.colorbar()
+                plt.title('mod0')
                 #sh = mod0.shape
                 sh = roi_shape
                 mx = max(np.abs(B))
@@ -730,14 +822,18 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 mx = np.max(np.abs(d))
                 print('B max diff:', mx, 'rel diff', np.mean(np.abs(d / np.maximum(1e-16, ((np.abs(oldval) + np.abs(newval))/2.)))))
                 plt.imshow(d.reshape(sh), vmin=-mx, vmax=mx, **ima)
+                if cb:
+                    plt.colorbar()
                 plt.title('B')
                 AX = new_img(np.dot(A, X * colscales))
                 oAX = orig_img(np.dot(orig_A, orig_x))
                 plt.subplot(rr,cc,3)
                 d = AX - oAX
                 mx = np.max(np.abs(d))
-                print('AX diff:', mx, 'rel diff', np.mean(np.abs(d / np.maximum(1e-16, ((np.abs(AX) + np.abs(oAX))/2.)))))
+                print('AX max diff:', mx, 'rel diff', np.mean(np.abs(d / np.maximum(1e-16, ((np.abs(AX) + np.abs(oAX))/2.)))))
                 plt.imshow(d.reshape(sh), vmin=-mx, vmax=mx, **ima)
+                if cb:
+                    plt.colorbar()
                 plt.title('A X')
                 oNd = orig_A.shape[1]
                 for i in range(oNd):
@@ -751,6 +847,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                     mx = np.max(np.abs(d))
                     print('A[:,%i] diff:' % i, mx, 'rel diff', np.mean(np.abs(d / np.maximum(1e-16, ((np.abs(nA) + np.abs(oA))/2)))))
                     plt.imshow(d.reshape(sh), vmin=-mx, vmax=mx, **ima)
+                    if cb:
+                        plt.colorbar()
 
                 plt.suptitle('Difference: image %i/%i' % (img_i+1, len(imgs)))
                 self.ps.savefig()
@@ -769,7 +867,54 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
             print('orig A', orig_A.shape)
             print('A     ', A.shape)
-            
+
+            for i,(tag,data) in enumerate(DataRecorder.get().all()):
+                print('saving', tag)
+                import fitsio
+                fitsio.write('data-%02i-%s.fits' % (i,tag), data, overwrite=True)
+
+            data = DataRecorder.get().all()
+
+            _,before_f = data[0]
+            _,before_g = data[4]
+
+            _,after_f = data[1]
+            _,after_g = data[5]
+
+            for name,(ot,oldval),(nt,newval) in [
+                    ('Before L', data[0], data[4]),
+                    ('After  L', data[1], data[5])]:
+                d = newval - oldval
+                print(name, ': max diff', np.max(np.abs(d)), 'cosine dist',
+                      3600. * np.rad2deg(np.arccos(np.sum(oldval * newval) / (np.sqrt(np.sum(oldval**2)) * np.sqrt(np.sum(newval**2))))), 'arcsec')
+                if self.ps is not None:
+                    plt.clf()
+                    mx = np.max(oldval)
+                    dmx = np.max(np.abs(d))
+                    ima = dict(interpolation='nearest', origin='lower', vmin=0, vmax=mx)
+                    imd = dict(interpolation='nearest', origin='lower',
+                               vmin=-dmx, vmax=dmx)
+                    plt.subplot(1,3,1)
+                    plt.imshow(oldval, **ima)
+                    if cb:
+                        plt.colorbar()
+                    plt.title(ot)
+                    plt.subplot(1,3,2)
+                    plt.imshow(newval, **ima)
+                    if cb:
+                        plt.colorbar()
+                    plt.title(nt)
+                    plt.subplot(1,3,3)
+                    plt.imshow(d, **imd)
+                    if cb:
+                        plt.colorbar()
+                    plt.title('diff')
+                    plt.suptitle(name)
+                    self.ps.savefig()
+
+            import sys
+            sys.exit(0)
+
             del A,B,mod0
             Xic.append((X, Xicov))
         return Xic
