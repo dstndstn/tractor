@@ -28,16 +28,24 @@ def lanczos_shift_image_batch_gpu(imgs, dxs, dys):
         and helper functions from tractor.miscutils"""
     import cupy as cp
     from tractor.miscutils import gpu_lanczos_filter,batch_correlate1d_gpu
+    do_reshape = False
+    if len(imgs.shape) == 4:
+        oldshape = imgs.shape
+        imgs = imgs.reshape((oldshape[0]*oldshape[1], oldshape[2], oldshape[3]))
     L = 3
     nimg = dxs.size 
+    print ("LANC", imgs.shape, oldshape, nimg, dxs.shape, dys.shape)
     lr = cp.tile(cp.arange(-L, L+1), (nimg, 1))
     Lx = gpu_lanczos_filter(L, lr+dxs.reshape((nimg,1)))
     Ly = gpu_lanczos_filter(L, lr+dys.reshape((nimg,1)))
     # Normalize the Lanczos interpolants (preserve flux)
     Lx /= Lx.sum(1).reshape((nimg,1))
     Ly /= Ly.sum(1).reshape((nimg,1))
+    print ("LX", Lx.shape, Ly.shape)
     sx = batch_correlate1d_gpu(imgs, Lx, axis=2, mode='constant')
     outimg = batch_correlate1d_gpu(sx, Ly, axis=1, mode='constant')
+    if (do_reshape):
+        outimg = outimg.reshape(oldshape)
     return outimg
 
 class BatchHybridPSF(object):

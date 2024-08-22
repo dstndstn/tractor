@@ -472,7 +472,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         print ("G", G.shape)
         lanczos_shift_image_batch_gpu(G, img_params.mux, img_params.muy)
         del Fsum
-        assert (G.shape == (img_params.Nimages, img_params.maxNd, img_params.nw, img_params.nv))
+        assert (G.shape == (img_params.Nimages, img_params.maxNfft, img_params.mh, img_params.mw))
 
 
         #for img_i, (img_derivs_batch, pix, ie, P, mux, muy, mw, mh, counts, cdi, roi, v, w) in enumerate(imgs):
@@ -488,7 +488,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # number of derivatives
             #Nd = len(img_derivs)
             #Nd = img_derivs_batch.N
-            Nd = imderiv.N
+            Nd = imderiv.nfft
             if use_roi:
                 (rx0,ry0,rw,rh) = roi
                 roi_slice = slice(ry0, ry0+rh), slice(rx0, rx0+rw)
@@ -518,6 +518,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             #lanczos_shift_image_batch_gpu(G, mux, muy)
             #del Fsum
             Gi = G[img_i]
+            print (f'{Nd=}, {mh=}, {mw=}', Gi.shape)
             assert (Gi.shape == (Nd,mh,mw))
             if use_roi:
                 Gi = Gi[:,roi_slice]

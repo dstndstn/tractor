@@ -122,6 +122,7 @@ class BatchImageParams(object):
     '''
 
     def __init__(self, P, v, w):
+        self._initialized = False
         self.P = P
         self.v = v
         self.w = w
@@ -143,6 +144,9 @@ class BatchImageParams(object):
         self.mux = None
         self.muy = None
 
+        self.mh = 0
+        self.mw = 0
+
     def add_image_deriv(self, imderiv):
         self.img_derivs.append(imderiv)
         self.Nimages += 1
@@ -153,9 +157,14 @@ class BatchImageParams(object):
         self.maxNmogs = max(self.maxNmogs, imderiv.nmogs)
         self.maxNfft = max(self.maxNfft, imderiv.nfft)
 
+        self.mh = max(self.mh, imderiv.mh)
+        self.mw = max(self.mw, imderiv.mw)
+
     def collect_params(self):
-        self.mux = cp.asarray([imderiv.mux for imderiv in self.img_derivs])
-        self.muy = cp.asarray([imderiv.muy for imderiv in self.img_derivs])
+        assert(self._initialized is False)
+        self._initialized = True
+        self.mux = cp.asarray([[imderiv.mux]*self.maxNfft for imderiv in self.img_derivs]).ravel()
+        self.muy = cp.asarray([[imderiv.muy]*self.maxNfft for imderiv in self.img_derivs]).ravel()
         if self.maxNmogs > 0:
             amp = np.zeros((self.Nimages, self.maxNd, self.maxNmogs))
             mean = np.zeros((self.Nimages, self.maxNd, self.maxNmogs, self.maxD))
