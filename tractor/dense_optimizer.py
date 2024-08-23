@@ -152,13 +152,12 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
             if scale_columns:
                 colscales2[col] = scale2
 
-        #print('Colscales:', colscales)
         if Npriors > 0:
             rA, cA, vA, pb, mub = priorVals
             #print('Dense optimizer: Priors: pb', pb, 'mub', mub)
             for ri,ci,vi,bi in zip(rA, cA, vA, pb):
                 if scale_columns:
-                    colscales2[col] += np.dot(vi, vi)
+                    colscales2[ci] += np.dot(vi, vi)
                 for rij,vij,bij in zip(ri, vi, bi):
                     A[Npixels + rij, ci] = vij
                     B[Npixels + rij] += bij
@@ -173,6 +172,8 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
                     colscales2[col] = 1.
             colscales = np.sqrt(colscales2)
 
+        print('dense Colscales:', colscales)
+        print('dense A priors:', A[Npixels:,:])
         chimap = {}
         if chiImages is not None:
             for img, chi in zip(tractor.getImages(), chiImages):
@@ -186,7 +187,7 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
             #npix = len(chi)
             B[row0: row0 + npix] = chi
             del chi
-
+            
         # X, resids, rank, singular_vals
         X,_,_,_ = lstsq(A, B, rcond=None)
 

@@ -484,18 +484,29 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # Note, this "Nw" looks like it might be a bug (should be "Nv"?) but it's not,
             # I promise.  "v" will end up having length "Nv".  eg, Nw=64, Nv=33.
             v = np.fft.rfftfreq(Nw)
+
+            # Make all the arguments to the np.exp float32
+            v = v.astype(np.float32)
+            w = w.astype(np.float32)
+            negtwopisq = np.float32(-2. * np.pi**2)
+
             for i in range(Nd):
                 for k in range(Nc):
                     amp = fftamps[i,k]
                     a,b,d = fftvars[i, k, :]
-                    Fsums[i, :, :] += amp * np.exp(
-                        -2. * np.pi**2 *
+                    Fsums[i, :, :] += amp * np.exp(negtwopisq *
                         (a * v[np.newaxis, :]**2 +
                          d * w[:, np.newaxis]**2 +
                          2 * b * v[np.newaxis, :] * w[:, np.newaxis]))
 
             Gs = scipy.fft.irfftn(Fsums * P[np.newaxis,:,:], axes=(1,2))
             print('Gs shape:', Gs.shape) #--> 4,64,64
+
+            drN = DataRecorder.get().n_recorded()
+            
+            DataRecorder.get().add('gpu-Fsum', Fsums[0,:,:].copy())
+            DataRecorder.get().add('gpu-P', P.copy())
+            DataRecorder.get().add('gpu-G', Gs[0,:,:].copy())
 
             if use_roi:
                 Gs = Gs[:, roi_slice[0], roi_slice[1]]
@@ -597,7 +608,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
             # Pre-scale the columns of A
             colscales = np.sqrt(np.diag(Xicov))
+            print('gpu   Colscales:', colscales)
             A /= colscales[np.newaxis, :]
+            print('gpu   A priors:', A[Npix:,:])
 
             # Solve the least-squares problem!
             X,_,_,_ = np.linalg.lstsq(A, B, rcond=None)
@@ -890,7 +903,36 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 plt.suptitle('Difference: image %i/%i' % (img_i+1, len(imgs)))
                 self.ps.savefig()
 
-                
+                data = DataRecorder.get().all()
+                t1,gpuF = data[drN+0]
+                t2,gpuP = data[drN+1]
+                t3,gpuG = data[drN+2]
+                t4,origF = data[drN+3]
+                t5,origP = data[drN+4]
+                t6,origG = data[drN+5]
+
+                plt.clf()
+                k = 1
+                for gpu,orig,ta,tb in [(gpuF,origF,t1,t4),
+                                       (gpuP.real,origP.real,t2,t5),
+                                       (gpuG,origG,t3,t6),]:
+                    plt.subplot(3,3,k)
+                    plt.imshow(gpu, **ima)
+                    if cb:
+                        plt.colorbar()
+                    plt.title(ta)
+                    plt.subplot(3,3,k+1)
+                    plt.imshow(orig, **ima)
+                    if cb:
+                        plt.colorbar()
+                    plt.title(tb)
+                    plt.subplot(3,3,k+2)
+                    plt.imshow(gpu - orig, **ima)
+                    if cb:
+                        plt.colorbar()
+                    k += 3
+                self.ps.savefig()
+
             # j = np.all(orig_A == 0, axis=1)
             # from collections import Counter
             # print('all zero rows in orig A:', Counter(j))

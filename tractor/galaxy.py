@@ -483,7 +483,8 @@ class ProfileGalaxy(object):
                 fftmix = None
 
         if fftmix is not None:
-            Fsum = fftmix.getFourierTransform(v, w, zero_mean=True)
+            Fsum = fftmix.getFourierTransform(v, w, zero_mean=True,
+                                              use_mp_fourier=False)
             # In Intel's mkl_fft library, the irfftn code path is faster than irfft2
             # (the irfft2 version sets args (to their default values) which triggers padding
             #  behavior, changing the FFT size and copying behavior)
@@ -502,10 +503,15 @@ class ProfileGalaxy(object):
             # pixelized PSFs.
             from tractor.psf import lanczos_shift_image
             G = G.astype(np.float32)
+
+            DataRecorder.get().add('galaxy.py-Fsum', Fsum.copy())
+            DataRecorder.get().add('galaxy.py-P', P.copy())
+            DataRecorder.get().add('galaxy.py-G', G.copy())
+            
             if mux != 0.0 or muy != 0.0:
                 lanczos_shift_image(G, mux, muy, inplace=True)
-            else:
-                G = np.zeros((pH, pW), np.float32)
+        else:
+            G = np.zeros((pH, pW), np.float32)
 
         if modelMask is not None:
             gh, gw = G.shape

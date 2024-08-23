@@ -218,17 +218,21 @@ class MixtureOfGaussians(object):
 
         Fsum = None
 
+        # Make all arguments to the np.exp() be type float32
+        v = v.astype(np.float32)
+        w = w.astype(np.float32)
+        negtwopisq = np.float32(-2. * np.pi**2)
+        
         for k in range(self.K):
             mu = self.mean[k, :]
-            amp = self.amp[k]
-            a = self.var[k, 0, 0]
-            b = self.var[k, 0, 1]
-            d = self.var[k, 1, 1]
-
-            F = np.exp(-2. * np.pi**2 *
-                       (a * v[np.newaxis, :]**2 +
-                        d * w[:, np.newaxis]**2 +
-                        2 * b * v[np.newaxis, :] * w[:, np.newaxis]))
+            amp = np.float32(self.amp[k])
+            a = np.float32(self.var[k, 0, 0])
+            b = np.float32(self.var[k, 0, 1])
+            d = np.float32(self.var[k, 1, 1])
+            F = np.exp(negtwopisq *
+                        (a * v[np.newaxis, :]**2 +
+                         d * w[:, np.newaxis]**2 +
+                         2 * b * v[np.newaxis, :] * w[:, np.newaxis]))
             if mu[0] != 0. or mu[1] != 0.:
                 F = F * np.exp(-2. * np.pi * 1j * (mu[0] * v[np.newaxis, :] +
                                                    mu[1] * w[:, np.newaxis]))
@@ -237,7 +241,6 @@ class MixtureOfGaussians(object):
                 Fsum = amp * F
             else:
                 Fsum += amp * F
-
         return Fsum
 
     def getFourierTransform2(self, Nv, Nw, use_mp_fourier=True, zero_mean=False):

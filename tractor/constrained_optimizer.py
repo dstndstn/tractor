@@ -23,7 +23,11 @@ class ConstrainedOptimizer(LsqrOptimizer):
         for step in range(steps):
             #print('Optimize_loop: step', step)
             self.stepLimited = False
-            dlnp,_,_ = self.optimize(tractor, **kwargs)
+            #dlnp,_,_ = self.optimize(tractor, **kwargs)
+            dlnp,X,alpha = self.optimize(tractor, **kwargs)
+
+            print('OneBlob opt_loop dlnp %.6g, alpha %.4g, steplim %s, X' % (dlnp, alpha, self.stepLimited), X)
+
             #print('Optimize_loop: step', step, 'dlnp', dlnp, 'hit limit:',
             #      self.hit_limit, 'step limit:', self.stepLimited)
             #for s in tractor.catalog:
