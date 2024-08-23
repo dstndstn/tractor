@@ -269,14 +269,10 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
             return self._getOversampledFourierTransform(px, py, radius)
 
         sz = self.getFourierTransformSize(radius)
-        print('PixelizedPSF: FFT size', sz)
         if sz in self.fftcache:
-            print('cached!')
             return self.fftcache[sz]
 
         pad, cx, cy = self._padInImage(sz, sz)
-        print('Padding PSF of size', self.img.shape, 'into image of size', sz,
-              '->', pad.shape)
         # cx,cy: coordinate of the PSF center in *pad*
         P = np.fft.rfft2(pad)
         P = P.astype(np.complex64)

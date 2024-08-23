@@ -178,7 +178,6 @@ class Galaxy(MultiParams, SingleProfileSource):
                 #dy[1:-1,:] = (p0[:-2, :] - p0[2:, :]) / 2.
                 dy[1:-1, 1:-1] = (p0[:-2, 1:-1] - p0[2:, 1:-1]) / 2.
                 patchdy = Patch(patch0.x0, patch0.y0, dy)
-                print('galaxy.py: quick dx,dy derivatives')
                 del dx, dy
                 derivs.extend(wcs.pixelDerivsToPositionDerivs(pos0, self, counts,
                                                               patch0, patchdx, patchdy))
@@ -357,12 +356,10 @@ class ProfileGalaxy(object):
                                          max(1 + py - y0, 1 + y1 - py)))
             psfh, psfw = psf.shape
             halfsize = max(halfsize, max(psfw / 2., psfh / 2.))
-            #print('Halfsize:', halfsize)
             if force_halfsize is not None:
                 halfsize = force_halfsize
             # is the source center outside the modelMask?
             sourceOut = (px < x0 or px > x1 - 1 or py < y0 or py > y1 - 1)
-            # print('mh,mw', mh,mw, 'sourceout?', sourceOut)
 
             if sourceOut:
                 if hybrid:
@@ -380,7 +377,6 @@ class ProfileGalaxy(object):
                 if py > y1:
                     neardy = py - y1
                 nearest = np.hypot(neardx, neardy)
-                #print('Nearest corner:', nearest, 'vs radius', self.getRadius())
                 if nearest > self.getRadius():
                     return None
                 # how far is the furthest point from the source center?
@@ -405,26 +401,18 @@ class ProfileGalaxy(object):
                 else:
                     bigMask[boffy:boffy + mh, boffx:boffx + mw] = True
                 bigMask = ModelMask(bigx0, bigy0, bigMask)
-                # print('Recursing:', self, ':', (mh,mw), 'to', (bigh,bigw))
                 bigmodel = self._realGetUnitFluxModelPatch(
                     img, px, py, minval, modelMask=bigMask)
                 return Patch(x0, y0,
                              bigmodel.patch[boffy:boffy + mh, boffx:boffx + mw])
 
-        print('Getting Fourier transform of PSF at', px,py)
-        print('halfsize:', halfsize)
-        print('PSF is', psf)
-        # print('Tim shape:', img.shape)
         P, (cx, cy), (pH, pW), (v, w) = psf.getFourierTransform(px, py, halfsize)
-        print('P shape', P.shape, 'cx,cy', cx,cy, 'pH,pW:', pH,pW)
-        
         dx = px - cx
         dy = py - cy
         if modelMask is not None:
             # the Patch we return *must* have this origin.
             ix0 = x0
             iy0 = y0
-            print('ix0,iy0', ix0,iy0)
             # the difference that we have to handle by shifting the model image
             mux = dx - ix0
             muy = dy - iy0
@@ -495,17 +483,16 @@ class ProfileGalaxy(object):
                 fftmix = None
 
         if fftmix is not None:
-            #print('Evaluating FFT mixture:', len(fftmix.amp), 'components in size', pH,pW)
-            #print('Amps:', fftmix.amp)
             Fsum = fftmix.getFourierTransform(v, w, zero_mean=True)
             # In Intel's mkl_fft library, the irfftn code path is faster than irfft2
             # (the irfft2 version sets args (to their default values) which triggers padding
             #  behavior, changing the FFT size and copying behavior)
             #G = np.fft.irfft2(Fsum * P, s=(pH, pW))
             Fsum = Fsum.astype(np.float32)
-            G = np.fft.irfftn(Fsum * P)
-            print('galaxy.py irrftn types: Fsum', Fsum.dtype, 'P', P.dtype, 'G', G.dtype)
-
+            #G = np.fft.irfftn(Fsum * P)
+            import scipy
+            G = scipy.fft.irfftn(Fsum * P)
+            print('galaxy.py irfftn types: Fsum', Fsum.dtype, 'P', P.dtype, 'G', G.dtype)
             assert(G.shape == (pH,pW))
             # FIXME -- we could try to be sneaky and Lanczos-interp
             # after cutting G down to nearly its final size... tricky
@@ -515,11 +502,8 @@ class ProfileGalaxy(object):
             # pixelized PSFs.
             from tractor.psf import lanczos_shift_image
             G = G.astype(np.float32)
-            print('galaxy.py Lanczos-shift:', G.shape, 'mu', mux,muy)
             if mux != 0.0 or muy != 0.0:
-                DataRecorder.get().add('lanczos-galaxy-before', G.copy())
                 lanczos_shift_image(G, mux, muy, inplace=True)
-                DataRecorder.get().add('lanczos-galaxy-after', G.copy())
             else:
                 G = np.zeros((pH, pW), np.float32)
 
@@ -527,44 +511,19 @@ class ProfileGalaxy(object):
             gh, gw = G.shape
             assert((gw == pW) and (gh == pH))
             if sx != 0 or sy != 0:
-
-                print('get_overlapping_regions:')
-                print(' sx, sy:', sx, sy)
-                print(' mw, mh:', mw, mh)
-                print(' gw, gh:', gw, gh)
-
                 yi, yo = get_overlapping_region(-sy, -sy + mh - 1, 0, gh - 1)
                 xi, xo = get_overlapping_region(-sx, -sx + mw - 1, 0, gw - 1)
-
-                print('Y: desired range', -sy, -sy + mh - 1)
-                print('   available range', 0, gh-1)
-                print(' yi:', yi)
-                print(' yo:', yo)
-
-                print('X: desired range', -sx, -sx + mw - 1)
-                print('   available range', 0, gw-1)
-                print(' xi:', xi)
-                print(' xo:', xo)
-
                 # shifted
                 # FIXME -- are yo,xo always the whole image?  If so, optimize
                 shG = np.zeros((mh, mw), G.dtype)
-
-                print('Copying into final image of shape', shG.shape)
-                print('shape of target:', shG[yo,xo].shape)
-                print('shape of input:', G[yi,xi].shape)
-
                 shG[yo, xo] = G[yi, xi]
-
                 if debug_ps is not None:
                     _fourier_galaxy_debug_plots(G, shG, xi, yi, xo, yo, P, Fsum,
                                                 pW, pH, psf)
-
                 G = shG
             if gh > mh or gw > mw:
                 G = G[:mh, :mw]
             assert(G.shape == modelMask.shape)
-            print('galaxy.py: cut to', G.shape)
 
         else:
             # Clip down to suggested "halfsize"
