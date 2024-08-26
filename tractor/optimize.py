@@ -413,14 +413,29 @@ class Optimizer(object):
                 # trim the slice.
                 # (slice indexing correctly handles when the umod extends off
                 # the positive end)
+
+                # also need to slice the unit flux model properly if they extend off the image, 
+                # From Dan Masters
                 if x0 < 0:
                     uw += x0
                     x0 = 0
+                    um_start_x = -x0
+                else: 
+                    um_start_x = 0
+
                 if y0 < 0:
                     uh += y0
                     y0 = 0
+                    um_start_y = -y0
+                else: 
+                    um_start_y = 0
+
+                x1 = np.min([x0+uw, tim.shape[1]])
+                y1 = np.min([y0+uh, tim.shape[0]])
+
                 slc = slice(y0, y0 + uh), slice(x0, x0 + uw)
-                models_cov[ui][slc] += um.getImage() # add psfs
+                slc_model = slice(um_start_y, um_start_y+(y1-y0)), slice(um_start_x, um_start_x+(x1-x0))
+                models_cov[ui][slc] += um.getImage()[slc_model] # add psfs
 
         # faster implementation of the fisher information matrix
         F = np.zeros(shape=(D,D))
@@ -428,12 +443,14 @@ class Optimizer(object):
         if np.any(np.isnan(F)) or np.any(np.isinf(F)):
             raise ValueError("Fisher matrix contains NaNs or Infs.")
 
-        # check if F is invertible or not
-        if np.linalg.det(F)==0.:
-            print('F is not invertible! Infinity in the covariance.')
-            C = np.inf + np.zeros_like(F)
-        else:
+        # Calculate covariance matrix by inverting Fisher information matrix
+        try:
             C = np.linalg.inv(F)
+
+        except np.linalg.LinAlgError as e:
+            # Handle the case where F is not invertible
+            print(f'Error: {e}. F is not invertible!')
+            C = np.inf + np.zeros_like(F)
         
         var = -np.diag(C)
         IV[Nsky:] = 1/var # inverse variance. 
