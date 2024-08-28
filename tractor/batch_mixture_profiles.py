@@ -168,7 +168,7 @@ class BatchImageParams(object):
         assert(self._initialized is False)
         self._initialized = True
         self.pix = np.zeros((self.Nimages, self.mh, self.mw), dtype = np.float32 )
-        self.ie = np.zeros_like(pix_batch)
+        self.ie = np.zeros_like(self.pix)
         self.counts = np.zeros(self.Nimages)
         self.cdi = np.zeros((self.Nimages, 2,2), dtype=np.float32)
         self.roi = np.zeros((self.Nimages, 4), dtype = np.int)

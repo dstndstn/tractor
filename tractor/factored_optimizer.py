@@ -501,8 +501,14 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         A[:,:Npix, 0] = cp.reshape(-((dx * cdi[:,0, 0] + dy * cdi[:,1, 0]) * img_params.counts / 2),(img_params.Nimages, -1)) 
         A[:,:Npix, 1] = cp.reshape(-((dx * cdi[:,0, 1] + dy * cdi[:,1, 1]) * img_params.counts / 2), (img_params.Nimages, -1))
         del dx,dy
-
+        A[:,:Npix,2] = cp.reshape(mod0,(img_params.Nimages, -1))
         
+        #A[:Npix, i + 2] = counts / stepsizes[i] * (Gi[i,:,:] - mod0).ravel()
+        A[:,:Npix, 2:] = counts[cp.newaxis, cp.newaxis,2:] / stepsizes[cp.newaxis,cp.newaxis,2:] * cp.reshape((G[:,2:,:,:] - mod0[:,cp.newaxis,:,:]), (img_params.Nimages, Npix,-1))
+        #A[:Npix,:] *= ie.ravel()[:, cp.newaxis]
+        A[:,:Npix,:] *= cp.reshape(ie, (img_params.Nimages, -1)[:,:, cp.newaxis]
+
+
 
          for img_i, imderiv in enumerate(img_params.img_derivs):
             pix, ie, mw, mh, counts, cdi, roi = imderiv.mmpix, imderiv.mmie, imderiv.mw, imderiv.mh, imderiv.counts, imderiv.cdi, imderiv.roi 
