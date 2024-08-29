@@ -29,16 +29,6 @@ class FactoredOptimizer(object):
         allderivs = tr.getDerivs()
         x,A = self.getUpdateDirection(tr, allderivs, get_A_matrix=True, **kwargs)
 
-        if False:
-            print('Got A matrix:', A.shape)
-            global image_counter
-            n,m = A.shape
-            for i in range(m):
-                plt.clf()
-                plt.imshow(A[:,i].reshape((50,50)), interpolation='nearest', origin='lower')
-                plt.savefig('orig-img%i-d%i.png' % (image_counter, i))
-            image_counter += 1
-
         if self.ps is not None:
             mod0 = tr.getModelImage(0)
             tim = tr.getImage(0)
@@ -51,6 +41,7 @@ class FactoredOptimizer(object):
             plt.imshow(mod0, **ima)
             plt.title('mod0')
             sh = mod0.shape
+            Npix = sh[0]*sh[1]
             plt.subplot(rr,cc,2)
             mx = max(np.abs(B))
             imx = ima.copy()
@@ -59,12 +50,12 @@ class FactoredOptimizer(object):
             plt.title('B')
             AX = np.dot(A, x)
             plt.subplot(rr,cc,3)
-            plt.imshow(AX.reshape(sh), **imx)
+            plt.imshow(AX[:Npix].reshape(sh), **imx)
             plt.title('A X')
             ah,aw = A.shape
             for i in range(min(aw, 8)):
                 plt.subplot(rr,cc,5+i)
-                plt.imshow(A[:,i].reshape(sh), **ima)
+                plt.imshow(A[:Npix,i].reshape(sh), **ima)
                 if i == 0:
                     plt.title('dx')
                 elif i == 1:
@@ -576,15 +567,15 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 mx = max(np.abs(B))
                 imx = ima.copy()
                 imx.update(vmin=-mx, vmax=+mx)
-                plt.imshow(B.reshape(sh), **imx)
+                plt.imshow(B[:Npix].reshape(sh), **imx)
                 plt.title('B')
                 AX = np.dot(A, X)
                 plt.subplot(rr,cc,3)
-                plt.imshow(AX.reshape(sh), **imx)
+                plt.imshow(AX[:Npix].reshape(sh), **imx)
                 plt.title('A X')
                 for i in range(min(Nd+2, 8)):
                     plt.subplot(rr,cc,5+i)
-                    plt.imshow(A[:,i].reshape(sh), **ima)
+                    plt.imshow(A[:Npix,i].reshape(sh), **ima)
                     if i == 0:
                         plt.title('dx')
                     elif i == 1:
