@@ -8,6 +8,7 @@ import numpy as np
 import scipy
 import scipy.fft
 import time
+import matplotlib
 
 from data_recorder import DataRecorder
 
@@ -157,8 +158,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         assert(all([m is not None for m in masks]))
 
         assert(src.isParamThawed('pos'))
-
-        # FIXME -- must handle priors (ellipticity)!!
 
         # Pixel positions
         pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
@@ -478,6 +477,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 fftvars[i,:,1] = mix.var[:,0,1]
                 fftvars[i,:,2] = mix.var[:,1,1]
 
+            for i,(_,_,mog,_) in enumerate(img_derivs):
+                if mog is None:
+                    print('Source:', src)
+                #assert(mog is None)
+                
             # from mixture_profiles : getFourierTransform2() with zero_mean=True
             Fsums = np.zeros((Nd, Nw, Nv), np.float32)
             w = np.fft.fftfreq(Nw)
@@ -503,7 +507,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             print('Gs shape:', Gs.shape) #--> 4,64,64
 
             drN = DataRecorder.get().n_recorded()
-            
             DataRecorder.get().add('gpu-Fsum', Fsums[0,:,:].copy())
             DataRecorder.get().add('gpu-P', P.copy())
             DataRecorder.get().add('gpu-G', Gs[0,:,:].copy())
@@ -520,6 +523,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
             # The first element in img_derivs is the current galaxy model parameters.
             mod0 = Gs[0,:,:]
+            print('mod0 sum:', mod0.sum())
 
             # Shift this initial model image to get X,Y pixel derivatives
             dx = np.zeros_like(mod0)
@@ -596,21 +600,14 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                         A[Npix + rij, ci] = vij
                         B[Npix + rij] += bij
 
-            if False:
-                n,m = A.shape
-                for i in range(m):
-                    plt.clf()
-                    plt.imshow(A[:,i].reshape((mh,mw)), interpolation='nearest', origin='lower')
-                    plt.savefig('gpu-img%i-d%i.png' % (img_i, i))
-
             # Compute the covariance matrix
             Xicov = np.matmul(A.T, A)
 
             # Pre-scale the columns of A
             colscales = np.sqrt(np.diag(Xicov))
-            print('gpu   Colscales:', colscales)
+            print('GPU colscales:', colscales)
             A /= colscales[np.newaxis, :]
-            print('gpu   A priors:', A[Npix:,:])
+            #print('gpu   A priors:', A[Npix:,:])
 
             # Solve the least-squares problem!
             X,_,_,_ = np.linalg.lstsq(A, B, rcond=None)
@@ -620,6 +617,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             if True:
                 # Call orig version
                 print('Calling orig version...')# kwargs=', kwargs)
+                print('Source:', src)
                 tims = tr.images
                 mms = tr.modelMasks
                 cat = tr.catalog
@@ -666,6 +664,14 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 orig_x = orig_x[orig_cols]
                 #print('cut orig a to', len(orig_cols), 'of', nc, 'columns')
 
+                orig_ie = tr.images[0].getInvError()
+
+                #darg = np.sum(orig_x * X/colscales) / (np.sqrt(np.sum(orig_x**2)) * np.sqrt(np.sum((X/colscales)**2)))
+                #print('Cosine dist arg (X,orig_x):', darg)
+
+                darg = np.sum(orig_x * X * colscales) / (np.sqrt(np.sum((orig_x * colscales)**2)) * np.sqrt(np.sum(X**2)))
+                print('Cosine dist arg (X,orig_x):', darg)
+
                 srcx = src.copy()
                 srcx.getBrightness().freezeAllBut(tr.images[0].band)
                 tr.catalog = Catalog(srcx)
@@ -686,8 +692,12 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 tr.images = tims
                 tr.catalog = cat
                 tr.modelMasks = mms
-            
-            if self.ps is not None:
+
+            doplots = (self.ps is not None)
+            if darg > 0.999:
+                doplots = False
+
+            if doplots:
 
                 def new_img(X):
                     return X[:Npix].reshape(mh,mw)[roi_slice]
@@ -722,16 +732,25 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 plt.imshow(new_img(B[:Npix]), **imx)
                 if cb:
                     plt.colorbar()
+                plt.xticks([]); plt.yticks([])
                 plt.title('B')
                 AX = np.dot(A, X)
                 plt.subplot(rr,cc,3)
                 plt.imshow(new_img(AX[:Npix]), **imx)
                 if cb:
                     plt.colorbar()
+                plt.xticks([]); plt.yticks([])
                 plt.title('A X')
                 for i in range(min(Nd+2, 8)):
                     plt.subplot(rr,cc,5+i)
-                    plt.imshow(new_img(A[:Npix,i]), **ima)
+                    a = new_img(A[:Npix,i] * colscales[i])
+                    a = a.copy()
+                    mx = np.max(np.abs(a))
+                    a[a == 0] = np.nan
+                    cmap = matplotlib.cm.viridis
+                    cmap.set_bad(color='0.5', alpha=1.)
+                    plt.imshow(a, vmin=-mx, vmax=mx, cmap=cmap, **ima)
+                    plt.xticks([]); plt.yticks([])
                     if cb:
                         plt.colorbar()
                     if i == 0:
@@ -742,6 +761,14 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                         plt.title('dflux')
                     else:
                         plt.title(img_derivs[i-2][0])
+
+                plt.subplot(rr,cc, 12)
+                plt.imshow(ie, **ima)
+                if cb:
+                    plt.colorbar()
+                plt.xticks([]); plt.yticks([])
+                plt.title('ie')
+                
                 plt.suptitle('GPU: image %i/%i' % (img_i+1, len(imgs)))
                 self.ps.savefig()
 
@@ -751,7 +778,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             #print('ROI slice:', roi_slice)
 
             # orig plots
-            if self.ps is not None:
+            if doplots:
                 import pylab as plt
                 plt.clf()
                 ima = dict(interpolation='nearest', origin='lower')
@@ -778,24 +805,40 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 plt.imshow(orig_img(orig_B), **imx)
                 if cb:
                     plt.colorbar()
+                plt.xticks([]); plt.yticks([])
                 plt.title('B')
                 AX = np.dot(orig_A, orig_x)
                 plt.subplot(rr,cc,3)
                 plt.imshow(orig_img(AX), **imx)
                 if cb:
                     plt.colorbar()
+                plt.xticks([]); plt.yticks([])
                 plt.title('A X')
                 ond = orig_A.shape[1]
                 for i in range(ond):
                     plt.subplot(rr,cc,5+i)
-                    plt.imshow(orig_img(orig_A[:,i]), **ima)
+                    oa = orig_img(orig_A[:,i])
+                    oa = oa.copy()
+                    mx = np.max(np.abs(oa))
+                    oa[oa == 0] = np.nan
+                    cmap = matplotlib.cm.viridis
+                    cmap.set_bad(color='0.5', alpha=1.)
+                    plt.imshow(oa, vmin=-mx, vmax=mx, cmap=cmap, **ima)
                     if cb:
                         plt.colorbar()
+                    plt.xticks([]); plt.yticks([])
+
+                plt.subplot(rr,cc, 12)
+                plt.imshow(orig_ie, **ima)
+                if cb:
+                    plt.colorbar()
+                plt.xticks([]); plt.yticks([])
+                plt.title('ie')
 
                 plt.suptitle('Orig version: image %i/%i' % (img_i+1, len(imgs)))
                 self.ps.savefig()
 
-            if self.ps is not None:
+            if doplots:
                 import pylab as plt
 
                 # plt.clf()
@@ -843,6 +886,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 plt.clf()
                 ima = dict(interpolation='nearest', origin='lower')
                 rr,cc = 3,4
+                print('Orig mod0 max:', np.max(orig_mod0))
+                print('GPU mod0 max:', np.max(mod0[roi_slice]))
                 d = orig_mod0 - mod0[roi_slice]
                 mx = np.max(np.abs(d))
                 plt.subplot(rr,cc,1)
@@ -850,7 +895,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 if cb:
                     plt.colorbar()
                 plt.title('mod0')
-                #sh = mod0.shape
                 sh = roi_shape
                 mx = max(np.abs(B))
                 imx = ima.copy()
@@ -864,6 +908,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 plt.imshow(d.reshape(sh), vmin=-mx, vmax=mx, **ima)
                 if cb:
                     plt.colorbar()
+                plt.xticks([]); plt.yticks([])
                 plt.title('B')
                 AX = new_img(np.dot(A, X * colscales))
                 oAX = orig_img(np.dot(orig_A, orig_x))
@@ -874,6 +919,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 plt.imshow(d.reshape(sh), vmin=-mx, vmax=mx, **ima)
                 if cb:
                     plt.colorbar()
+                plt.xticks([]); plt.yticks([])
                 plt.title('A X')
 
                 plt.subplot(rr,cc,4)
@@ -883,6 +929,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 plt.imshow(d.reshape(sh), vmin=-mx, vmax=mx, **ima)
                 if cb:
                     plt.colorbar()
+                plt.xticks([]); plt.yticks([])
                 plt.title('mod1')
                 
                 oNd = orig_A.shape[1]
@@ -899,10 +946,12 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                     plt.imshow(d.reshape(sh), vmin=-mx, vmax=mx, **ima)
                     if cb:
                         plt.colorbar()
+                    plt.xticks([]); plt.yticks([])
 
                 plt.suptitle('Difference: image %i/%i' % (img_i+1, len(imgs)))
                 self.ps.savefig()
 
+                print('Plotting saved Fourier data elements:', drN, 'though', drN+5)
                 data = DataRecorder.get().all()
                 t1,gpuF = data[drN+0]
                 t2,gpuP = data[drN+1]
@@ -910,7 +959,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 t4,origF = data[drN+3]
                 t5,origP = data[drN+4]
                 t6,origG = data[drN+5]
-
+                
                 plt.clf()
                 k = 1
                 for gpu,orig,ta,tb in [(gpuF,origF,t1,t4),

@@ -173,7 +173,7 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
             colscales = np.sqrt(colscales2)
 
         print('dense Colscales:', colscales)
-        print('dense A priors:', A[Npixels:,:])
+        #print('dense A priors:', A[Npixels:,:])
         chimap = {}
         if chiImages is not None:
             for img, chi in zip(tractor.getImages(), chiImages):

@@ -319,7 +319,6 @@ class LsqrOptimizer(Optimizer):
         R = {}
         for step in range(steps):
             dlnp, X, alpha = self.optimize(tractor, **kwargs)
-            print('OneBlob opt_loop dlnp %.6g, alpha %.4g, X' % (dlnp, alpha), X)
             # print('Opt step: dlnp', dlnp,
             #      ', '.join([str(src) for src in tractor.getCatalog()]))
             if dlnp <= dchisq:

@@ -493,7 +493,6 @@ class ProfileGalaxy(object):
             #G = np.fft.irfftn(Fsum * P)
             import scipy
             G = scipy.fft.irfftn(Fsum * P)
-            print('galaxy.py irfftn types: Fsum', Fsum.dtype, 'P', P.dtype, 'G', G.dtype)
             assert(G.shape == (pH,pW))
             # FIXME -- we could try to be sneaky and Lanczos-interp
             # after cutting G down to nearly its final size... tricky
@@ -546,6 +545,7 @@ class ProfileGalaxy(object):
                 G = G[:y1 - iy0, :]
 
         if mogmix is not None:
+            print('Adding MoG components:', mogmix)
             if modelMask is not None:
                 mogpatch = run_mog(amix=mogmix, mm=modelMask)
             else:
