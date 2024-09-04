@@ -97,23 +97,23 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
             ampsum += amp[k];
             
         // We symmetrize the covariance matrix,
-        // so V,I just have three elements for each K: x**2, xy, y**2.
+        // so V,icov just have three elements for each K: x**2, xy, y**2.
         for (k=0; k<K; k++) {
-            // We also scale the I to make the Gaussian evaluation easier
+            // We also scale the icov to make the Gaussian evaluation easier
             double det;
             double isc;
             double* V = VV + 3*k;
-            double* I = II + 3*k;
+            double* icov = II + 3*k;
             V[0] =  var[k*D*D + 0];
             V[1] = (var[k*D*D + 1] + var[k*D*D + 2])*0.5;
             V[2] =  var[k*D*D + 3];
             det = V[0]*V[2] - V[1]*V[1];
             // we fold the -0.5 in the Gaussian exponent term in here...
             isc = -0.5 / det;
-            I[0] =  V[2] * isc;
+            icov[0] =  V[2] * isc;
             // we also fold in the 2*dx*dy term here
-            I[1] = -V[1] * isc * 2.0;
-            I[2] =  V[0] * isc;
+            icov[1] = -V[1] * isc * 2.0;
+            icov[2] =  V[0] * isc;
             scales[k] = amp[k] / sqrt(tpd * det);
             if (minval > 0.0) {
                 maxD[k] = log(minval * sqrt(tpd*det) / ampsum);

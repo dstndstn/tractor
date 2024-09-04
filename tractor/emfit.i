@@ -396,7 +396,7 @@ static int em_fit_2d_reg(PyObject* po_img, int x0, int y0,
         for (k=0; k<K; k++) {
             // ASSUME ordering
             double* V = var + k*D*D;
-            double* I = ivar + k*D*D;
+            double* ivar_k = ivar + k*D*D;
             double det;
             //printf("var[%i]: %.3f,%.3f,%.3f,%.3f\n", k, V[0], V[1], V[2], V[3]);
             det = V[0]*V[3] - V[1]*V[2];
@@ -406,10 +406,10 @@ static int em_fit_2d_reg(PyObject* po_img, int x0, int y0,
                 result = -1;
                 goto cleanup;
             }
-            I[0] =  V[3] / det;
-            I[1] = -V[1] / det;
-            I[2] = -V[2] / det;
-            I[3] =  V[0] / det;
+            ivar_k[0] =  V[3] / det;
+            ivar_k[1] = -V[1] / det;
+            ivar_k[2] = -V[2] / det;
+            ivar_k[3] =  V[0] / det;
             scale[k] = amp[k] / sqrt(tpd * det);
         }
 
