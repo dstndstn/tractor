@@ -108,6 +108,24 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
             self.nativeW = int(np.ceil(self.W * self.sampling))
             self.nativeH = int(np.ceil(self.H * self.sampling))
 
+        from tractor.psf import HybridPSF
+        from tractor.batch_mixture_profiles import BatchMixtureOfGaussians
+        psfmogs = []
+        maxK = 0
+        for i,psf in enumerate(psfs):
+            assert(isinstance(psf, HybridPSF))
+            psfmog = psf.getMixtureOfGaussians()
+            psfmogs.append(psfmog)
+            maxK = max(maxK, psfmog.K)
+        amps = np.zeros((N, maxK))
+        means = np.zeros((N, maxK, 2))
+        varrs = np.zeros((N, maxK, 2, 2))
+        for i,psfmog in enumerate(psfmogs):
+            amps[i, :psfmog.K] = psfmog.amp
+            means[i, :psfmog.K, :] = psfmog.mean
+            varrs[i, :psfmog.K, :, :] = psfmog.var
+        self.psf_mogs = BatchMixtureOfGaussians(amps, means, varrs, quick=True)
+
     def __str__(self):
         return 'BatchPixelizedPSF'
 

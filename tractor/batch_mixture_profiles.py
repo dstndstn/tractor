@@ -121,11 +121,12 @@ class BatchImageParams(object):
         v, w = 1d vectors
     '''
 
-    def __init__(self, P, v, w):
+    def __init__(self, P, v, w, psf_mogs):
         self._initialized = False
         self.P = P
         self.v = v
         self.w = w
+        self.psf_mogs = psf_mogs
 
         self.mogs = None
         self.ffts = None

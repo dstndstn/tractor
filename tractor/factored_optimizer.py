@@ -200,7 +200,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         assert(pH % 2 == 0)
         assert(P.shape == (nimages,len(w),len(v)))
 
-        img_params = BatchImageParams(P, v, w)
+        img_params = BatchImageParams(P, v, w, batch_psf.psf_mogs)
 
         #Not optimal but for now go back into loop
         for mm,(px,py),(x0,x1,y0,y1),psf,pix,ie,counts,cdi,tim in zip(
@@ -453,7 +453,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             rA, cA, vA, pb, mub = priorVals
             Npriors = max(Npriors, max([1+max(r) for r in rA]))
 
-        assert(img_params.mogs is None) 
         assert(img_params.ffts is not None)
         assert(img_params.mux is not None)
         assert(img_params.muy is not None)
@@ -474,6 +473,72 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         del Fsum
         assert (G.shape == (img_params.Nimages, img_params.maxNd, img_params.mh, img_params.mw))
 
+        if img_params.mogs is not None:
+            psfmog = img_params.psf_mogs
+            print('Img_params.mogs:', img_params.mogs)
+            print('PSF mogs:', img_params.psf_mogs)
+            # assert trivial mixture of Gaussians - single circular Gaussian
+            # If we relax this, then convolution becomes much harder!
+            assert(psfmog.K == 1)
+            assert(np.all(psfmog.mean == 0.))
+            assert(np.all(psfmog.amp == 1.))
+            assert(psfmog.var[..., 0, 0,1] == 0)
+            assert(psfmog.var[..., 0, 1,0] == 0)
+            assert(psfmog.var[..., 0, 0,0] == psfmog.var[..., 0, 1,1])
+
+            # Trivial convolution
+            mogs = img_params.mogs
+            #varcopy = mogs.var.copy()
+            varcopy = mogs.var.get()
+            #print('Varcopy:', type(varcopy))
+            varcopy[..., 0, 0] += psfmog.var[..., np.newaxis, 0, 0, 0]
+            varcopy[..., 1, 1] += psfmog.var[..., np.newaxis, 0, 1, 1]
+            #gpu_v = cp.asarray(psfmog.var[..., 0, 0, 0])
+            #varcopy[..., 0, 0] += gpu_v[..., cp.newaxis]
+            #gpu_v = cp.asarray(psfmog.var[..., 0, 0, 0])
+            #varcopy[..., 1, 1] += gpu_v[..., cp.newaxis]
+            conv_mog = BatchMixtureOfGaussians(mogs.amp.get(), mogs.mean.get(), varcopy, quick=True)
+            print('Convolved MoG:', conv_mog)
+
+            ### Could also assert that the Gaussians are all concentric... means for all K are equal
+
+            print('var shape', conv_mog.var.shape)
+            #print('mogs K', mogs.K)
+            print('maxNmogs', img_params.maxNmogs)
+            print(img_params.Nimages, img_params.maxNd, img_params.maxNmogs)
+            
+            # Evaluate MoG on pixel grid, add to G
+            xx = np.arange(img_params.mw)
+            yy = np.arange(img_params.mh)
+            for i in range(img_params.Nimages):
+                for j in range(img_params.maxNd):
+                    #for k in range(img_params.maxK):
+                    for k in range(img_params.maxNmogs):
+                        V = conv_mog.var[i, j, k, :, :]
+                        det = V[0,0]*V[1,1] - V[0,1]*V[1,0]
+                        iv0 = V[1,1] / det
+                        iv1 = -(V[0,1] + V[1,0]) / det
+                        iv2 = V[0, 0] / det
+                        scale = conv_mog.amp[i, j, k] / (2.*np.pi * np.sqrt(det))
+                        dx = xx - conv_mog.mean[i, j, k, 0]
+                        dy = yy - conv_mog.mean[i, j, k, 1]
+                        distsq = (iv0 * dx[np.newaxis,:] * dx[np.newaxis,:] +
+                                  iv1 * dx[np.newaxis,:] * dy[:,np.newaxis] +
+                                  iv2 * dy[:,np.newaxis] * dy[:,np.newaxis])
+                        g = scale * np.exp(-0.5 * distsq)
+
+                        if self.ps is not None:
+                            import pylab as plt
+                            plt.clf()
+                            plt.subplot(1,2,1)
+                            plt.imshow(G[i,j,:,:].get(), interpolation='nearest', origin='lower')
+                            plt.title('G[%i,%i]' % (i, j))
+                            plt.subplot(1,2,2)
+                            plt.imshow(g, interpolation='nearest', origin='lower')
+                            plt.title('g')
+                            self.ps.savefig()
+
+                        G[i, j, :, :] += cp.asarray(g)
 
         #for img_i, (img_derivs_batch, pix, ie, P, mux, muy, mw, mh, counts, cdi, roi, v, w) in enumerate(imgs):
         #for img_i, (img_derivs, pix, ie, P, mux, muy, mw, mh, counts, cdi, roi) in enumerate(imgs):
