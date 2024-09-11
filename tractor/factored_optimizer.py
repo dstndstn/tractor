@@ -483,7 +483,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
           
         Npix = img_params.mh*img_params.mw
         Nd = img_params.maxNd
-        A = cp.zeros((Npix + Npriors, Nd+2), cp.float32)
+        A = cp.zeros((img_params.Nimages, Npix + Npriors, Nd+2), cp.float32)
         # The first element in img_derivs is the current galaxy model parameters.
         mod0 = G[:,0,:,:]
         # Shift this initial model image to get X,Y pixel derivatives
@@ -507,6 +507,45 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         A[:,:Npix, 2:] = counts[cp.newaxis, cp.newaxis,2:] / stepsizes[cp.newaxis,cp.newaxis,2:] * cp.reshape((G[:,2:,:,:] - mod0[:,cp.newaxis,:,:]), (img_params.Nimages, Npix,-1))
         #A[:Npix,:] *= ie.ravel()[:, cp.newaxis]
         A[:,:Npix,:] *= cp.reshape(ie, (img_params.Nimages, -1)[:,:, cp.newaxis]
+
+        B = cp.append(cp.reshape((img_params.pix - img_derivs.counts(:,cp.newaxis, cp.newaxis)*mod0)*
+            img_derivs.ie, (img_params.Nimages, -1)), cp.zeros((img_params.Nimages,-1),cp.float32))        
+        #B = cp.append(((pix - counts*mod0) * ie).ravel(),
+        #                cp.zeros(Npriors, cp.float32))
+
+
+        # Append priors --do priors depend on which image I am looking at?
+
+        if priorVals is not None:
+            rA, cA, vA, pb, mub = priorVals
+            for ri,ci,vi,bi in zip(rA, cA, vA, pb):
+                for rij,vij,bij in zip(ri, vi, bi):
+                    A(:,Npix + rij, ci) = vij
+                    B(:,Npix + rij) += bij
+        
+    '''    
+            # Append priors
+            if priorVals is not None:
+                rA, cA, vA, pb, mub = priorVals
+                for ri,ci,vi,bi in zip(rA, cA, vA, pb):
+                    for rij,vij,bij in zip(ri, vi, bi):
+                        A[Npix + rij, ci] = vij
+                        B[Npix + rij] += bij
+    '''
+
+        
+        # Compute the covariance matrix
+        Xicov = cp.matmul(A.T, A)
+
+        # Pre-scale the columns of A
+        colscales = cp.sqrt(cp.diagonal(Xicov, axis1=1, axis2=2)
+        A /= colscales[:,cp.newaxis, :]
+
+        # Solve the least-squares problem!
+        X,_,_,_ = cp.linalg.lstsq(A, B, rcond=None)
+
+        # Undo pre-scaling
+        X /= colscales
 
 
 
