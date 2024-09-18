@@ -482,19 +482,24 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #for img_i, (img_derivs, pix, ie, P, mux, muy, mw, mh, counts, cdi, roi) in enumerate(imgs):
           
         Npix = img_params.mh*img_params.mw
+        #Npix is a scalar
         Nd = img_params.maxNd
         A = cp.zeros((img_params.Nimages, Npix + Npriors, Nd+2), cp.float32)
+        # A is of shape (Nimages, Npix+Npriors, Nd+2)
         # The first element in img_derivs is the current galaxy model parameters.
         mod0 = G[:,0,:,:]
+        # mod0 should be (Nimages, nw, nv)
         # Shift this initial model image to get X,Y pixel derivatives
         dx = cp.zeros_like(mod0)
+        # dx is of shape (Nimages, nw, nv)
         # X derivative -- difference between shifted-left and shifted-right arrays
         dx[:,:,1:-1] = mod0[:,:, 2:] - mod0[:,:, :-2]
         # Y derivative -- difference between shifted-down and shifted-up arrays
         dy = cp.zeros_like(mod0)
+        # dy is of shape (Nimages, nw, nv)
         dy[:,1:-1, :] = mod0[:,2:, :] - mod0[:,:-2, :]
         # Push through local WCS transformation to get to RA,Dec param derivatives
-        assert(cdi.shape == (img_params.Nimages,2,2))
+        assert(img_params.cdi.shape == (img_params.Nimages,2,2))
         # divide by 2 because we did +- 1 pixel
         # negative because we shifted the *image*, which is opposite
         # from shifting the *model*
@@ -502,14 +507,16 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         A[:,:Npix, 1] = cp.reshape(-((dx * cdi[:,0, 1] + dy * cdi[:,1, 1]) * img_params.counts / 2), (img_params.Nimages, -1))
         del dx,dy
         A[:,:Npix,2] = cp.reshape(mod0,(img_params.Nimages, -1))
+
         
         #A[:Npix, i + 2] = counts / stepsizes[i] * (Gi[i,:,:] - mod0).ravel()
         A[:,:Npix, 2:] = counts[cp.newaxis, cp.newaxis,2:] / stepsizes[cp.newaxis,cp.newaxis,2:] * cp.reshape((G[:,2:,:,:] - mod0[:,cp.newaxis,:,:]), (img_params.Nimages, Npix,-1))
         #A[:Npix,:] *= ie.ravel()[:, cp.newaxis]
-        A[:,:Npix,:] *= cp.reshape(ie, (img_params.Nimages, -1)[:,:, cp.newaxis]
+        A[:,:Npix,:] *= cp.reshape(ie, (img_params.Nimages, -1))[:,:, cp.newaxis]
 
         B = cp.append(cp.reshape((img_params.pix - img_derivs.counts(:,cp.newaxis, cp.newaxis)*mod0)*
-            img_derivs.ie, (img_params.Nimages, -1)), cp.zeros((img_params.Nimages,-1),cp.float32))        
+            img_derivs.ie, (img_params.Nimages, -1)), cp.zeros((img_params.Nimages,-1),cp.float32))    
+        # B should be of shape (Nimages, :)                           
         #B = cp.append(((pix - counts*mod0) * ie).ravel(),
         #                cp.zeros(Npriors, cp.float32))
 
@@ -537,18 +544,25 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # Compute the covariance matrix
         Xicov = cp.matmul(A.T, A)
 
+
         # Pre-scale the columns of A
-        colscales = cp.sqrt(cp.diagonal(Xicov, axis1=1, axis2=2)
+        colscales = cp.sqrt(cp.diagonal(Xicov, axis1=1, axis2=2))
         A /= colscales[:,cp.newaxis, :]
 
         # Solve the least-squares problem!
-        X,_,_,_ = cp.linalg.lstsq(A, B, rcond=None)
+        #X,_,_ = cp.linalg.lstsq(A, B, rcond=None)
+        A_T_dot_A = cp.einsum("...ji,...jk", A, A)
+        A_T_dot_B = cp.einsum("...ji,...j", A, b)
+        X = cp.linalg.solve(A_T_dot_A, A_T_dot_B)
 
         # Undo pre-scaling
         X /= colscales
+        # del A, B
+        Xic.append((X, Xicov))
 
+    return Xic
 
-
+ '''
          for img_i, imderiv in enumerate(img_params.img_derivs):
             pix, ie, mw, mh, counts, cdi, roi = imderiv.mmpix, imderiv.mmie, imderiv.mw, imderiv.mh, imderiv.counts, imderiv.cdi, imderiv.roi 
             assert(pix.shape == (mh,mw))
@@ -676,7 +690,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             A /= colscales[cp.newaxis, :]
 
             # Solve the least-squares problem!
-            X,_,_,_ = cp.linalg.lstsq(A, B, rcond=None)
+            X = cupy.linalg.solve(A, B)
 
             # Undo pre-scaling
             X /= colscales
@@ -717,6 +731,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             del A,B
             Xic.append((X, Xicov))
         return Xic
+'''
 
 class MyAwesomeGpuImplementation(GPUFriendlyOptimizer):
     def computeUpdateDirections(self, imgs):
