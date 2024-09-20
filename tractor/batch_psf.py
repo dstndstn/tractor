@@ -30,18 +30,17 @@ def lanczos_shift_image_batch_gpu(imgs, dxs, dys):
     from tractor.miscutils import gpu_lanczos_filter,batch_correlate1d_gpu
     do_reshape = False
     if len(imgs.shape) == 4:
+        do_reshape = True
         oldshape = imgs.shape
         imgs = imgs.reshape((oldshape[0]*oldshape[1], oldshape[2], oldshape[3]))
     L = 3
     nimg = dxs.size 
-    print ("LANC", imgs.shape, oldshape, nimg, dxs.shape, dys.shape)
     lr = cp.tile(cp.arange(-L, L+1), (nimg, 1))
     Lx = gpu_lanczos_filter(L, lr+dxs.reshape((nimg,1)))
     Ly = gpu_lanczos_filter(L, lr+dys.reshape((nimg,1)))
     # Normalize the Lanczos interpolants (preserve flux)
     Lx /= Lx.sum(1).reshape((nimg,1))
     Ly /= Ly.sum(1).reshape((nimg,1))
-    print ("LX", Lx.shape, Ly.shape)
     sx = batch_correlate1d_gpu(imgs, Lx, axis=2, mode='constant')
     outimg = batch_correlate1d_gpu(sx, Ly, axis=1, mode='constant')
     if (do_reshape):
@@ -107,6 +106,28 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
             # The size of PSF image we will return.
             self.nativeW = int(np.ceil(self.W * self.sampling))
             self.nativeH = int(np.ceil(self.H * self.sampling))
+
+        from tractor.psf import HybridPSF
+        from tractor.batch_mixture_profiles import BatchMixtureOfGaussians
+        psfmogs = []
+        maxK = 0
+        for i,psf in enumerate(psfs):
+            assert(isinstance(psf, HybridPSF))
+            psfmog = psf.getMixtureOfGaussians()
+            psfmogs.append(psfmog)
+            maxK = max(maxK, psfmog.K)
+        amps = np.zeros((N, maxK))
+        means = np.zeros((N, maxK, 2))
+        varrs = np.zeros((N, maxK, 2, 2))
+        for i,psfmog in enumerate(psfmogs):
+            amps[i, :psfmog.K] = psfmog.amp
+            means[i, :psfmog.K, :] = psfmog.mean
+            varrs[i, :psfmog.K, :, :] = psfmog.var
+        amps = cp.asarray(amps)
+        means = cp.asarray(means)
+        varrs = cp.asarray(varrs)
+        self.psf_mogs = BatchMixtureOfGaussians(amps, means, varrs, quick=True)
+
 
     def __str__(self):
         return 'BatchPixelizedPSF'

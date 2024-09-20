@@ -87,7 +87,7 @@ class ImageDerivs(object):
             for i, amix in enumerate(amixes):
                 (name, mix, step) = amix
                 amp[i] = mix.amp[IF] * fftweights
-                mean[i] = mix.mean[IF, :] + np.array([px, py])[np.newaxis, :]
+                mean[i] = mix.mean[IF, :]
                 var[i] = mix.var[IF, :, :]
             #self.ffts = BatchMixtureOfGaussians(cp.asarray(amp), cp.asarray(mean), cp.asarray(var), quick=True)
             self.fft_amp = amp
@@ -121,11 +121,12 @@ class BatchImageParams(object):
         v, w = 1d vectors
     '''
 
-    def __init__(self, P, v, w):
+    def __init__(self, P, v, w, psf_mogs):
         self._initialized = False
         self.P = P
         self.v = v
         self.w = w
+        self.psf_mogs = psf_mogs
 
         self.mogs = None
         self.ffts = None
@@ -418,7 +419,6 @@ class BatchMixtureOfGaussians(object):
             F[z] = F[z] * cp.exp(-2. * cp.pi * 1j * (mu[:,:,0,cp.newaxis,cp.newaxis]*v[cp.newaxis,cp.newaxis,cp.newaxis,:] +
                                     mu[:,:,1,cp.newaxis,cp.newaxis]*w[cp.newaxis,cp.newaxis,:,cp.newaxis])[z])
 
-        print ("F", F.shape)
         Fsum = (self.amp[:,:,None,None]*F).sum(axis=1)
         return Fsum
 
@@ -434,12 +434,14 @@ class BatchMixtureOfGaussians(object):
         a = self.var[:,:,:,0,0]
         b = self.var[:,:,:,0,1]
         d = self.var[:,:,:,1,1]
+
         #n, K
         #5D arrays are fun!
         F = cp.exp(-2. * cp.pi**2 *
                 (a[:,:,:,cp.newaxis,cp.newaxis]*v[cp.newaxis,cp.newaxis,cp.newaxis,cp.newaxis,:]**2 +
                  d[:,:,:,cp.newaxis,cp.newaxis]*w[cp.newaxis,cp.newaxis,cp.newaxis,:,cp.newaxis]**2 +
                  2*b[:,:,:,cp.newaxis,cp.newaxis]*v[cp.newaxis,cp.newaxis,cp.newaxis,cp.newaxis,:]*w[cp.newaxis,cp.newaxis,cp.newaxis,:,cp.newaxis]))
+
         z = cp.logical_or(mu[:,:,:,0] != 0, mu[:,:,:,1] != 0)
         if (z.any()):
             F[z] = F[z] * cp.exp(-2. * cp.pi * 1j * (mu[:,:,:,0,cp.newaxis,cp.newaxis]*v[cp.newaxis,cp.newaxis,cp.newaxis,cp.newaxis,:] +

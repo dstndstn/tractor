@@ -3,7 +3,7 @@ import numpy as np
 from tractor.engine import logverb
 from tractor.constrained_optimizer import ConstrainedOptimizer
 
-from numpy.linalg import lstsq
+from numpy.linalg import lstsq, LinAlgError
 
 # from astrometry.util.plotutils import PlotSequence
 # ps = PlotSequence('opt')
@@ -185,8 +185,21 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
             B[row0: row0 + npix] = chi
             del chi
 
-        # X, resids, rank, singular_vals
-        X,_,_,_ = lstsq(A, B, rcond=None)
+        try:
+            X,_,_,_ = lstsq(A, B, rcond=None)
+        except LinAlgError as e:
+            print('Exception in lstsq:', e)
+            from collections import Counter
+            import traceback
+            traceback.print_exc()
+            if scale_columns:
+                print('Column scales:', colscales)
+            print('A finite:', Counter(np.isfinite(A.ravel())))
+            print('B finite:', Counter(np.isfinite(B.ravel())))
+            return None
+
+        ## X, resids, rank, singular_vals
+        #X,_,_,_ = lstsq(A, B, rcond=None)
 
         if False:
             Aold = super(ConstrainedDenseOptimizer, self).getUpdateDirection(
