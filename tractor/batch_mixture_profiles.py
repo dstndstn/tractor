@@ -190,7 +190,7 @@ class BatchImageParams(object):
         print (f'\t{self.maxNmogs=}, {self.maxNfft=}, {self.mux=}, {self.muy=}')
 
     def get_imderiv(self, i):
-        assert (i < self.N)
+        assert (i < self.Nimages)
         return self.img_derivs[i]
 
 

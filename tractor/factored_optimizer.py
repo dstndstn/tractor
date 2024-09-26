@@ -281,7 +281,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
             K = amix.var.shape[0]
             D = amix.var.shape[1]
-            print ("LEN AMIXES ", len(amixes), "IM", IM.sum(), "IF", IF.sum())
             img_derivs = ImageDerivs(amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi)
             img_params.add_image_deriv(img_derivs)
             img_derivs.tostr()
@@ -484,34 +483,12 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         t1 = time.time()
         G = cp.fft.irfft2(Fsum*P)
         add_to_timer(5, time.time()-t1)
-        ## TODO G should be (nimages, maxNd, nw, nv) and mux and muy should be 1d vectors
-        #print ("G", G.shape)
         t1 = time.time()
-        print ("G", G.shape, img_params.mux, img_params.muy)
-        g2 = G[0,0].get().copy()
-        Nd = G.shape[1]
-        import pylab as plt
-        for i in range(Nd):
-            plt.clf()
-            plt.imshow(G[0,i].get(), interpolation='nearest', origin='lower')
-            plt.savefig('gpu-G0%i.png' % (i))
+        #Do Lanczos shift
         G = lanczos_shift_image_batch_gpu(G, img_params.mux, img_params.muy)
-        print ("GL", G.shape)
-        lanczos_shift_image(g2, img_params.mux.get()[0], img_params.muy.get()[0], inplace=True)
-        for i in range(Nd):
-            plt.clf()
-            plt.imshow(G[0,i].get(), interpolation='nearest', origin='lower')
-            plt.savefig('gpu-GL%i.png' % (i))
-        plt.clf()
-        plt.imshow(g2, interpolation='nearest', origin='lower')
-        plt.savefig('cpu-G1.png')
-        print (f'{G=}')
-        print(f'{g2=}')
-        dg = G[0,0].get()-g2
-        print ("Diff ",dg.mean(), dg.std(), dg.min(), dg.max())
-        #assert(cp.allclose(G[0,0], g2, atol=1.e-6))
         add_to_timer(6, time.time()-t1)
         #del Fsum
+        #G should be (nimages, maxNd, nw, nv) and mux and muy should be 1d vectors
         assert (G.shape == (img_params.Nimages, img_params.maxNd, img_params.mh, img_params.mw))
 
 
@@ -531,7 +508,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # Trivial convolution
             mogs = img_params.mogs
             varcopy = mogs.var.copy()
-            print('Varcopy:', type(varcopy))
+            #print('Varcopy:', type(varcopy))
             varcopy[..., 0, 0] += psfmog.var[..., cp.newaxis, 0, 0, 0]
             varcopy[..., 1, 1] += psfmog.var[..., cp.newaxis, 0, 1, 1]
             #gpu_v = cp.asarray(psfmog.var[..., 0, 0, 0])
@@ -539,16 +516,17 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             #gpu_v = cp.asarray(psfmog.var[..., 0, 0, 0])
             #varcopy[..., 1, 1] += gpu_v[..., cp.newaxis]
             conv_mog = BatchMixtureOfGaussians(mogs.amp, mogs.mean, varcopy, quick=True)
-            print('Convolved MoG:', conv_mog)
+            #print('Convolved MoG:', conv_mog)
 
             ### Could also assert that the Gaussians are all concentric... means for all K are equal
 
-            print('var shape', conv_mog.var.shape)
+            #print('var shape', conv_mog.var.shape)
             #print('mogs K', mogs.K)
-            print('maxNmogs', img_params.maxNmogs)
-            print(img_params.Nimages, img_params.maxNd, img_params.maxNmogs)
+            #print('maxNmogs', img_params.maxNmogs)
+            #print(img_params.Nimages, img_params.maxNd, img_params.maxNmogs)
 
             # Evaluate MoG on pixel grid, add to G
+            use_roi = True
             xx = cp.arange(img_params.mw)
             yy = cp.arange(img_params.mh)
             det = conv_mog.var[:,:,:,0,0] * conv_mog.var[:,:,:,1,1] - conv_mog.var[:,:,:,0,1] * conv_mog.var[:,:,:,1,0]
@@ -558,45 +536,26 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             scale = conv_mog.amp / (2.*cp.pi*cp.sqrt(det))
             dx = xx - conv_mog.mean[:,:,:,0]
             dy = yy - conv_mog.mean[:,:,:,1]
+            if use_roi:
+                #Loop over img_params.img_derivs and correct mean so that mogs are centered with G
+                for img_i, imderiv in enumerate(img_params.img_derivs):
+                    (rx0,ry0,rw,rh) = imderiv.roi
+                    dx[img_i] -= rx0
+                    dy[img_i] -= ry0
             distsq = (iv0[:,:,:,cp.newaxis] * dx[:,:,cp.newaxis,:] * dx[:,:,cp.newaxis,:] +
                       iv1[:,:,:,cp.newaxis] * dx[:,:,cp.newaxis,:] * dy[:,:,:,cp.newaxis] +
                       iv2[:,:,:,cp.newaxis] * dy[:,:,:,cp.newaxis] * dy[:,:,:,cp.newaxis])
             mog_g = scale[:,:,:,cp.newaxis] * cp.exp(-0.5*distsq)
-            for i in range(img_params.Nimages):
-                for j in range(img_params.maxNd):
-                    #for k in range(img_params.maxK):
-                    for k in range(img_params.maxNmogs):
-                        #V = conv_mog.var[i, j, k, :, :].get()
-                        #det = V[0,0]*V[1,1] - V[0,1]*V[1,0]
-                        #iv0 = V[1,1] / det
-                        #iv1 = -(V[0,1] + V[1,0]) / det
-                        #iv2 = V[0, 0] / det
-                        #scale = conv_mog.amp[i, j, k].get() / (2.*np.pi * np.sqrt(det))
-                        #dx = xx - conv_mog.mean[i, j, k, 0]
-                        #dy = yy - conv_mog.mean[i, j, k, 1]
-                        #dx = xx.get()
-                        #dy = yy.get()
-                        #distsq = (iv0 * dx[np.newaxis,:] * dx[np.newaxis,:] +
-                        #          iv1 * dx[np.newaxis,:] * dy[:,np.newaxis] +
-                        #          iv2 * dy[:,np.newaxis] * dy[:,np.newaxis])
-                        #g = scale * np.exp(-0.5 * distsq)
 
-                        if self.ps is not None:
-                            import pylab as plt
-                            plt.clf()
-                            plt.subplot(1,2,1)
-                            plt.imshow(G[i,j,:,:].get(), interpolation='nearest', origin='lower')
-                            plt.title('G[%i,%i]' % (i, j))
-                            plt.subplot(1,2,2)
-                            plt.imshow(mog_g[i,j].get(), interpolation='nearest', origin='lower')
-                            plt.title('g')
-                            self.ps.savefig()
+        #if use_roi:
+        #    roi = img_params.get_imderiv(0).roi
+        #    (rx0,ry0,rw,rh) = roi
+        #    G = G[:,:,ry0:ry0+rh, rx0:rx0+rw]
+        #    mog_g = mog_g[:,:,:rh,:rw]
+        G += mog_g
+        use_roi = False
 
-                        #G[i, j, :, :] += cp.asarray(g)
-
-            G += mog_g
-
-
+        #TODO this loop still needs to be vectorized
         #for img_i, (img_derivs_batch, pix, ie, P, mux, muy, mw, mh, counts, cdi, roi, v, w) in enumerate(imgs):
         #for img_i, (img_derivs, pix, ie, P, mux, muy, mw, mh, counts, cdi, roi) in enumerate(imgs):
         t1 = time.time()
@@ -643,9 +602,13 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             #del Fsum
             Gi = G[img_i]
             print (f'{Nd=}, {mh=}, {mw=}', Gi.shape)
-            assert (Gi.shape == (Nd,mh,mw))
             if use_roi:
-                Gi = Gi[:,roi_slice]
+                assert(Gi.shape == (Nd, rh, rw))
+            else:
+                assert (Gi.shape == (Nd,mh,mw))
+            #if use_roi:
+            #    #Gi = Gi[:,roi_slice]
+            #    Gi = Gi[:,ry0:ry0+rh, rx0:rx0+rw]
 
             # The first element in img_derivs is the current galaxy model parameters.
             mod0 = Gi[0,:,:]
@@ -717,7 +680,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                         A[Npix + rij, ci] = vij
                         B[Npix + rij] += bij
 
-            if True:
+            if False:
                 import pylab as plt
                 n,m = A.shape
                 for i in range(m):
