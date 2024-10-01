@@ -382,7 +382,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #
         #print('Calling original version...')
         #sXic = super().getSingleImageUpdateDirections(tr, **kwargs)
-
         return Xic
 
     def computeUpdateDirections(self, img_params, priorVals):
@@ -485,6 +484,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #Npix is a scalar
         Nd = img_params.maxNd
         A = cp.zeros((img_params.Nimages, Npix + Npriors, Nd+2), cp.float32)
+        cdi = cp.asarray(img_params.cdi)
         # A is of shape (Nimages, Npix+Npriors, Nd+2)
         # The first element in img_derivs is the current galaxy model parameters.
         mod0 = G[:,0,:,:]
@@ -503,19 +503,27 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # divide by 2 because we did +- 1 pixel
         # negative because we shifted the *image*, which is opposite
         # from shifting the *model*
-        A[:,:Npix, 0] = cp.reshape(-((dx * cdi[:,0, 0] + dy * cdi[:,1, 0]) * img_params.counts / 2),(img_params.Nimages, -1)) 
-        A[:,:Npix, 1] = cp.reshape(-((dx * cdi[:,0, 1] + dy * cdi[:,1, 1]) * img_params.counts / 2), (img_params.Nimages, -1))
+        cdi00 = cdi[:,0,0]
+        cdi10 = cdi[:,1,0]
+        cdi01 = cdi[:,0,1]
+        cdi11 = cdi[:,1,1]
+        counts = cp.asarray(img_params.counts)
+        print ("img_params.steps", img_params.steps)
+        stepsizes = img_params.steps
+        A[:,:Npix, 0] = cp.reshape(-((dx * cdi00[:,cp.newaxis, cp.newaxis] + dy * cdi10[:,cp.newaxis, cp.newaxis]) * counts[:,cp.newaxis, cp.newaxis] / 2),(img_params.Nimages, -1)) 
+        A[:,:Npix, 1] = cp.reshape(-((dx * cdi01[:,cp.newaxis, cp.newaxis] + dy * cdi11[:,cp.newaxis, cp.newaxis]) * counts[:,cp.newaxis, cp.newaxis] / 2),(img_params.Nimages, -1))
         del dx,dy
         A[:,:Npix,2] = cp.reshape(mod0,(img_params.Nimages, -1))
 
-        
-        #A[:Npix, i + 2] = counts / stepsizes[i] * (Gi[i,:,:] - mod0).ravel()
-        A[:,:Npix, 2:] = counts[cp.newaxis, cp.newaxis,2:] / stepsizes[cp.newaxis,cp.newaxis,2:] * cp.reshape((G[:,2:,:,:] - mod0[:,cp.newaxis,:,:]), (img_params.Nimages, Npix,-1))
-        #A[:Npix,:] *= ie.ravel()[:, cp.newaxis]
-        A[:,:Npix,:] *= cp.reshape(ie, (img_params.Nimages, -1))[:,:, cp.newaxis]
 
-        B = cp.append(cp.reshape((img_params.pix - img_derivs.counts(:,cp.newaxis, cp.newaxis)*mod0)*
-            img_derivs.ie, (img_params.Nimages, -1)), cp.zeros((img_params.Nimages,-1),cp.float32))    
+        #A[:Npix, i + 2] = counts / stepsizes[i] * (Gi[i,:,:] - mod0).ravel()
+        A[:,:Npix, 3:] = counts[:,cp.newaxis, cp.newaxis] / stepsizes[:,cp.newaxis,1:] * cp.reshape((G[:,1:,:,:] -  mod0[:,cp.newaxis,:,:]), (img_params.Nimages, Npix,-1))
+
+        #A[:Npix,:] *= ie.ravel()[:, cp.newaxis]
+        A[:,:Npix,:] *= cp.reshape(img_params.ie, (img_params.Nimages, -1))[:,:, cp.newaxis]
+
+        B = cp.append(cp.reshape((img_params.pix - img_params.counts[:,cp.newaxis, cp.newaxis]*mod0)*
+            img_params.ie, (img_params.Nimages, -1)), cp.zeros((img_params.Nimages, Npriors),cp.float32), axis=1)    
         # B should be of shape (Nimages, :)                           
         #B = cp.append(((pix - counts*mod0) * ie).ravel(),
         #                cp.zeros(Npriors, cp.float32))
@@ -527,10 +535,10 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             rA, cA, vA, pb, mub = priorVals
             for ri,ci,vi,bi in zip(rA, cA, vA, pb):
                 for rij,vij,bij in zip(ri, vi, bi):
-                    A(:,Npix + rij, ci) = vij
-                    B(:,Npix + rij) += bij
+                    A[:,Npix + rij, ci] = vij
+                    B[:,Npix + rij] += bij
         
-    '''    
+        '''    
             # Append priors
             if priorVals is not None:
                 rA, cA, vA, pb, mub = priorVals
@@ -538,21 +546,23 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                     for rij,vij,bij in zip(ri, vi, bi):
                         A[Npix + rij, ci] = vij
                         B[Npix + rij] += bij
-    '''
+       '''
 
         
         # Compute the covariance matrix
-        Xicov = cp.matmul(A.T, A)
-
+        Xicov = cp.matmul(cp.transpose(A, (0, 2, 1)), A)
+        print ("Shape of Xicov", cp.shape(Xicov))
 
         # Pre-scale the columns of A
         colscales = cp.sqrt(cp.diagonal(Xicov, axis1=1, axis2=2))
+        print ("Shape of colscales", cp.shape(colscales))
         A /= colscales[:,cp.newaxis, :]
+        print ("Shape of A:", cp.shape(A), "Shape of B", cp.shape(B))
 
         # Solve the least-squares problem!
         #X,_,_ = cp.linalg.lstsq(A, B, rcond=None)
         A_T_dot_A = cp.einsum("...ji,...jk", A, A)
-        A_T_dot_B = cp.einsum("...ji,...j", A, b)
+        A_T_dot_B = cp.einsum("...ji,...j", A, B)
         X = cp.linalg.solve(A_T_dot_A, A_T_dot_B)
 
         # Undo pre-scaling
@@ -560,9 +570,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # del A, B
         Xic.append((X, Xicov))
 
-    return Xic
+        return Xic
 
- '''
+    '''
          for img_i, imderiv in enumerate(img_params.img_derivs):
             pix, ie, mw, mh, counts, cdi, roi = imderiv.mmpix, imderiv.mmie, imderiv.mw, imderiv.mh, imderiv.counts, imderiv.cdi, imderiv.roi 
             assert(pix.shape == (mh,mw))
@@ -731,7 +741,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             del A,B
             Xic.append((X, Xicov))
         return Xic
-'''
+    '''
 
 class MyAwesomeGpuImplementation(GPUFriendlyOptimizer):
     def computeUpdateDirections(self, imgs):
@@ -802,10 +812,11 @@ if __name__ == '__main__':
         true_mod = tr.getModelImage(0)
         data += true_mod
 
+
     #src = PointSource(PixPos(W//2, H//2), Flux(100.))
     e = EllipseE(2., 0., 0.)
-    src  = ExpGalaxy(RaDecPos(ra, dec), Flux(100.), EllipseESoft.fromEllipseE(e))
-    src2 = ExpGalaxy(RaDecPos(ra, dec), Flux(100.), EllipseESoft.fromEllipseE(e))
+    src  = ExpGalaxy(RaDecPos(ra, dec), Flux(100.), EllipseESoft.fromEllipseE(e))   #ssg
+    src2 = ExpGalaxy(RaDecPos(ra, dec), Flux(100.), EllipseESoft.fromEllipseE(e))   #ssg 
 
     opt = ConstrainedDenseOptimizer()
     #opt2 = GPUFriendlyOptimizer()
@@ -816,7 +827,6 @@ if __name__ == '__main__':
 
     tr2 = Tractor(tims, [src2], optimizer=opt2)
     tr2.setModelMasks([{src2: ModelMask(0, 0, W, H)} for tim in tims])
-
     tr.freezeParam('images')
     tr2.freezeParam('images')
 
@@ -891,3 +901,4 @@ if __name__ == '__main__':
         plt.imshow(mods2_after[i], **ima)
     plt.suptitle('GPU-friendly optimizer, after')
     plt.savefig('3.png')
+

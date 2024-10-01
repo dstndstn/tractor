@@ -167,25 +167,28 @@ class BatchImageParams(object):
     def collect_params(self):
         assert(self._initialized is False)
         self._initialized = True
-        self.pix = np.zeros((self.Nimages, self.mh, self.mw), dtype = np.float32 )
-        self.ie = np.zeros_like(self.pix)
-        self.counts = np.zeros(self.Nimages)
-        self.cdi = np.zeros((self.Nimages, 2,2), dtype=np.float32)
-        self.roi = np.zeros((self.Nimages, 4), dtype = np.int)
-
+        self.pix = cp.zeros((self.Nimages, self.mh, self.mw), dtype = np.float32 )
+        self.ie = cp.zeros_like(self.pix)
+        self.counts = cp.zeros(self.Nimages)
+        self.cdi = cp.zeros((self.Nimages, 2,2), dtype=np.float32)
+        self.roi = cp.zeros((self.Nimages, 4), dtype = np.int)
+        self.steps = []
 
         self.mux = cp.asarray([[imderiv.mux]*self.maxNd for imderiv in self.img_derivs]).ravel()
         self.muy = cp.asarray([[imderiv.muy]*self.maxNd for imderiv in self.img_derivs]).ravel()
         if self.maxNmogs > 0:
+            print ("Yes self.maxNmogs > 0")
             amp = np.zeros((self.Nimages, self.maxNd, self.maxNmogs))
             mean = np.zeros((self.Nimages, self.maxNd, self.maxNmogs, self.maxD))
             var = np.zeros((self.Nimages, self.maxNd, self.maxNmogs, self.maxD, self.maxD))
             for i, imderiv in enumerate(self.img_derivs):
-                self.pix[i, :,:] = np.pad(imderiv.mmpix, ((0, self.mh - imderiv.mmpix.shape[0]), (0, self.mw - imderiv.mmpix.shape[1])), mode='constant',constant_values=(np.float32(0.0),))
-                self.ie[i, :,:] = np.pad(imderiv.mmie, ((0, self.mh - imderiv.mmie.shape[0]), (0, self.mw - imderiv.mmie.shape[1])), mode='constant',constant_values=(np.float32(0.0),))
+                self.pix[i, :,:] = cp.pad(imderiv.mmpix, ((0, self.mh - imderiv.mmpix.shape[0]), (0, self.mw - imderiv.mmpix.shape[1])), mode='constant',constant_values=(np.float32(0.0),))
+                self.ie[i, :,:] = cp.pad(imderiv.mmie, ((0, self.mh - imderiv.mmie.shape[0]), (0, self.mw - imderiv.mmie.shape[1])), mode='constant',constant_values=(np.float32(0.0),))
                 self.counts[i] = imderiv.counts
                 self.cdi[i] = imderiv.cdi
-                self.roi[i] = np.asarray(imderiv.roi, dtype = np.int)
+                self.roi[i] = cp.asarray(imderiv.roi, dtype = np.int)
+                self.steps.append(imderiv.steps)
+                print ("imderiv.steps in mogs ", imderiv.steps, "self.steps:", self.steps)
 
                 if imderiv.nmogs > 0:
                     amp[i, :imderiv.N, :imderiv.nmogs] = imderiv.mog_amp
@@ -201,7 +204,18 @@ class BatchImageParams(object):
                     amp[i, :imderiv.N, :imderiv.nfft] = imderiv.fft_amp
                     mean[i, :imderiv.N, :imderiv.nfft, :imderiv.D] = imderiv.fft_mean
                     var[i, :imderiv.N, :imderiv.nfft, :imderiv.D, :imderiv.D] = imderiv.fft_var
-            self.ffts = BatchMixtureOfGaussians(cp.asarray(amp), cp.asarray(mean), cp.asarray(var), quick=True)
+                self.pix[i, :,:] = cp.pad(imderiv.mmpix, ((0, self.mh - imderiv.mmpix.shape[0]), (0, self.mw - imderiv.mmpix.shape[1])), mode='constant',constant_values=(np.float32(0.0),))
+                self.ie[i, :,:] = cp.pad(imderiv.mmie, ((0, self.mh - imderiv.mmie.shape[0]), (0, self.mw - imderiv.mmie.shape[1])), mode='constant',constant_values=(np.float32(0.0),))
+                self.counts[i] = imderiv.counts
+                self.cdi[i] = cp.asarray(imderiv.cdi)
+                self.roi[i] = cp.asarray(imderiv.roi, dtype = np.int)
+                self.steps.append(imderiv.steps)
+                print ("imderiv.steps in ffts", imderiv.steps, "self.steps:", self.steps)
+
+
+        self.ffts = BatchMixtureOfGaussians(cp.asarray(amp), cp.asarray(mean), cp.asarray(var), quick=True)
+        print ("value of Steps after collecting params:", self.steps)
+        self.steps = cp.array(self.steps)
         print ("Collected Params")
         print (f'\t{self.maxNmogs=}, {self.maxNfft=}, {self.mux=}, {self.muy=}')
 
