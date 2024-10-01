@@ -96,6 +96,7 @@ class ImageDerivs(object):
         for name,mix,step in amixes:
             self.names.append(name)
             self.steps.append(step)
+        self.steps = np.array(self.steps, dtype=np.float32)
 
     def tostr(self):
         print("****** ImageDerivs *****")
@@ -166,6 +167,24 @@ class BatchImageParams(object):
         self._initialized = True
         self.mux = cp.asarray([[imderiv.mux]*self.maxNd for imderiv in self.img_derivs]).ravel()
         self.muy = cp.asarray([[imderiv.muy]*self.maxNd for imderiv in self.img_derivs]).ravel()
+
+        self.pix = cp.zeros((self.Nimages, self.mh, self.mw), dtype = np.float32 )
+        self.ie = cp.zeros_like(self.pix)
+        self.counts = cp.zeros(self.Nimages)
+        self.cdi = np.zeros((self.Nimages, 2,2), dtype=np.float32)
+        self.roi = np.zeros((self.Nimages, 4), dtype=np.int)
+        self.steps = np.zeros((self.Nimages, self.maxNd), dtype=np.float32)
+
+        for i, imderiv in enumerate(self.img_derivs):
+            self.pix[i, :,:] = cp.pad(imderiv.mmpix, ((0, self.mh - imderiv.mmpix.shape[0]), (0, self.mw - imderiv.mmpix.shape[1])), mode='constant',constant_values=(cp.float32(0.0),))
+            self.ie[i, :,:] = cp.pad(imderiv.mmie, ((0, self.mh - imderiv.mmie.shape[0]), (0, self.mw - imderiv.mmie.shape[1])), mode='constant',constant_values=(cp.float32(0.0),))
+            self.counts[i] = imderiv.counts
+            self.cdi[i] = imderiv.cdi
+            self.roi[i] = np.asarray(imderiv.roi, dtype = np.int)
+            self.steps[i] = imderiv.steps
+        self.cdi = cp.asarray(self.cdi)
+        self.steps = cp.asarray(self.steps)
+
         if self.maxNmogs > 0:
             amp = np.zeros((self.Nimages, self.maxNd, self.maxNmogs))
             mean = np.zeros((self.Nimages, self.maxNd, self.maxNmogs, self.maxD))
@@ -186,8 +205,8 @@ class BatchImageParams(object):
                     mean[i, :imderiv.N, :imderiv.nfft, :imderiv.D] = imderiv.fft_mean
                     var[i, :imderiv.N, :imderiv.nfft, :imderiv.D, :imderiv.D] = imderiv.fft_var
             self.ffts = BatchMixtureOfGaussians(cp.asarray(amp), cp.asarray(mean), cp.asarray(var), quick=True)
-        print ("Collected Params")
-        print (f'\t{self.maxNmogs=}, {self.maxNfft=}, {self.mux=}, {self.muy=}')
+        #print ("Collected Params")
+        #print (f'\t{self.maxNmogs=}, {self.maxNfft=}, {self.mux=}, {self.muy=}')
 
     def get_imderiv(self, i):
         assert (i < self.Nimages)

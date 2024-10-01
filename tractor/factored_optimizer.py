@@ -177,7 +177,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         inner_real_nsigma = 3.
         outer_real_nsigma = 4.
 
-        #imgs = []
         print ("Calling FACTORED version")
         nimages = len(masks)
         gpu_px = np.zeros(nimages)
@@ -283,31 +282,12 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             D = amix.var.shape[1]
             img_derivs = ImageDerivs(amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi)
             img_params.add_image_deriv(img_derivs)
-            img_derivs.tostr()
-
-            """
-            img_derivs = []
-            for name,mix,step in amixes:
-                mogs = None
-                ffts = None
-                if np.any(IM):
-                    mogs = mp.MixtureOfGaussians(
-                        mix.amp[IM] * mogweights,
-                        mix.mean[IM, :] + np.array([px, py])[np.newaxis, :],
-                        mix.var[IM, :, :], quick=True)
-                if np.any(IF):
-                    ffts = mp.MixtureOfGaussians(
-                        mix.amp[IF] * fftweights,
-                        mix.mean[IF, :],
-                        mix.var[IF, :, :], quick=True)
-
-                img_derivs.append((name, step, mogs, ffts))
-            """
+            #Commented out print below
+            #img_derivs.tostr()
 
             assert(sx == 0 and sy == 0)
 
-            #imgs.append((imd, mmpix, mmie, cpu_P, mux, muy, mh, mw, counts, cdi, roi))
-
+        #Call collect_params() to finalize BatchImageParams object with all ImageDerivs
         img_params.collect_params()
         add_to_timer(1, time.time()-t1)
         #nbands = 1 + max(img_bands)
@@ -479,7 +459,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # resulting in P already being a CuPy array
         #P shape (Nimages, nw, nv)
         P = img_params.P[:,cp.newaxis,:,:]
-        print ("FSUM", Fsum.shape, "P", P.shape)
+        #print ("FSUM", Fsum.shape, "P", P.shape)
         t1 = time.time()
         G = cp.fft.irfft2(Fsum*P)
         add_to_timer(5, time.time()-t1)
@@ -487,15 +467,15 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #Do Lanczos shift
         G = lanczos_shift_image_batch_gpu(G, img_params.mux, img_params.muy)
         add_to_timer(6, time.time()-t1)
-        #del Fsum
+        del Fsum
         #G should be (nimages, maxNd, nw, nv) and mux and muy should be 1d vectors
         assert (G.shape == (img_params.Nimages, img_params.maxNd, img_params.mh, img_params.mw))
 
 
         if img_params.mogs is not None:
             psfmog = img_params.psf_mogs
-            print('Img_params.mogs:', img_params.mogs)
-            print('PSF mogs:', img_params.psf_mogs)
+            #print('Img_params.mogs:', img_params.mogs)
+            #print('PSF mogs:', img_params.psf_mogs)
             # assert trivial mixture of Gaussians - single circular Gaussian
             # If we relax this, then convolution becomes much harder!
             assert(psfmog.K == 1)
@@ -504,6 +484,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             assert(psfmog.var[..., 0, 0,1] == 0)
             assert(psfmog.var[..., 0, 1,0] == 0)
             assert(psfmog.var[..., 0, 0,0] == psfmog.var[..., 0, 1,1])
+            #TODO - @Dustin if I make the following change, it works - I think
+            #this change should be made to vectorize over NImages
+            #assert(np.all(psfmog.var[..., 0, 0,1] == 0))
+            #assert(np.all(psfmog.var[..., 0, 1,0] == 0))
+            #assert(np.all(psfmog.var[..., 0, 0,0] == psfmog.var[..., 0, 1,1]))
 
             # Trivial convolution
             mogs = img_params.mogs
@@ -511,10 +496,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             #print('Varcopy:', type(varcopy))
             varcopy[..., 0, 0] += psfmog.var[..., cp.newaxis, 0, 0, 0]
             varcopy[..., 1, 1] += psfmog.var[..., cp.newaxis, 0, 1, 1]
-            #gpu_v = cp.asarray(psfmog.var[..., 0, 0, 0])
-            #varcopy[..., 0, 0] += gpu_v[..., cp.newaxis]
-            #gpu_v = cp.asarray(psfmog.var[..., 0, 0, 0])
-            #varcopy[..., 1, 1] += gpu_v[..., cp.newaxis]
+            #TODO - @Dustin looks like another axis needs to be added to match?
+            #varcopy[..., 0, 0] += psfmog.var[..., cp.newaxis, cp.newaxis, 0, 0, 0]
+            #varcopy[..., 1, 1] += psfmog.var[..., cp.newaxis, cp.newaxis, 0, 1, 1]
             conv_mog = BatchMixtureOfGaussians(mogs.amp, mogs.mean, varcopy, quick=True)
             #print('Convolved MoG:', conv_mog)
 
@@ -536,6 +520,10 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             scale = conv_mog.amp / (2.*cp.pi*cp.sqrt(det))
             dx = xx - conv_mog.mean[:,:,:,0]
             dy = yy - conv_mog.mean[:,:,:,1]
+            #TODO - @Dustin - if I make the following changes, I then need to add another axis to distsq below
+            # conv_mog.mean[:,:,:,0].shape == (13,4,1) in one pass through run-one-blob.py and (13,4,2) in another
+            #dx = xx - conv_mog.mean[:,:,:,cp.newaxis,0]
+            #dy = yy - conv_mog.mean[:,:,:,cp.newaxis,1]
             if use_roi:
                 #Loop over img_params.img_derivs and correct mean so that mogs are centered with G
                 for img_i, imderiv in enumerate(img_params.img_derivs):
@@ -546,19 +534,92 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                       iv1[:,:,:,cp.newaxis] * dx[:,:,cp.newaxis,:] * dy[:,:,:,cp.newaxis] +
                       iv2[:,:,:,cp.newaxis] * dy[:,:,:,cp.newaxis] * dy[:,:,:,cp.newaxis])
             mog_g = scale[:,:,:,cp.newaxis] * cp.exp(-0.5*distsq)
+            G += mog_g
 
-        #if use_roi:
-        #    roi = img_params.get_imderiv(0).roi
-        #    (rx0,ry0,rw,rh) = roi
-        #    G = G[:,:,ry0:ry0+rh, rx0:rx0+rw]
-        #    mog_g = mog_g[:,:,:rh,:rw]
-        G += mog_g
+        #Do no use roi since images are padded to be (mh, mw)
         use_roi = False
 
-        #TODO this loop still needs to be vectorized
-        #for img_i, (img_derivs_batch, pix, ie, P, mux, muy, mw, mh, counts, cdi, roi, v, w) in enumerate(imgs):
-        #for img_i, (img_derivs, pix, ie, P, mux, muy, mw, mh, counts, cdi, roi) in enumerate(imgs):
         t1 = time.time()
+
+        Npix = img_params.mh*img_params.mw
+        #Npix is a scalar
+        Nd = img_params.maxNd
+        cdi = img_params.cdi
+        A = cp.zeros((img_params.Nimages, Npix + Npriors, Nd+2), cp.float32)
+        # A is of shape (Nimages, Npix+Npriors, Nd+2)
+        # The first element in img_derivs is the current galaxy model parameters.
+        mod0 = G[:,0,:,:]
+        # mod0 should be (Nimages, nw, nv)
+        assert (mod0.shape == (img_params.Nimages, img_params.mh, img_params.mw))
+        # Shift this initial model image to get X,Y pixel derivatives
+        dx = cp.zeros_like(mod0)
+        # dx is of shape (Nimages, nw, nv)
+        # X derivative -- difference between shifted-left and shifted-right arrays
+        dx[:,:,1:-1] = mod0[:,:, 2:] - mod0[:,:, :-2]
+        # Y derivative -- difference between shifted-down and shifted-up arrays
+        dy = cp.zeros_like(mod0)
+        # dy is of shape (Nimages, nw, nv)
+        dy[:,1:-1, :] = mod0[:,2:, :] - mod0[:,:-2, :]
+        # Push through local WCS transformation to get to RA,Dec param derivatives
+        assert(cdi.shape == (img_params.Nimages,2,2))
+        # divide by 2 because we did +- 1 pixel
+        # negative because we shifted the *image*, which is opposite
+        # from shifting the *model*
+        A[:,:Npix, 0] = cp.reshape(-((dx * cdi[:,0, 0][:,cp.newaxis, cp.newaxis] + dy * cdi[:,1, 0][:,cp.newaxis, cp.newaxis]) * img_params.counts[:,cp.newaxis, cp.newaxis] / 2),(img_params.Nimages, -1))
+        A[:,:Npix, 1] = cp.reshape(-((dx * cdi[:,0, 1][:,cp.newaxis, cp.newaxis] + dy * cdi[:,1, 1][:,cp.newaxis, cp.newaxis]) * img_params.counts[:,cp.newaxis, cp.newaxis] / 2), (img_params.Nimages, -1))
+        del dx,dy
+        A[:,:Npix,2] = cp.reshape(mod0,(img_params.Nimages, -1))
+
+        #A[:Npix, i + 2] = counts / stepsizes[i] * (Gi[i,:,:] - mod0).ravel()
+        stepsizes = img_params.steps
+        A[:,:Npix, 3:] = img_params.counts[:,cp.newaxis, cp.newaxis] / stepsizes[:,cp.newaxis,1:] * cp.moveaxis((G[:,1:,:,:] - mod0[:,cp.newaxis,:,:]), 1, -1).reshape((img_params.Nimages, Npix, Nd-1))
+
+        #A[:Npix,:] *= ie.ravel()[:, cp.newaxis]
+        A[:,:Npix,:] *= img_params.ie.reshape((img_params.Nimages, Npix))[:,:,cp.newaxis]
+
+        B = cp.zeros((img_params.Nimages, Npix + Npriors), cp.float32)
+        B[:,:Npix] = ((img_params.pix - img_params.counts[:,cp.newaxis, cp.newaxis]*mod0) * img_params.ie).reshape((img_params.Nimages, Npix))
+        # B should be of shape (Nimages, :)                           
+        #B = cp.append(((pix - counts*mod0) * ie).ravel(),
+        #                cp.zeros(Npriors, cp.float32))
+
+
+        # Append priors --do priors depend on which image I am looking at?
+        #TODO not sure if this is correct for priors? 
+
+        if priorVals is not None:
+            print ("Using PRIORS")
+            rA, cA, vA, pb, mub = priorVals
+            for ri,ci,vi,bi in zip(rA, cA, vA, pb):
+                for rij,vij,bij in zip(ri, vi, bi):
+                    A[:,Npix + rij, ci] = vij
+                    B[:,Npix + rij] += bij
+        else:
+            print ("NO PRIORS")
+
+        # Compute the covariance matrix
+        Xicov = cp.matmul(A.swapaxes(-1,-2), A)
+
+
+        # Pre-scale the columns of A
+        colscales = cp.sqrt(cp.diagonal(Xicov, axis1=1, axis2=2))
+        A /= colscales[:,cp.newaxis, :]
+
+        # Solve the least-squares problem!
+        #X,_,_ = cp.linalg.lstsq(A, B, rcond=None)
+        A_T_dot_A = cp.einsum("...ji,...jk", A, A)
+        A_T_dot_B = cp.einsum("...ji,...j", A, B)
+        X = cp.linalg.solve(A_T_dot_A, A_T_dot_B)
+        #X = cp.einsum("ijk,ik->ij", cp.linalg.pinv(A), B)
+
+        # Undo pre-scaling
+        X /= colscales
+        # del A, B
+        #Have to corectly make Xic a list of tuples
+        for i in range(img_params.Nimages):
+            Xic.append((X[i], Xicov[i]))
+
+        """
         for img_i, imderiv in enumerate(img_params.img_derivs):
             pix, ie, mw, mh, counts, cdi, roi = imderiv.mmpix, imderiv.mmie, imderiv.mw, imderiv.mh, imderiv.counts, imderiv.cdi, imderiv.roi 
             assert(pix.shape == (mh,mw))
@@ -741,6 +802,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
             del A,B
             Xic.append((X, Xicov))
+            print ("X2", X.shape, Xicov.shape)
+        """
         add_to_timer(7, time.time()-t1)
         print_timer()
         return Xic
