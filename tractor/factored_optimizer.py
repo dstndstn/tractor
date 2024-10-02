@@ -481,24 +481,22 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             assert(psfmog.K == 1)
             assert(np.all(psfmog.mean == 0.))
             assert(np.all(psfmog.amp == 1.))
-            assert(psfmog.var[..., 0, 0,1] == 0)
-            assert(psfmog.var[..., 0, 1,0] == 0)
-            assert(psfmog.var[..., 0, 0,0] == psfmog.var[..., 0, 1,1])
-            #TODO - @Dustin if I make the following change, it works - I think
-            #this change should be made to vectorize over NImages
-            #assert(np.all(psfmog.var[..., 0, 0,1] == 0))
-            #assert(np.all(psfmog.var[..., 0, 1,0] == 0))
-            #assert(np.all(psfmog.var[..., 0, 0,0] == psfmog.var[..., 0, 1,1]))
+            assert(np.all(psfmog.var[..., 0, 0,1] == 0))
+            assert(np.all(psfmog.var[..., 0, 1,0] == 0))
+            assert(np.all(psfmog.var[..., 0, 0,0] == psfmog.var[..., 0, 1,1]))
 
             # Trivial convolution
             mogs = img_params.mogs
             varcopy = mogs.var.copy()
-            #print('Varcopy:', type(varcopy))
-            varcopy[..., 0, 0] += psfmog.var[..., cp.newaxis, 0, 0, 0]
-            varcopy[..., 1, 1] += psfmog.var[..., cp.newaxis, 0, 1, 1]
-            #TODO - @Dustin looks like another axis needs to be added to match?
-            #varcopy[..., 0, 0] += psfmog.var[..., cp.newaxis, cp.newaxis, 0, 0, 0]
-            #varcopy[..., 1, 1] += psfmog.var[..., cp.newaxis, cp.newaxis, 0, 1, 1]
+            # varcopy shape: (13, 4, 1, 2, 2)
+            # psfmog.var shape: (13, 1, 2, 2)
+            varcopy[..., 0, 0, 0] += psfmog.var[..., cp.newaxis, 0, 0, 0]
+            varcopy[..., 0, 1, 1] += psfmog.var[..., cp.newaxis, 0, 1, 1]
+
+            print('mogs.amp', mogs.amp.shape)
+            print('mogs.mean', mogs.mean.shape)
+            print('varcopy', varcopy.shape)
+
             conv_mog = BatchMixtureOfGaussians(mogs.amp, mogs.mean, varcopy, quick=True)
             #print('Convolved MoG:', conv_mog)
 
@@ -518,22 +516,70 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             iv1 = -(conv_mog.var[:,:,:,0,1] + conv_mog.var[:,:,:,1,0]) / det
             iv2 = conv_mog.var[:,:,:,0,0] / det
             scale = conv_mog.amp / (2.*cp.pi*cp.sqrt(det))
-            dx = xx - conv_mog.mean[:,:,:,0]
-            dy = yy - conv_mog.mean[:,:,:,1]
+
+            print('conv_mog.mean shape:', conv_mog.mean.shape)
+            print('xx shape:', xx.shape)
+
+            #print('conv_mog.means:', conv_mog.mean)
+            #print('img_params.mux,muy:', img_params.mux, img_params.muy)
+
+            # conv_mog.mean is, eg, (13 x 4 x 2 x 2)
+            # (nimages x nderivs x nmog x 2), where the 2 is x,y coordinates.
+            # BUT, it's really only (nimages x 2), the values for all the derivs and mogs are equal!
+            assert(np.all(conv_mog.mean[:, 0, 0, :][:,cp.newaxis,cp.newaxis,:] == conv_mog.mean))
+            means = conv_mog.mean[:, 0, 0, :].copy()
+            # now "means" is (nimages x 2)
+
+            # xx, yy are each 64 elements long.
+
+            print('img_derivs length:', len(img_params.img_derivs))
+
+            #dx = xx - means[:,0]
+            #dy = yy - means[:,1]
             #TODO - @Dustin - if I make the following changes, I then need to add another axis to distsq below
             # conv_mog.mean[:,:,:,0].shape == (13,4,1) in one pass through run-one-blob.py and (13,4,2) in another
             #dx = xx - conv_mog.mean[:,:,:,cp.newaxis,0]
             #dy = yy - conv_mog.mean[:,:,:,cp.newaxis,1]
             if use_roi:
-                #Loop over img_params.img_derivs and correct mean so that mogs are centered with G
-                for img_i, imderiv in enumerate(img_params.img_derivs):
-                    (rx0,ry0,rw,rh) = imderiv.roi
-                    dx[img_i] -= rx0
-                    dy[img_i] -= ry0
-            distsq = (iv0[:,:,:,cp.newaxis] * dx[:,:,cp.newaxis,:] * dx[:,:,cp.newaxis,:] +
-                      iv1[:,:,:,cp.newaxis] * dx[:,:,cp.newaxis,:] * dy[:,:,:,cp.newaxis] +
-                      iv2[:,:,:,cp.newaxis] * dy[:,:,:,cp.newaxis] * dy[:,:,:,cp.newaxis])
-            mog_g = scale[:,:,:,cp.newaxis] * cp.exp(-0.5*distsq)
+
+                # rois: (rx0,ry0, rw,rh)
+                means[:,0] += cp.array([d.roi[0] for d in img_params.img_derivs])
+                means[:,1] += cp.array([d.roi[1] for d in img_params.img_derivs])
+
+                # #Loop over img_params.img_derivs and correct mean so that mogs are centered with G
+                # for img_i, imderiv in enumerate(img_params.img_derivs):
+                #     (rx0,ry0,rw,rh) = imderiv.roi
+                #     dx[img_i] -= rx0
+                #     dy[img_i] -= ry0
+            # distsq = (iv0[:,:,:,cp.newaxis] * dx[:,:,cp.newaxis,:] * dx[:,:,cp.newaxis,:] +
+            #           iv1[:,:,:,cp.newaxis] * dx[:,:,cp.newaxis,:] * dy[:,:,:,cp.newaxis] +
+            #           iv2[:,:,:,cp.newaxis] * dy[:,:,:,cp.newaxis] * dy[:,:,:,cp.newaxis])
+
+            # (13,4,1) = (nimages, nderivs, nmog)
+            print('scale:', scale.shape)
+            print('iv shapes:', iv0.shape, iv1.shape, iv2.shape)
+
+            # (13,4,64,64) = (nimages, nderivs, ny,nx)
+            print('G:', G.shape)
+
+            # The distsq array is going to be nimages x nderivs x nmog x ny=64 x nx=64
+
+            # distsq = (iv0[:,:,:,cp.newaxis] * dx[:,:,cp.newaxis,:] * dx[:,:,cp.newaxis,:] +
+            #           iv1[:,:,:,cp.newaxis] * dx[:,:,cp.newaxis,:] * dy[:,:,:,cp.newaxis] +
+            #           iv2[:,:,:,cp.newaxis] * dy[:,:,:,cp.newaxis] * dy[:,:,:,cp.newaxis])
+
+            n = cp.newaxis
+            distsq = (iv0[:,:,:,n,n] * (xx[n,n,n,n,:] - means[:,n,n,n,0][:,:,:,n,:])**2 +
+                      iv1[:,:,:,n,n] * (xx[n,n,n,n,:] - means[:,n,n,n,0][:,:,:,n,:]) * (yy[n,n,n,:,n] - means[:,n,n,n,1][:,:,:,:,n]) +
+                      iv2[:,:,:,n,n] * (yy[n,n,n,:,n] - means[:,n,n,n,1][:,:,:,:,n])**2)
+            # t1 = (iv0[:,:,:,n,n] * (xx[n,n,n,n,:] - means[:,n,n,n,0][:,:,:,n,:])**2)
+            # print('t1', t1.shape)
+            # t3 = (iv2[:,:,:,n,n] * (yy[n,n,n,:,n] - means[:,n,n,n,1][:,:,:,:,n])**2)
+            # print('t3', t3.shape)
+            # t2 = (iv1[:,:,:,n,n] * (xx[n,n,n,n,:] - means[:,n,n,n,0][:,:,:,n,:]) * (yy[n,n,n,:,n] - means[:,n,n,n,1][:,:,:,:,n]))
+            # print('t2', t2.shape)
+            # Sum over the nmog
+            mog_g = cp.sum(scale[:,:,:,cp.newaxis,cp.newaxis] * cp.exp(-0.5*distsq), axis=2)
             G += mog_g
 
         #Do no use roi since images are padded to be (mh, mw)
