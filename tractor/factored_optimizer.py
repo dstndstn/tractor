@@ -33,7 +33,10 @@ class FactoredOptimizer(object):
 
     def getSingleImageUpdateDirection(self, tr, **kwargs):
         allderivs = tr.getDerivs()
-        x,A = self.getUpdateDirection(tr, allderivs, get_A_matrix=True, **kwargs)
+        r = self.getUpdateDirection(tr, allderivs, get_A_matrix=True, **kwargs)
+        if r is None:
+            return None
+        x,A = r
 
         if False:
             print('Got A matrix:', A.shape)
@@ -92,7 +95,10 @@ class FactoredOptimizer(object):
             tr.images = Images(img)
             if mm is not None:
                 tr.modelMasks = [mm[i]]
-            x,x_icov = self.getSingleImageUpdateDirection(tr, **kwargs)
+            r = self.getSingleImageUpdateDirection(tr, **kwargs)
+            if r is None:
+                continue
+            x,x_icov = r
 
             #print('FO: X', x, 'x_icov', x_icov)
 

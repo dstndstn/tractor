@@ -113,7 +113,8 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
 
         Nrows = Npixels + Npriors
         if Nrows == 0:
-            return []
+            print('ConstrainedDenseOptimizer.getUpdateDirection: Nrows = 0')
+            return None
         #print('Allocating', Nrows, 'x', Ncols, 'matrix for update direction')
         A = np.zeros((Nrows, Ncols), np.float32)
         # 'B' holds the chi values
@@ -263,6 +264,8 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
             print('Relative difference:', ', '.join(['%.1f' % d for d in 100.*((X - Xold) / np.maximum(1e-18, np.abs(Xold)))]), 'percent')
 
         if not np.all(np.isfinite(X)):
+            print('ConstrainedDenseOptimizer.getUpdateDirection: X not all finite!')
+            print('X = ', X)
             return None
 
         if get_A_matrix:
