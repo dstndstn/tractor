@@ -20,7 +20,10 @@ from tractor.patch import Patch, add_patches, ModelMask
 from tractor.basics import SingleProfileSource, BasicSource
 
 debug_ps = None
-
+import time
+ts1 = np.zeros(10)
+ts2 = np.zeros(10)
+ts3 = np.zeros(10)
 
 def get_galaxy_cache():
     return None
@@ -33,6 +36,10 @@ def set_galaxy_cache_size(N=10000):
 
 enable_galaxy_cache = set_galaxy_cache_size
 
+def print_ts():
+    print ("TS1:", ts1)
+    print ("TS2:", ts2)
+    print ("TS3:", ts3)
 
 def disable_galaxy_cache():
     pass
@@ -697,11 +704,43 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
         shear-transformed into the pixel space of the image.
         At px,py (but not offset to px,py).
         '''
+        ts1[9] += 1
+        t = time.time()
         galmix = self.getProfile()
+        ts1[0] += time.time()-t
+        t = time.time()
         cdinv = img.getWcs().cdInverseAtPixel(px, py)
+        ts1[1] += time.time()-t
+        t = time.time()
         G = self.shape.getRaDecBasis()
+        ts1[2] += time.time()-t
+        t = time.time()
         Tinv = np.dot(cdinv, G)
+        ts1[3] += time.time()-t
+        t = time.time()
         amix = galmix.apply_shear(Tinv)
+        ts1[4] += time.time()-t
+        return amix
+
+    def _getShearedProfileGPU(self, imgs, px, py):
+        ts3[9] += 1
+        t = time.time()
+        import cupy as cp
+        galmix = self.getProfile()
+        ts3[0] += time.time()-t
+        t = time.time()
+        cdinv = cp.array([img.getWcs().cdInverseAtPixel(px[i], py[i]) for i, img in enumerate(imgs)])
+        ts3[1] += time.time()-t
+        t = time.time()
+        G = cp.asarray(self.shape.getRaDecBasis())
+        ts3[2] += time.time()-t
+        t = time.time()
+        Tinv = cp.dot(cdinv, G)
+        ts3[3] += time.time()-t
+        t = time.time()
+        print (type(galmix))
+        amix = galmix.apply_shear_GPU(Tinv)
+        ts3[4] += time.time()-t
         return amix
 
     def _getUnitFluxDeps(self, img, px, py):
@@ -724,18 +763,27 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
         # Returns a list of sheared profiles that will be needed to compute
         # derivatives for this source; this is assumed in addition to the
         # sheared profile at the current parameter settings.
+        ts2[9] += 1
         derivs = []
         if self.isParamThawed('shape'):
+            t = time.time()
             gsteps = self.shape.getStepSizes()
             gnames = self.shape.getParamNames()
             oldvals = self.shape.getParams()
+            ts2[0] += time.time()-t
             for i, gstep in enumerate(gsteps):
+                t = time.time()
                 oldval = self.shape.setParam(i, oldvals[i] + gstep)
+                ts2[1] += time.time()-t
+                t = time.time()
                 pro = self._getShearedProfile(img, px, py)
+                ts2[2] += time.time()-t
+                t = time.time()
                 #print('Param', gnames[i], 'was', oldval, 'stepped to', oldvals[i]+gstep,
                 #      '-> profile', pro.var.ravel())
                 self.shape.setParam(i, oldval)
                 derivs.append(('shape.'+gnames[i], pro, gstep))
+                ts2[3] += time.time()-t
         return derivs
 
 class GaussianGalaxy(HoggGalaxy):

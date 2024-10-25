@@ -360,6 +360,15 @@ class Tractor(MultiParams):
         assert((masks is None) or (len(masks) == len(self.images)))
         self.expectModelMasks = (masks is not None) and assumeMasks
 
+
+    def _getModelMaskByIdx(self, idx, src):
+        if self.modelMasks is None:
+            return None
+        try:
+            return self.modelMasks[idx][src]
+        except KeyError:
+            return None
+
     def _getModelMaskFor(self, image, src):
         if self.modelMasks is None:
             return None

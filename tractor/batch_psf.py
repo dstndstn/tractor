@@ -16,6 +16,8 @@ from tractor.utils import BaseParams, ParamList, MultiParams, MogParams
 from tractor import mixture_profiles as mp
 from tractor import ducks
 import cupy as cp
+import time
+tp = np.zeros(10)
 
 if sys.version_info[0] == 2:
     # Py2
@@ -77,21 +79,33 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
            shifting the image to subpixel positions.
         '''
         # ensure float32 and align
+        t1 = time.time()
         N = len(psfs)
-        iH = np.zeros(N, dtype=np.int32) #individual height
-        iW = np.zeros(N, dtype=np.int32) #individual width
+        #iH = np.zeros(N, dtype=np.int32) #individual height
+        #iW = np.zeros(N, dtype=np.int32) #individual width
+        tp[0] += time.time()-t1
+        t1 = time.time()
 
         #Find max w, h
-        for i, psf in enumerate(psfs):
-            iH[i], iW[i] = psf.img.shape
-        H = np.max(iH)
-        W = np.max(iW)
+        iH,iW = np.array([psf.img.shape for psf in psfs]).T
+        #for i, psf in enumerate(psfs):
+        #    iH[i], iW[i] = psf.img.shape
+        #H = np.max(iH)
+        #W = np.max(iW)
+        H = iH.max()
+        W = iW.max()
         img = np.zeros((N, H, W), dtype=np.float32)
+        tp[1] += time.time()-t1
+        t1 = time.time()
 
         #Now loop over psfs and copy data into one 3-d zero-padded array
         for i, psf in enumerate(psfs):
             img[i,:iH[i],:iW[i]] = psf.img
+        tp[2] += time.time()-t1
+        t1 = time.time()
         img = cp.asarray(img)
+        tp[3] += time.time()-t1
+        t1 = time.time()
         #self.img = cp.require(img, requirements=['A'])
         self.img = img
         assert((H % 2) == 1)
@@ -106,9 +120,13 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
             # The size of PSF image we will return.
             self.nativeW = int(np.ceil(self.W * self.sampling))
             self.nativeH = int(np.ceil(self.H * self.sampling))
+        tp[4] += time.time()-t1
+        t1 = time.time()
 
         from tractor.psf import HybridPSF
         from tractor.batch_mixture_profiles import BatchMixtureOfGaussians
+        tp[5] += time.time()-t1
+        t1 = time.time()
         psfmogs = []
         maxK = 0
         for i,psf in enumerate(psfs):
@@ -119,14 +137,22 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
         amps = np.zeros((N, maxK))
         means = np.zeros((N, maxK, 2))
         varrs = np.zeros((N, maxK, 2, 2))
+        tp[6] += time.time()-t1
+        t1 = time.time()
         for i,psfmog in enumerate(psfmogs):
             amps[i, :psfmog.K] = psfmog.amp
             means[i, :psfmog.K, :] = psfmog.mean
             varrs[i, :psfmog.K, :, :] = psfmog.var
+        tp[7] += time.time()-t1
+        t1 = time.time()
         amps = cp.asarray(amps)
         means = cp.asarray(means)
         varrs = cp.asarray(varrs)
+        tp[8] += time.time()-t1
+        t1 = time.time()
         self.psf_mogs = BatchMixtureOfGaussians(amps, means, varrs, quick=True)
+        tp[9] += time.time()-t1
+        print ("TP:", tp, tp.sum())
 
 
     def __str__(self):
