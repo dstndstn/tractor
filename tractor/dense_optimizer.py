@@ -21,6 +21,8 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
                            shared_params=True,
                            get_A_matrix=False):
 
+        #print('ConstrainedDenseOptimizer.getUpdateDirection: shared_params=', shared_params,
+        #      'scales_only=', scales_only, 'damp', damp, 'variance', variance)
         if shared_params or scales_only or damp>0 or variance:
             raise RuntimeError('Not implemented')
         # I don't want to deal with this right now!
@@ -113,7 +115,7 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
 
         Nrows = Npixels + Npriors
         if Nrows == 0:
-            print('ConstrainedDenseOptimizer.getUpdateDirection: Nrows = 0')
+            #print('ConstrainedDenseOptimizer.getUpdateDirection: Nrows = 0')
             return None
         #print('Allocating', Nrows, 'x', Ncols, 'matrix for update direction')
         A = np.zeros((Nrows, Ncols), np.float32)

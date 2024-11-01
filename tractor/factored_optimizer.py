@@ -99,9 +99,7 @@ class FactoredOptimizer(object):
             if r is None:
                 continue
             x,x_icov = r
-
             #print('FO: X', x, 'x_icov', x_icov)
-
             img_opts.append((x,x_icov))
         tr.images = imgs
         tr.modelMasks = mm
@@ -116,12 +114,10 @@ class FactoredOptimizer(object):
         for x,ic in img_opts:
             xicsum = xicsum + np.dot(ic, x)
             icsum = icsum + ic
-        C = np.linalg.inv(icsum)
-        x = np.dot(C, xicsum)
-        # print('Total opt:')
-        # print(x)
+        #C = np.linalg.inv(icsum)
+        #x = np.dot(C, xicsum)
+        x,_,_,_ = np.linalg.lstsq(icsum, xicsum, rcond=None)
         return x
-
 
 class FactoredDenseOptimizer(FactoredOptimizer, ConstrainedDenseOptimizer):
     pass
@@ -134,10 +130,10 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         if not (tr.isParamFrozen('images') and
                 (len(tr.catalog) == 1) and
                 isinstance(tr.catalog[0], ProfileGalaxy)):
-            p = self.ps
-            self.ps = None
+            #p = self.ps
+            #self.ps = None
             R = super().getSingleImageUpdateDirections(tr, **kwargs)
-            self.ps = p
+            #self.ps = p
             return R
 
         #print('Using GpuFriendly code')
