@@ -106,8 +106,25 @@ class FactoredOptimizer(object):
         return img_opts
 
     def getLinearUpdateDirection(self, tr, **kwargs):
+
+        # We can fit for image-based parameters (eg, sky level) and source-based parameters.
+        # If image parameters are being fit, use the base code (eg in lsqr_optimizer.py)
+        # to fit those, 
+        x_imgs = None
+        if tr.isParamThawed('images'):
+            cat_frozen = tr.isParamFrozen('catalog')
+            if not cat_frozen:
+                tr.freezeParam('catalog')
+            x_imgs = super().getLinearUpdateDirection(tr, **kwargs)
+            if not cat_frozen:
+                tr.thawParam('catalog')
+            else:
+                return x_imgs
+
         #print('getLinearUpdateDirection( kwargs=', kwargs, ')')
         img_opts = self.getSingleImageUpdateDirections(tr, **kwargs)
+        if len(img_opts) == 0:
+            return None
         # ~ inverse-covariance-weighted sum of img_opts...
         xicsum = 0
         icsum = 0
@@ -117,6 +134,8 @@ class FactoredOptimizer(object):
         #C = np.linalg.inv(icsum)
         #x = np.dot(C, xicsum)
         x,_,_,_ = np.linalg.lstsq(icsum, xicsum, rcond=None)
+        if x_imgs is not None:
+            x = np.append(x_imgs, x)
         return x
 
 class FactoredDenseOptimizer(FactoredOptimizer, ConstrainedDenseOptimizer):
