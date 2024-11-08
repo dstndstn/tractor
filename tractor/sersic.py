@@ -456,11 +456,15 @@ class SersicGalaxy(HoggGalaxy):
         # Returns a list of sheared profiles that will be needed to compute
         # derivatives for this source; this is assumed in addition to the
         # sheared profile at the current parameter settings.
+
         if self.isParamThawed('sersicindex'):
             steps = self.sersicindex.getStepSizes()
             inames = self.sersicindex.getParamNames()
             oldvals = self.sersicindex.getParams()
             ups = self.sersicindex.getUpperBounds()
+            los = self.sersicindex.getLowerBounds()
+            n0 = len(self._getShearedProfile(img, px, py).amp)
+
             for i,step in enumerate(steps):
                 # Assume step is positive, and check whether stepping
                 # would exceed the upper bound.
@@ -468,8 +472,21 @@ class SersicGalaxy(HoggGalaxy):
                 if newval > ups[i]:
                     step *= -1.
                     newval = oldvals[i] + step
+                    assert(newval > los[i])
                 oldval = self.sersicindex.setParam(i, newval)
                 pro = self._getShearedProfile(img, px, py)
+                if len(pro.amp) != n0:
+                    # If we can, try stepping the opposite direction to avoid changing the
+                    # number of Gaussian components
+                    new2 = oldvals[i] - step
+                    if new2 < ups[i] and new2 > los[i]:
+                        self.sersicindex.setParam(i, new2)
+                        pro2 = self._getShearedProfile(img, px, py)
+                        if len(pro2.amp) == n0:
+                            # use this one instead
+                            pro = pro2
+                            step *= -1
+
                 self.sersicindex.setParam(i, oldval)
                 derivs.append(('sersicindex.'+inames[i], pro, step))
         return derivs
