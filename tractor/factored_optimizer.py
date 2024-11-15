@@ -37,6 +37,10 @@ class FactoredOptimizer(object):
         if r is None:
             return None
         x,A = r
+        # print('SingeImageUpdateDirection: tr thawed params:')
+        # tr.printThawedParams()
+        # print('allderivs:', len(allderivs))
+        # print('x:', x)
 
         if False:
             print('Got A matrix:', A.shape)
@@ -163,6 +167,66 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             #self.ps = p
             return R
 
+        print('Running GPU code...')
+        try:
+            R_gpu = self.gpuSingleImageUpdateDirections(tr, **kwargs)
+            # return R_gpu
+        except:
+            import traceback
+            print('Exception in GPU code:')
+            traceback.print_exc()
+
+            src = tr.catalog[0]
+            print('Source:', src)
+            print(repr(src))
+            f = open('bad.pickle','wb')
+            import pickle
+            pickle.dump(tr, f)
+            f.close()
+            sys.exit(-1)
+
+        print('Running CPU code for comparison...')
+        R_cpu = super().getSingleImageUpdateDirections(tr, **kwargs)
+
+        xicacc_cpu = 0.
+        icacc_cpu = 0.
+        for x,ic in R_cpu:
+            xicacc_cpu = xicacc_cpu + np.dot(ic, x)
+            icacc_cpu = icacc_cpu + ic
+        x_cpu,_,_,_ = np.linalg.lstsq(icacc_cpu, xicacc_cpu, rcond=None)
+            
+        xicacc_gpu = 0.
+        icacc_gpu = 0.
+        for x,ic in R_gpu:
+            xicacc_gpu = xicacc_gpu + np.dot(ic, x)
+            icacc_gpu = icacc_gpu + ic
+        x_gpu,_,_,_ = np.linalg.lstsq(icacc_gpu, xicacc_gpu, rcond=None)
+
+        print('CPU:', x_cpu)
+        print('GPU:', x_gpu)
+        s = np.sum(x_cpu * x_gpu) / np.sqrt(np.sum(x_cpu**2) * np.sum(x_gpu**2))
+        print('Similarity:', s)
+        if s < 0.9:
+            src = tr.catalog[0]
+            print('Source:', src)
+            for i,((x_cpu,ic_cpu), (x_gpu,ic_gpu)) in enumerate(zip(R_cpu, R_gpu)):
+                print('  CPU:', x_cpu)
+                print('  GPU:', x_gpu)
+                s = np.sum(x_cpu * x_gpu) / np.sqrt(np.sum(x_cpu**2) * np.sum(x_gpu**2))
+                print('  similarity:', s)
+                if s < 0.9:
+                    tim = tr.images[i]
+                    print('Tim:', tim)
+                    f = open('bad2.pickle', 'wb')
+                    import pickle
+                    tr.images = [tim]
+                    pickle.dump(tr, f)
+                    f.close()
+                    sys.exit(-1)
+        return R_gpu
+
+    def gpuSingleImageUpdateDirections(self, tr, **kwargs):
+        
         #print('Using GpuFriendly code')
         # Assume we're not fitting any of the image parameters.
         assert(tr.isParamFrozen('images'))
@@ -184,8 +248,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         assert(src.isParamThawed('pos'))
 
-        # FIXME -- must handle priors (ellipticity)!!
-
         # Pixel positions
         pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
                for tim in tr.images]
@@ -206,7 +268,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         inner_real_nsigma = 3.
         outer_real_nsigma = 4.
 
-        print ("Calling FACTORED version")
         nimages = len(masks)
         gpu_px = np.zeros(nimages)
         gpu_py = np.zeros(nimages)
