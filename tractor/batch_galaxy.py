@@ -16,6 +16,7 @@ import numpy as np
 import cupy as cp
 
 from tractor.galaxy import HoggGalaxy
+from tractor.sersic import SersicGalaxy
 from tractor import batch_mixture_profiles as mp
 from tractor.utils import ParamList, MultiParams, ScalarParam, BaseParams
 from tractor.patch import Patch, add_patches, ModelMask
@@ -81,4 +82,41 @@ def getDerivativeShearedProfilesGPU(galaxy, img, px, py):
             galaxy.shape.setParam(i, oldval)
             derivs.append(('shape.'+gnames[i], pro, gstep))
             tbs2[3] += time.time()-t
+    if type(galaxy) == SersicGalaxy:
+        print ("SERSIC")
+        t = time.time()
+        if galaxy.isParamThawed('sersicindex'):
+            steps = galaxy.sersicindex.getStepSizes()
+            inames = galaxy.sersicindex.getParamNames()
+            oldvals = galaxy.sersicindex.getParams()
+            ups = galaxy.sersicindex.getUpperBounds()
+            los = galaxy.sersicindex.getLowerBounds()
+            n0 = len(pro.amp)
+            #n0 = len(self._getShearedProfile(img, px, py).amp)
+
+            for i,step in enumerate(steps):
+                # Assume step is positive, and check whether stepping
+                # would exceed the upper bound.
+                newval = oldvals[i] + step
+                if newval > ups[i]:
+                    step *= -1.
+                    newval = oldvals[i] + step
+                    assert(newval > los[i])
+                oldval = galaxy.sersicindex.setParam(i, newval)
+                pro = getShearedProfileGPU(galaxy, img, px, py)
+                if len(pro.amp) != n0:
+                    # If we can, try stepping the opposite direction to avoid changing the
+                    # number of Gaussian components
+                    new2 = oldvals[i] - step
+                    if new2 < ups[i] and new2 > los[i]:
+                        galaxy.sersicindex.setParam(i, new2)
+                        pro2 = getShearedProfileGPU(galaxy, img, px, py)
+                        if len(pro2.amp) == n0:
+                            # use this one instead
+                            pro = pro2
+                            step *= -1
+
+                galaxy.sersicindex.setParam(i, oldval)
+                derivs.append(('sersicindex.'+inames[i], pro, step))
+        tbs2[4] += time.time()-t
     return derivs
