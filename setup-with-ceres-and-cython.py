@@ -61,8 +61,6 @@ def main():
 
     with_ceres = True
     if with_ceres:
-        sys.argv.remove(key)
-
         ## Ceres module
         from subprocess import check_output
         eigen_inc = os.environ.get('EIGEN_INC', None)
@@ -96,7 +94,6 @@ def main():
 
     with_cython = True
     if with_cython:
-        sys.argv.remove(key)
         from Cython.Build import cythonize
 
         nthreads = 4
