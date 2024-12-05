@@ -150,18 +150,31 @@ class Galaxy(MultiParams, SingleProfileSource):
         else:
             minval = None
 
-        patch0 = self.getUnitFluxModelPatch(img, px=px0, py=py0, minval=minval,
-                                            modelMask=modelMask, **kwargs)
+        padded = False
+        if modelMask is not None:
+            # grow mask by 1 pixel in each direction
+            mh,mw = modelMask.shape
+            mm = ModelMask(modelMask.x0 - 1, modelMask.y0 - 1, mw + 2, mh + 2)
+            patch0 = self.getUnitFluxModelPatch(img, px=px0, py=py0, minval=minval,
+                                                modelMask=mm, **kwargs)
+            padded = True
+        else:
+            patch0 = self.getUnitFluxModelPatch(img, px=px0, py=py0, minval=minval,
+                                                modelMask=modelMask, **kwargs)
         if patch0 is None:
             return [None] * self.numberOfParams()
         derivs = []
 
         if modelMask is None:
-            modelMask = ModelMask.fromExtent(*patch0.getExtent())
+            x0,x1,y0,y1 = patch0.getExtent()
+            if padded:
+                x0 += 1
+                x1 -= 1
+                y0 += 1
+                y1 -= 1
+            modelMask = ModelMask.fromExtent([x0,x1,y0,y1])
         assert(modelMask is not None)
 
-        # FIXME -- would we be better to do central differences in
-        # pixel space, and convert to Position via CD matrix?
         # derivatives wrt position
         if not self.isParamFrozen('pos'):
             if counts == 0:
@@ -170,10 +183,19 @@ class Galaxy(MultiParams, SingleProfileSource):
                 p0 = patch0.patch
                 dx = np.zeros_like(p0)
                 dx[:,1:-1] = (p0[:, :-2] - p0[:, 2:]) / 2.
-                patchdx = Patch(patch0.x0, patch0.y0, dx)
                 dy = np.zeros_like(p0)
                 dy[1:-1,:] = (p0[:-2, :] - p0[2:, :]) / 2.
-                patchdy = Patch(patch0.x0, patch0.y0, dy)
+
+                if padded:
+                    slc = slice(1,-1), slice(1,-1)
+                    x0,y0 = patch0.x0 + 1, patch0.y0 + 1
+                    patch0  = Patch(x0, y0, patch0.patch[slc])
+                    patchdx = Patch(x0, y0, dx[slc])
+                    patchdy = Patch(x0, y0, dy[slc])
+                else:
+                    patchdx = Patch(patch0.x0, patch0.y0, dx)
+                    patchdy = Patch(patch0.x0, patch0.y0, dy)
+
                 del dx, dy
                 derivs.extend(wcs.pixelDerivsToPositionDerivs(pos0, self, counts,
                                                               patch0, patchdx, patchdy))
