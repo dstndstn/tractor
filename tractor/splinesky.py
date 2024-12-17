@@ -105,7 +105,7 @@ class SplineSky(ParamList, ducks.ImageCalibration):
     def offset(self, dsky):
         #sky0 = self.spl(0,0)
         (tx, ty, c) = self.spl.tck
-        c = [ci + dsky for ci in c]
+        c += dsky
         self.spl.tck = (tx, ty, c)
         self.vals = c
         #sky1 = self.spl(0,0)
@@ -259,7 +259,7 @@ class SplineSky(ParamList, ducks.ImageCalibration):
 
     @classmethod
     def from_fits_row(cls, Ti):
-        sky = cls(Ti.xgrid, Ti.ygrid, Ti.gridvals, order=Ti.order)
+        sky = cls(Ti.xgrid, Ti.ygrid, Ti.gridvals, order=int(Ti.order))
         sky.shift(Ti.x0, Ti.y0)
         return sky
 
