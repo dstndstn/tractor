@@ -293,7 +293,7 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         ystart = (cy - dy/self.sampling) + ylo * ystep
 
         native_img = np.zeros((height, width), np.float32)
-        lanczos3_interpolate_grid(xstart, xstep, ystart, ystep,
+        lanczos3_interpolate_grid(float(xstart), float(xstep), float(ystart), float(ystep),
                                   native_img, img)
         return xlo, ylo, native_img
 
