@@ -3,6 +3,7 @@ from tractor.dense_optimizer import ConstrainedDenseOptimizer
 from tractor import ProfileGalaxy, HybridPSF
 from tractor import mixture_profiles as mp
 from tractor.psf import lanczos_shift_image
+from tractor.sky import ConstantSky
 from astrometry.util.miscutils import get_overlapping_region
 import numpy as np
 import scipy
@@ -230,9 +231,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #print('Using GpuFriendly code')
         # Assume we're not fitting any of the image parameters.
         assert(tr.isParamFrozen('images'))
+        # Assume no (varying) sky background levels
+        assert(all([isinstance(tim.sky, ConstantSky) for tim in tr.images]))
+        #assert(all([tim.sky.getConstant() == 0 for tim in tr.images]))
         # Assume single source
         assert(len(tr.catalog) == 1)
-        
         img_pix = [tim.data for tim in tr.images]
         img_ie  = [tim.getInvError() for tim in tr.images]
         # Assume galaxy
@@ -242,10 +245,16 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # Assume hybrid PSF model
         assert(all([isinstance(psf, HybridPSF) for psf in psfs]))
 
+        # Assume ConstantSky models, grab constant sky levels
+        # NOTE - instead of building this list and passing it around in ImageDerivs, etc,
+        # we could perhaps just subtract it off img_pix at the start...
+        img_sky = [tim.getSky().getConstant() for tim in tr.images]
+
         # Assume model masks are set (ie, pixel ROIs of interest are defined)
         masks = [tr._getModelMaskFor(tim, src) for tim in tr.images]
         assert(all([m is not None for m in masks]))
 
+        # Assume we *are* fitting for the (RA,Dec) position
         assert(src.isParamThawed('pos'))
 
         # Pixel positions
@@ -299,8 +308,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         #Not optimal but for now go back into loop
         pi = 0
-        for mm,(px,py),(x0,x1,y0,y1),psf,pix,ie,counts,cdi,tim in zip(
-                masks, pxy, extents, psfs, img_pix, img_ie, img_counts, img_cdi, tr.images):
+        for mm,(px,py),(x0,x1,y0,y1),psf,pix,ie,counts,sky,cdi,tim in zip(
+                masks, pxy, extents, psfs, img_pix, img_ie, img_counts, img_sky, img_cdi, tr.images):
             mmpix = pix[mm.y0:mm.y1, mm.x0:mm.x1]
             mmie =   ie[mm.y0:mm.y1, mm.x0:mm.x1]
 
@@ -370,7 +379,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
             K = amix.var.shape[0]
             D = amix.var.shape[1]
-            img_derivs = ImageDerivs(amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi)
+            img_derivs = ImageDerivs(amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi, sky)
             img_params.add_image_deriv(img_derivs)
             #Commented out print below
             #img_derivs.tostr()
@@ -714,7 +723,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         A[:,:Npix,:] *= img_params.ie.reshape((img_params.Nimages, Npix))[:,:,cp.newaxis]
 
         B = cp.zeros((img_params.Nimages, Npix + Npriors), cp.float32)
-        B[:,:Npix] = ((img_params.pix - img_params.counts[:,cp.newaxis, cp.newaxis]*mod0) * img_params.ie).reshape((img_params.Nimages, Npix))
+        B[:,:Npix] = ((img_params.pix - (img_params.counts[:,cp.newaxis, cp.newaxis]*mod0 + img_params.sky[:, cp.newaxis, cp.newaxis])) * img_params.ie).reshape((img_params.Nimages, Npix))
         # B should be of shape (Nimages, :)                           
         #B = cp.append(((pix - counts*mod0) * ie).ravel(),
         #                cp.zeros(Npriors, cp.float32))
@@ -747,6 +756,56 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         A_T_dot_B = cp.einsum("...ji,...j", A, B)
         X = cp.linalg.solve(A_T_dot_A, A_T_dot_B)
         #X = cp.einsum("ijk,ik->ij", cp.linalg.pinv(A), B)
+
+        if self.ps is not None:
+
+            N,_,_ = A.shape
+            xx = []
+            for i in range(N):
+                xi,_,_,_ = cp.linalg.lstsq(A[i,:,:], B[i,:], rcond=None)
+                xx.append(xi)
+            print('X:', X)
+            print('xx:', xx)
+
+            plt.clf()
+            myA = A.get()
+            myA = myA[0,:,:]
+            print('A:', myA.shape)
+            myX = X.get()
+            print('X', myX.shape)
+            myX = myX[0,:]
+            myB = B.get()
+            print('B', myB.shape)
+            myB = myB[0,:]
+
+            import fitsio
+            fitsio.write('gpu-x.fits', myX, clobber=True)
+            fitsio.write('gpu-x-scaled.fits', myX / colscales.get(), clobber=True)
+            fitsio.write('gpu-a.fits', myA.reshape((64,64,-1)) * colscales.get()[np.newaxis,:], clobber=True)
+            fitsio.write('gpu-a-scaled.fits', myA.reshape((64,64,-1)), clobber=True)
+            fitsio.write('gpu-b.fits', myB.reshape((64,64)), clobber=True)
+            
+            ax = np.dot(myA, myX)
+            print('AX', ax.shape)
+            print('AX', np.percentile(np.abs(ax), [1,99]))
+            print('B ', np.percentile(np.abs(myB), [1,99]))
+            #lo,hi = np.percentile(np.abs(myB), [1,99])
+            lo,hi = myB.min(), myB.max()
+            plt.clf()
+            plt.subplot(1,3,1)
+            imx = dict(interpolation='nearest', origin='lower', vmin=lo, vmax=hi)
+            plt.imshow(ax.reshape((64,64)), **imx)
+            plt.colorbar()
+            plt.title('AX')
+            plt.subplot(1,3,2)
+            plt.imshow(myB.reshape((64,64)), **imx)
+            plt.colorbar()
+            plt.title('B')
+            plt.subplot(1,3,3)
+            plt.imshow(ax.reshape((64,64)), interpolation='nearest', origin='lower')
+            plt.colorbar()
+            plt.title('AX')
+            self.ps.savefig()
 
         # Undo pre-scaling
         X /= colscales

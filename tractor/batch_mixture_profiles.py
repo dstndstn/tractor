@@ -43,7 +43,7 @@ class ImageDerivs(object):
         step = list of amixes.step
     '''
 
-    def __init__(self, amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi):
+    def __init__(self, amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi, sky):
         N = len(amixes)
         nmogs = IM.sum()
         nfft = IF.sum()
@@ -66,6 +66,7 @@ class ImageDerivs(object):
         self.counts = counts
         self.cdi = cdi
         self.roi = roi
+        self.sky = sky
 
         if self.nmogs > 0:
             amp = np.zeros((N, nmogs))
@@ -170,9 +171,10 @@ class BatchImageParams(object):
 
         self.pix = cp.zeros((self.Nimages, self.mh, self.mw), dtype = np.float32 )
         self.ie = cp.zeros_like(self.pix)
-        self.counts = cp.zeros(self.Nimages)
+        self.counts = cp.zeros(self.Nimages, dtype=np.float32)
         self.cdi = np.zeros((self.Nimages, 2,2), dtype=np.float32)
         self.roi = np.zeros((self.Nimages, 4), dtype=np.int)
+        self.sky = cp.zeros(self.Nimages, dtype=np.float32)
         self.steps = np.zeros((self.Nimages, self.maxNd), dtype=np.float32)
 
         for i, imderiv in enumerate(self.img_derivs):
@@ -181,6 +183,7 @@ class BatchImageParams(object):
             self.counts[i] = imderiv.counts
             self.cdi[i] = imderiv.cdi
             self.roi[i] = np.asarray(imderiv.roi, dtype = np.int)
+            self.sky[i] = imderiv.sky
             self.steps[i] = imderiv.steps
         self.cdi = cp.asarray(self.cdi)
         self.steps = cp.asarray(self.steps)
