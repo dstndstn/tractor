@@ -152,7 +152,7 @@ class Galaxy(MultiParams, SingleProfileSource):
 
         padded = False
         if modelMask is not None:
-            # grow mask by 1 pixel in each direction
+            # grow mask by 1 pixel in each direction (for spatial derivs)
             mh,mw = modelMask.shape
             mm = ModelMask(modelMask.x0 - 1, modelMask.y0 - 1, mw + 2, mh + 2)
             patch0 = self.getUnitFluxModelPatch(img, px=px0, py=py0, minval=minval,
@@ -163,39 +163,38 @@ class Galaxy(MultiParams, SingleProfileSource):
                                                 modelMask=modelMask, **kwargs)
         if patch0 is None:
             return [None] * self.numberOfParams()
-        derivs = []
 
         if modelMask is None:
             x0,x1,y0,y1 = patch0.getExtent()
-            if padded:
-                x0 += 1
-                x1 -= 1
-                y0 += 1
-                y1 -= 1
             modelMask = ModelMask.fromExtent([x0,x1,y0,y1])
         assert(modelMask is not None)
 
+        derivs = []
         # derivatives wrt position
         if not self.isParamFrozen('pos'):
             if counts == 0:
                 derivs.extend([None] * len(pos0.getParams()))
             else:
                 p0 = patch0.patch
-                dx = np.zeros_like(p0)
-                dx[:,1:-1] = (p0[:, :-2] - p0[:, 2:]) / 2.
-                dy = np.zeros_like(p0)
-                dy[1:-1,:] = (p0[:-2, :] - p0[2:, :]) / 2.
 
                 if padded:
-                    slc = slice(1,-1), slice(1,-1)
-                    x0,y0 = patch0.x0 + 1, patch0.y0 + 1
-                    patch0  = Patch(x0, y0, patch0.patch[slc])
-                    patchdx = Patch(x0, y0, dx[slc])
-                    patchdy = Patch(x0, y0, dy[slc])
+                    dx = (p0[1:-1,   :-2] - p0[1:-1, 2:  ]) / 2.
+                    dy = (p0[ :-2 , 1:-1] - p0[2:  , 1:-1]) / 2.
+                    assert(dx.shape == modelMask.shape)
+                    assert(dy.shape == modelMask.shape)
+                    x0,y0 = modelMask.x0,modelMask.y0
+                    patchdx = Patch(x0, y0, dx)
+                    patchdy = Patch(x0, y0, dy)
+                    # Undo the padding on patch0.
+                    patch0  = Patch(x0, y0, patch0.patch[1:-1, 1:-1])
+                    assert(patch0.shape == modelMask.shape)
                 else:
+                    dx = np.zeros_like(p0)
+                    dx[:,1:-1] = (p0[:, :-2] - p0[:, 2:]) / 2.
+                    dy = np.zeros_like(p0)
+                    dy[1:-1,:] = (p0[:-2, :] - p0[2:, :]) / 2.
                     patchdx = Patch(patch0.x0, patch0.y0, dx)
                     patchdy = Patch(patch0.x0, patch0.y0, dy)
-
                 del dx, dy
                 derivs.extend(wcs.pixelDerivsToPositionDerivs(pos0, self, counts,
                                                               patch0, patchdx, patchdy))
