@@ -11,6 +11,7 @@ import scipy.fft
 import time
 from tractor.batch_psf import BatchPixelizedPSF, lanczos_shift_image_batch_gpu
 from tractor.batch_mixture_profiles import ImageDerivs, BatchImageParams, BatchMixtureOfGaussians
+from tractor.patch import ModelMask
 import cupy as cp
 import time
 
@@ -310,8 +311,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         pi = 0
         for mm,(px,py),(x0,x1,y0,y1),psf,pix,ie,counts,sky,cdi,tim in zip(
                 masks, pxy, extents, psfs, img_pix, img_ie, img_counts, img_sky, img_cdi, tr.images):
-            mmpix = pix[mm.y0:mm.y1, mm.x0:mm.x1]
-            mmie =   ie[mm.y0:mm.y1, mm.x0:mm.x1]
+            #Subtract 1 from y0 and x0 CW 1/22/25 -- unknown why but rectifies difference with CPU IE
+            mmpix = pix[mm.y0-1:mm.y1, mm.x0-1:mm.x1]
+            mmie =   ie[mm.y0-1:mm.y1, mm.x0-1:mm.x1]
 
             # PSF Fourier transforms
             #P, (cx, cy), (pH, pW), (v, w) = psf.getFourierTransform(px, py, halfsize)
@@ -334,8 +336,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             padpix = np.zeros((pH,pW), np.float32)
             padie  = np.zeros((pH,pW), np.float32)
             assert(sy <= 0 and sx <= 0)
-            padpix[-sy: -sy+mh, -sx: -sx+mw] = mmpix
-            padie [-sy: -sy+mh, -sx: -sx+mw] = mmie
+            padpix[-sy-1: -sy+mh, -sx-1: -sx+mw] = mmpix
+            padie [-sy-1: -sy+mh, -sx-1: -sx+mw] = mmie
             roi = (-sx, -sy, mw, mh)
             mmpix = padpix
             mmie  = padie
@@ -724,6 +726,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         B = cp.zeros((img_params.Nimages, Npix + Npriors), cp.float32)
         B[:,:Npix] = ((img_params.pix - (img_params.counts[:,cp.newaxis, cp.newaxis]*mod0 + img_params.sky[:, cp.newaxis, cp.newaxis])) * img_params.ie).reshape((img_params.Nimages, Npix))
+
         # B should be of shape (Nimages, :)                           
         #B = cp.append(((pix - counts*mod0) * ie).ravel(),
         #                cp.zeros(Npriors, cp.float32))
