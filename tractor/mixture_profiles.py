@@ -177,6 +177,13 @@ class MixtureOfGaussians(object):
 
         return MixtureOfGaussians(self.amp, self.mean, newvar, quick=True)
 
+    def apply_shear_GPU(self, scale):
+        import cupy as cp
+        var = cp.asarray(self.var)
+        scale = cp.asarray(scale)
+        newvar = cp.einsum("...ij,...jk", scale.dot(var).swapaxes(1,2), scale.swapaxes(1,2)[:,None,:,:])
+        return MixtureOfGaussians(self.amp, self.mean, newvar, quick=True)
+
     # dstn: should this be called "correlate"?
     def convolve(self, other):
         assert(self.D == other.D)

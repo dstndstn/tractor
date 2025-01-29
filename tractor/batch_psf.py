@@ -78,14 +78,17 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
         '''
         # ensure float32 and align
         N = len(psfs)
-        iH = np.zeros(N, dtype=np.int32) #individual height
-        iW = np.zeros(N, dtype=np.int32) #individual width
+        #iH = np.zeros(N, dtype=np.int32) #individual height
+        #iW = np.zeros(N, dtype=np.int32) #individual width
 
         #Find max w, h
-        for i, psf in enumerate(psfs):
-            iH[i], iW[i] = psf.img.shape
-        H = np.max(iH)
-        W = np.max(iW)
+        iH,iW = np.array([psf.img.shape for psf in psfs]).T
+        #for i, psf in enumerate(psfs):
+        #    iH[i], iW[i] = psf.img.shape
+        #H = np.max(iH)
+        #W = np.max(iW)
+        H = iH.max()
+        W = iW.max()
         img = np.zeros((N, H, W), dtype=np.float32)
 
         #Now loop over psfs and copy data into one 3-d zero-padded array

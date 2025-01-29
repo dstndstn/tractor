@@ -18,6 +18,10 @@ from tractor import mixture_profiles as mp
 from tractor.utils import ParamList, MultiParams, ScalarParam, BaseParams
 from tractor.patch import Patch, add_patches, ModelMask
 from tractor.basics import SingleProfileSource, BasicSource
+import time
+ts1 = np.zeros(10)
+ts2 = np.zeros(10)
+ts3 = np.zeros(10)
 
 debug_ps = None
 
@@ -33,6 +37,10 @@ def set_galaxy_cache_size(N=10000):
 
 enable_galaxy_cache = set_galaxy_cache_size
 
+def print_ts():
+    print ("TS1:", ts1)
+    print ("TS2:", ts2)
+    print ("TS3:", ts3)
 
 def disable_galaxy_cache():
     pass
@@ -711,6 +719,27 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
         G = self.shape.getRaDecBasis()
         Tinv = np.dot(cdinv, G)
         amix = galmix.apply_affine(np.array([px, py]), Tinv)
+        return amix
+
+    def _getShearedProfileGPU(self, imgs, px, py):
+        ts3[9] += 1
+        t = time.time()
+        import cupy as cp
+        galmix = self.getProfile()
+        ts3[0] += time.time()-t
+        t = time.time()
+        cdinv = cp.array([img.getWcs().cdInverseAtPixel(px[i], py[i]) for i, img in enumerate(imgs)])
+        ts3[1] += time.time()-t
+        t = time.time()
+        G = cp.asarray(self.shape.getRaDecBasis())
+        ts3[2] += time.time()-t
+        t = time.time()
+        Tinv = cp.dot(cdinv, G)
+        ts3[3] += time.time()-t
+        t = time.time()
+        print (type(galmix))
+        amix = galmix.apply_shear_GPU(Tinv)
+        ts3[4] += time.time()-t
         return amix
 
     def _getShearedProfile(self, img, px, py):
