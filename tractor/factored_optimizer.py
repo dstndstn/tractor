@@ -196,6 +196,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             sys.exit(-1)
 
         print ('Running VECTORIZED GPU code...')
+        tx[:] = 0
         try:
             R_gpuv = self.gpuSingleImageUpdateDirectionsVectorized(tr, **kwargs)
             # return R_gpuv
@@ -526,6 +527,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #print('Using GpuFriendly code')
         # Assume we're not fitting any of the image parameters.
         assert(tr.isParamFrozen('images'))
+        # Assume no (varying) sky background levels
+        assert(all([isinstance(tim.sky, ConstantSky) for tim in tr.images]))
+        #assert(all([tim.sky.getConstant() == 0 for tim in tr.images]))
         # Assume single source
         assert(len(tr.catalog) == 1)
         t1 = time.time()
@@ -543,6 +547,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         assert(all([isinstance(psf, HybridPSF) for psf in psfs]))
         th[1] += time.time()-t1
         t1 = time.time()
+
+        # Assume ConstantSky models, grab constant sky levels
+        # NOTE - instead of building this list and passing it around in ImageDerivs, etc,
+        # we could perhaps just subtract it off img_pix at the start...
+        img_sky = [tim.getSky().getConstant() for tim in tr.images]
 
         # Assume model masks are set (ie, pixel ROIs of interest are defined)
         masks = [tr._getModelMaskByIdx(i, src) for i in range(len(tr.images))]
@@ -641,14 +650,16 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         t9 = time.time()
 
         for i, pix in enumerate(img_pix):
-            padpix[i, -sy[i]:-sy[i]+mh[i], -sx[i]:-sx[i]+mw[i]] = pix[my0[i]:my1[i], mx0[i]:mx1[i]]
+            padpix[i, -sy[i]-1:-sy[i]+mh[i], -sx[i]-1:-sx[i]+mw[i]] = pix[my0[i]-1:my1[i], mx0[i]-1:mx1[i]]
         for i, ie in enumerate(img_ie):
-            padie[i, -sy[i]:-sy[i]+mh[i], -sx[i]:-sx[i]+mw[i]] = ie[my0[i]:my1[i], mx0[i]:mx1[i]]
+            padie[i, -sy[i]-1:-sy[i]+mh[i], -sx[i]-1:-sx[i]+mw[i]] = ie[my0[i]-1:my1[i], mx0[i]-1:mx1[i]]
         tg[1] += time.time()-t9
         t9 = time.time()
         roi = cp.asarray([-sx, -sy, mw, mh]).T
         mmpix = cp.asarray(padpix)
         mmie = cp.asarray(padie)
+        sky = cp.asarray(img_sky)
+        print("SKY", sky.shape)
         tg[2] += time.time()-t9
         t9 = time.time()
 
@@ -705,13 +716,14 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #print ("amixes_gpu", type(amixes_gpu), type(IF), type(IM), type(K), type(D))
         #print ("mogweights", type(mogweights), type(fftweights), fftweights.shape, type(px), type(py), type(mux), type(muy))
         #print ("MH", type(mh), type(mw), type(counts), type(cdi), type(roi))
-        img_derivs = BatchImageDerivs(amixes_gpu, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi)
+        img_derivs = BatchImageDerivs(amixes_gpu, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi, sky)
         img_params.addBatchImageDerivs(img_derivs)
+        #img_derivs.tostr()
         tg[6] += time.time()-t9
 
         i = 0
-        print_ts()
-        print_tbs()
+        #print_ts()
+        #print_tbs()
         add_to_timer(2, time.time()-t1)
         t1 = time.time()
         #Call collect_params() to finalize BatchImageParams object with all ImageDerivs
@@ -1111,6 +1123,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             print('X:', X)
             print('xx:', xx)
 
+            import pylab as plt
             plt.clf()
             myA = A.get()
             myA = myA[0,:,:]
@@ -1595,7 +1608,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         A[:,:Npix,:] *= img_params.ie.reshape((img_params.Nimages, Npix))[:,:,cp.newaxis]
 
         B = cp.zeros((img_params.Nimages, Npix + Npriors), cp.float32)
-        B[:,:Npix] = ((img_params.pix - img_params.counts[:,cp.newaxis, cp.newaxis]*mod0) * img_params.ie).reshape((img_params.Nimages, Npix))
+        B[:,:Npix] = ((img_params.pix - (img_params.counts[:,cp.newaxis, cp.newaxis]*mod0 + img_params.sky[:, cp.newaxis, cp.newaxis])) * img_params.ie).reshape((img_params.Nimages, Npix))
+        #B[:,:Npix] = ((img_params.pix - img_params.counts[:,cp.newaxis, cp.newaxis]*mod0) * img_params.ie).reshape((img_params.Nimages, Npix))
         # B should be of shape (Nimages, :)                           
         #B = cp.append(((pix - counts*mod0) * ie).ravel(),
         #                cp.zeros(Npriors, cp.float32))

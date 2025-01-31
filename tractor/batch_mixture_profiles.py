@@ -46,7 +46,7 @@ class BatchImageDerivs(object):
         step = list of amixes.step
     ''' 
 
-    def __init__(self, amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi):
+    def __init__(self, amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi, sky):
         t = time.time()
         self.Nimages = len(counts)
         N = len(amixes)
@@ -74,6 +74,7 @@ class BatchImageDerivs(object):
         self.counts = counts
         self.cdi = cdi
         self.roi = roi
+        self.sky = sky
 
         #self.maxNmogs = IM.shape[1] 
         #self.maxNfft = IF.shape[1] 
@@ -394,6 +395,7 @@ class BatchImageParams(object):
         self.cdi = bimderiv.cdi
         self.roi = bimderiv.roi
         self.steps = bimderiv.steps
+        self.sky = bimderiv.sky
         tb[0] += time.time()-t
         t = time.time()
 
