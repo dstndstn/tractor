@@ -164,6 +164,10 @@ class Patch(object):
     def x1(self):
         return self.x0 + self.patch.shape[1]
 
+    def extent(self):
+        (h, w) = self.shape
+        return (self.x0, self.x0 + w, self.y0, self.y0 + h)
+
     def __str__(self):
         s = 'Patch: '
         name = getattr(self, 'name', '')
