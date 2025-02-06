@@ -70,7 +70,7 @@ class FactoredOptimizer(object):
             h,w = mm.shape
             fitsio.write('cpu-x.fits', x * colscales, clobber=True)
             fitsio.write('cpu-x-scaled.fits', x, clobber=True)
-            fitsio.write('cpu-a-scaled.fits', A.reshape((h,w,-1)) / colscales[np.newaxis,:], clobber=True)
+            fitsio.write('cpu-a-scaled.fits', A.reshape((h,w,-1)) / np.maximum(1e-16, colscales[np.newaxis,:]), clobber=True)
             fitsio.write('cpu-a.fits', A.reshape((h,w,-1)), clobber=True)
             fitsio.write('cpu-b.fits', B.reshape(h,w), clobber=True)
 

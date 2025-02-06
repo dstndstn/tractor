@@ -165,13 +165,36 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
                     w = x1-x0
                     h = y1-y0
                     apix = (deriv.patch * inverrs[y0:y1, x0:x1])
+                    ### HACK
+                    ii0,jj0 = np.nonzero(deriv.patch)
+                    ii1,jj1 = np.nonzero(inverrs[y0:y1, x0:x1])
+                    if len(ii0) == 0:
+                        print('modelmask: deriv is all zeros')
+                    else:
+                        print('modelmask: deriv  non-zero region: x [%i,%i)' % (jj0.min(), jj0.max()+1),
+                              'y [%i,%i)' % (ii0.min(), ii0.max()+1))
+                    if len(ii1) == 0:
+                        print('modelmask: inverr is all zeros')
+                    else:
+                        print('modelmask: inverr non-zero region: x [%i,%i)' % (jj1.min(), jj1.max()+1),
+                              'y [%i,%i)' % (ii1.min(), ii1.max()+1))
+
+                    ii2,jj2 = np.nonzero(inverrs)
+                    if len(ii2):
+                        print('whole      inverr non-zero region (relative to modelmask origin): x [%i,%i)' %
+                              (jj2.min() - x0, jj2.max()+1 - x0), 'y [%i,%i)' % (ii2.min()-y0, ii2.max()+1-y0))
+
+                        ###
                     A[rowstart:rowstart+w*h, col] = apix.flat
                     if scale_columns:
                         # accumulate L2 norm
                         scale2 += np.sum(apix**2)
                     del apix
                 else:
+                    # There are multiple modelMasks for this image
+                    # (eg from multiple sources), so need to pad it out
                     assert(False)
+                    sys.exit(-1)
 
             if scale_columns:
                 colscales2[col] = scale2
