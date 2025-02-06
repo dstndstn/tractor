@@ -63,7 +63,7 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
 
             for deriv, img in derivs:
                 print('deriv', deriv)
-                dx0,dx1,dy0,dy1 = deriv.extent()
+                dx0,dx1,dy0,dy1 = deriv.extent
 
                 if img in img_bounds:
                     x0,x1,y0,y1 = img_bounds[img]
@@ -154,7 +154,7 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
                     continue
                 inverrs = img.getInvError()
 
-                dx0,dx1,dy0,dy1 = deriv.extent()
+                dx0,dx1,dy0,dy1 = deriv.extent
                 x0,x1,y0,y1 = img_bounds[img]
                 print('deriv extent', dx0,dx1, dy0,dy1)
                 print('image bounds', x0,x1,y0,y1)
