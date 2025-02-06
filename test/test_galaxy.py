@@ -60,8 +60,11 @@ class GalaxyTest(unittest.TestCase):
         self.assertEqual(len(derivs), 7)
         self.assertEqual(len(derivs), gal1.numberOfParams())
         self.assertEqual(len(derivs), len(gal1.getParams()))
-        for d in derivs:
-            self.assertIsNotNone(d)
+        for i,d in enumerate(derivs):
+            if i == 2:
+                self.assertIsNone(d)
+            else:
+                self.assertIsNotNone(d)
 
         # Set one of the fluxes to zero.
         gal1.brightness.r = 0.
@@ -70,8 +73,8 @@ class GalaxyTest(unittest.TestCase):
         print('Derivs:', derivs)
         self.assertEqual(len(derivs), 7)
         for i,d in enumerate(derivs):
-            # flux derivatives still non-None
-            if i in [2,3]:
+            # flux derivative for this image's band should still be non-None
+            if i == 3:
                 self.assertIsNotNone(derivs[i])
             else:
                 # other derivatives should be None
