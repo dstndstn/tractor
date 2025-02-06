@@ -788,7 +788,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             derivs = A.get()[0,:,:]
             for i in range(4):
                 plt.subplot(2,2,i+1)
-                plt.imshow(derivs[:,i].reshape((64,64)), interpolation='nearest', origin='lower')
+                plt.imshow(derivs[:(64*64),i].reshape((64,64)), interpolation='nearest', origin='lower')
             plt.suptitle('A matrix')
             self.ps.savefig()
 
@@ -860,15 +860,15 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             plt.clf()
             plt.subplot(1,3,1)
             imx = dict(interpolation='nearest', origin='lower', vmin=lo, vmax=hi)
-            plt.imshow(ax.reshape((64,64)), **imx)
+            plt.imshow(ax[:(64*64)].reshape((64,64)), **imx)
             plt.colorbar()
             plt.title('AX')
             plt.subplot(1,3,2)
-            plt.imshow(myB.reshape((64,64)), **imx)
+            plt.imshow(myB[:(64*64)].reshape((64,64)), **imx)
             plt.colorbar()
             plt.title('B')
             plt.subplot(1,3,3)
-            plt.imshow(ax.reshape((64,64)), interpolation='nearest', origin='lower')
+            plt.imshow(ax[:(64*64)].reshape((64,64)), interpolation='nearest', origin='lower')
             plt.colorbar()
             plt.title('AX')
             self.ps.savefig()
