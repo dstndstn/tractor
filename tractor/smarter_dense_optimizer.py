@@ -145,6 +145,8 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
 
         colscales2 = np.ones(Ncols)
         for iparam,derivs in enumerate(allderivs):
+            if len(derivs) == 0:
+                continue
             col = column_map[iparam]
             scale2 = 0.
             for deriv, img in derivs:
@@ -251,6 +253,20 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
         if get_A_matrix:
             if scale_columns:
                 A *= colscales[np.newaxis,:]
+            # HACK
+            # expand the colscales array too!
+            c_full = np.zeros(len(X))
+            for c,i in column_map.items():
+                c_full[c] = colscales[i]
+            colscales = c_full
+
+            # Expand A matrix
+            r,c = A.shape
+            A_full = np.zeros((r, len(X)), np.float32)
+            for c,i in column_map.items():
+                A_full[:,c] = A[:,i]
+            A = A_full
+
             return X,A,colscales,B
 
         return X

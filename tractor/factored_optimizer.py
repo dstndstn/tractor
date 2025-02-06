@@ -339,9 +339,12 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         pi = 0
         for mm,(px,py),(x0,x1,y0,y1),psf,pix,ie,counts,sky,cdi,tim in zip(
                 masks, pxy, extents, psfs, img_pix, img_ie, img_counts, img_sky, img_cdi, tr.images):
+
             #Subtract 1 from y0 and x0 CW 1/22/25 -- unknown why but rectifies difference with CPU IE
-            mmpix = pix[mm.y0-1:mm.y1, mm.x0-1:mm.x1]
-            mmie =   ie[mm.y0-1:mm.y1, mm.x0-1:mm.x1]
+            #mmpix = pix[mm.y0-1:mm.y1, mm.x0-1:mm.x1]
+            #mmie =   ie[mm.y0-1:mm.y1, mm.x0-1:mm.x1]
+            mmpix = pix[mm.y0:mm.y1, mm.x0:mm.x1]
+            mmie =   ie[mm.y0:mm.y1, mm.x0:mm.x1]
 
             # PSF Fourier transforms
             #P, (cx, cy), (pH, pW), (v, w) = psf.getFourierTransform(px, py, halfsize)
@@ -375,8 +378,10 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             padpix = np.zeros((pH,pW), np.float32)
             padie  = np.zeros((pH,pW), np.float32)
             assert(sy <= 0 and sx <= 0)
-            padpix[-sy-1: -sy+mh, -sx-1: -sx+mw] = mmpix
-            padie [-sy-1: -sy+mh, -sx-1: -sx+mw] = mmie
+            #padpix[-sy-1: -sy+mh, -sx-1: -sx+mw] = mmpix
+            #padie [-sy-1: -sy+mh, -sx-1: -sx+mw] = mmie
+            padpix[-sy: -sy+mh, -sx: -sx+mw] = mmpix
+            padie [-sy: -sy+mh, -sx: -sx+mw] = mmie
             roi = (-sx, -sy, mw, mh)
             mmpix = padpix
             mmie  = padie
