@@ -159,7 +159,7 @@ class Galaxy(MultiParams, SingleProfileSource):
             print('Expanded modelMask:', mm)
             patch0 = self.getUnitFluxModelPatch(img, px=px0, py=py0, minval=minval,
                                                 modelMask=mm, **kwargs)
-            print('Patch0:', patch0)
+            print('Patch0 (expanded):', patch0)
             padded = True
         else:
             patch0 = self.getUnitFluxModelPatch(img, px=px0, py=py0, minval=minval,
@@ -192,6 +192,9 @@ class Galaxy(MultiParams, SingleProfileSource):
                     patchdy = Patch(x0, y0, dy)
                     # Undo the padding on patch0.
                     patch0  = Patch(x0, y0, patch0.patch[1:-1, 1:-1])
+                    print('Patch0 shape (undoing padding):', patch0)
+                    print('dx:', patchdx)
+                    print('dy:', patchdy)
                     assert(patch0.shape == modelMask.shape)
                 else:
                     dx = np.zeros_like(p0)
@@ -224,6 +227,7 @@ class Galaxy(MultiParams, SingleProfileSource):
             for i, bstep in enumerate(bsteps):
                 oldval = self.brightness.setParam(i, params[i] + bstep)
                 countsi = img.getPhotoCal().brightnessToCounts(self.brightness)
+                #print('Brightness deriv', i, ': new counts', countsi, 'vs', counts)
                 self.brightness.setParam(i, oldval)
                 if countsi == counts:
                     df = None
@@ -258,6 +262,7 @@ class Galaxy(MultiParams, SingleProfileSource):
                 dx = (patchx - patch0) * (counts / gstep)
                 dx.setName('d(%s)/d(%s)' % (self.dname, gnames[i]))
                 derivs.append(dx)
+
         return derivs
 
 

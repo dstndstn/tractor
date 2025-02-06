@@ -17,7 +17,6 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
         assert(variance == False)
         assert(damp == 0.)
 
-
         # Returns: numpy array containing update direction.
         # If *variance* is True, return    (update,variance)
         # If *get_A_matrix* is True, returns the matrix of derivatives.
@@ -53,9 +52,8 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
         # Keep track of active pixels in each image
         img_bounds = {}
         # which parameters actually have derivatives?
-        # FIXME -- careful with how this interacts with priors!
         live_params = set()
-
+        print('Smarter')
         for iparam,derivs in enumerate(allderivs):
             if len(derivs) == 0:
                 continue
@@ -73,7 +71,6 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
         Ncols = len(live_params)
 
         # Where in the A & B arrays will the image pixels start?
-
         img_offsets = {}
         Npixels = 0
         for iparam,derivs in enumerate(allderivs):
@@ -148,6 +145,7 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
             if len(derivs) == 0:
                 continue
             col = column_map[iparam]
+            print('col', col)
             scale2 = 0.
             for deriv, img in derivs:
                 if deriv.patch is None:
@@ -156,12 +154,12 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
 
                 dx0,dx1,dy0,dy1 = deriv.extent
                 x0,x1,y0,y1 = img_bounds[img]
+                print('deriv', deriv.name)
                 print('deriv extent', dx0,dx1, dy0,dy1)
                 print('image bounds', x0,x1,y0,y1)
                 if x0 == dx0 and x1 == dx1 and y0 == dy0 and y1 == dy1:
                     rowstart = img_offsets[img]
                     print('row start:', rowstart)
-                    print('col', col)
                     w = x1-x0
                     h = y1-y0
                     apix = (deriv.patch * inverrs[y0:y1, x0:x1])
@@ -198,7 +196,7 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
 
             if scale_columns:
                 colscales2[col] = scale2
-        print('colscales2:', colscales2)
+        #print('colscales2:', colscales2)
 
         if Npriors > 0:
             rA, cA, vA, pb, mub = priorVals
@@ -221,7 +219,7 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
                     # Set to safe value...
                     colscales2[col] = 1.
             colscales = np.sqrt(colscales2)
-            print('colscales:', colscales)
+            #print('colscales:', colscales)
 
         chimap = {}
         if chiImages is not None:
@@ -237,6 +235,9 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
             chi = chi[y0:y1, x0:x1]
             B[rowstart: rowstart + w*h] = chi.flat
             del chi
+
+        print('smarter: A non-zero rows:', np.sum(np.any(A != 0, axis=0)),
+              'cols:', np.sum(np.any(A != 0, axis=1)))
 
         try:
             X,_,_,_ = lstsq(A, B, rcond=None)
@@ -276,13 +277,13 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
         if get_A_matrix:
             if scale_columns:
                 A *= colscales[np.newaxis,:]
-            # HACK
             # expand the colscales array too!
             c_full = np.zeros(len(X))
             for c,i in column_map.items():
                 c_full[c] = colscales[i]
             colscales = c_full
 
+            # HACK
             # Expand A matrix
             r,c = A.shape
             A_full = np.zeros((r, len(X)), np.float32)
@@ -290,6 +291,15 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
                 A_full[:,c] = A[:,i]
             A = A_full
 
+            print('Smarter: running old for comparison')
+            X_old,A_old,colscales_old,B_old = super().getUpdateDirection(
+                tractor, allderivs, priors=priors,
+                scale_columns=scale_columns, chiImages=chiImages,
+                variance=variance, shared_params=shared_params,
+                get_A_matrix=get_A_matrix)
+            print('X_old:', X_old)
+            print('X    :', X)
+            
             return X,A,colscales,B
 
         return X

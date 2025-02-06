@@ -195,6 +195,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             #self.ps = p
             return R
 
+        print('Running CPU code for comparison...')
+        R_cpu = super().getSingleImageUpdateDirections(tr, **kwargs)
+
         print('Running GPU code...')
         try:
             R_gpu = self.gpuSingleImageUpdateDirections(tr, **kwargs)
@@ -212,9 +215,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             pickle.dump(tr, f)
             f.close()
             sys.exit(-1)
-
-        print('Running CPU code for comparison...')
-        R_cpu = super().getSingleImageUpdateDirections(tr, **kwargs)
 
         xicacc_cpu = 0.
         icacc_cpu = 0.

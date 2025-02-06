@@ -113,6 +113,9 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
                 rA, cA, vA, pb, mub = priorVals
                 Npriors = max(Npriors, max([1+max(r) for r in rA]))
 
+        print('DenseOptimizer.getUpdateDirection : N params (cols) %i, N pix %i, N priors %i' %
+              (Ncols, Npixels, Npriors))
+
         Nrows = Npixels + Npriors
         if Nrows == 0:
             #print('ConstrainedDenseOptimizer.getUpdateDirection: Nrows = 0')
@@ -135,6 +138,7 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
 
                 # shortcut for deriv bounds == img bounds
                 if deriv.x0 == 0 and deriv.y0 == 0 and deriv.patch.shape==(H,W):
+                    print('dense: deriv bounds == img bounds')
                     dimg = (deriv.patch * inverrs).flat
                 else:
                     dimg = np.zeros((H,W), np.float32)
@@ -153,6 +157,9 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
             if scale_columns:
                 colscales2[col] = scale2
         print('colscales2:', colscales2)
+
+        print('dense: A non-zero rows:', np.sum(np.any(A != 0, axis=0)),
+              'cols:', np.sum(np.any(A != 0, axis=1)))
 
         if Npriors > 0:
             rA, cA, vA, pb, mub = priorVals
