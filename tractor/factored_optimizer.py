@@ -18,8 +18,9 @@ import time
 tx = np.zeros(10)
 
 image_counter = 0
-#from astrometry.util.plotutils import PlotSequence
-#ps = PlotSequence('fourier')
+
+from astrometry.util.plotutils import PlotSequence
+ps = PlotSequence('gpu')
 
 '''
 A mixin class for LsqrOptimizer that does the linear update direction step
@@ -38,7 +39,7 @@ class FactoredOptimizer(object):
         r = self.getUpdateDirection(tr, allderivs, get_A_matrix=True, **kwargs)
         if r is None:
             return None
-        x,A = r
+        x,A,colscales,B = r
         # print('SingeImageUpdateDirection: tr thawed params:')
         # tr.printThawedParams()
         # print('allderivs:', len(allderivs))
@@ -57,7 +58,20 @@ class FactoredOptimizer(object):
         if self.ps is not None:
             mod0 = tr.getModelImage(0)
             tim = tr.getImage(0)
-            B = ((tim.getImage() - mod0) * tim.getInvError()).ravel()
+            #B = ((tim.getImage() - mod0) * tim.getInvError()).ravel()
+
+            src = tr.catalog[0]
+            masks = [tr._getModelMaskFor(tim, src) for tim in tr.images]
+            print('model masks:', masks)
+
+            import fitsio
+            h,w = tim.shape
+            fitsio.write('cpu-x.fits', x * colscales, clobber=True)
+            fitsio.write('cpu-x-scaled.fits', x, clobber=True)
+            fitsio.write('cpu-a-scaled.fits', A.reshape((h,w,-1)) / colscales[np.newaxis,:], clobber=True)
+            fitsio.write('cpu-a.fits', A.reshape((h,w,-1)), clobber=True)
+            fitsio.write('cpu-b.fits', B.reshape(h,w), clobber=True)
+
             import pylab as plt
             plt.clf()
             ima = dict(interpolation='nearest', origin='lower')
@@ -71,19 +85,25 @@ class FactoredOptimizer(object):
             imx = ima.copy()
             imx.update(vmin=-mx, vmax=+mx)
             plt.imshow(B.reshape(sh), **imx)
+            plt.colorbar()
             plt.title('B')
-            AX = np.dot(A, x)
+            AX = np.dot(A / colscales[np.newaxis,:], x)
             plt.subplot(rr,cc,3)
-            plt.imshow(AX.reshape(sh), **imx)
+            plt.imshow(AX.reshape(sh), **imx)#interpolation='nearest', #origin='lower') #
+            plt.colorbar()
+            plt.title('A X')
+            plt.subplot(rr,cc,4)
+            plt.imshow(AX.reshape(sh), interpolation='nearest', origin='lower')
+            plt.colorbar()
             plt.title('A X')
             ah,aw = A.shape
             for i in range(min(aw, 8)):
                 plt.subplot(rr,cc,5+i)
                 plt.imshow(A[:,i].reshape(sh), **ima)
                 if i == 0:
-                    plt.title('dx')
+                    plt.title('dra')
                 elif i == 1:
-                    plt.title('dy')
+                    plt.title('ddec')
                 elif i == 2:
                     plt.title('dflux')
             self.ps.savefig()
@@ -275,6 +295,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # (x0,x1,y0,y1) in image coordinates
         extents = [mm.extent for mm in masks]
 
+        print('extents:', extents)
+        
         inner_real_nsigma = 3.
         outer_real_nsigma = 4.
 
@@ -332,6 +354,17 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             assert(np.abs(mux) <= 0.5)
             assert(np.abs(muy) <= 0.5)
 
+            import pylab as plt
+            plt.clf()
+            plt.imshow(ie, interpolation='nearest', origin='lower')
+            plt.title('ie')
+            ps.savefig()
+
+            plt.clf()
+            plt.imshow(mmie, interpolation='nearest', origin='lower')
+            plt.title('mmie')
+            ps.savefig()
+            
             # Embed pix and ie in images the same size as pW,pH.
             padpix = np.zeros((pH,pW), np.float32)
             padie  = np.zeros((pH,pW), np.float32)
@@ -344,6 +377,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             sx = sy = 0
             mh = pH
             mw = pW
+
+            plt.clf()
+            plt.imshow(mmie, interpolation='nearest', origin='lower')
+            plt.title('mmie after padding; sx,sy was %i,%i' % (-roi[0], -roi[1]))
+            ps.savefig()
 
             # Compute the mixture-of-Gaussian components for this galaxy model
             # (at its current parameter values)
@@ -572,7 +610,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #G should be (nimages, maxNd, nw, nv) and mux and muy should be 1d vectors
         assert (G.shape == (img_params.Nimages, img_params.maxNd, img_params.mh, img_params.mw))
 
-
+        print('img_params.mogs:', img_params.mogs)
         if img_params.mogs is not None:
             psfmog = img_params.psf_mogs
             #print('Img_params.mogs:', img_params.mogs)
@@ -731,6 +769,17 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #B = cp.append(((pix - counts*mod0) * ie).ravel(),
         #                cp.zeros(Npriors, cp.float32))
 
+        print('A shape:', A.shape)
+        if self.ps is not None:
+            import pylab as plt
+            plt.clf()
+            # HACK
+            derivs = A.get()[0,:,:]
+            for i in range(4):
+                plt.subplot(2,2,i+1)
+                plt.imshow(derivs[:,i].reshape((64,64)), interpolation='nearest', origin='lower')
+            plt.suptitle('A matrix')
+            self.ps.savefig()
 
         # Append priors --do priors depend on which image I am looking at?
         #TODO not sure if this is correct for priors? 
@@ -751,6 +800,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         # Pre-scale the columns of A
         colscales = cp.sqrt(cp.diagonal(Xicov, axis1=1, axis2=2))
+
+        print('GPU Column scales:', colscales.get())
+
         A /= colscales[:,cp.newaxis, :]
 
         # Solve the least-squares problem!
@@ -816,6 +868,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #Have to corectly make Xic a list of tuples
         for i in range(img_params.Nimages):
             Xic.append((X[i], Xicov[i]))
+
 
         """
         for img_i, imderiv in enumerate(img_params.img_derivs):
@@ -978,10 +1031,12 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 imx = ima.copy()
                 imx.update(vmin=-mx, vmax=+mx)
                 plt.imshow(B[:Npix].get().reshape(sh), **imx)
+                plt.colorbar()
                 plt.title('B')
                 AX = np.dot(A, X)
                 plt.subplot(rr,cc,3)
-                plt.imshow(AX[:Npix].get().reshape(sh), **imx)
+                plt.imshow(AX[:Npix].get().reshape(sh), interpolation='nearest', origin='lower') #**imx)
+                plt.colorbar()
                 plt.title('A X')
                 for i in range(min(Nd+2, 8)):
                     plt.subplot(rr,cc,5+i)
