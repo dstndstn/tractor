@@ -171,7 +171,7 @@ class Galaxy(MultiParams, SingleProfileSource):
 
         if modelMask is None:
             x0,x1,y0,y1 = patch0.getExtent()
-            modelMask = ModelMask.fromExtent([x0,x1,y0,y1])
+            modelMask = ModelMask.fromExtent(x0,x1,y0,y1)
         assert(modelMask is not None)
 
         derivs = []

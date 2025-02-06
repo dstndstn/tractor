@@ -96,7 +96,7 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
             pb: has shape N
             mub: has shape N
             rowA: list of iterables of ints
-            colA: list of iterables of ints
+            colA: list of ints
             valA: list of iterables of floats
             pb:   list of iterables of floats
             mub:  list of iterables of floats
@@ -205,7 +205,8 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
                 print('prior: r,c', ri, ci, 'v', vi, 'b', bi)
                 col = column_map[ci]
                 if scale_columns:
-                    colscales2[col] += np.sum(vi**2)
+                    # (note, np.dot work when vi is a list)
+                    colscales2[col] += np.dot(vi, vi)
                 for rij,vij,bij in zip(ri, vi, bi):
                     A[Npixels + rij, col] = vij
                     B[Npixels + rij] += bij
