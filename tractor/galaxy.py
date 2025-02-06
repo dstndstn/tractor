@@ -182,16 +182,6 @@ class Galaxy(MultiParams, SingleProfileSource):
             else:
                 p0 = patch0.patch
 
-                import pylab as plt
-                plt.clf()
-                plt.subplot(1,3,1)
-                plt.imshow(p0, interpolation='nearest', origin='lower')
-                plt.subplot(1,3,2)
-                plt.imshow(dx, interpolation='nearest', origin='lower')
-                plt.subplot(1,3,3)
-                plt.imshow(dy, interpolation='nearest', origin='lower')
-                plt.savefig('deriv.png')
-
                 if padded:
                     dx = (p0[1:-1,   :-2] - p0[1:-1, 2:  ]) / 2.
                     dy = (p0[ :-2 , 1:-1] - p0[2:  , 1:-1]) / 2.
@@ -210,6 +200,18 @@ class Galaxy(MultiParams, SingleProfileSource):
                     dy[1:-1,:] = (p0[:-2, :] - p0[2:, :]) / 2.
                     patchdx = Patch(patch0.x0, patch0.y0, dx)
                     patchdy = Patch(patch0.x0, patch0.y0, dy)
+
+                if True:
+                    import pylab as plt
+                    plt.clf()
+                    plt.subplot(1,3,1)
+                    plt.imshow(p0, interpolation='nearest', origin='lower')
+                    plt.subplot(1,3,2)
+                    plt.imshow(dx, interpolation='nearest', origin='lower')
+                    plt.subplot(1,3,3)
+                    plt.imshow(dy, interpolation='nearest', origin='lower')
+                    plt.savefig('deriv.png')
+
                 del dx, dy
                 derivs.extend(wcs.pixelDerivsToPositionDerivs(pos0, self, counts,
                                                               patch0, patchdx, patchdy))

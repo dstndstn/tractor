@@ -65,48 +65,51 @@ class FactoredOptimizer(object):
             print('model masks:', masks)
 
             import fitsio
-            h,w = tim.shape
+            #h,w = tim.shape
+            mm = masks[0]
+            h,w = mm.shape
             fitsio.write('cpu-x.fits', x * colscales, clobber=True)
             fitsio.write('cpu-x-scaled.fits', x, clobber=True)
             fitsio.write('cpu-a-scaled.fits', A.reshape((h,w,-1)) / colscales[np.newaxis,:], clobber=True)
             fitsio.write('cpu-a.fits', A.reshape((h,w,-1)), clobber=True)
             fitsio.write('cpu-b.fits', B.reshape(h,w), clobber=True)
 
-            import pylab as plt
-            plt.clf()
-            ima = dict(interpolation='nearest', origin='lower')
-            rr,cc = 3,4
-            plt.subplot(rr,cc,1)
-            plt.imshow(mod0, **ima)
-            plt.title('mod0')
-            sh = mod0.shape
-            plt.subplot(rr,cc,2)
-            mx = max(np.abs(B))
-            imx = ima.copy()
-            imx.update(vmin=-mx, vmax=+mx)
-            plt.imshow(B.reshape(sh), **imx)
-            plt.colorbar()
-            plt.title('B')
-            AX = np.dot(A / colscales[np.newaxis,:], x)
-            plt.subplot(rr,cc,3)
-            plt.imshow(AX.reshape(sh), **imx)#interpolation='nearest', #origin='lower') #
-            plt.colorbar()
-            plt.title('A X')
-            plt.subplot(rr,cc,4)
-            plt.imshow(AX.reshape(sh), interpolation='nearest', origin='lower')
-            plt.colorbar()
-            plt.title('A X')
-            ah,aw = A.shape
-            for i in range(min(aw, 8)):
-                plt.subplot(rr,cc,5+i)
-                plt.imshow(A[:,i].reshape(sh), **ima)
-                if i == 0:
-                    plt.title('dra')
-                elif i == 1:
-                    plt.title('ddec')
-                elif i == 2:
-                    plt.title('dflux')
-            self.ps.savefig()
+            # import pylab as plt
+            # plt.clf()
+            # ima = dict(interpolation='nearest', origin='lower')
+            # rr,cc = 3,4
+            # plt.subplot(rr,cc,1)
+            # plt.imshow(mod0, **ima)
+            # plt.title('mod0')
+            # sh = mod0.shape
+            # plt.subplot(rr,cc,2)
+            # mx = max(np.abs(B))
+            # imx = ima.copy()
+            # imx.update(vmin=-mx, vmax=+mx)
+            # #plt.imshow(B.reshape(sh), **imx)
+            # plt.imshow(B.reshape(h,w), **imx)
+            # plt.colorbar()
+            # plt.title('B')
+            # AX = np.dot(A / colscales[np.newaxis,:], x)
+            # plt.subplot(rr,cc,3)
+            # plt.imshow(AX.reshape(sh), **imx)#interpolation='nearest', #origin='lower') #
+            # plt.colorbar()
+            # plt.title('A X')
+            # plt.subplot(rr,cc,4)
+            # plt.imshow(AX.reshape(sh), interpolation='nearest', origin='lower')
+            # plt.colorbar()
+            # plt.title('A X')
+            # ah,aw = A.shape
+            # for i in range(min(aw, 8)):
+            #     plt.subplot(rr,cc,5+i)
+            #     plt.imshow(A[:,i].reshape(sh), **ima)
+            #     if i == 0:
+            #         plt.title('dra')
+            #     elif i == 1:
+            #         plt.title('ddec')
+            #     elif i == 2:
+            #         plt.title('dflux')
+            # self.ps.savefig()
 
         icov = np.matmul(A.T, A)
         del A
@@ -172,7 +175,10 @@ class FactoredOptimizer(object):
             tr.thawParam('images')
         return x
 
-class FactoredDenseOptimizer(FactoredOptimizer, ConstrainedDenseOptimizer):
+from tractor.smarter_dense_optimizer import SmarterDenseOptimizer
+
+#class FactoredDenseOptimizer(FactoredOptimizer, ConstrainedDenseOptimizer):
+class FactoredDenseOptimizer(FactoredOptimizer, SmarterDenseOptimizer):
     pass
 
 
