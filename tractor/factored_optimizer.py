@@ -20,7 +20,8 @@ tx = np.zeros(10)
 image_counter = 0
 
 from astrometry.util.plotutils import PlotSequence
-ps = PlotSequence('gpu')
+#ps = PlotSequence('gpu')
+ps = None
 
 '''
 A mixin class for LsqrOptimizer that does the linear update direction step
@@ -55,7 +56,7 @@ class FactoredOptimizer(object):
                 plt.savefig('orig-img%i-d%i.png' % (image_counter, i))
             image_counter += 1
 
-        if self.ps is not None:
+        if False and self.ps is not None:
             mod0 = tr.getModelImage(0)
             tim = tr.getImage(0)
             #B = ((tim.getImage() - mod0) * tim.getInvError()).ravel()
@@ -237,6 +238,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         if s < 0.9:
             src = tr.catalog[0]
             print('Source:', src)
+            # Look at individual images
             for i,((x_cpu,ic_cpu), (x_gpu,ic_gpu)) in enumerate(zip(R_cpu, R_gpu)):
                 print('  CPU:', x_cpu)
                 print('  GPU:', x_gpu)
@@ -245,7 +247,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 if s < 0.9:
                     tim = tr.images[i]
                     print('Tim:', tim)
-                    f = open('bad2.pickle', 'wb')
+                    f = open('bad3.pickle', 'wb')
                     import pickle
                     tr.images = [tim]
                     pickle.dump(tr, f)
@@ -301,7 +303,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # (x0,x1,y0,y1) in image coordinates
         extents = [mm.extent for mm in masks]
 
-        print('extents:', extents)
+        #print('extents:', extents)
         
         inner_real_nsigma = 3.
         outer_real_nsigma = 4.
@@ -363,16 +365,17 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             assert(np.abs(mux) <= 0.5)
             assert(np.abs(muy) <= 0.5)
 
-            import pylab as plt
-            plt.clf()
-            plt.imshow(ie, interpolation='nearest', origin='lower')
-            plt.title('ie')
-            ps.savefig()
-
-            plt.clf()
-            plt.imshow(mmie, interpolation='nearest', origin='lower')
-            plt.title('mmie')
-            ps.savefig()
+            if ps is not None:
+                import pylab as plt
+                plt.clf()
+                plt.imshow(ie, interpolation='nearest', origin='lower')
+                plt.title('ie')
+                ps.savefig()
+    
+                plt.clf()
+                plt.imshow(mmie, interpolation='nearest', origin='lower')
+                plt.title('mmie')
+                ps.savefig()
             
             # Embed pix and ie in images the same size as pW,pH.
             padpix = np.zeros((pH,pW), np.float32)
@@ -389,10 +392,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             mh = pH
             mw = pW
 
-            plt.clf()
-            plt.imshow(mmie, interpolation='nearest', origin='lower')
-            plt.title('mmie after padding; sx,sy was %i,%i' % (-roi[0], -roi[1]))
-            ps.savefig()
+            if ps is not None:
+                plt.clf()
+                plt.imshow(mmie, interpolation='nearest', origin='lower')
+                plt.title('mmie after padding; sx,sy was %i,%i' % (-roi[0], -roi[1]))
+                ps.savefig()
 
             # Compute the mixture-of-Gaussian components for this galaxy model
             # (at its current parameter values)
@@ -451,7 +455,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             assert(len(pnames) > 0)
             bright.freezeAllBut(pnames[0])
             priorVals = tr.getLogPriorDerivatives()
-            print('Prior vals with one band:', priorVals)
+            #print('Prior vals with one band:', priorVals)
             bright.thawParams(*pnames)
 
         Xic = self.computeUpdateDirections(img_params, priorVals)
@@ -621,7 +625,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #G should be (nimages, maxNd, nw, nv) and mux and muy should be 1d vectors
         assert (G.shape == (img_params.Nimages, img_params.maxNd, img_params.mh, img_params.mw))
 
-        print('img_params.mogs:', img_params.mogs)
+        #print('img_params.mogs:', img_params.mogs)
         if img_params.mogs is not None:
             psfmog = img_params.psf_mogs
             #print('Img_params.mogs:', img_params.mogs)
@@ -643,9 +647,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             varcopy[..., 0, 0, 0] += psfmog.var[..., cp.newaxis, 0, 0, 0]
             varcopy[..., 0, 1, 1] += psfmog.var[..., cp.newaxis, 0, 1, 1]
 
-            print('mogs.amp', mogs.amp.shape)
-            print('mogs.mean', mogs.mean.shape)
-            print('varcopy', varcopy.shape)
+            # print('mogs.amp', mogs.amp.shape)
+            # print('mogs.mean', mogs.mean.shape)
+            # print('varcopy', varcopy.shape)
 
             conv_mog = BatchMixtureOfGaussians(mogs.amp, mogs.mean, varcopy, quick=True)
             #print('Convolved MoG:', conv_mog)
@@ -667,8 +671,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             iv2 = conv_mog.var[:,:,:,0,0] / det
             scale = conv_mog.amp / (2.*cp.pi*cp.sqrt(det))
 
-            print('conv_mog.mean shape:', conv_mog.mean.shape)
-            print('xx shape:', xx.shape)
+            # print('conv_mog.mean shape:', conv_mog.mean.shape)
+            # print('xx shape:', xx.shape)
 
             #print('conv_mog.means:', conv_mog.mean)
             #print('img_params.mux,muy:', img_params.mux, img_params.muy)
@@ -682,7 +686,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
             # xx, yy are each 64 elements long.
 
-            print('img_derivs length:', len(img_params.img_derivs))
+            #print('img_derivs length:', len(img_params.img_derivs))
 
             #dx = xx - means[:,0]
             #dy = yy - means[:,1]
@@ -706,11 +710,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             #           iv2[:,:,:,cp.newaxis] * dy[:,:,:,cp.newaxis] * dy[:,:,:,cp.newaxis])
 
             # (13,4,1) = (nimages, nderivs, nmog)
-            print('scale:', scale.shape)
-            print('iv shapes:', iv0.shape, iv1.shape, iv2.shape)
+            # print('scale:', scale.shape)
+            # print('iv shapes:', iv0.shape, iv1.shape, iv2.shape)
 
             # (13,4,64,64) = (nimages, nderivs, ny,nx)
-            print('G:', G.shape)
+            #print('G:', G.shape)
 
             # The distsq array is going to be nimages x nderivs x nmog x ny=64 x nx=64
 
@@ -780,7 +784,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #B = cp.append(((pix - counts*mod0) * ie).ravel(),
         #                cp.zeros(Npriors, cp.float32))
 
-        print('A shape:', A.shape)
+        #print('A shape:', A.shape)
         if self.ps is not None:
             import pylab as plt
             plt.clf()
@@ -796,14 +800,14 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #TODO not sure if this is correct for priors? 
 
         if priorVals is not None:
-            print ("Using PRIORS")
+            #print ("Using PRIORS")
             rA, cA, vA, pb, mub = priorVals
             for ri,ci,vi,bi in zip(rA, cA, vA, pb):
                 for rij,vij,bij in zip(ri, vi, bi):
                     A[:,Npix + rij, ci] = vij
                     B[:,Npix + rij] += bij
-        else:
-            print ("NO PRIORS")
+        #else:
+        #    print ("NO PRIORS")
 
         # Compute the covariance matrix
         Xicov = cp.matmul(A.swapaxes(-1,-2), A)
@@ -812,7 +816,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # Pre-scale the columns of A
         colscales = cp.sqrt(cp.diagonal(Xicov, axis1=1, axis2=2))
 
-        print('GPU Column scales:', colscales.get())
+        #print('GPU Column scales:', colscales.get())
 
         A /= colscales[:,cp.newaxis, :]
 
@@ -830,31 +834,31 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             for i in range(N):
                 xi,_,_,_ = cp.linalg.lstsq(A[i,:,:], B[i,:], rcond=None)
                 xx.append(xi)
-            print('X:', X)
-            print('xx:', xx)
+            #print('X:', X)
+            #print('xx:', xx)
 
             plt.clf()
             myA = A.get()
             myA = myA[0,:,:]
-            print('A:', myA.shape)
+            #print('A:', myA.shape)
             myX = X.get()
-            print('X', myX.shape)
+            #print('X', myX.shape)
             myX = myX[0,:]
             myB = B.get()
-            print('B', myB.shape)
+            #print('B', myB.shape)
             myB = myB[0,:]
 
-            import fitsio
-            fitsio.write('gpu-x.fits', myX, clobber=True)
-            fitsio.write('gpu-x-scaled.fits', myX / colscales.get(), clobber=True)
-            fitsio.write('gpu-a.fits', myA.reshape((64,64,-1)) * colscales.get()[np.newaxis,:], clobber=True)
-            fitsio.write('gpu-a-scaled.fits', myA.reshape((64,64,-1)), clobber=True)
-            fitsio.write('gpu-b.fits', myB.reshape((64,64)), clobber=True)
+            # import fitsio
+            # fitsio.write('gpu-x.fits', myX, clobber=True)
+            # fitsio.write('gpu-x-scaled.fits', myX / colscales.get(), clobber=True)
+            # fitsio.write('gpu-a.fits', myA.reshape((64,64,-1)) * colscales.get()[np.newaxis,:], clobber=True)
+            # fitsio.write('gpu-a-scaled.fits', myA.reshape((64,64,-1)), clobber=True)
+            # fitsio.write('gpu-b.fits', myB.reshape((64,64)), clobber=True)
             
             ax = np.dot(myA, myX)
-            print('AX', ax.shape)
-            print('AX', np.percentile(np.abs(ax), [1,99]))
-            print('B ', np.percentile(np.abs(myB), [1,99]))
+            # print('AX', ax.shape)
+            # print('AX', np.percentile(np.abs(ax), [1,99]))
+            # print('B ', np.percentile(np.abs(myB), [1,99]))
             #lo,hi = np.percentile(np.abs(myB), [1,99])
             lo,hi = myB.min(), myB.max()
             plt.clf()

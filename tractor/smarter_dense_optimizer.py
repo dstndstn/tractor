@@ -53,14 +53,14 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
         img_bounds = {}
         # which parameters actually have derivatives?
         live_params = set()
-        print('Smarter')
+        # print('Smarter')
         for iparam,derivs in enumerate(allderivs):
             if len(derivs) == 0:
                 continue
             live_params.add(iparam)
 
             for deriv, img in derivs:
-                print('deriv', deriv)
+                # print('deriv', deriv)
                 dx0,dx1,dy0,dy1 = deriv.extent
 
                 if img in img_bounds:
@@ -112,18 +112,17 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
             the Gaussian.
             '''
             priorVals = tractor.getLogPriorDerivatives()
-            #print('Priors:', priorVals)
             if priorVals is not None:
                 rA, cA, vA, pb, mub = priorVals
                 Npriors = max(Npriors, max([1+max(r) for r in rA]))
-                print('Priors.  live_params:', live_params, ', cA:', cA)
+                # print('Priors.  live_params:', live_params, ', cA:', cA)
                 live_params.update(cA)
-                print('live_params after:', live_params)
+                # print('live_params after:', live_params)
                 Ncols = len(live_params)
-                print('new Ncols:', Ncols)
+                # print('new Ncols:', Ncols)
 
-        print('DenseOptimizer.getUpdateDirection : N params (cols) %i, N pix %i, N priors %i' %
-              (Ncols, Npixels, Npriors))
+        # print('DenseOptimizer.getUpdateDirection : N params (cols) %i, N pix %i, N priors %i' %
+        #      (Ncols, Npixels, Npriors))
 
         Nrows = Npixels + Npriors
         if Nrows == 0:
@@ -138,14 +137,12 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
         live_params.sort()
 
         column_map = dict([(c,i) for i,c in enumerate(live_params)])
-        print('Column map:', column_map)
 
         colscales2 = np.ones(Ncols)
         for iparam,derivs in enumerate(allderivs):
             if len(derivs) == 0:
                 continue
             col = column_map[iparam]
-            print('col', col)
             scale2 = 0.
             for deriv, img in derivs:
                 if deriv.patch is None:
@@ -154,35 +151,33 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
 
                 dx0,dx1,dy0,dy1 = deriv.extent
                 x0,x1,y0,y1 = img_bounds[img]
-                print('deriv', deriv.name)
-                print('deriv extent', dx0,dx1, dy0,dy1)
-                print('image bounds', x0,x1,y0,y1)
+                #print('deriv', deriv.name)
+                #print('deriv extent', dx0,dx1, dy0,dy1)
+                #print('image bounds', x0,x1,y0,y1)
                 if x0 == dx0 and x1 == dx1 and y0 == dy0 and y1 == dy1:
                     rowstart = img_offsets[img]
-                    print('row start:', rowstart)
+                    #print('row start:', rowstart)
                     w = x1-x0
                     h = y1-y0
                     apix = (deriv.patch * inverrs[y0:y1, x0:x1])
-                    ### HACK
-                    ii0,jj0 = np.nonzero(deriv.patch)
-                    ii1,jj1 = np.nonzero(inverrs[y0:y1, x0:x1])
-                    if len(ii0) == 0:
-                        print('modelmask: deriv is all zeros')
-                    else:
-                        print('modelmask: deriv  non-zero region: x [%i,%i)' % (jj0.min(), jj0.max()+1),
-                              'y [%i,%i)' % (ii0.min(), ii0.max()+1))
-                    if len(ii1) == 0:
-                        print('modelmask: inverr is all zeros')
-                    else:
-                        print('modelmask: inverr non-zero region: x [%i,%i)' % (jj1.min(), jj1.max()+1),
-                              'y [%i,%i)' % (ii1.min(), ii1.max()+1))
-
-                    ii2,jj2 = np.nonzero(inverrs)
-                    if len(ii2):
-                        print('whole      inverr non-zero region (relative to modelmask origin): x [%i,%i)' %
-                              (jj2.min() - x0, jj2.max()+1 - x0), 'y [%i,%i)' % (ii2.min()-y0, ii2.max()+1-y0))
-
-                        ###
+                    # ### HACK
+                    # ii0,jj0 = np.nonzero(deriv.patch)
+                    # ii1,jj1 = np.nonzero(inverrs[y0:y1, x0:x1])
+                    # if len(ii0) == 0:
+                    #     print('modelmask: deriv is all zeros')
+                    # else:
+                    #     print('modelmask: deriv  non-zero region: x [%i,%i)' % (jj0.min(), jj0.max()+1),
+                    #           'y [%i,%i)' % (ii0.min(), ii0.max()+1))
+                    # if len(ii1) == 0:
+                    #     print('modelmask: inverr is all zeros')
+                    # else:
+                    #     print('modelmask: inverr non-zero region: x [%i,%i)' % (jj1.min(), jj1.max()+1),
+                    #           'y [%i,%i)' % (ii1.min(), ii1.max()+1))
+                    # ii2,jj2 = np.nonzero(inverrs)
+                    # if len(ii2):
+                    #     print('whole      inverr non-zero region (relative to modelmask origin): x [%i,%i)' %
+                    #           (jj2.min() - x0, jj2.max()+1 - x0), 'y [%i,%i)' % (ii2.min()-y0, ii2.max()+1-y0))
+                    # ###
                     A[rowstart:rowstart+w*h, col] = apix.flat
                     if scale_columns:
                         # accumulate L2 norm
@@ -199,10 +194,19 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
         #print('colscales2:', colscales2)
 
         if Npriors > 0:
+            #print('Priors:', priorVals)
+
+            # Priors: ([[0], [1]], [7, 8], [[4.0], [4.0]], [[-0.0], [-0.0]], [[0.0], [0.0]])
+            # rA = [[0], [1]]
+            # cA = [7, 8]
+            # vA = [[4.0], [4.0]],
+            # pb = [[-0.0], [-0.0]]
+            # mub = [[0.0], [0.0]]
+            
             rA, cA, vA, pb, mub = priorVals
             #print('Priors: pb', pb, 'mub', mub)
             for ri,ci,vi,bi in zip(rA, cA, vA, pb):
-                print('prior: r,c', ri, ci, 'v', vi, 'b', bi)
+                #print('prior: r,c', ri, ci, 'v', vi, 'b', bi)
                 col = column_map[ci]
                 if scale_columns:
                     # (note, np.dot work when vi is a list)
@@ -237,8 +241,8 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
             B[rowstart: rowstart + w*h] = chi.flat
             del chi
 
-        print('smarter: A non-zero rows:', np.sum(np.any(A != 0, axis=0)),
-              'cols:', np.sum(np.any(A != 0, axis=1)))
+        #print('smarter: A non-zero rows:', np.sum(np.any(A != 0, axis=0)),
+        #'cols:', np.sum(np.any(A != 0, axis=1)))
 
         try:
             X,_,_,_ = lstsq(A, B, rcond=None)
@@ -267,13 +271,10 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
             return None
 
         # Expand x back out (undo the column_map)
-        print('Expanding X: column_map =', column_map)
-        print('X:', X)
         X_full = np.zeros(1+max(live_params))
         for c,i in column_map.items():
             X_full[c] = X[i]
         X = X_full
-        print('-> X', X)
 
         if get_A_matrix:
             if scale_columns:
@@ -292,14 +293,14 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
                 A_full[:,c] = A[:,i]
             A = A_full
 
-            print('Smarter: running old for comparison')
-            X_old,A_old,colscales_old,B_old = super().getUpdateDirection(
-                tractor, allderivs, priors=priors,
-                scale_columns=scale_columns, chiImages=chiImages,
-                variance=variance, shared_params=shared_params,
-                get_A_matrix=get_A_matrix)
-            print('X_old:', X_old)
-            print('X    :', X)
+            # print('Smarter: running old for comparison')
+            # X_old,A_old,colscales_old,B_old = super().getUpdateDirection(
+            #     tractor, allderivs, priors=priors,
+            #     scale_columns=scale_columns, chiImages=chiImages,
+            #     variance=variance, shared_params=shared_params,
+            #     get_A_matrix=get_A_matrix)
+            # print('X_old:', X_old)
+            # print('X    :', X)
             
             return X,A,colscales,B
 
