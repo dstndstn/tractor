@@ -65,14 +65,14 @@ class FactoredOptimizer(object):
             print('model masks:', masks)
 
             import fitsio
-            #h,w = tim.shape
             mm = masks[0]
             h,w = mm.shape
+            r,c = A.shape
             fitsio.write('cpu-x.fits', x * colscales, clobber=True)
             fitsio.write('cpu-x-scaled.fits', x, clobber=True)
-            fitsio.write('cpu-a-scaled.fits', A.reshape((h,w,-1)) / np.maximum(1e-16, colscales[np.newaxis,:]), clobber=True)
-            fitsio.write('cpu-a.fits', A.reshape((h,w,-1)), clobber=True)
-            fitsio.write('cpu-b.fits', B.reshape(h,w), clobber=True)
+            fitsio.write('cpu-a-scaled.fits', A[:(w*h),:].reshape((h,w,-1)) / np.maximum(1e-16, colscales[np.newaxis,:]), clobber=True)
+            fitsio.write('cpu-a.fits', A[:(w*h),:].reshape((h,w,-1)), clobber=True)
+            fitsio.write('cpu-b.fits', B[:(w*h)].reshape(h,w), clobber=True)
 
             # import pylab as plt
             # plt.clf()
@@ -237,20 +237,20 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         if s < 0.9:
             src = tr.catalog[0]
             print('Source:', src)
-            for i,((x_cpu,ic_cpu), (x_gpu,ic_gpu)) in enumerate(zip(R_cpu, R_gpu)):
-                print('  CPU:', x_cpu)
-                print('  GPU:', x_gpu)
-                s = np.sum(x_cpu * x_gpu) / np.sqrt(np.sum(x_cpu**2) * np.sum(x_gpu**2))
-                print('  similarity:', s)
-                if s < 0.9:
-                    tim = tr.images[i]
-                    print('Tim:', tim)
-                    f = open('bad2.pickle', 'wb')
-                    import pickle
-                    tr.images = [tim]
-                    pickle.dump(tr, f)
-                    f.close()
-                    sys.exit(-1)
+            # for i,((x_cpu,ic_cpu), (x_gpu,ic_gpu)) in enumerate(zip(R_cpu, R_gpu)):
+            #     print('  CPU:', x_cpu)
+            #     print('  GPU:', x_gpu)
+            #     s = np.sum(x_cpu * x_gpu) / np.sqrt(np.sum(x_cpu**2) * np.sum(x_gpu**2))
+            #     print('  similarity:', s)
+            #     if s < 0.9:
+            #         tim = tr.images[i]
+            #         print('Tim:', tim)
+            #         f = open('bad2.pickle', 'wb')
+            #         import pickle
+            #         tr.images = [tim]
+            #         pickle.dump(tr, f)
+            #         f.close()
+            #         sys.exit(-1)
         return R_gpu
 
     def gpuSingleImageUpdateDirections(self, tr, **kwargs):
@@ -844,12 +844,13 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             print('B', myB.shape)
             myB = myB[0,:]
 
+            r,c = myA.shape
             import fitsio
             fitsio.write('gpu-x.fits', myX, clobber=True)
             fitsio.write('gpu-x-scaled.fits', myX / colscales.get(), clobber=True)
-            fitsio.write('gpu-a.fits', myA.reshape((64,64,-1)) * colscales.get()[np.newaxis,:], clobber=True)
-            fitsio.write('gpu-a-scaled.fits', myA.reshape((64,64,-1)), clobber=True)
-            fitsio.write('gpu-b.fits', myB.reshape((64,64)), clobber=True)
+            fitsio.write('gpu-a.fits', myA[:(64*64),:].reshape((64,64,-1)) * colscales.get()[np.newaxis,:], clobber=True)
+            fitsio.write('gpu-a-scaled.fits', myA[:(64*64),:].reshape((64,64,-1)), clobber=True)
+            fitsio.write('gpu-b.fits', myB[:(64*64)].reshape((64,64)), clobber=True)
             
             ax = np.dot(myA, myX)
             print('AX', ax.shape)
