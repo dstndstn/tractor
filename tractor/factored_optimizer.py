@@ -62,8 +62,12 @@ class FactoredOptimizer(object):
 
             src = tr.catalog[0]
             masks = [tr._getModelMaskFor(tim, src) for tim in tr.images]
-            print('model masks:', masks)
+            #print('model masks:', masks)
 
+            print('X (cpu):', x*colscales)
+            print('X (cpu, scaled):', x)
+            print('CPU colscales:', colscales)
+            
             import fitsio
             mm = masks[0]
             h,w = mm.shape
@@ -219,6 +223,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         xicacc_cpu = 0.
         icacc_cpu = 0.
         for x,ic in R_cpu:
+            print('x_cpu:', type(x), x)
+            print('ic_cpu:', type(ic), ic)
             xicacc_cpu = xicacc_cpu + np.dot(ic, x)
             icacc_cpu = icacc_cpu + ic
         x_cpu,_,_,_ = np.linalg.lstsq(icacc_cpu, xicacc_cpu, rcond=None)
@@ -226,12 +232,16 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         xicacc_gpu = 0.
         icacc_gpu = 0.
         for x,ic in R_gpu:
+            x = x.get()
+            ic = ic.get()
+            print('x_gpu:', type(x), x)
+            print('ic_gpu:', type(ic), ic)
             xicacc_gpu = xicacc_gpu + np.dot(ic, x)
             icacc_gpu = icacc_gpu + ic
         x_gpu,_,_,_ = np.linalg.lstsq(icacc_gpu, xicacc_gpu, rcond=None)
-
-        print('CPU:', x_cpu)
-        print('GPU:', x_gpu)
+        
+        print('CPU:', type(x_cpu), x_cpu)
+        print('GPU:', type(x_gpu), x_gpu)
         s = np.sum(x_cpu * x_gpu) / np.sqrt(np.sum(x_cpu**2) * np.sum(x_gpu**2))
         print('Similarity:', s)
         if s < 0.9:
@@ -301,7 +311,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # (x0,x1,y0,y1) in image coordinates
         extents = [mm.extent for mm in masks]
 
-        print('extents:', extents)
+        #print('extents:', extents)
         
         inner_real_nsigma = 3.
         outer_real_nsigma = 4.
@@ -621,7 +631,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #G should be (nimages, maxNd, nw, nv) and mux and muy should be 1d vectors
         assert (G.shape == (img_params.Nimages, img_params.maxNd, img_params.mh, img_params.mw))
 
-        print('img_params.mogs:', img_params.mogs)
+        #print('img_params.mogs:', img_params.mogs)
         if img_params.mogs is not None:
             psfmog = img_params.psf_mogs
             #print('Img_params.mogs:', img_params.mogs)
@@ -780,7 +790,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #B = cp.append(((pix - counts*mod0) * ie).ravel(),
         #                cp.zeros(Npriors, cp.float32))
 
-        print('A shape:', A.shape)
         if self.ps is not None:
             import pylab as plt
             plt.clf()
@@ -796,18 +805,14 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #TODO not sure if this is correct for priors? 
 
         if priorVals is not None:
-            print ("Using PRIORS")
             rA, cA, vA, pb, mub = priorVals
             for ri,ci,vi,bi in zip(rA, cA, vA, pb):
                 for rij,vij,bij in zip(ri, vi, bi):
                     A[:,Npix + rij, ci] = vij
                     B[:,Npix + rij] += bij
-        else:
-            print ("NO PRIORS")
 
         # Compute the covariance matrix
         Xicov = cp.matmul(A.swapaxes(-1,-2), A)
-
 
         # Pre-scale the columns of A
         colscales = cp.sqrt(cp.diagonal(Xicov, axis1=1, axis2=2))
@@ -826,24 +831,24 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         if self.ps is not None:
 
             N,_,_ = A.shape
-            xx = []
-            for i in range(N):
-                xi,_,_,_ = cp.linalg.lstsq(A[i,:,:], B[i,:], rcond=None)
-                xx.append(xi)
-            print('X:', X)
-            print('xx:', xx)
+            # xx = []
+            # for i in range(N):
+            #     xi,_,_,_ = cp.linalg.lstsq(A[i,:,:], B[i,:], rcond=None)
+            #     xx.append(xi)
+            # print('X:', X)
+            # print('xx:', xx)
 
             plt.clf()
             myA = A.get()
             myA = myA[0,:,:]
-            print('A:', myA.shape)
             myX = X.get()
-            print('X', myX.shape)
             myX = myX[0,:]
             myB = B.get()
-            print('B', myB.shape)
             myB = myB[0,:]
 
+            print('X (gpu):', myX)
+            print('X (gpu, scaled):', myX / colscales.get())
+            
             r,c = myA.shape
             import fitsio
             fitsio.write('gpu-x.fits', myX, clobber=True)
@@ -851,12 +856,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             fitsio.write('gpu-a.fits', myA[:(64*64),:].reshape((64,64,-1)) * colscales.get()[np.newaxis,:], clobber=True)
             fitsio.write('gpu-a-scaled.fits', myA[:(64*64),:].reshape((64,64,-1)), clobber=True)
             fitsio.write('gpu-b.fits', myB[:(64*64)].reshape((64,64)), clobber=True)
-            
+
             ax = np.dot(myA, myX)
-            print('AX', ax.shape)
-            print('AX', np.percentile(np.abs(ax), [1,99]))
-            print('B ', np.percentile(np.abs(myB), [1,99]))
-            #lo,hi = np.percentile(np.abs(myB), [1,99])
             lo,hi = myB.min(), myB.max()
             plt.clf()
             plt.subplot(1,3,1)

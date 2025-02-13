@@ -62,7 +62,7 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
             live_params.add(iparam)
 
             for deriv, img in derivs:
-                print('deriv', deriv)
+                #print('deriv', deriv)
                 dx0,dx1,dy0,dy1 = deriv.extent
 
                 if img in img_bounds:
@@ -119,14 +119,14 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
             if priorVals is not None:
                 rA, cA, vA, pb, mub = priorVals
                 Npriors = max(Npriors, max([1+max(r) for r in rA]))
-                print('Priors.  live_params:', live_params, ', cA:', cA)
+                #print('Priors.  live_params:', live_params, ', cA:', cA)
                 live_params.update(cA)
-                print('live_params after:', live_params)
+                #print('live_params after:', live_params)
                 Ncols = len(live_params)
-                print('new Ncols:', Ncols)
+                #print('new Ncols:', Ncols)
 
-        print('DenseOptimizer.getUpdateDirection : N params (cols) %i, N pix %i, N priors %i' %
-              (Ncols, Npixels, Npriors))
+        #print('DenseOptimizer.getUpdateDirection : N params (cols) %i, N pix %i, N priors %i' %
+        #      (Ncols, Npixels, Npriors))
 
         Nrows = Npixels + Npriors
         if Nrows == 0:
@@ -141,7 +141,7 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
         live_params.sort()
 
         column_map = dict([(c,i) for i,c in enumerate(live_params)])
-        print('Column map:', column_map)
+        #print('Column map:', column_map)
 
         colscales2 = np.ones(Ncols)
         for iparam,derivs in enumerate(allderivs):
@@ -156,35 +156,35 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
 
                 dx0,dx1,dy0,dy1 = deriv.extent
                 x0,x1,y0,y1 = img_bounds[img]
-                print('deriv extent', dx0,dx1, dy0,dy1)
-                print('image bounds', x0,x1,y0,y1)
+                #print('deriv extent', dx0,dx1, dy0,dy1)
+                #print('image bounds', x0,x1,y0,y1)
                 if x0 == dx0 and x1 == dx1 and y0 == dy0 and y1 == dy1:
                     rowstart = img_offsets[img]
-                    print('row start:', rowstart)
-                    print('col', col)
+                    #print('row start:', rowstart)
+                    #print('col', col)
                     w = x1-x0
                     h = y1-y0
                     apix = (deriv.patch * inverrs[y0:y1, x0:x1])
                     ### HACK
-                    ii0,jj0 = np.nonzero(deriv.patch)
-                    ii1,jj1 = np.nonzero(inverrs[y0:y1, x0:x1])
-                    if len(ii0) == 0:
-                        print('modelmask: deriv is all zeros')
-                    else:
-                        print('modelmask: deriv  non-zero region: x [%i,%i)' % (jj0.min(), jj0.max()+1),
-                              'y [%i,%i)' % (ii0.min(), ii0.max()+1))
-                    if len(ii1) == 0:
-                        print('modelmask: inverr is all zeros')
-                    else:
-                        print('modelmask: inverr non-zero region: x [%i,%i)' % (jj1.min(), jj1.max()+1),
-                              'y [%i,%i)' % (ii1.min(), ii1.max()+1))
-
-                    ii2,jj2 = np.nonzero(inverrs)
-                    if len(ii2):
-                        print('whole      inverr non-zero region (relative to modelmask origin): x [%i,%i)' %
-                              (jj2.min() - x0, jj2.max()+1 - x0), 'y [%i,%i)' % (ii2.min()-y0, ii2.max()+1-y0))
-
-                        ###
+                    # ii0,jj0 = np.nonzero(deriv.patch)
+                    # ii1,jj1 = np.nonzero(inverrs[y0:y1, x0:x1])
+                    # if len(ii0) == 0:
+                    #     print('modelmask: deriv is all zeros')
+                    # else:
+                    #     print('modelmask: deriv  non-zero region: x [%i,%i)' % (jj0.min(), jj0.max()+1),
+                    #           'y [%i,%i)' % (ii0.min(), ii0.max()+1))
+                    # if len(ii1) == 0:
+                    #     print('modelmask: inverr is all zeros')
+                    # else:
+                    #     print('modelmask: inverr non-zero region: x [%i,%i)' % (jj1.min(), jj1.max()+1),
+                    #           'y [%i,%i)' % (ii1.min(), ii1.max()+1))
+                    # 
+                    # ii2,jj2 = np.nonzero(inverrs)
+                    # if len(ii2):
+                    #     print('whole      inverr non-zero region (relative to modelmask origin): x [%i,%i)' %
+                    #           (jj2.min() - x0, jj2.max()+1 - x0), 'y [%i,%i)' % (ii2.min()-y0, ii2.max()+1-y0))
+                    # 
+                    ####
                     A[rowstart:rowstart+w*h, col] = apix.flat
                     if scale_columns:
                         # accumulate L2 norm
@@ -198,13 +198,13 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
 
             if scale_columns:
                 colscales2[col] = scale2
-        print('colscales2:', colscales2)
+        #print('colscales2:', colscales2)
 
         if Npriors > 0:
             rA, cA, vA, pb, mub = priorVals
             #print('Priors: pb', pb, 'mub', mub)
             for ri,ci,vi,bi in zip(rA, cA, vA, pb):
-                print('prior: r,c', ri, ci, 'v', vi, 'b', bi)
+                #print('prior: r,c', ri, ci, 'v', vi, 'b', bi)
                 col = column_map[ci]
                 if scale_columns:
                     # (note, np.dot work when vi is a list)
@@ -222,7 +222,7 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
                     # Set to safe value...
                     colscales2[col] = 1.
             colscales = np.sqrt(colscales2)
-            print('colscales:', colscales)
+            #print('colscales:', colscales)
 
         chimap = {}
         if chiImages is not None:
@@ -266,13 +266,13 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
             return None
 
         # Expand x back out (undo the column_map)
-        print('Expanding X: column_map =', column_map)
-        print('X:', X)
+        #print('Expanding X: column_map =', column_map)
+        #print('X:', X)
         X_full = np.zeros(1+max(live_params))
         for c,i in column_map.items():
             X_full[c] = X[i]
         X = X_full
-        print('-> X', X)
+        #print('-> X', X)
 
         if get_A_matrix:
             if scale_columns:

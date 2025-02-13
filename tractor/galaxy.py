@@ -150,16 +150,16 @@ class Galaxy(MultiParams, SingleProfileSource):
         else:
             minval = None
 
-        print('galaxy modelMask:', modelMask)
+        #print('galaxy modelMask:', modelMask)
         padded = False
         if modelMask is not None:
             # grow mask by 1 pixel in each direction (for spatial derivs)
             mh,mw = modelMask.shape
             mm = ModelMask(modelMask.x0 - 1, modelMask.y0 - 1, mw + 2, mh + 2)
-            print('Expanded modelMask:', mm)
+            #print('Expanded modelMask:', mm)
             patch0 = self.getUnitFluxModelPatch(img, px=px0, py=py0, minval=minval,
                                                 modelMask=mm, **kwargs)
-            print('Patch0:', patch0)
+            #print('Patch0:', patch0)
             padded = True
         else:
             patch0 = self.getUnitFluxModelPatch(img, px=px0, py=py0, minval=minval,
@@ -167,7 +167,7 @@ class Galaxy(MultiParams, SingleProfileSource):
         if patch0 is None:
             return [None] * self.numberOfParams()
 
-        print('galaxy derivatives: modelMask =', modelMask)
+        #print('galaxy derivatives: modelMask =', modelMask)
 
         if modelMask is None:
             x0,x1,y0,y1 = patch0.getExtent()
@@ -201,7 +201,7 @@ class Galaxy(MultiParams, SingleProfileSource):
                     patchdx = Patch(patch0.x0, patch0.y0, dx)
                     patchdy = Patch(patch0.x0, patch0.y0, dy)
 
-                if True:
+                if False:
                     import pylab as plt
                     plt.clf()
                     plt.subplot(1,3,1)
@@ -770,7 +770,6 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
             gsteps = self.shape.getStepSizes()
             gnames = self.shape.getParamNames()
             oldvals = self.shape.getParams()
-            print('HoggGalaxy: shape is', self.shape, 'derivatives', gnames, 'step sizes', gsteps)
             for i, gstep in enumerate(gsteps):
                 oldval = self.shape.setParam(i, oldvals[i] + gstep)
                 pro = self._getShearedProfile(img, px, py)
