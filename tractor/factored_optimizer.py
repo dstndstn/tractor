@@ -351,10 +351,10 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 masks, pxy, extents, psfs, img_pix, img_ie, img_counts, img_sky, img_cdi, tr.images):
 
             #Subtract 1 from y0 and x0 CW 1/22/25 -- unknown why but rectifies difference with CPU IE
-            #mmpix = pix[mm.y0-1:mm.y1, mm.x0-1:mm.x1]
-            #mmie =   ie[mm.y0-1:mm.y1, mm.x0-1:mm.x1]
-            mmpix = pix[mm.y0:mm.y1, mm.x0:mm.x1]
-            mmie =   ie[mm.y0:mm.y1, mm.x0:mm.x1]
+            mmpix = pix[mm.y0-1:mm.y1, mm.x0-1:mm.x1]
+            mmie =   ie[mm.y0-1:mm.y1, mm.x0-1:mm.x1]
+            #mmpix = pix[mm.y0:mm.y1, mm.x0:mm.x1]
+            #mmie =   ie[mm.y0:mm.y1, mm.x0:mm.x1]
 
             # PSF Fourier transforms
             #P, (cx, cy), (pH, pW), (v, w) = psf.getFourierTransform(px, py, halfsize)
@@ -388,10 +388,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             padpix = np.zeros((pH,pW), np.float32)
             padie  = np.zeros((pH,pW), np.float32)
             assert(sy <= 0 and sx <= 0)
-            #padpix[-sy-1: -sy+mh, -sx-1: -sx+mw] = mmpix
-            #padie [-sy-1: -sy+mh, -sx-1: -sx+mw] = mmie
-            padpix[-sy: -sy+mh, -sx: -sx+mw] = mmpix
-            padie [-sy: -sy+mh, -sx: -sx+mw] = mmie
+            padpix[-sy-1: -sy+mh, -sx-1: -sx+mw] = mmpix
+            padie [-sy-1: -sy+mh, -sx-1: -sx+mw] = mmie
+            #padpix[-sy: -sy+mh, -sx: -sx+mw] = mmpix
+            #padie [-sy: -sy+mh, -sx: -sx+mw] = mmie
+            #ROI remains -sy, -sx NOT -1 # 02-13-25
             roi = (-sx, -sy, mw, mh)
             mmpix = padpix
             mmie  = padie
@@ -757,6 +758,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         mod0 = G[:,0,:,:]
         # mod0 should be (Nimages, nw, nv)
         assert (mod0.shape == (img_params.Nimages, img_params.mh, img_params.mw))
+        ## 02-13-25 - make a mask with only the ROI as ones to mask out background
+        roi = img_params.roi[0]
+        roimask = cp.zeros((mod0.shape[1], mod0.shape[2]))
+        roimask[roi[1]:roi[1]+roi[3], roi[0]:roi[0]+roi[2]] = 1
+        ###############
         # Shift this initial model image to get X,Y pixel derivatives
         dx = cp.zeros_like(mod0)
         # dx is of shape (Nimages, nw, nv)
@@ -768,6 +774,13 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         dy[:,1:-1, :] = mod0[:,2:, :] - mod0[:,:-2, :]
         # Push through local WCS transformation to get to RA,Dec param derivatives
         assert(cdi.shape == (img_params.Nimages,2,2))
+
+        ##Multiply everything by roimask 02-13-25
+        dx *= roimask
+        dy *= roimask
+        mod0 *= roimask
+        G *= roimask
+
         # divide by 2 because we did +- 1 pixel
         # negative because we shifted the *image*, which is opposite
         # from shifting the *model*
