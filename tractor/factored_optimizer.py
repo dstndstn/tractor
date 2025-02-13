@@ -524,7 +524,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 # print('ic2')
                 # print(ic2)
                 
-                full_xic.append((x2.get(),ic2.get()))
+                #full_xic.append((x2.get(),ic2.get()))
+                full_xic.append((x2, ic2))
             Xic = full_xic
             add_to_timer(2, time.time()-t1)
 
