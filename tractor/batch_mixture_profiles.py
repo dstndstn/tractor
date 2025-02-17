@@ -43,10 +43,10 @@ class ImageDerivs(object):
         step = list of amixes.step
     '''
 
-    def __init__(self, amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi, sky):
+    def __init__(self, amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi, sky, dx, dy):
         N = len(amixes)
-        nmogs = IM.sum()
-        nfft = IF.sum()
+        nmogs = IM.sum(axis=1).max()
+        nfft = IF.sum(axis=1).max()
         self.N = N
         self.nmogs = nmogs
         self.nfft = nfft
@@ -68,15 +68,19 @@ class ImageDerivs(object):
         self.roi = roi
         self.sky = sky
 
+        self.dx = dx
+        self.dy = dy
+
         if self.nmogs > 0:
             amp = np.zeros((N, nmogs))
             mean = np.zeros((N, nmogs, D))
             var = np.zeros((N, nmogs, D, D))
             for i, amix in enumerate(amixes):
                 (name, mix, step) = amix
-                amp[i] = mix.amp[IM] * mogweights
-                mean[i] = mix.mean[IM, :] + np.array([px, py])[np.newaxis, :]
-                var[i] = mix.var[IM, :, :]
+                nm = IM[i].sum()
+                amp[i][:nm] = mix.amp[IM[i]] * mogweights[i][IM[i]]
+                mean[i][:nm] = mix.mean[IM[i], :] + np.array([px, py])[np.newaxis, :]
+                var[i][:nm] = mix.var[IM[i], :, :]
             #self.mogs = BatchMixtureOfGaussians(cp.asarray(amp), cp.asarray(mean), cp.asarray(var), quick=True)
             self.mog_amp = amp
             self.mog_mean = mean
@@ -87,9 +91,10 @@ class ImageDerivs(object):
             var = np.zeros((N, nfft, D, D))
             for i, amix in enumerate(amixes):
                 (name, mix, step) = amix
-                amp[i] = mix.amp[IF] * fftweights
-                mean[i] = mix.mean[IF, :]
-                var[i] = mix.var[IF, :, :]
+                nf = IF[i].sum()
+                amp[i][:nf] = mix.amp[IF[i]] * fftweights[i][IF[i]]
+                mean[i][:nf] = mix.mean[IF[i], :]
+                var[i][:nf] = mix.var[IF[i], :, :]
             #self.ffts = BatchMixtureOfGaussians(cp.asarray(amp), cp.asarray(mean), cp.asarray(var), quick=True)
             self.fft_amp = amp
             self.fft_mean = mean
