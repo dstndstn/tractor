@@ -164,6 +164,10 @@ class Patch(object):
     def x1(self):
         return self.x0 + self.patch.shape[1]
 
+    def extent(self):
+        (h, w) = self.shape
+        return (self.x0, self.x0 + w, self.y0, self.y0 + h)
+
     def __str__(self):
         s = 'Patch: '
         name = getattr(self, 'name', '')
@@ -275,6 +279,17 @@ class Patch(object):
         (h, w) = self.shape
         return (self.x0 - margin, self.x0 + w + margin,
                 self.y0 - margin, self.y0 + h + margin)
+
+    @property
+    def extent(self):
+        (h, w) = self.shape
+        return (self.x0, self.x0 + w, self.y0, self.y0 + h)
+
+    @property
+    def shape(self):
+        if self.patch is None:
+            return 0,0
+        return self.patch.shape
 
     def getOrigin(self):
         return (self.x0, self.y0)
@@ -426,13 +441,6 @@ class Patch(object):
         #   print 'Wrote', fn
         #
         #   Patch.plotnum += 1
-
-    def __getattr__(self, name):
-        if name == 'shape':
-            if self.patch is None:
-                return (0, 0)
-            return self.patch.shape
-        raise AttributeError('Patch: unknown attribute "%s"' % name)
 
     # Implement *=, /= for numeric types
     def __imul__(self, f):

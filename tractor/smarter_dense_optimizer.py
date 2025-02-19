@@ -1,18 +1,8 @@
-from __future__ import print_function
+from tractor.dense_optimizer import ConstrainedDenseOptimizer
 import numpy as np
-from tractor.engine import logverb
-from tractor.constrained_optimizer import ConstrainedOptimizer
-
 from numpy.linalg import lstsq, LinAlgError
 
-# from astrometry.util.plotutils import PlotSequence
-# ps = PlotSequence('opt')
-# import pylab as plt
-        
-class ConstrainedDenseOptimizer(ConstrainedOptimizer):
-
-    # TODO: implement:
-    #   _optimized_forcedphot_core
+class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
 
     def getUpdateDirection(self, tractor, allderivs, damp=0., priors=True,
                            scale_columns=True, scales_only=False,
@@ -20,16 +10,13 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
                            variance=False,
                            shared_params=True,
                            get_A_matrix=False):
-
-        #print('ConstrainedDenseOptimizer.getUpdateDirection: shared_params=', shared_params,
-        #      'scales_only=', scales_only, 'damp', damp, 'variance', variance)
         if shared_params or scales_only or damp>0 or variance:
             raise RuntimeError('Not implemented')
-        # I don't want to deal with this right now!
         assert(shared_params == False)
         assert(scales_only == False)
         assert(variance == False)
         assert(damp == 0.)
+
 
         # Returns: numpy array containing update direction.
         # If *variance* is True, return    (update,variance)
@@ -62,20 +49,40 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
         # Parameters to optimize go in the columns of matrix A
         # Pixels go in the rows.
 
-        #print('Getting update direction:')
-        #tractor.printThawedParams()
-        
-        # Keep track of row offsets for each image.
-        imgoffs = {}
+
+        # Keep track of active pixels in each image
+        img_bounds = {}
+        # which parameters actually have derivatives?
+        # FIXME -- careful with how this interacts with priors!
+        live_params = set()
+
+        for iparam,derivs in enumerate(allderivs):
+            if len(derivs) == 0:
+                continue
+            live_params.add(iparam)
+
+            for deriv, img in derivs:
+                #print('deriv', deriv)
+                dx0,dx1,dy0,dy1 = deriv.extent
+
+                if img in img_bounds:
+                    x0,x1,y0,y1 = img_bounds[img]
+                    img_bounds[img] = min(dx0, x0), max(dx1, x1), min(dy0, y0), max(dy1, y1)
+                else:
+                    img_bounds[img] = dx0, dx1, dy0, dy1
+        Ncols = len(live_params)
+
+        # Where in the A & B arrays will the image pixels start?
+
+        img_offsets = {}
         Npixels = 0
-        for param in allderivs:
-            for deriv, img in param:
-                if img in imgoffs:
+        for iparam,derivs in enumerate(allderivs):
+            for deriv, img in derivs:
+                if img in img_offsets:
                     continue
-                npix = img.numberOfPixels()
-                imgoffs[img] = (Npixels, npix)
-                Npixels += npix
-        Ncols = len(allderivs)
+                x0,x1,y0,y1 = img_bounds[img]
+                img_offsets[img] = Npixels
+                Npixels += (x1-x0) * (y1-y0)
 
         Npriors = 0
         if priors:
@@ -92,7 +99,7 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
             pb: has shape N
             mub: has shape N
             rowA: list of iterables of ints
-            colA: list of iterables of ints
+            colA: list of ints
             valA: list of iterables of floats
             pb:   list of iterables of floats
             mub:  list of iterables of floats
@@ -112,6 +119,14 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
             if priorVals is not None:
                 rA, cA, vA, pb, mub = priorVals
                 Npriors = max(Npriors, max([1+max(r) for r in rA]))
+                #print('Priors.  live_params:', live_params, ', cA:', cA)
+                live_params.update(cA)
+                #print('live_params after:', live_params)
+                Ncols = len(live_params)
+                #print('new Ncols:', Ncols)
+
+        #print('DenseOptimizer.getUpdateDirection : N params (cols) %i, N pix %i, N priors %i' %
+        #      (Ncols, Npixels, Npriors))
 
         Nrows = Npixels + Npriors
         if Nrows == 0:
@@ -122,46 +137,80 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
         # 'B' holds the chi values
         B = np.zeros(Nrows, np.float32)
 
+        live_params = list(live_params)
+        live_params.sort()
+
+        column_map = dict([(c,i) for i,c in enumerate(live_params)])
+        #print('Column map:', column_map)
+
         colscales2 = np.ones(Ncols)
-        for col,param in enumerate(allderivs):
+        for iparam,derivs in enumerate(allderivs):
+            if len(derivs) == 0:
+                continue
+            col = column_map[iparam]
             scale2 = 0.
-            for (deriv, img) in param:
+            for deriv, img in derivs:
                 if deriv.patch is None:
                     continue
                 inverrs = img.getInvError()
-                H,W = img.shape
-                row0,npix = imgoffs[img]
-                rows = slice(row0, row0+npix)
 
-                # shortcut for deriv bounds == img bounds
-                if deriv.x0 == 0 and deriv.y0 == 0 and deriv.patch.shape==(H,W):
-                    dimg = (deriv.patch * inverrs).flat
+                dx0,dx1,dy0,dy1 = deriv.extent
+                x0,x1,y0,y1 = img_bounds[img]
+                #print('deriv extent', dx0,dx1, dy0,dy1)
+                #print('image bounds', x0,x1,y0,y1)
+                if x0 == dx0 and x1 == dx1 and y0 == dy0 and y1 == dy1:
+                    rowstart = img_offsets[img]
+                    #print('row start:', rowstart)
+                    #print('col', col)
+                    w = x1-x0
+                    h = y1-y0
+                    apix = (deriv.patch * inverrs[y0:y1, x0:x1])
+                    ### HACK
+                    # ii0,jj0 = np.nonzero(deriv.patch)
+                    # ii1,jj1 = np.nonzero(inverrs[y0:y1, x0:x1])
+                    # if len(ii0) == 0:
+                    #     print('modelmask: deriv is all zeros')
+                    # else:
+                    #     print('modelmask: deriv  non-zero region: x [%i,%i)' % (jj0.min(), jj0.max()+1),
+                    #           'y [%i,%i)' % (ii0.min(), ii0.max()+1))
+                    # if len(ii1) == 0:
+                    #     print('modelmask: inverr is all zeros')
+                    # else:
+                    #     print('modelmask: inverr non-zero region: x [%i,%i)' % (jj1.min(), jj1.max()+1),
+                    #           'y [%i,%i)' % (ii1.min(), ii1.max()+1))
+                    # 
+                    # ii2,jj2 = np.nonzero(inverrs)
+                    # if len(ii2):
+                    #     print('whole      inverr non-zero region (relative to modelmask origin): x [%i,%i)' %
+                    #           (jj2.min() - x0, jj2.max()+1 - x0), 'y [%i,%i)' % (ii2.min()-y0, ii2.max()+1-y0))
+                    # 
+                    ####
+                    A[rowstart:rowstart+w*h, col] = apix.flat
+                    if scale_columns:
+                        # accumulate L2 norm
+                        scale2 += np.sum(apix**2)
+                    del apix
                 else:
-                    dimg = np.zeros((H,W), np.float32)
-                    deriv.addTo(dimg)
-                    dimg *= inverrs
-                    dimg = dimg.flat
-                assert(np.all(np.isfinite(dimg)))
-                #print('Derivative', col, 'in image', img, 'gave non-finite value!')
-                #tractor.printThawedParams()
-                if scale_columns:
-                    # accumulate L2 norm
-                    scale2 += np.dot(dimg, dimg)
+                    # There are multiple modelMasks for this image
+                    # (eg from multiple sources), so need to pad it out
+                    assert(False)
+                    sys.exit(-1)
 
-                A[rows, col] = dimg
-                del dimg
             if scale_columns:
                 colscales2[col] = scale2
+        #print('colscales2:', colscales2)
 
-        #print('Colscales:', colscales)
         if Npriors > 0:
             rA, cA, vA, pb, mub = priorVals
             #print('Priors: pb', pb, 'mub', mub)
             for ri,ci,vi,bi in zip(rA, cA, vA, pb):
+                #print('prior: r,c', ri, ci, 'v', vi, 'b', bi)
+                col = column_map[ci]
                 if scale_columns:
-                    colscales2[ci] += np.dot(vi, vi)
+                    # (note, np.dot work when vi is a list)
+                    colscales2[col] += np.dot(vi, vi)
                 for rij,vij,bij in zip(ri, vi, bi):
-                    A[Npixels + rij, ci] = vij
+                    A[Npixels + rij, col] = vij
                     B[Npixels + rij] += bij
             del priorVals, rA, cA, vA, pb, mub
 
@@ -173,19 +222,21 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
                     # Set to safe value...
                     colscales2[col] = 1.
             colscales = np.sqrt(colscales2)
+            #print('colscales:', colscales)
 
         chimap = {}
         if chiImages is not None:
             for img, chi in zip(tractor.getImages(), chiImages):
                 chimap[img] = chi
-        # iterating this way avoids setting the elements more than once
-        for img, (row0,npix) in imgoffs.items():
+
+        for img,rowstart in img_offsets.items():
             chi = chimap.get(img, None)
             if chi is None:
+                ### FIXME.... set tractor's modelMask???
                 chi = tractor.getChiImage(img=img)
-            chi = chi.flat
-            #npix = len(chi)
-            B[row0: row0 + npix] = chi
+            x0,x1,y0,y1 = img_bounds[img]
+            chi = chi[y0:y1, x0:x1]
+            B[rowstart: rowstart + w*h] = chi.flat
             del chi
 
         try:
@@ -201,81 +252,45 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
             print('B finite:', Counter(np.isfinite(B.ravel())))
             return None
 
-        ## X, resids, rank, singular_vals
-        #X,_,_,_ = lstsq(A, B, rcond=None)
-
-        if False:
-            Aold = super(ConstrainedDenseOptimizer, self).getUpdateDirection(
-                tractor, allderivs, damp=damp, priors=priors,
-                scale_columns=scale_columns,
-                get_A_matrix=True, shared_params=False)
-            Aold = Aold.toarray()
-    
-            print('Sparse A matrix:', Aold.shape)
-            if Aold.shape == A.shape:
-                print('Average relative difference in matrix elements:',
-                      100. * np.mean(np.abs((A - Aold) / np.maximum(1e-6, Aold))), 'percent')
-    
-            plt.clf()
-            plt.plot(Aold.ravel(), A.ravel(), 'b.')
-            plt.xlabel('Old matrix element')
-            plt.ylabel('New matrix element')
-            plt.title('scale columns: %s, priors: %i' % (scale_columns, Npriors))
-            ps.savefig()
-    
-            plt.clf()
-            plt.plot(Aold.ravel(), A.ravel(), 'b.')
-            plt.xscale('symlog', linthreshx=1e-6)
-            plt.yscale('symlog', linthreshy=1e-6)
-            plt.xlabel('Old matrix element')
-            plt.ylabel('New matrix element')
-            ps.savefig()
-
-            # plt.clf()
-            # plt.plot(Aold.ravel(), (A-Aold).ravel(), 'b.')
-            # plt.xlabel('Old matrix element')
-            # plt.ylabel('New-Old matrix element')
-            # #plt.title('scale columns: %s, priors: %i' % (scale_columns, Npriors))
-            # ps.savefig()
-                
-            plt.clf()
-            #plt.plot(Aold.ravel(), A.ravel(), 'b.')
-            reldif = ((A-Aold)/np.maximum(1e-6, Aold)).ravel()
-            mx = reldif.max()
-            plt.plot(Aold.ravel(), reldif, 'b.')
-            plt.xlabel('Old matrix element')
-            #plt.ylabel('New matrix element')
-            plt.ylabel('Relative change in New matrix element')
-            plt.ylim(-mx, mx)
-            ps.savefig()
-
         if not get_A_matrix:
             del A
             del B
+        #del B
 
         if scale_columns:
             X /= colscales
-
-        if False:
-            print('Returning:  ', X)
-            Xold = super(ConstrainedDenseOptimizer, self).getUpdateDirection(
-                tractor, allderivs, damp=damp, priors=priors,
-                scale_columns=scale_columns, chiImages=chiImages, variance=variance,
-                shared_params=False)
-            print('COpt result:', Xold)
-            print('Relative difference:', ', '.join(['%.1f' % d for d in 100.*((X - Xold) / np.maximum(1e-18, np.abs(Xold)))]), 'percent')
 
         if not np.all(np.isfinite(X)):
             print('ConstrainedDenseOptimizer.getUpdateDirection: X not all finite!')
             print('X = ', X)
             return None
 
+        # Expand x back out (undo the column_map)
+        #print('Expanding X: column_map =', column_map)
+        #print('X:', X)
+        X_full = np.zeros(1+max(live_params))
+        for c,i in column_map.items():
+            X_full[c] = X[i]
+        X = X_full
+        #print('-> X', X)
+
         if get_A_matrix:
             if scale_columns:
                 A *= colscales[np.newaxis,:]
+            # HACK
+            # expand the colscales array too!
+            c_full = np.zeros(len(X))
+            for c,i in column_map.items():
+                c_full[c] = colscales[i]
+            colscales = c_full
+
+            # Expand A matrix
+            r,c = A.shape
+            A_full = np.zeros((r, len(X)), np.float32)
+            for c,i in column_map.items():
+                A_full[:,c] = A[:,i]
+            A = A_full
+
             return X,A,colscales,B
 
-
         return X
-
-

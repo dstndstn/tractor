@@ -46,7 +46,7 @@ class FactoredOptimizer(object):
         r = self.getUpdateDirection(tr, allderivs, get_A_matrix=True, **kwargs)
         if r is None:
             return None
-        x,A = r
+        x,A,colscales,B = r
         # print('SingeImageUpdateDirection: tr thawed params:')
         # tr.printThawedParams()
         # print('allderivs:', len(allderivs))
@@ -160,9 +160,11 @@ class FactoredOptimizer(object):
             tr.thawParam('images')
         return x
 
-class FactoredDenseOptimizer(FactoredOptimizer, ConstrainedDenseOptimizer):
-    pass
+from tractor.smarter_dense_optimizer import SmarterDenseOptimizer
 
+#class FactoredDenseOptimizer(FactoredOptimizer, ConstrainedDenseOptimizer):
+class FactoredDenseOptimizer(FactoredOptimizer, SmarterDenseOptimizer):
+    pass
 
 
 class GPUFriendlyOptimizer(FactoredDenseOptimizer):
@@ -238,7 +240,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             icacc_gpuv = icacc_gpuv + ic
         x_gpuv,_,_,_ = np.linalg.lstsq(icacc_gpuv, xicacc_gpuv, rcond=None)
 
-
         print('CPU:', x_cpu)
         print('GPU:', x_gpu)
         print('GPU V:', x_gpuv)
@@ -246,7 +247,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         sv = np.sum(x_gpu * x_gpuv) / np.sqrt(np.sum(x_gpu**2) * np.sum(x_gpuv**2))
         print('Similarity CPU/GPU:', s)
         print('Similarity GPU/V:', sv)
-        if s < 0.9:
+        if s < 0.1:
             src = tr.catalog[0]
             print('Source:', src)
             for i,((x_cpu,ic_cpu), (x_gpu,ic_gpu)) in enumerate(zip(R_cpu, R_gpu)):
@@ -367,6 +368,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # the subpixel portion will be handled with a Lanczos interpolation
             mux -= sx
             muy -= sy
+            dxi = x0+sx
+            dyi = y0+sy
             assert(np.abs(mux) <= 0.5)
             assert(np.abs(muy) <= 0.5)
 
@@ -393,7 +396,10 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
             # Split "amix" into terms that we will evaluate using MoG vs FFT.
             # (we'll use that same split for the derivatives also)
-            vv = amix.var[:, 0, 0] + amix.var[:, 1, 1]
+            vv = np.zeros((len(amixes), amix.var.shape[0]))
+            for i, am in enumerate(amixes):
+                vv[i] = am[1].var[:,0,0]+am[1].var[:,1,1]
+            #vv = amix.var[:, 0, 0] + amix.var[:, 1, 1]
             # Ramp between:
             nsigma1 = inner_real_nsigma
             nsigma2 = outer_real_nsigma
@@ -405,21 +411,25 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             IM = ((pW/2)**2 < (nsigma2**2 * vv))
             IF = ((pW/2)**2 > (nsigma1**2 * vv))
             ramp = np.any(IM*IF)
-            mogweights = 1.
-            fftweights = 1.
+            #mogweights = 1.
+            #fftweights = 1.
+            mogweights = np.ones(vv.shape, dtype=np.float32)
+            fftweights = np.ones(vv.shape, dtype=np.float32)
             if ramp:
                 # ramp
                 ns = (pW/2) / np.maximum(1e-6, np.sqrt(vv))
-                mogweights = np.minimum(1., (nsigma2 - ns[IM]) / (nsigma2 - nsigma1))
-                fftweights = np.minimum(1., (ns[IF] - nsigma1) / (nsigma2 - nsigma1))
-                assert(np.all(mogweights > 0.))
-                assert(np.all(mogweights <= 1.))
-                assert(np.all(fftweights > 0.))
-                assert(np.all(fftweights <= 1.))
+                #mogweights = np.minimum(1., (nsigma2 - ns[IM]) / (nsigma2 - nsigma1))
+                #fftweights = np.minimum(1., (ns[IF] - nsigma1) / (nsigma2 - nsigma1))
+                mogweights = np.minimum(1., (nsigma2 - ns) / (nsigma2 - nsigma1))*IM
+                fftweights = np.minimum(1., (ns - nsigma1) / (nsigma2 - nsigma1))*IF
+                assert(np.all(mogweights[IM] > 0.))
+                assert(np.all(mogweights[IM] <= 1.))
+                assert(np.all(fftweights[IF] > 0.))
+                assert(np.all(fftweights[IF] <= 1.))
 
             K = amix.var.shape[0]
             D = amix.var.shape[1]
-            img_derivs = ImageDerivs(amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi, sky)
+            img_derivs = ImageDerivs(amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi, sky, dxi, dyi)
             img_params.add_image_deriv(img_derivs)
             #Commented out print below
             #img_derivs.tostr()
@@ -639,6 +649,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # the subpixel portion will be handled with a Lanczos interpolation
         mux -= sx
         muy -= sy
+        dxi = cp.asarray(x0+sx)
+        dyi = cp.asarray(y0+sy)
+        print ("DXI", dxi.shape)
         assert(np.abs(mux).max() <= 0.5)
         assert(np.abs(muy).max() <= 0.5)
 
@@ -678,7 +691,10 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         # Split "amix" into terms that we will evaluate using MoG vs FFT.
         # (we'll use that same split for the derivatives also)
-        vv = amix_gpu.var[:,:,0,0] + amix_gpu.var[:,:,1,1]
+        #vv = amix_gpu.var[:,:,0,0] + amix_gpu.var[:,:,1,1]
+        vv = cp.zeros((Nimages, len(amixes_gpu), amix_gpu.var.shape[1]))
+        for i, am in enumerate(amixes_gpu):
+            vv[:,i] = am[1].var[:,:,0,0]+am[1].var[:,:,1,1]
 
         # Ramp between:
         nsigma1 = inner_real_nsigma
@@ -689,22 +705,27 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # patch, how many sigmas out are we?  If small (ie, the
         # edge still has a significant fraction of the flux),
         # render w/ MoG.
+        print ("vv", vv.shape)
         IM = ((pW/2)**2 < (nsigma2**2 * vv))
         IF = ((pW/2)**2 > (nsigma1**2 * vv))
         ramp = np.any(IM*IF)
         tg[4] += time.time()-t9
         t9 = time.time()
-        mogweights = cp.ones(Nimages, dtype=np.float32)
-        fftweights = cp.ones(Nimages, dtype=np.float32)
+        #mogweights = cp.ones(Nimages, dtype=np.float32)
+        #fftweights = cp.ones(Nimages, dtype=np.float32)
+        mogweights = cp.ones(vv.shape, dtype=cp.float32)
+        fftweights = cp.ones(vv.shape, dtype=cp.float32)
         if ramp:
             # ramp
             ns = (pW/2) / cp.maximum(1e-6, cp.sqrt(vv))
-            mogweights = cp.minimum(1., (nsigma2 - ns[IM]) / (nsigma2 - nsigma1))
-            fftweights = cp.minimum(1., (ns[IF] - nsigma1) / (nsigma2 - nsigma1))
-            assert(cp.all(mogweights > 0.))
-            assert(cp.all(mogweights <= 1.))
-            assert(cp.all(fftweights > 0.))
-            assert(cp.all(fftweights <= 1.))
+            #mogweights = cp.minimum(1., (nsigma2 - ns[IM]) / (nsigma2 - nsigma1))
+            #fftweights = cp.minimum(1., (ns[IF] - nsigma1) / (nsigma2 - nsigma1))
+            mogweights = cp.minimum(1., (nsigma2 - ns) / (nsigma2 - nsigma1))*IM
+            fftweights = cp.minimum(1., (ns - nsigma1) / (nsigma2 - nsigma1))*IF
+            assert(cp.all(mogweights[IM] > 0.))
+            assert(cp.all(mogweights[IM] <= 1.))
+            assert(cp.all(fftweights[IF] > 0.))
+            assert(cp.all(fftweights[IF] <= 1.))
 
         K = amix_gpu.var.shape[1]
         D = amix_gpu.var.shape[2]
@@ -716,7 +737,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #print ("amixes_gpu", type(amixes_gpu), type(IF), type(IM), type(K), type(D))
         #print ("mogweights", type(mogweights), type(fftweights), fftweights.shape, type(px), type(py), type(mux), type(muy))
         #print ("MH", type(mh), type(mw), type(counts), type(cdi), type(roi))
-        img_derivs = BatchImageDerivs(amixes_gpu, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi, sky)
+        img_derivs = BatchImageDerivs(amixes_gpu, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi, sky, dxi, dyi)
         img_params.addBatchImageDerivs(img_derivs)
         #img_derivs.tostr()
         tg[6] += time.time()-t9
@@ -920,6 +941,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         t1 = time.time()
         #Do Lanczos shift
         G = lanczos_shift_image_batch_gpu(G, img_params.mux, img_params.muy)
+        cp.savetxt('gg.txt', G.ravel())
         add_to_timer(6, time.time()-t1)
         del Fsum
         #G should be (nimages, maxNd, nw, nv) and mux and muy should be 1d vectors
@@ -944,8 +966,10 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             varcopy = mogs.var.copy()
             # varcopy shape: (13, 4, 1, 2, 2)
             # psfmog.var shape: (13, 1, 2, 2)
-            varcopy[..., 0, 0, 0] += psfmog.var[..., cp.newaxis, 0, 0, 0]
-            varcopy[..., 0, 1, 1] += psfmog.var[..., cp.newaxis, 0, 1, 1]
+            #varcopy[..., 0, 0, 0] += psfmog.var[..., cp.newaxis, 0, 0, 0]
+            #varcopy[..., 0, 1, 1] += psfmog.var[..., cp.newaxis, 0, 1, 1]
+            varcopy[..., :, 0, 0] += psfmog.var[..., cp.newaxis, 0, 0, 0]
+            varcopy[..., :, 1, 1] += psfmog.var[..., cp.newaxis, 0, 1, 1]
 
             print('mogs.amp', mogs.amp.shape)
             print('mogs.mean', mogs.mean.shape)
@@ -994,11 +1018,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # conv_mog.mean[:,:,:,0].shape == (13,4,1) in one pass through run-one-blob.py and (13,4,2) in another
             #dx = xx - conv_mog.mean[:,:,:,cp.newaxis,0]
             #dy = yy - conv_mog.mean[:,:,:,cp.newaxis,1]
-            if use_roi:
+            #if use_roi:
 
                 # rois: (rx0,ry0, rw,rh)
-                means[:,0] += cp.array([d.roi[0] for d in img_params.img_derivs])
-                means[:,1] += cp.array([d.roi[1] for d in img_params.img_derivs])
+                #means[:,0] += cp.array([d.roi[0] for d in img_params.img_derivs])
+                #means[:,1] += cp.array([d.roi[1] for d in img_params.img_derivs])
 
                 # #Loop over img_params.img_derivs and correct mean so that mogs are centered with G
                 # for img_i, imderiv in enumerate(img_params.img_derivs):
@@ -1008,6 +1032,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # distsq = (iv0[:,:,:,cp.newaxis] * dx[:,:,cp.newaxis,:] * dx[:,:,cp.newaxis,:] +
             #           iv1[:,:,:,cp.newaxis] * dx[:,:,cp.newaxis,:] * dy[:,:,:,cp.newaxis] +
             #           iv2[:,:,:,cp.newaxis] * dy[:,:,:,cp.newaxis] * dy[:,:,:,cp.newaxis])
+
+            for i, deriv in enumerate(img_params.img_derivs):
+                print ("DX", deriv.dx, deriv.dy)
+                means[i,0] -= deriv.dx
+                means[i,1] -= deriv.dy
 
             # (13,4,1) = (nimages, nderivs, nmog)
             print('scale:', scale.shape)
@@ -1034,11 +1063,13 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # print('t2', t2.shape)
             # Sum over the nmog
             mog_g = cp.sum(scale[:,:,:,cp.newaxis,cp.newaxis] * cp.exp(-0.5*distsq), axis=2)
+            print ("MEANS", means.shape, means)
+            print ("mog_g", mog_g.shape, mog_g.max())
+            cp.savetxt('gmogpatch.txt',mog_g.ravel())
             G += mog_g
 
         #Do no use roi since images are padded to be (mh, mw)
-        use_roi = False
-
+        #use_roi = False
         t1 = time.time()
 
         Npix = img_params.mh*img_params.mw
@@ -1051,6 +1082,12 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         mod0 = G[:,0,:,:]
         # mod0 should be (Nimages, nw, nv)
         assert (mod0.shape == (img_params.Nimages, img_params.mh, img_params.mw))
+        ## 02-13-25 - make a mask with only the ROI as ones to mask out background
+        roi = img_params.roi[0]
+        roimask = cp.zeros((mod0.shape[1], mod0.shape[2]))
+        roimask[roi[1]:roi[1]+roi[3], roi[0]:roi[0]+roi[2]] = 1
+        ###############
+
         # Shift this initial model image to get X,Y pixel derivatives
         dx = cp.zeros_like(mod0)
         # dx is of shape (Nimages, nw, nv)
@@ -1062,6 +1099,19 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         dy[:,1:-1, :] = mod0[:,2:, :] - mod0[:,:-2, :]
         # Push through local WCS transformation to get to RA,Dec param derivatives
         assert(cdi.shape == (img_params.Nimages,2,2))
+
+        ##Multiply everything by roimask 02-13-25
+        dx *= roimask
+        dy *= roimask
+        mod0 *= roimask
+        G *= roimask
+
+        #cp.savetxt('dx.txt', dx.ravel())
+        #cp.savetxt('dy.txt', dy.ravel())
+        #cp.savetxt('cdi.txt', cdi.ravel())
+        #print ("DX", dx.shape, "CDI", cdi.shape, cdi)
+        #print ("COUNTS", img_params.counts, "SKY", img_params.sky)
+
         # divide by 2 because we did +- 1 pixel
         # negative because we shifted the *image*, which is opposite
         # from shifting the *model*
@@ -1079,6 +1129,13 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         B = cp.zeros((img_params.Nimages, Npix + Npriors), cp.float32)
         B[:,:Npix] = ((img_params.pix - (img_params.counts[:,cp.newaxis, cp.newaxis]*mod0 + img_params.sky[:, cp.newaxis, cp.newaxis])) * img_params.ie).reshape((img_params.Nimages, Npix))
+
+        cp.savetxt('mod0.txt', mod0.ravel())
+        cp.savetxt("gmod.txt", (img_params.counts[:,cp.newaxis, cp.newaxis]*mod0 + img_params.sky[:, cp.newaxis, cp.newaxis]).ravel())
+        cp.savetxt("gie.txt", img_params.ie.ravel())
+        cp.savetxt("gpix.txt", img_params.pix.ravel())
+        cp.savetxt("ga1.txt", A.ravel())
+        cp.savetxt("gb1.txt", B.ravel())
 
         # B should be of shape (Nimages, :)                           
         #B = cp.append(((pix - counts*mod0) * ie).ravel(),
@@ -1456,6 +1513,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         t1 = time.time()
         #Do Lanczos shift
         G = lanczos_shift_image_batch_gpu(G, img_params.mux, img_params.muy)
+        cp.savetxt('vgg.txt', G.ravel())
         add_to_timer(7, time.time()-t1)
         t1 = time.time()
         del Fsum
@@ -1482,8 +1540,10 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             varcopy = mogs.var.copy()
             # varcopy shape: (13, 4, 1, 2, 2)
             # psfmog.var shape: (13, 1, 2, 2)
-            varcopy[..., 0, 0, 0] += psfmog.var[..., cp.newaxis, 0, 0, 0]
-            varcopy[..., 0, 1, 1] += psfmog.var[..., cp.newaxis, 0, 1, 1]
+            #varcopy[..., 0, 0, 0] += psfmog.var[..., cp.newaxis, 0, 0, 0]
+            #varcopy[..., 0, 1, 1] += psfmog.var[..., cp.newaxis, 0, 1, 1]
+            varcopy[..., :, 0, 0] += psfmog.var[..., cp.newaxis, 0, 0, 0]
+            varcopy[..., :, 1, 1] += psfmog.var[..., cp.newaxis, 0, 1, 1]
 
             #print('mogs.amp', mogs.amp.shape)
             #print('mogs.mean', mogs.mean.shape)
@@ -1532,14 +1592,19 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # conv_mog.mean[:,:,:,0].shape == (13,4,1) in one pass through run-one-blob.py and (13,4,2) in another
             #dx = xx - conv_mog.mean[:,:,:,cp.newaxis,0]
             #dy = yy - conv_mog.mean[:,:,:,cp.newaxis,1]
-            if use_roi:
+            #if use_roi:
 
                 #print ("MEANS", means[:,0].shape, means[:,1].shape, img_params.roi.shape)
                 ## rois: (rx0,ry0, rw,rh)
                 #means[:,0] += cp.array([d.roi[0] for d in img_params.img_derivs])
                 #means[:,1] += cp.array([d.roi[1] for d in img_params.img_derivs])
-                means[:,0] += img_params.roi[:,0]
-                means[:,1] += img_params.roi[:,1]
+                #means[:,0] += img_params.roi[:,0]
+                #means[:,1] += img_params.roi[:,1]
+
+            print ("DX", img_params.dx, img_params.dy)
+            print (type(means), type(img_params.dx))
+            means[:,0] -= img_params.dx
+            means[:,1] -= img_params.dy
 
             # (13,4,1) = (nimages, nderivs, nmog)
             #print('scale:', scale.shape)
@@ -1561,6 +1626,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # print('t2', t2.shape)
             # Sum over the nmog
             mog_g = cp.sum(scale[:,:,:,cp.newaxis,cp.newaxis] * cp.exp(-0.5*distsq), axis=2)
+            print ("MEANS", means.shape, means)
+            print ("mog_g", mog_g.shape, mog_g.max())
+            cp.savetxt('vgmogpatch.txt',mog_g.ravel())
             G += mog_g
 
         #Do no use roi since images are padded to be (mh, mw)
@@ -1579,6 +1647,19 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         mod0 = G[:,0,:,:]
         # mod0 should be (Nimages, nw, nv)
         assert (mod0.shape == (img_params.Nimages, img_params.mh, img_params.mw))
+        ## 02-13-25 - make a mask with only the ROI as ones to mask out background
+        print ("ROI")
+        print (img_params.roi.shape)
+        roi = img_params.roi
+        print (roi.shape)
+        roimask = cp.zeros((img_params.Nimages, mod0.shape[1], mod0.shape[2]))
+        for i in range(img_params.Nimages):
+            roimask[i, roi[i,1]:roi[i,1]+roi[i,3], roi[i,0]:roi[i,0]+roi[i,2]] = 1
+        print (roimask.shape)
+        print (roi)
+        #roimask[roi[1]:roi[1]+roi[3], roi[0]:roi[0]+roi[2]] = 1
+        ###############
+
         # Shift this initial model image to get X,Y pixel derivatives
         dx = cp.zeros_like(mod0)
         # dx is of shape (Nimages, nw, nv)
@@ -1590,6 +1671,13 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         dy[:,1:-1, :] = mod0[:,2:, :] - mod0[:,:-2, :]
         # Push through local WCS transformation to get to RA,Dec param derivatives
         assert(cdi.shape == (img_params.Nimages,2,2))
+
+        ##Multiply everything by roimask 02-13-25
+        dx *= roimask
+        dy *= roimask
+        mod0 *= roimask
+        G *= roimask
+
         # divide by 2 because we did +- 1 pixel
         # negative because we shifted the *image*, which is opposite
         # from shifting the *model*
@@ -1614,6 +1702,12 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #B = cp.append(((pix - counts*mod0) * ie).ravel(),
         #                cp.zeros(Npriors, cp.float32))
 
+        cp.savetxt('vmod0.txt', mod0.ravel())
+        cp.savetxt("vgmod.txt", (img_params.counts[:,cp.newaxis, cp.newaxis]*mod0 + img_params.sky[:, cp.newaxis, cp.newaxis]).ravel())
+        cp.savetxt("vgie.txt", img_params.ie.ravel())
+        cp.savetxt("vgpix.txt", img_params.pix.ravel())
+        cp.savetxt("vga1.txt", A.ravel())
+        cp.savetxt("vgb1.txt", B.ravel())
 
         # Append priors --do priors depend on which image I am looking at?
         #TODO not sure if this is correct for priors? 

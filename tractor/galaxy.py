@@ -174,7 +174,8 @@ class Galaxy(MultiParams, SingleProfileSource):
 
         if modelMask is None:
             x0,x1,y0,y1 = patch0.getExtent()
-            modelMask = ModelMask.fromExtent([x0,x1,y0,y1])
+            modelMask = ModelMask.fromExtent(x0,x1,y0,y1)
+            #modelMask = ModelMask.fromExtent([x0,x1,y0,y1])
         assert(modelMask is not None)
 
         derivs = []
@@ -216,8 +217,11 @@ class Galaxy(MultiParams, SingleProfileSource):
                 oldval = self.brightness.setParam(i, params[i] + bstep)
                 countsi = img.getPhotoCal().brightnessToCounts(self.brightness)
                 self.brightness.setParam(i, oldval)
-                df = patch0 * ((countsi - counts) / bstep)
-                df.setName('d(%s)/d(bright%i)' % (self.dname, i))
+                if countsi == counts:
+                    df = None
+                else:
+                    df = patch0 * ((countsi - counts) / bstep)
+                    df.setName('d(%s)/d(bright%i)' % (self.dname, i))
                 derivs.append(df)
 
         # derivatives wrt shape
