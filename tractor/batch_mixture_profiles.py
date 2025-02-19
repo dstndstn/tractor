@@ -52,14 +52,14 @@ class BatchImageDerivs(object):
         N = len(amixes)
         #IF = IF.get()
         #IM = IM.get()
-        print ("IM", IM.shape, IM.sum(axis=1), IM.sum(axis=2))
-        print ("IF", IF.shape, IF.sum(axis=1), IF.sum(axis=2))
-        print ("IM = ", IM)
-        print ("IF = ", IF)
+        #print ("IM", IM.shape, IM.sum(axis=1), IM.sum(axis=2))
+        #print ("IF", IF.shape, IF.sum(axis=1), IF.sum(axis=2))
+        #print ("IM = ", IM)
+        #print ("IF = ", IF)
         nmogs = IM.sum(axis=2).max(axis=1)
         nfft = IF.sum(axis=2).max(axis=1)
-        print ("nmogs", nmogs.shape)
-        print ("nfft", nfft.shape)
+        #print ("nmogs", nmogs.shape)
+        #print ("nfft", nfft.shape)
         self.N = N
         self.maxNd = N
         self.nmogs = nmogs
@@ -276,8 +276,8 @@ class ImageDerivs(object):
 
     def __init__(self, amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi, sky, dx, dy):
         N = len(amixes)
-        print ("IM", IM.shape, IM, IM.sum(axis=1))
-        print ("IF", IF.shape, IF, IF.sum(axis=1))
+        #print ("IM", IM.shape, IM, IM.sum(axis=1))
+        #print ("IF", IF.shape, IF, IF.sum(axis=1))
         nmogs = IM.sum(axis=1).max()
         nfft = IF.sum(axis=1).max()
         self.N = N
@@ -413,7 +413,7 @@ class BatchImageParams(object):
 
     def addBatchImageDerivs(self, bimderiv):
         t = time.time()
-        print ("ADD_BATCH")
+        #print ("ADD_BATCH")
         assert(self._initialized is False)
         self._initialized = True
         self.Nimages += bimderiv.Nimages
