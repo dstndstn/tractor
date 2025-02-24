@@ -482,12 +482,14 @@ class Optimizer(object):
                     uniq_source_dict[key] = [ui]
                 
         # remove duplicate sources from models_cov
-        models_cov = np.delete(models_cov, 
-                               np.concatenate(list(overlap_dict.values())), 
-                               axis=0)
-        # new dimension after removing duplicates
-        new_D = D - len(np.concatenate(list(overlap_dict.values())))
-
+        if overlap_dict:
+            models_cov = np.delete(models_cov, 
+                                np.concatenate(list(overlap_dict.values())), 
+                                axis=0)
+            # new dimension after removing duplicates
+            new_D = D - len(np.concatenate(list(overlap_dict.values())))
+        else:
+            new_D = D # if no overlaps, keep original dimensions
 
         # faster implementation of the fisher information matrix ,using Einstein summation
         F = np.zeros(shape=(new_D, new_D))
