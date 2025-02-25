@@ -484,12 +484,15 @@ class Optimizer(object):
         # remove duplicate sources from models_cov
         if overlap_dict:
             models_cov = np.delete(models_cov, 
-                                np.concatenate(list(overlap_dict.values())), 
-                                axis=0)
+                                   np.concatenate(list(overlap_dict.values())), 
+                                   axis=0)
+            
             # new dimension after removing duplicates
             new_D = D - len(np.concatenate(list(overlap_dict.values())))
+
+        # if no overlaps, keep the original dimension
         else:
-            new_D = D # if no overlaps, keep original dimensions
+            new_D = D 
 
         # faster implementation of the fisher information matrix ,using Einstein summation
         F = np.zeros(shape=(new_D, new_D))
@@ -513,18 +516,26 @@ class Optimizer(object):
             # Handle the case where F is not invertible
             C = np.nan + np.zeros_like(F)
 
-        # might be a truncated list due to overlapping sources
+        # this could be a truncated list due to overlapping sources
         var = -np.diag(C)
+        
         # reconstruct a variance array with the input number of sources
         var_all = np.zeros(shape=D) + np.nan
         var_all[np.concatenate(list(uniq_source_dict.values()))] = var
+
         # set any overlapping sources to be nan
         var_all[list(overlap_dict.keys())] = np.nan
+
+        # if any overlapping sources, set to nan
+        if overlap_dict:
+
+            var_all[list(overlap_dict.keys())] = np.nan
+
+            # remove any repetitive sources in the uniq source dict that are in the overlap dict
+            uniq_source_dict = {key: [idx for idx in value if idx not in overlap_dict] for key, value in uniq_source_dict.items()}
+
         
         IV[Nsky:] = 1/var_all # inverse variance. 
-
-        # remove any repetitive sources in the uniq source dict that are in the overlap dict
-        uniq_source_dict = {key: [idx for idx in value if idx not in overlap_dict] for key, value in uniq_source_dict.items()}
 
         ## TODO: what to be returned here?
         ## to keep track of overlapping (junk) sources, would be useful to return 
