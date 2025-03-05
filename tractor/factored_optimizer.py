@@ -357,8 +357,16 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         for mm,(px,py),(x0,x1,y0,y1),psf,pix,ie,counts,sky,cdi,tim in zip(
                 masks, pxy, extents, psfs, img_pix, img_ie, img_counts, img_sky, img_cdi, tr.images):
             #Subtract 1 from y0 and x0 CW 1/22/25 -- unknown why but rectifies difference with CPU IE
-            mmpix = pix[mm.y0-1:mm.y1, mm.x0-1:mm.x1]
-            mmie =   ie[mm.y0-1:mm.y1, mm.x0-1:mm.x1]
+            y_delta = 1
+            x_delta = 1
+            if mm.y0 == 0:
+                y_delta = 0
+            if mm.x0 == 0:
+                x_delta = 0
+            #mmpix = pix[mm.y0-1:mm.y1, mm.x0-1:mm.x1]
+            #mmie =   ie[mm.y0-1:mm.y1, mm.x0-1:mm.x1]
+            mmpix = pix[mm.y0-y_delta:mm.y1, mm.x0-x_delta:mm.x1]
+            mmie =   ie[mm.y0-y_delta:mm.y1, mm.x0-x_delta:mm.x1]
 
             # PSF Fourier transforms
             #P, (cx, cy), (pH, pW), (v, w) = psf.getFourierTransform(px, py, halfsize)
@@ -383,8 +391,10 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             padpix = np.zeros((pH,pW), np.float32)
             padie  = np.zeros((pH,pW), np.float32)
             assert(sy <= 0 and sx <= 0)
-            padpix[-sy-1: -sy+mh, -sx-1: -sx+mw] = mmpix
-            padie [-sy-1: -sy+mh, -sx-1: -sx+mw] = mmie
+            #padpix[-sy-1: -sy+mh, -sx-1: -sx+mw] = mmpix
+            #padie [-sy-1: -sy+mh, -sx-1: -sx+mw] = mmie
+            padpix[-sy-y_delta: -sy+mh, -sx-x_delta: -sx+mw] = mmpix
+            padie [-sy-y_delta: -sy+mh, -sx-x_delta: -sx+mw] = mmie
             roi = (-sx, -sy, mw, mh)
             mmpix = padpix
             mmie  = padie
@@ -613,7 +623,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         outer_real_nsigma = 4.
 
         print ("Calling VECTORIZED version")
-        print (type(tr.images), type(tr))
+        #print (type(tr.images), type(tr))
         px, py = np.array(pxy).T
         psfH, psfW = np.array([psf.shape for psf in psfs]).T
         x0, x1, y0, y1 = np.asarray(extents).T
@@ -667,17 +677,23 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         tg[0] += time.time()-t9
         t9 = time.time()
 
+        x_delta = np.ones(mx0.shape, np.int32)
+        y_delta = np.ones(my0.shape, np.int32)
+        x_delta[mx0 == 0] = 0
+        y_delta[my0 == 0] = 0
         for i, pix in enumerate(img_pix):
-            padpix[i, -sy[i]-1:-sy[i]+mh[i], -sx[i]-1:-sx[i]+mw[i]] = pix[my0[i]-1:my1[i], mx0[i]-1:mx1[i]]
+            #padpix[i, -sy[i]-1:-sy[i]+mh[i], -sx[i]-1:-sx[i]+mw[i]] = pix[my0[i]-1:my1[i], mx0[i]-1:mx1[i]]
+            padpix[i, -sy[i]-y_delta[i]:-sy[i]+mh[i], -sx[i]-x_delta[i]:-sx[i]+mw[i]] = pix[my0[i]-y_delta[i]:my1[i], mx0[i]-x_delta[i]:mx1[i]]
         for i, ie in enumerate(img_ie):
-            padie[i, -sy[i]-1:-sy[i]+mh[i], -sx[i]-1:-sx[i]+mw[i]] = ie[my0[i]-1:my1[i], mx0[i]-1:mx1[i]]
+            #padie[i, -sy[i]-1:-sy[i]+mh[i], -sx[i]-1:-sx[i]+mw[i]] = ie[my0[i]-1:my1[i], mx0[i]-1:mx1[i]]
+            padie[i, -sy[i]-y_delta[i]:-sy[i]+mh[i], -sx[i]-x_delta[i]:-sx[i]+mw[i]] = ie[my0[i]-y_delta[i]:my1[i], mx0[i]-x_delta[i]:mx1[i]]
         tg[1] += time.time()-t9
         t9 = time.time()
         roi = cp.asarray([-sx, -sy, mw, mh]).T
         mmpix = cp.asarray(padpix)
         mmie = cp.asarray(padie)
         sky = cp.asarray(img_sky)
-        print("SKY", sky.shape)
+        #print("SKY", sky.shape)
         tg[2] += time.time()-t9
         t9 = time.time()
 
@@ -972,8 +988,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # psfmog.var shape: (13, 1, 2, 2)
             #varcopy[..., 0, 0, 0] += psfmog.var[..., cp.newaxis, 0, 0, 0]
             #varcopy[..., 0, 1, 1] += psfmog.var[..., cp.newaxis, 0, 1, 1]
-            varcopy[..., :, 0, 0] += psfmog.var[..., cp.newaxis, 0, 0, 0]
-            varcopy[..., :, 1, 1] += psfmog.var[..., cp.newaxis, 0, 1, 1]
+            print ("VARCOPY", varcopy.shape, psfmog.var.shape)
+            varcopy[..., :, 0, 0] += psfmog.var[..., cp.newaxis, cp.newaxis, 0, 0, 0]
+            varcopy[..., :, 1, 1] += psfmog.var[..., cp.newaxis, cp.newaxis, 0, 1, 1]
 
             #print('mogs.amp', mogs.amp.shape)
             #print('mogs.mean', mogs.mean.shape)
@@ -1084,9 +1101,12 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # mod0 should be (Nimages, nw, nv)
         assert (mod0.shape == (img_params.Nimages, img_params.mh, img_params.mw))
         ## 02-13-25 - make a mask with only the ROI as ones to mask out background
-        roi = img_params.roi[0]
-        roimask = cp.zeros((mod0.shape[1], mod0.shape[2]))
-        roimask[roi[1]:roi[1]+roi[3], roi[0]:roi[0]+roi[2]] = 1
+        roi = img_params.roi
+        #roimask can be different for each image
+        roimask = cp.zeros((img_params.Nimages, mod0.shape[1], mod0.shape[2]))
+        #print ("ROI", roi)
+        for i, ri in enumerate(roi): 
+            roimask[i, ri[1]:ri[1]+ri[3], ri[0]:ri[0]+ri[2]] = 1
         ###############
 
         # Shift this initial model image to get X,Y pixel derivatives
@@ -1105,7 +1125,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         dx *= roimask
         dy *= roimask
         mod0 *= roimask
-        G *= roimask
+        #Need to reshape for G
+        G *= roimask[:,None,:,:]
 
         #cp.savetxt('dx.txt', dx.ravel())
         #cp.savetxt('dy.txt', dy.ravel())
@@ -1158,7 +1179,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         # Compute the covariance matrix
         Xicov = cp.matmul(A.swapaxes(-1,-2), A)
-
 
         # Pre-scale the columns of A
         colscales = cp.sqrt(cp.diagonal(Xicov, axis1=1, axis2=2))
@@ -1543,8 +1563,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # psfmog.var shape: (13, 1, 2, 2)
             #varcopy[..., 0, 0, 0] += psfmog.var[..., cp.newaxis, 0, 0, 0]
             #varcopy[..., 0, 1, 1] += psfmog.var[..., cp.newaxis, 0, 1, 1]
-            varcopy[..., :, 0, 0] += psfmog.var[..., cp.newaxis, 0, 0, 0]
-            varcopy[..., :, 1, 1] += psfmog.var[..., cp.newaxis, 0, 1, 1]
+            varcopy[..., :, 0, 0] += psfmog.var[..., cp.newaxis, cp.newaxis, 0, 0, 0]
+            varcopy[..., :, 1, 1] += psfmog.var[..., cp.newaxis, cp.newaxis, 0, 1, 1]
 
             #print('mogs.amp', mogs.amp.shape)
             #print('mogs.mean', mogs.mean.shape)
@@ -1648,8 +1668,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #print (img_params.roi.shape)
         roi = img_params.roi
         roimask = cp.zeros((img_params.Nimages, mod0.shape[1], mod0.shape[2]))
-        for i in range(img_params.Nimages):
-            roimask[i, roi[i,1]:roi[i,1]+roi[i,3], roi[i,0]:roi[i,0]+roi[i,2]] = 1
+        for i, ri in enumerate(roi):
+            roimask[i, ri[1]:ri[1]+ri[3], ri[0]:ri[0]+ri[2]] = 1
         #roimask[roi[1]:roi[1]+roi[3], roi[0]:roi[0]+roi[2]] = 1
         ###############
 
@@ -1669,7 +1689,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         dx *= roimask
         dy *= roimask
         mod0 *= roimask
-        G *= roimask
+        #Need to reshape for G
+        G *= roimask[:,None,:,:]
 
         # divide by 2 because we did +- 1 pixel
         # negative because we shifted the *image*, which is opposite
