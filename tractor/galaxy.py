@@ -99,7 +99,7 @@ class Galaxy(MultiParams, SingleProfileSource):
     '''
 
     def __init__(self, *args):
-        super(Galaxy, self).__init__(*args)
+        super().__init__(*args)
         self.name = self.getName()
         self.dname = self.getDName()
 
@@ -725,7 +725,7 @@ class GaussianGalaxy(HoggGalaxy):
 
     def __init__(self, *args, **kwargs):
         self.nre = GaussianGalaxy.nre
-        super(GaussianGalaxy, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def getName(self):
         return 'GaussianGalaxy'
@@ -745,7 +745,7 @@ class ExpGalaxy(HoggGalaxy):
 
     def __init__(self, *args, **kwargs):
         self.nre = ExpGalaxy.nre
-        super(ExpGalaxy, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def getName(self):
         return 'ExpGalaxy'
@@ -765,7 +765,7 @@ class DevGalaxy(HoggGalaxy):
 
     def __init__(self, *args, **kwargs):
         self.nre = DevGalaxy.nre
-        super(DevGalaxy, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def getName(self):
         return 'DevGalaxy'
