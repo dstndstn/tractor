@@ -236,7 +236,7 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
                 chi = tractor.getChiImage(img=img)
             x0,x1,y0,y1 = img_bounds[img]
             chi = chi[y0:y1, x0:x1]
-            B[rowstart: rowstart + w*h] = chi.flat
+            B[rowstart: rowstart + (y1-y0)*(x1-x0)] = chi.flat
             del chi
 
         try:
