@@ -1,6 +1,7 @@
 from tractor.dense_optimizer import ConstrainedDenseOptimizer
 import numpy as np
 from numpy.linalg import lstsq, LinAlgError
+from tractor.utils import savetxt_cpu_append
 
 class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
 
@@ -56,13 +57,16 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
         # FIXME -- careful with how this interacts with priors!
         live_params = set()
 
+        #print ("CPU SmarterDenseOptimizer::getUpdateDirection len derivs = ", len(allderivs))
         for iparam,derivs in enumerate(allderivs):
             if len(derivs) == 0:
                 continue
             live_params.add(iparam)
 
+            #print ("\tLEN DERIV", len(derivs))
             for deriv, img in derivs:
-                #print('deriv', deriv)
+                #print ("\tIMG ",img)
+                #print('\t\tderiv', deriv, deriv.extent)
                 dx0,dx1,dy0,dy1 = deriv.extent
 
                 if img in img_bounds:
@@ -156,8 +160,6 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
 
                 dx0,dx1,dy0,dy1 = deriv.extent
                 x0,x1,y0,y1 = img_bounds[img]
-                #print('deriv extent', dx0,dx1, dy0,dy1)
-                #print('image bounds', x0,x1,y0,y1)
                 if x0 == dx0 and x1 == dx1 and y0 == dy0 and y1 == dy1:
                     rowstart = img_offsets[img]
                     #print('row start:', rowstart)
@@ -193,12 +195,16 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
                 else:
                     # There are multiple modelMasks for this image
                     # (eg from multiple sources), so need to pad it out
-                    assert(False)
-                    sys.exit(-1)
+                    print('\tderiv extent', dx0,dx1, dy0,dy1)
+                    print('\timage bounds', x0,x1,y0,y1, img)
+                    return None
+                    #assert(False)
+                    #sys.exit(-1)
 
             if scale_columns:
                 colscales2[col] = scale2
         #print('colscales2:', colscales2)
+        savetxt_cpu_append('ca1.txt', A)
 
         if Npriors > 0:
             rA, cA, vA, pb, mub = priorVals
@@ -213,6 +219,7 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
                     A[Npixels + rij, col] = vij
                     B[Npixels + rij] += bij
             del priorVals, rA, cA, vA, pb, mub
+        savetxt_cpu_append('ca2.txt', A)
 
         if scale_columns:
             for col,scale2 in enumerate(colscales2):
@@ -236,8 +243,12 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
                 chi = tractor.getChiImage(img=img)
             x0,x1,y0,y1 = img_bounds[img]
             chi = chi[y0:y1, x0:x1]
+            w = x1-x0
+            h = y1-y0
+            #print ("CHI", chi.shape, "B",B.shape, "Row",rowstart, "WxH",w, h, "Y0Y1X0X1",y0, y1, x0, x1)
             B[rowstart: rowstart + w*h] = chi.flat
             del chi
+        savetxt_cpu_append('cb1.txt', B)
 
         try:
             X,_,_,_ = lstsq(A, B, rcond=None)

@@ -46,7 +46,7 @@ class BatchImageDerivs(object):
         step = list of amixes.step
     ''' 
 
-    def __init__(self, amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi, sky, dx, dy):
+    def __init__(self, amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi, sky, dx, dy, fit_pos):
         t = time.time()
         self.Nimages = len(counts)
         N = len(amixes)
@@ -84,6 +84,7 @@ class BatchImageDerivs(object):
 
         self.dx = dx
         self.dy = dy
+        self.fit_pos = fit_pos
 
         #self.maxNmogs = IM.shape[1] 
         #self.maxNfft = IF.shape[1] 
@@ -274,7 +275,7 @@ class ImageDerivs(object):
         step = list of amixes.step
     '''
 
-    def __init__(self, amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi, sky, dx, dy):
+    def __init__(self, amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi, sky, dx, dy, fit_pos):
         N = len(amixes)
         #print ("IM", IM.shape, IM, IM.sum(axis=1))
         #print ("IF", IF.shape, IF, IF.sum(axis=1))
@@ -303,6 +304,7 @@ class ImageDerivs(object):
 
         self.dx = dx
         self.dy = dy
+        self.fit_pos = fit_pos
 
         if self.nmogs > 0:
             amp = np.zeros((N, nmogs))
@@ -397,6 +399,7 @@ class BatchImageParams(object):
 
         self.dx = None
         self.dy = None
+        self.fit_pos = None
 
     def add_image_deriv(self, imderiv):
         self.img_derivs.append(imderiv)
@@ -435,6 +438,7 @@ class BatchImageParams(object):
         self.sky = bimderiv.sky
         self.dx = bimderiv.dx
         self.dy = bimderiv.dy
+        self.fit_pos = bimderiv.fit_pos
         tb[0] += time.time()-t
         t = time.time()
 
@@ -476,7 +480,7 @@ class BatchImageParams(object):
         """
         #print ("Collected Params")
         #print (f'\t{self.maxNmogs=}, {self.maxNfft=}, {self.mux=}, {self.muy=}')
-        print ("TB", tb)
+        #print ("TB", tb)
 
 
     def collect_params(self):
@@ -484,6 +488,7 @@ class BatchImageParams(object):
         self._initialized = True
         self.mux = cp.asarray([[imderiv.mux]*self.maxNd for imderiv in self.img_derivs]).ravel()
         self.muy = cp.asarray([[imderiv.muy]*self.maxNd for imderiv in self.img_derivs]).ravel()
+        self.fit_pos = cp.asarray([imderiv.fit_pos for imderiv in self.img_derivs])
 
         self.pix = cp.zeros((self.Nimages, self.mh, self.mw), dtype = np.float32 )
         self.ie = cp.zeros_like(self.pix)
@@ -544,7 +549,7 @@ class BatchDerivs(object):
         step = list of amixes.step
     '''
 
-    def __init__(self, amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy):
+    def __init__(self, amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, fit_pos):
         N = len(amixes)
         ni = IM.sum()
         nf = IF.sum()
@@ -560,6 +565,7 @@ class BatchDerivs(object):
 
         self.mux = mux
         self.muy = muy
+        self.fit_pos = fit_pos
 
         if self.ni > 0:
             amp = np.zeros((N, ni))

@@ -20,10 +20,8 @@ from tractor.galaxy import print_ts
 tx = np.zeros(12)
 ty = np.zeros(4)
 tc = np.zeros(4, np.int32)
-tz = np.zeros(10)
-th = np.zeros(10)
-tg = np.zeros(10)
-
+tt = np.zeros(7)
+tct = np.zeros(7, np.int32)
 
 image_counter = 0
 #from astrometry.util.plotutils import PlotSequence
@@ -124,13 +122,17 @@ class FactoredOptimizer(object):
         # We can fit for image-based parameters (eg, sky level) and source-based parameters.
         # If image parameters are being fit, use the base code (eg in lsqr_optimizer.py)
         # to fit those, and prepend them to the results below.
+        tct[5] += 1
+        t = time.time()
         x_imgs = None
         image_thawed = tr.isParamThawed('images')
         if image_thawed:
+            tct[6] += 1
             cat_frozen = tr.isParamFrozen('catalog')
             if not cat_frozen:
                 tr.freezeParam('catalog')
             x_imgs = super().getLinearUpdateDirection(tr, **kwargs)
+            tt[6] += time.time()-t
             if not cat_frozen:
                 tr.thawParam('catalog')
             else:
@@ -140,6 +142,7 @@ class FactoredOptimizer(object):
             tr.freezeParam('images')
         #print('getLinearUpdateDirection( kwargs=', kwargs, ')')
         img_opts = self.getSingleImageUpdateDirections(tr, **kwargs)
+        tt[4] += time.time()-t
         if len(img_opts) == 0:
             if x_imgs is not None:
                 return x_imgs
@@ -152,12 +155,14 @@ class FactoredOptimizer(object):
             icsum = icsum + ic
         #C = np.linalg.inv(icsum)
         #x = np.dot(C, xicsum)
+        print (f'{icsum=} {xicsum=}')
         x,_,_,_ = np.linalg.lstsq(icsum, xicsum, rcond=None)
         if x_imgs is not None:
             x = np.append(x_imgs, x)
 
         if image_thawed:
             tr.thawParam('images')
+        tt[5] += time.time()-t
         return x
 
 from tractor.smarter_dense_optimizer import SmarterDenseOptimizer
@@ -168,68 +173,109 @@ class FactoredDenseOptimizer(FactoredOptimizer, SmarterDenseOptimizer):
 
 
 class GPUFriendlyOptimizer(FactoredDenseOptimizer):
+    _gpumode = 3
+
+    def setGPUMode(self, gpumode):
+        print ("Setting GPUMODE = ",gpumode)
+        #0 = run CPU only
+        #1 = run GPU only
+        #2 = run VECTORIZED only
+        #3 = run all
+        #10 = run CPU only - Profile only
+        #11 = run GPU only - Profile only
+        #12 = run VECTORIZED only - Profile only
+        #13 = run all - Profile only
+        self._gpumode = gpumode
+
+    def printTiming(self):
+        print ("Times:",tt,tct)
+
 
     def getSingleImageUpdateDirections(self, tr, **kwargs):
+        tct[4] += 1
+        print ("GPU getSingleImageUpdateDirections")
+        print ("profile galaxy", isinstance(tr.catalog[0], ProfileGalaxy))
         if not (tr.isParamFrozen('images') and
                 (len(tr.catalog) == 1) and
                 isinstance(tr.catalog[0], ProfileGalaxy)):
+            if self._gpumode >= 10:
+                print ("Skipping non-profile galaxy")
+                return []
+            print ("Running CPU version, frozen = ", tr.isParamFrozen('images'), "len = ", len(tr.catalog), " profile = ", isinstance(tr.catalog[0], ProfileGalaxy))
             #p = self.ps
             #self.ps = None
+            t = time.time()
             R = super().getSingleImageUpdateDirections(tr, **kwargs)
+            tt[0] += time.time()-t
+            tct[0] += 1
             #self.ps = p
             return R
 
-        print('Running GPU code...')
-        try:
+        if self._gpumode == 1 or self._gpumode == 3 or self._gpumode == 11 or self._gpumode == 13:
+            try:
+                print('Running GPU code...')
+                t = time.time()
+                R_gpu = self.gpuSingleImageUpdateDirections(tr, **kwargs)
+                tt[1] += time.time()-t
+                tct[1] += 1
+                print ("GPU time:",time.time()-t)
+                if self._gpumode == 1 or self._gpumode == 11:
+                    return R_gpu
+            except:
+                import traceback
+                print('Exception in GPU code:')
+                traceback.print_exc()
+ 
+                src = tr.catalog[0]
+                print('Source:', src)
+                print(repr(src))
+                f = open('bad.pickle','wb')
+                import pickle
+                pickle.dump(tr, f)
+                f.close()
+                #sys.exit(-1)
+
+        if self._gpumode == 2 or self._gpumode == 3 or self._gpumode == 12 or self._gpumode == 13:
+            try:
+                print ('Running VECTORIZED GPU code...')
+                tx[:] = 0
+                t = time.time()
+                R_gpuv = self.gpuSingleImageUpdateDirectionsVectorized(tr, **kwargs)
+                tt[2] += time.time()-t
+                tct[2] += 1
+                print ("GPU Vectorized time:", time.time()-t)
+                if self._gpumode == 2 or self._gpumode == 12:
+                    return R_gpuv
+            except:
+                import traceback
+                print('Exception in GPU Vectorized code:')
+                traceback.print_exc()
+
+                src = tr.catalog[0]
+                print('Source:', src)
+                print(repr(src))
+                f = open('bad.pickle','wb')
+                import pickle
+                pickle.dump(tr, f)
+                f.close()
+                #sys.exit(-1)
+
+        if self._gpumode == 0 or self._gpumode == 3 or self._gpumode == 10 or self._gpumode == 13:
+            print('Running CPU code for comparison...')
             t = time.time()
-            R_gpu = self.gpuSingleImageUpdateDirections(tr, **kwargs)
-            print ("GPU time:",time.time()-t)
-            # return R_gpu
-        except:
-            import traceback
-            print('Exception in GPU code:')
-            traceback.print_exc()
-
-            src = tr.catalog[0]
-            print('Source:', src)
-            print(repr(src))
-            f = open('bad.pickle','wb')
-            import pickle
-            pickle.dump(tr, f)
-            f.close()
-            sys.exit(-1)
-
-        print ('Running VECTORIZED GPU code...')
-        tx[:] = 0
-        try:
-            t = time.time()
-            R_gpuv = self.gpuSingleImageUpdateDirectionsVectorized(tr, **kwargs)
-            print ("GPU Vectorized time:", time.time()-t)
-            # return R_gpuv
-        except:
-            import traceback
-            print('Exception in GPU Vectorized code:')
-            traceback.print_exc()
-
-            src = tr.catalog[0]
-            print('Source:', src)
-            print(repr(src))
-            f = open('bad.pickle','wb')
-            import pickle
-            pickle.dump(tr, f)
-            f.close()
-            sys.exit(-1)
-
-        print('Running CPU code for comparison...')
-        t = time.time()
-        R_cpu = super().getSingleImageUpdateDirections(tr, **kwargs)
-        print ("CPU time", time.time()-t)
+            R_cpu = super().getSingleImageUpdateDirections(tr, **kwargs)
+            tt[3] += time.time()-t
+            tct[3] += 1
+            print ("CPU time", time.time()-t)
+            if self._gpumode == 0 or self._gpumode == 10:
+                return R_cpu
 
         xicacc_cpu = 0.
         icacc_cpu = 0.
         for x,ic in R_cpu:
             xicacc_cpu = xicacc_cpu + np.dot(ic, x)
             icacc_cpu = icacc_cpu + ic
+        print (f'{icacc_cpu=} {xicacc_cpu=}')
         x_cpu,_,_,_ = np.linalg.lstsq(icacc_cpu, xicacc_cpu, rcond=None)
             
         xicacc_gpu = 0.
@@ -237,6 +283,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         for x,ic in R_gpu:
             xicacc_gpu = xicacc_gpu + np.dot(ic, x)
             icacc_gpu = icacc_gpu + ic
+        print (f'{icacc_gpu=} {xicacc_gpu=}')
         x_gpu,_,_,_ = np.linalg.lstsq(icacc_gpu, xicacc_gpu, rcond=None)
 
         xicacc_gpuv = 0.
@@ -253,7 +300,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         sv = np.sum(x_gpu * x_gpuv) / np.sqrt(np.sum(x_gpu**2) * np.sum(x_gpuv**2))
         print('Similarity CPU/GPU:', s)
         print('Similarity GPU/V:', sv)
-        if s < 0.5:
+        print ("Times:",tt,tct)
+        if s < 0.99:
             src = tr.catalog[0]
             print('Source:', src)
             for i,((x_cpu,ic_cpu), (x_gpu,ic_gpu)) in enumerate(zip(R_cpu, R_gpu)):
@@ -261,7 +309,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 print('  GPU:', x_gpu)
                 s = np.sum(x_cpu * x_gpu) / np.sqrt(np.sum(x_cpu**2) * np.sum(x_gpu**2))
                 print('  similarity:', s)
-                if s < 0.9:
+                if s < 0.99:
                     tim = tr.images[i]
                     print('Tim:', tim)
                     f = open('bad2.pickle', 'wb')
@@ -274,7 +322,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
     def gpuSingleImageUpdateDirections(self, tr, **kwargs):
         
-        #print('Using GpuFriendly code')
+        print('Using GpuFriendly code')
         # Assume we're not fitting any of the image parameters.
         assert(tr.isParamFrozen('images'))
         # Assume no (varying) sky background levels
@@ -445,7 +493,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
             K = amix.var.shape[0]
             D = amix.var.shape[1]
-            img_derivs = ImageDerivs(amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi, sky, dxi, dyi)
+            # are we fitting for the position of this source?
+            fit_pos = (src.getPosition().numberOfParams() > 0)
+            img_derivs = ImageDerivs(amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi, sky, dxi, dyi, fit_pos)
             img_params.add_image_deriv(img_derivs)
             #Commented out print below
             #img_derivs.tostr()
@@ -475,13 +525,27 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             t1 = time.time()
             full_xic = []
             fullN = tr.numberOfParams()
+            # number of source position parameters
+            # - these would be RA and Dec, except for when we're fitting Gaia stars,
+            #   whose positions are assumed correct and not re-fit!
+            npos = src.getPosition().numberOfParams()
+            assert(npos in [0,2])
+            # The GPU-based fitting was done assuming 2 positions being fit
+            # (the coefficients are zeroed out, but the resulting arrays "x" below are still sized to
+            #  hold this many positional parameters)
+            npos_fit = 2
+            # fitting was done on a single band
+            nbands_fit = 1
             for iband,(x,ic) in zip(img_bands, Xic):
-                assert(fullN == len(x) + nbands - 1)
+                #assert(fullN == len(x) + nbands - 1)
+                # the "x" here are from fitting on a single image, *assuming* 2 positions are being fit
+                assert(fullN == len(x) + nbands - nbands_fit + npos - npos_fit)
                 x2 = cp.zeros(fullN, cp.float32)
                 ic2 = cp.zeros((fullN,fullN), cp.float32)
                 # source params are ordered: position, brightness, others
-                npos = 2
-                nothers = len(x)-3
+                #npos = 2
+                #nothers = len(x)-3
+                nothers = len(x) - npos_fit - nbands_fit
 
                 # Where aa is a block of npos elements
                 #       cc is a block of nothers elements
@@ -495,6 +559,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 #      [ C E F ]            [ B z D z E ]
                 #                           [ z z z z z ]
                 #                           [ C z E z F ]
+                # (note, sometimes npos=0, so then we have x2[:0] = x[:0], ie a no-op, but that's okay)
 
                 # aa
                 x2[:npos] = x[:npos]
@@ -531,6 +596,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 full_xic.append((x2.get(),ic2.get()))
             Xic = full_xic
             add_to_timer(2, time.time()-t1)
+        else:
+            print ("SKIPPING nbands branch - fullN=",fullN, "nbands=",nbands,"X",Xic[0][0])
 
         #
         #print('Calling original version...')
@@ -550,7 +617,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             self.ps = p
             return R
 
-        #print('Using GpuFriendly code')
+        print('Using GpuFriendly vectorized code')
         # Assume we're not fitting any of the image parameters.
         assert(tr.isParamFrozen('images'))
         # Assume no (varying) sky background levels
@@ -567,12 +634,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         src = tr.catalog[0]
         assert(isinstance(src, ProfileGalaxy))
         psfs = [tim.getPsf() for tim in tr.images]
-        th[0] += time.time()-t2
-        t1 = time.time()
         # Assume hybrid PSF model
         assert(all([isinstance(psf, HybridPSF) for psf in psfs]))
-        th[1] += time.time()-t1
-        t1 = time.time()
 
         # Assume ConstantSky models, grab constant sky levels
         # NOTE - instead of building this list and passing it around in ImageDerivs, etc,
@@ -582,13 +645,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # Assume model masks are set (ie, pixel ROIs of interest are defined)
         masks = [tr._getModelMaskByIdx(i, src) for i in range(len(tr.images))]
         #masks = [tr._getModelMaskFor(tim, src) for tim in tr.images]
-        th[2] += time.time()-t1
-        t1 = time.time()
         assert(all([m is not None for m in masks]))
 
         assert(src.isParamThawed('pos'))
-        th[3] += time.time()-t1
-        t1 = time.time()
 
         # FIXME -- must handle priors (ellipticity)!!
 
@@ -597,19 +656,13 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # Pixel positions
         pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
                for tim in tr.images]
-        th[4] += time.time()-t1
-        t1 = time.time()
         # WCS inv(CD) matrix
         img_cdi = [tim.getWcs().cdInverseAtPosition(src.getPosition(), src=src)
                    for tim in tr.images]
-        th[5] += time.time()-t1
-        t1 = time.time()
         # Current counts
         img_counts = [tim.getPhotoCal().brightnessToCounts(src.brightness)
                       for tim in tr.images]
-        th[6] += time.time()-t1
         add_to_timer(10, time.time()-t2)
-        t1 = time.time()
         bands = src.getBrightness().getParamNames()
         #print('Bands:', bands)
         img_bands = [bands.index(tim.getPhotoCal().band) for tim in tr.images]
@@ -647,8 +700,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         assert(P.shape == (Nimages,len(w),len(v)))
 
         img_params = BatchImageParams(P, v, w, batch_psf.psf_mogs)
-        tz[0] += time.time()-t1
-        t9 = time.time()
 
         #Not optimal but for now go back into loop
         mx0, mx1, my0, my1, mh, mw = np.array([(mm.x0, mm.x1, mm.y0, mm.y1)+mm.shape for mm in masks]).T
@@ -674,8 +725,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         padpix = np.zeros((Nimages, pH,pW), np.float32)
         padie  = np.zeros((Nimages, pH,pW), np.float32)
         assert(np.all(sy <= 0) and np.all(sx <= 0))
-        tg[0] += time.time()-t9
-        t9 = time.time()
 
         x_delta = np.ones(mx0.shape, np.int32)
         y_delta = np.ones(my0.shape, np.int32)
@@ -687,15 +736,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         for i, ie in enumerate(img_ie):
             #padie[i, -sy[i]-1:-sy[i]+mh[i], -sx[i]-1:-sx[i]+mw[i]] = ie[my0[i]-1:my1[i], mx0[i]-1:mx1[i]]
             padie[i, -sy[i]-y_delta[i]:-sy[i]+mh[i], -sx[i]-x_delta[i]:-sx[i]+mw[i]] = ie[my0[i]-y_delta[i]:my1[i], mx0[i]-x_delta[i]:mx1[i]]
-        tg[1] += time.time()-t9
-        t9 = time.time()
         roi = cp.asarray([-sx, -sy, mw, mh]).T
         mmpix = cp.asarray(padpix)
         mmie = cp.asarray(padie)
         sky = cp.asarray(img_sky)
         #print("SKY", sky.shape)
-        tg[2] += time.time()-t9
-        t9 = time.time()
 
         #print ("DX", dx.shape)
         #print ("MX0", mx0.shape)
@@ -707,8 +752,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         amix_gpu = getShearedProfileGPU(src, tr.images, px, py)
         amixes_gpu = getDerivativeShearedProfilesGPU(src, tr.images, px, py)
         amixes_gpu = [('current', amix_gpu, 0.)] + amixes_gpu
-        tg[3] += time.time()-t9
-        t9 = time.time()
 
         # Split "amix" into terms that we will evaluate using MoG vs FFT.
         # (we'll use that same split for the derivatives also)
@@ -729,8 +772,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         IM = ((pW/2)**2 < (nsigma2**2 * vv))
         IF = ((pW/2)**2 > (nsigma1**2 * vv))
         ramp = np.any(IM*IF)
-        tg[4] += time.time()-t9
-        t9 = time.time()
         #mogweights = cp.ones(Nimages, dtype=np.float32)
         #fftweights = cp.ones(Nimages, dtype=np.float32)
         mogweights = cp.ones(vv.shape, dtype=cp.float32)
@@ -749,18 +790,19 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         K = amix_gpu.var.shape[1]
         D = amix_gpu.var.shape[2]
-        tg[5] += time.time()-t9
-        t9 = time.time()
         mh = pH
         mw = pW
 
         #print ("amixes_gpu", type(amixes_gpu), type(IF), type(IM), type(K), type(D))
         #print ("mogweights", type(mogweights), type(fftweights), fftweights.shape, type(px), type(py), type(mux), type(muy))
         #print ("MH", type(mh), type(mw), type(counts), type(cdi), type(roi))
-        img_derivs = BatchImageDerivs(amixes_gpu, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi, sky, dxi, dyi)
+
+        # are we fitting for the position of this source?
+        fit_pos = np.asarray([(src.getPosition().numberOfParams() > 0)]*Nimages)
+
+        img_derivs = BatchImageDerivs(amixes_gpu, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi, sky, dxi, dyi, fit_pos)
         img_params.addBatchImageDerivs(img_derivs)
         #img_derivs.tostr()
-        tg[6] += time.time()-t9
 
         i = 0
         #print_ts()
@@ -792,16 +834,31 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         if nbands > 1:
             full_xic = []
             fullN = tr.numberOfParams()
+            # number of source position parameters
+            # - these would be RA and Dec, except for when we're fitting Gaia stars,
+            #   whose positions are assumed correct and not re-fit!
+            npos = src.getPosition().numberOfParams()
+            assert(npos in [0,2])
+            # The GPU-based fitting was done assuming 2 positions being fit
+            # (the coefficients are zeroed out, but the resulting arrays "x" below are still sized to
+            #  hold this many positional parameters)
+            npos_fit = 2
+            # fitting was done on a single band
+            nbands_fit = 1
             (X, Xicov) = Xic
             X = X.get()
             Xicov = Xicov.get()
             for iband,x,ic in zip(img_bands, X, Xicov):
-                assert(fullN == len(x) + nbands - 1)
+                #assert(fullN == len(x) + nbands - 1)
+                # the "x" here are from fitting on a single image, *assuming* 2 positions are being fit
+                assert(fullN == len(x) + nbands - nbands_fit + npos - npos_fit)
                 x2 = np.zeros(fullN, np.float32)
                 ic2 = np.zeros((fullN,fullN), np.float32)
                 # source params are ordered: position, brightness, others
-                npos = 2
-                nothers = len(x)-3
+                #npos = 2
+                #nothers = len(x)-3
+                print (f'{npos_fit=} {nbands_fit=} {npos=} {nbands=} {fullN=}')
+                nothers = len(x) - npos_fit - nbands_fit
 
                 # Where aa is a block of npos elements
                 #       cc is a block of nothers elements
@@ -815,6 +872,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 #      [ C E F ]            [ B z D z E ]
                 #                           [ z z z z z ]
                 #                           [ C z E z F ]
+                # (note, sometimes npos=0, so then we have x2[:0] = x[:0], ie a no-op, but that's okay)
 
                 # aa
                 x2[:npos] = x[:npos]
@@ -865,7 +923,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #print('Calling original version...')
         #sXic = super().getSingleImageUpdateDirections(tr, **kwargs)
 
-        print_timer()
+        #print_timer()
         return Xic
 
     def computeUpdateDirections(self, img_params, priorVals):
@@ -961,7 +1019,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         t1 = time.time()
         #Do Lanczos shift
         G = lanczos_shift_image_batch_gpu(G, img_params.mux, img_params.muy)
-        #cp.savetxt('gg.txt', G.ravel())
+        cp.savetxt('gg.txt', G.ravel())
         add_to_timer(6, time.time()-t1)
         del Fsum
         #G should be (nimages, maxNd, nw, nv) and mux and muy should be 1d vectors
@@ -1016,7 +1074,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             iv2 = conv_mog.var[:,:,:,0,0] / det
             scale = conv_mog.amp / (2.*cp.pi*cp.sqrt(det))
 
-            #print('conv_mog.mean shape:', conv_mog.mean.shape)
+            print('conv_mog.mean shape:', conv_mog.mean.shape)
             #print('xx shape:', xx.shape)
 
             #print('conv_mog.means:', conv_mog.mean)
@@ -1025,7 +1083,14 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # conv_mog.mean is, eg, (13 x 4 x 2 x 2)
             # (nimages x nderivs x nmog x 2), where the 2 is x,y coordinates.
             # BUT, it's really only (nimages x 2), the values for all the derivs and mogs are equal!
-            assert(np.all(conv_mog.mean[:, 0, 0, :][:,cp.newaxis,cp.newaxis,:] == conv_mog.mean))
+            print (conv_mog.mean[:, 0, 0, :][:,cp.newaxis,cp.newaxis,:].shape)
+            b1 = np.where(conv_mog.mean[:, 0, 0, :][:,cp.newaxis,cp.newaxis,:] != conv_mog.mean)
+            print ("B1", b1)
+            print (conv_mog.mean[:, 0, 0, :][:,cp.newaxis,cp.newaxis,:][b1])
+            print ("ORIG", conv_mog.mean[b1])
+
+            ###  TAG: ISSUE 2 4/9/25 - uncomment assert to see crash
+            #assert(np.all(conv_mog.mean[:, 0, 0, :][:,cp.newaxis,cp.newaxis,:] == conv_mog.mean))
             means = conv_mog.mean[:, 0, 0, :].copy()
             # now "means" is (nimages x 2)
 
@@ -1083,7 +1148,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # print('t2', t2.shape)
             # Sum over the nmog
             mog_g = cp.sum(scale[:,:,:,cp.newaxis,cp.newaxis] * cp.exp(-0.5*distsq), axis=2)
-            #cp.savetxt('gmogpatch.txt',mog_g.ravel())
+            cp.savetxt('gmogpatch.txt',mog_g.ravel())
             G += mog_g
 
         #Do no use roi since images are padded to be (mh, mw)
@@ -1109,15 +1174,21 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             roimask[i, ri[1]:ri[1]+ri[3], ri[0]:ri[0]+ri[2]] = 1
         ###############
 
+        # boolean vector, are we fitting for positions?
+        fit_pos = img_params.fit_pos
         # Shift this initial model image to get X,Y pixel derivatives
+        ###  TAG: ISSUE 1 4/9/25 - comment / uncomment dx and dy to toggle fit_pos 
         dx = cp.zeros_like(mod0)
         # dx is of shape (Nimages, nw, nv)
         # X derivative -- difference between shifted-left and shifted-right arrays
         dx[:,:,1:-1] = mod0[:,:, 2:] - mod0[:,:, :-2]
+        #dx[fit_pos,:,1:-1] = mod0[fit_pos,:, 2:] - mod0[fit_pos,:, :-2]
+        print ("FITPOS", fit_pos)
         # Y derivative -- difference between shifted-down and shifted-up arrays
         dy = cp.zeros_like(mod0)
         # dy is of shape (Nimages, nw, nv)
         dy[:,1:-1, :] = mod0[:,2:, :] - mod0[:,:-2, :]
+        #dy[fit_pos,1:-1, :] = mod0[fit_pos,2:, :] - mod0[fit_pos,:-2, :]
         # Push through local WCS transformation to get to RA,Dec param derivatives
         assert(cdi.shape == (img_params.Nimages,2,2))
 
@@ -1152,12 +1223,12 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         B = cp.zeros((img_params.Nimages, Npix + Npriors), cp.float32)
         B[:,:Npix] = ((img_params.pix - (img_params.counts[:,cp.newaxis, cp.newaxis]*mod0 + img_params.sky[:, cp.newaxis, cp.newaxis])) * img_params.ie).reshape((img_params.Nimages, Npix))
 
-        #cp.savetxt('mod0.txt', mod0.ravel())
-        #cp.savetxt("gmod.txt", (img_params.counts[:,cp.newaxis, cp.newaxis]*mod0 + img_params.sky[:, cp.newaxis, cp.newaxis]).ravel())
-        #cp.savetxt("gie.txt", img_params.ie.ravel())
-        #cp.savetxt("gpix.txt", img_params.pix.ravel())
-        #cp.savetxt("ga1.txt", A.ravel())
-        #cp.savetxt("gb1.txt", B.ravel())
+        cp.savetxt('mod0.txt', mod0.ravel())
+        cp.savetxt("gmod.txt", (img_params.counts[:,cp.newaxis, cp.newaxis]*mod0 + img_params.sky[:, cp.newaxis, cp.newaxis]).ravel())
+        cp.savetxt("gie.txt", img_params.ie.ravel())
+        cp.savetxt("gpix.txt", img_params.pix.ravel())
+        cp.savetxt("ga1.txt", A.ravel())
+        cp.savetxt("gb1.txt", B.ravel())
 
         # B should be of shape (Nimages, :)                           
         #B = cp.append(((pix - counts*mod0) * ie).ravel(),
@@ -1182,6 +1253,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         # Pre-scale the columns of A
         colscales = cp.sqrt(cp.diagonal(Xicov, axis1=1, axis2=2))
+        ###  TAG: ISSUE 1 4/9/25 - uncomment and move divide within block to get rid of NaNs 
+        #if fit_pos[0] is True:
         A /= colscales[:,cp.newaxis, :]
 
         # Solve the least-squares problem!
@@ -1243,7 +1316,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             self.ps.savefig()
 
         # Undo pre-scaling
+        ###  TAG: ISSUE 1 4/9/25 - uncomment and move divide within block to get rid of NaNs 
+        #if fit_pos[0] is True:
         X /= colscales
+        #else:
+        #    X[cp.isnan(X)] = 0
         # del A, B
         #Have to corectly make Xic a list of tuples
         for i in range(img_params.Nimages):
@@ -1435,7 +1512,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             print ("X2", X.shape, Xicov.shape)
         """
         add_to_timer(7, time.time()-t1)
-        print_timer()
+        #print_timer()
         return Xic
 
     def computeUpdateDirectionsVectorized(self, img_params, priorVals):
@@ -1599,7 +1676,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # conv_mog.mean is, eg, (13 x 4 x 2 x 2)
             # (nimages x nderivs x nmog x 2), where the 2 is x,y coordinates.
             # BUT, it's really only (nimages x 2), the values for all the derivs and mogs are equal!
-            assert(np.all(conv_mog.mean[:, 0, 0, :][:,cp.newaxis,cp.newaxis,:] == conv_mog.mean))
+            ###  TAG: ISSUE 2 4/9/25 - uncomment assert to see crash
+            #assert(np.all(conv_mog.mean[:, 0, 0, :][:,cp.newaxis,cp.newaxis,:] == conv_mog.mean))
             means = conv_mog.mean[:, 0, 0, :].copy()
             # now "means" is (nimages x 2)
 
@@ -1673,15 +1751,21 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #roimask[roi[1]:roi[1]+roi[3], roi[0]:roi[0]+roi[2]] = 1
         ###############
 
+        # boolean vector, are we fitting for positions?
+        fit_pos = img_params.fit_pos
+        print ("FITPOS V", fit_pos)
         # Shift this initial model image to get X,Y pixel derivatives
+        ###  TAG: ISSUE 1 4/9/25 - comment / uncomment dx and dy to toggle fit_pos 
         dx = cp.zeros_like(mod0)
         # dx is of shape (Nimages, nw, nv)
         # X derivative -- difference between shifted-left and shifted-right arrays
+        #dx[fit_pos,:,1:-1] = mod0[fit_pos,:, 2:] - mod0[fit_pos,:, :-2]
         dx[:,:,1:-1] = mod0[:,:, 2:] - mod0[:,:, :-2]
         # Y derivative -- difference between shifted-down and shifted-up arrays
         dy = cp.zeros_like(mod0)
         # dy is of shape (Nimages, nw, nv)
         dy[:,1:-1, :] = mod0[:,2:, :] - mod0[:,:-2, :]
+        #dy[fit_pos,1:-1, :] = mod0[fit_pos,2:, :] - mod0[fit_pos,:-2, :]
         # Push through local WCS transformation to get to RA,Dec param derivatives
         assert(cdi.shape == (img_params.Nimages,2,2))
 
@@ -1742,6 +1826,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         # Pre-scale the columns of A
         colscales = cp.sqrt(cp.diagonal(Xicov, axis1=1, axis2=2))
+        ###  TAG: ISSUE 1 4/9/25 - uncomment and move divide within block to get rid of NaNs 
+        #if fit_pos[0] is True:
         A /= colscales[:,cp.newaxis, :]
 
         # Solve the least-squares problem!
@@ -1749,10 +1835,17 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         A_T_dot_A = cp.einsum("...ji,...jk", A, A)
         A_T_dot_B = cp.einsum("...ji,...j", A, B)
         X = cp.linalg.solve(A_T_dot_A, A_T_dot_B)
+        print ("A", A)
+        print ("B", B)
+        print ("X", X)
         #X = cp.einsum("ijk,ik->ij", cp.linalg.pinv(A), B)
 
         # Undo pre-scaling
+        ###  TAG: ISSUE 1 4/9/25 - uncomment and move divide within block to get rid of NaNs 
+        #if fit_pos[0] is True:
         X /= colscales
+        #else:
+        #    X[cp.isnan(X)] = 0
         # del A, B
         #Have to corectly make Xic a list of tuples
         #for i in range(img_params.Nimages):
