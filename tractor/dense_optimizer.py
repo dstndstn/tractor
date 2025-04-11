@@ -113,7 +113,7 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
         Nrows = Npixels + Npriors
         if Nrows == 0:
             return []
-        #print('Allocating', Nrows, 'x', Ncols, 'matrix for update direction')
+        print('Allocating', Nrows, 'x', Ncols, 'matrix for update direction')
         A = np.zeros((Nrows, Ncols), np.float32)
         # 'B' holds the chi values
         B = np.zeros(Nrows, np.float32)
