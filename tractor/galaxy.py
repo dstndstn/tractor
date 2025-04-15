@@ -19,6 +19,7 @@ from tractor.utils import ParamList, MultiParams, ScalarParam, BaseParams
 from tractor.patch import Patch, add_patches, ModelMask
 from tractor.basics import SingleProfileSource, BasicSource
 import time
+from tractor.utils import savetxt_cpu_append
 ts1 = np.zeros(10)
 ts2 = np.zeros(10)
 ts3 = np.zeros(10)
@@ -537,10 +538,12 @@ class ProfileGalaxy(object):
             # pixelized PSFs.
             from tractor.psf import lanczos_shift_image
             G = G.astype(np.float32)
+            savetxt_cpu_append('cg.txt', G)
             if mux != 0.0 or muy != 0.0:
                 lanczos_shift_image(G, mux, muy, inplace=True)
         else:
             G = np.zeros((pH, pW), np.float32)
+        savetxt_cpu_append('cg2.txt', G)
 
         if modelMask is not None:
             gh, gw = G.shape
@@ -583,6 +586,7 @@ class ProfileGalaxy(object):
                 gh, gw = G.shape
                 mogpatch = run_mog(amix=mogmix, mm=ModelMask(ix0, iy0, gw, gh))
             assert(mogpatch.patch.shape == G.shape)
+            savetxt_cpu_append('cmogpatch.txt', mogpatch.patch)
             G += mogpatch.patch
 
         return Patch(ix0, iy0, G)

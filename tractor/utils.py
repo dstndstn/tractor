@@ -21,6 +21,13 @@ try:
 except:
     from total_ordering import total_ordering
 
+def savetxt_cpu_append(fname, obj):
+    print (fname, "SHAPE", obj.shape, obj.size)
+    f1 = open('shapes.txt', 'a')
+    f1.write(fname+' '+str(obj.shape)+'\n')
+    f1.close()
+    with open(fname, 'a') as f:
+        np.savetxt(f, obj.ravel())
 
 def get_class_from_name(objclass):
     try:
