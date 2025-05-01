@@ -167,6 +167,10 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
                     w = x1-x0
                     h = y1-y0
                     apix = (deriv.patch * inverrs[y0:y1, x0:x1])
+                    #print (f'{y0=} {y1=} {x0=} {x1=} {w=} {h=}')
+                    #savetxt_cpu_append('cderiv.txt', deriv.patch)
+                    #savetxt_cpu_append('cie2.txt', inverrs[y0:y1, x0:x1])
+                    #savetxt_cpu_append('apix.txt', apix)
                     ### HACK
                     # ii0,jj0 = np.nonzero(deriv.patch)
                     # ii1,jj1 = np.nonzero(inverrs[y0:y1, x0:x1])
@@ -204,7 +208,7 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
             if scale_columns:
                 colscales2[col] = scale2
         #print('colscales2:', colscales2)
-        savetxt_cpu_append('ca1.txt', A)
+        #savetxt_cpu_append('ca1.txt', A)
 
         if Npriors > 0:
             rA, cA, vA, pb, mub = priorVals
@@ -219,7 +223,8 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
                     A[Npixels + rij, col] = vij
                     B[Npixels + rij] += bij
             del priorVals, rA, cA, vA, pb, mub
-        savetxt_cpu_append('ca2.txt', A)
+        #savetxt_cpu_append('cap.txt', A)
+        #savetxt_cpu_append('cbp.txt', B)
 
         if scale_columns:
             for col,scale2 in enumerate(colscales2):
@@ -230,6 +235,7 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
                     colscales2[col] = 1.
             colscales = np.sqrt(colscales2)
             #print('colscales:', colscales)
+        #savetxt_cpu_append('ca2.txt', A)
 
         chimap = {}
         if chiImages is not None:
@@ -248,7 +254,7 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
             #print ("CHI", chi.shape, "B",B.shape, "Row",rowstart, "WxH",w, h, "Y0Y1X0X1",y0, y1, x0, x1)
             B[rowstart: rowstart + w*h] = chi.flat
             del chi
-        savetxt_cpu_append('cb1.txt', B)
+        #savetxt_cpu_append('cb1.txt', B)
 
         try:
             X,_,_,_ = lstsq(A, B, rcond=None)
@@ -262,6 +268,12 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
             print('A finite:', Counter(np.isfinite(A.ravel())))
             print('B finite:', Counter(np.isfinite(B.ravel())))
             return None
+        #print ("OUTPUT SHAPES CPU ", A.shape, B.shape, X.shape)
+        #print ("CA", A)
+        #print ("CB", B)
+        #print ("CX", X)
+        #savetxt_cpu_append('ca1.txt', A)
+        #savetxt_cpu_append('cb1.txt', B)
 
         if not get_A_matrix:
             del A
@@ -281,6 +293,7 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
         #print('X:', X)
         X_full = np.zeros(1+max(live_params))
         for c,i in column_map.items():
+            #print ("C", c, "I", i, X[i])
             X_full[c] = X[i]
         X = X_full
         #print('-> X', X)
