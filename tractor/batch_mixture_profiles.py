@@ -344,7 +344,7 @@ class ImageDerivs(object):
         for name,mix,step in amixes:
             self.names.append(name)
             self.steps.append(step)
-        self.steps = np.array(self.steps, dtype=np.float32)
+        self.steps = np.array(self.steps, dtype=np.float64)
 
     def tostr(self):
         print("****** ImageDerivs *****")
@@ -490,17 +490,17 @@ class BatchImageParams(object):
         self.muy = cp.asarray([[imderiv.muy]*self.maxNd for imderiv in self.img_derivs]).ravel()
         self.fit_pos = cp.asarray([imderiv.fit_pos for imderiv in self.img_derivs])
 
-        self.pix = cp.zeros((self.Nimages, self.mh, self.mw), dtype = np.float32 )
+        self.pix = cp.zeros((self.Nimages, self.mh, self.mw), dtype = cp.float64 )
         self.ie = cp.zeros_like(self.pix)
-        self.counts = cp.zeros(self.Nimages, dtype=np.float32)
-        self.cdi = np.zeros((self.Nimages, 2,2), dtype=np.float32)
+        self.counts = cp.zeros(self.Nimages, dtype=cp.float64)
+        self.cdi = np.zeros((self.Nimages, 2,2), dtype=np.float64)
         self.roi = np.zeros((self.Nimages, 4), dtype=np.int)
-        self.sky = cp.zeros(self.Nimages, dtype=np.float32)
-        self.steps = np.zeros((self.Nimages, self.maxNd), dtype=np.float32)
+        self.sky = cp.zeros(self.Nimages, dtype=cp.float64)
+        self.steps = np.zeros((self.Nimages, self.maxNd), dtype=np.float64)
 
         for i, imderiv in enumerate(self.img_derivs):
-            self.pix[i, :,:] = cp.pad(imderiv.mmpix, ((0, self.mh - imderiv.mmpix.shape[0]), (0, self.mw - imderiv.mmpix.shape[1])), mode='constant',constant_values=(cp.float32(0.0),))
-            self.ie[i, :,:] = cp.pad(imderiv.mmie, ((0, self.mh - imderiv.mmie.shape[0]), (0, self.mw - imderiv.mmie.shape[1])), mode='constant',constant_values=(cp.float32(0.0),))
+            self.pix[i, :,:] = cp.pad(imderiv.mmpix, ((0, self.mh - imderiv.mmpix.shape[0]), (0, self.mw - imderiv.mmpix.shape[1])), mode='constant',constant_values=(cp.float64(0.0),))
+            self.ie[i, :,:] = cp.pad(imderiv.mmie, ((0, self.mh - imderiv.mmie.shape[0]), (0, self.mw - imderiv.mmie.shape[1])), mode='constant',constant_values=(cp.float64(0.0),))
             self.counts[i] = imderiv.counts
             self.cdi[i] = imderiv.cdi
             self.roi[i] = np.asarray(imderiv.roi, dtype = np.int)

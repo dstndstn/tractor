@@ -16,6 +16,7 @@ import numpy as np
 from tractor.utils import MultiParams, _isint, get_class_from_name
 from tractor.patch import Patch, ModelMask
 from tractor.image import Image
+from tractor.utils import savetxt_cpu_append
 
 logger = logging.getLogger('tractor.engine')
 def logverb(*args):
@@ -465,6 +466,9 @@ class Tractor(MultiParams):
             img = self.getImage(imgi)
         mod = self.getModelImage(img, srcs=srcs, minsb=minsb, **kwargs)
         chi = (img.getImage() - mod) * img.getInvError()
+        #savetxt_cpu_append('cmod.txt', mod)
+        #savetxt_cpu_append('cie.txt', img.getInvError())
+        #savetxt_cpu_append('cpix.txt', img.getImage())
         if not np.all(np.isfinite(chi)):
             print('Chi not finite')
             print('Image finite?', np.all(np.isfinite(img.getImage())))

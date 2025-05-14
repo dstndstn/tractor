@@ -205,6 +205,10 @@ class Galaxy(MultiParams, SingleProfileSource):
                     dy[1:-1,:] = (p0[:-2, :] - p0[2:, :]) / 2.
                     patchdx = Patch(patch0.x0, patch0.y0, dx)
                     patchdy = Patch(patch0.x0, patch0.y0, dy)
+                #savetxt_cpu_append('cdx.txt', dx)
+                #savetxt_cpu_append('cdy.txt', dy)
+                #savetxt_cpu_append('cp0.txt', p0)
+                #savetxt_cpu_append('cpatch.txt', patch0.patch)
                 del dx, dy
                 derivs.extend(wcs.pixelDerivsToPositionDerivs(pos0, self, counts,
                                                               patch0, patchdx, patchdy))
@@ -221,8 +225,10 @@ class Galaxy(MultiParams, SingleProfileSource):
                 if countsi == counts:
                     df = None
                 else:
+                    #print (f'{bstep=} {countsi=} {counts=}')
                     df = patch0 * ((countsi - counts) / bstep)
                     df.setName('d(%s)/d(bright%i)' % (self.dname, i))
+                    #savetxt_cpu_append('cdf.txt', df.patch)
                 derivs.append(df)
 
         # derivatives wrt shape
@@ -248,9 +254,13 @@ class Galaxy(MultiParams, SingleProfileSource):
                     print('  to', self.shape.getParams()[i])
                     derivs.append(None)
                     continue
+                #print (f'{counts=} {gstep=}')
                 dx = (patchx - patch0) * (counts / gstep)
                 dx.setName('d(%s)/d(%s)' % (self.dname, gnames[i]))
                 derivs.append(dx)
+                #savetxt_cpu_append('cdx3.txt', dx.patch)
+                #savetxt_cpu_append('cpatchx3.txt', patchx.patch)
+                #savetxt_cpu_append('cpatch03.txt', patch0.patch)
         return derivs
 
 
@@ -437,6 +447,7 @@ class ProfileGalaxy(object):
                 # print('Recursing:', self, ':', (mh,mw), 'to', (bigh,bigw))
                 bigmodel = self._realGetUnitFluxModelPatch(
                     img, px, py, minval, modelMask=bigMask)
+                #print ("PATCH")
                 return Patch(x0, y0,
                              bigmodel.patch[boffy:boffy + mh, boffx:boffx + mw])
 
@@ -538,12 +549,12 @@ class ProfileGalaxy(object):
             # pixelized PSFs.
             from tractor.psf import lanczos_shift_image
             G = G.astype(np.float32)
-            savetxt_cpu_append('cg.txt', G)
+            #savetxt_cpu_append('cg.txt', G)
             if mux != 0.0 or muy != 0.0:
                 lanczos_shift_image(G, mux, muy, inplace=True)
         else:
             G = np.zeros((pH, pW), np.float32)
-        savetxt_cpu_append('cg2.txt', G)
+        #savetxt_cpu_append('cg.txt', G)
 
         if modelMask is not None:
             gh, gw = G.shape
@@ -586,8 +597,9 @@ class ProfileGalaxy(object):
                 gh, gw = G.shape
                 mogpatch = run_mog(amix=mogmix, mm=ModelMask(ix0, iy0, gw, gh))
             assert(mogpatch.patch.shape == G.shape)
-            savetxt_cpu_append('cmogpatch.txt', mogpatch.patch)
+            #savetxt_cpu_append('cmogpatch.txt', mogpatch.patch)
             G += mogpatch.patch
+        #savetxt_cpu_append('cg2.txt', G)
 
         return Patch(ix0, iy0, G)
 
