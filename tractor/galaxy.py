@@ -23,6 +23,7 @@ from tractor.utils import savetxt_cpu_append
 ts1 = np.zeros(10)
 ts2 = np.zeros(10)
 ts3 = np.zeros(10)
+ct2 = np.zeros(2, dtype=np.int32)
 
 debug_ps = None
 
@@ -311,6 +312,8 @@ class ProfileGalaxy(object):
                                    outer_real_nsigma = 4.,
                                    force_halfsize=None,
                                    **kwargs):
+        ct2[1] += 1
+        #print ("CT2:",ct2)
         from astrometry.util.miscutils import get_overlapping_region
         if modelMask is not None:
             x0, y0 = modelMask.x0, modelMask.y0
@@ -399,9 +402,17 @@ class ProfileGalaxy(object):
             #print('Halfsize:', halfsize)
             if force_halfsize is not None:
                 halfsize = force_halfsize
+            #if not hasattr(img, 'halfsize'):
+            #    img.halfsize = halfsize
+            #elif int(np.ceil(np.log2(halfsize))) < int(np.ceil(np.log2(img.halfsize))):
+            #    print (f'Adjusting halfsize from {halfsize=} to {img.halfsize=}')
+            #    halfsize = img.halfsize
+            #halfsize += 1
             # is the source center outside the modelMask?
             sourceOut = (px < x0 or px > x1 - 1 or py < y0 or py > y1 - 1)
+            #print (f'{px=} {x0=} {x1=} {py=} {y0=} {y1=} {sourceOut=}')
             # print('mh,mw', mh,mw, 'sourceout?', sourceOut)
+            sourceOut = False
 
             if sourceOut:
                 if hybrid:
@@ -451,7 +462,9 @@ class ProfileGalaxy(object):
                 return Patch(x0, y0,
                              bigmodel.patch[boffy:boffy + mh, boffx:boffx + mw])
 
-        # print('Getting Fourier transform of PSF at', px,py)
+        #print('Getting Fourier transform of PSF at', px,py)
+        #print(type(psf))
+        #print (psf.getFourierTransform)
         # print('Tim shape:', img.shape)
         P, (cx, cy), (pH, pW), (v, w) = psf.getFourierTransform(px, py, halfsize)
 
@@ -484,6 +497,7 @@ class ProfileGalaxy(object):
         assert(np.abs(muy) <= 0.5)
 
         amix = self._getShearedProfile(img, px, py)
+        #print ("CPU AMIX", amix.var, amix.var.shape)
         fftmix = amix
         mogmix = None
 
@@ -499,15 +513,24 @@ class ProfileGalaxy(object):
             # patch, how many sigmas out are we?  If small (ie, the
             # edge still has a significant fraction of the flux),
             # render w/ MoG.
+            #pold = pW
+            #pW = 128
             IM = ((pW/2)**2 < (nsigma2**2 * vv))
             IF = ((pW/2)**2 > (nsigma1**2 * vv))
+            #print ("pW", pW, "N1", nsigma1)
+            #print ("vv", vv, vv.shape)
+            #pW = pold
             #print('Evaluating', np.sum(IM), 'terms as MoG,', np.sum(IF), 'with FFT,',
             #      np.sum(IM) + np.sum(IF) - len(IM), 'with both')
             #print('  sizes vs PSF size', pW, ':', ', '.join(['%.3g' % s for s in np.sqrt(vv)]))
             ramp = np.any(IM*IF)
 
             if np.any(IM):
+                #print ("CMOG AMP", amix.amp)
+                #print ("CMOG VAR", amix.var)
+                #print ("CMOG MEAN", amix.mean)
                 amps = amix.amp[IM]
+                #print ("IM", IM, IM.sum())
                 if ramp:
                     ns = (pW/2) / np.maximum(1e-6, np.sqrt(vv))
                     mogweights = np.minimum(1., (nsigma2 - ns[IM]) / (nsigma2 - nsigma1))
@@ -522,7 +545,11 @@ class ProfileGalaxy(object):
                                                amix.var[IM, :, :], quick=True)
 
             if np.any(IF):
+                #print ("CFFT AMP", amix.amp)
+                #print ("CFFT VAR", amix.var)
+                #print ("CFFT MEAN", amix.mean)
                 amps = amix.amp[IF]
+                #print ("IF", IF, IF.sum())
                 if ramp:
                     amps *= fftweights
                 fftmix = mp.MixtureOfGaussians(amps, amix.mean[IF, :], amix.var[IF, :, :],
@@ -533,11 +560,14 @@ class ProfileGalaxy(object):
         if fftmix is not None:
             #print('Evaluating FFT mixture:', len(fftmix.amp), 'components in size', pH,pW)
             #print('Amps:', fftmix.amp)
+            #print ("FFTMIX")
             Fsum = fftmix.getFourierTransform(v, w, zero_mean=True)
             # In Intel's mkl_fft library, the irfftn code path is faster than irfft2
             # (the irfft2 version sets args (to their default values) which triggers padding
             #  behavior, changing the FFT size and copying behavior)
             #G = np.fft.irfft2(Fsum * P, s=(pH, pW))
+            #savetxt_cpu_append('cfsum.txt', Fsum)
+            #savetxt_cpu_append('cp.txt', P)
             G = np.fft.irfftn(Fsum * P)
 
             assert(G.shape == (pH,pW))
@@ -1188,6 +1218,8 @@ class CompositeGalaxy(MultiParams, BasicSource):
         return (pe, pd)
 
     def getModelPatch(self, img, minsb=0., modelMask=None, **kwargs):
+        ct2[0] += 1
+        #print ("CT2:",ct2)
         pe, pd = self._getModelPatches(img, minsb=minsb, modelMask=modelMask,
                                        **kwargs)
         return add_patches(pe, pd)

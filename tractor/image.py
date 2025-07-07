@@ -163,6 +163,10 @@ class Image(MultiParams):
     def getInvError(self):
         return self.inverr
 
+    def getInvErrorGPU(self):
+        import cupy as cp
+        return cp.asarray(self.inverr)
+
     def getInvvar(self):
         return self.inverr**2
 

@@ -51,6 +51,7 @@ class CeresOptimizer(Optimizer):
         return chisq0 - chisq1, None, 1
 
     def optimize_loop(self, tractor, **kwargs):
+        print ("CERES OPTIMIZER")
         X = self._ceres_opt(tractor, **kwargs)
         return X
 

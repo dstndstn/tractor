@@ -116,6 +116,7 @@ class DieselEngine(object):
         return allderivs
 
     def tryUpdates(self, X, alphas=None):
+        print ("DIESEL")
         if alphas is None:
             # 1/1024 to 1 in factors of 2, + sqrt(2.) + 2.
             alphas = np.append(2.**np.arange(-10, 1), [np.sqrt(2.), 2.])

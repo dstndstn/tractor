@@ -232,6 +232,10 @@ class Patch(object):
     def getImage(self):
         return self.patch
 
+    def getImageGPU(self):
+        import cupy as cp
+        return cp.asarray(self.patch)
+
     def getX0(self):
         return self.x0
 
@@ -327,6 +331,10 @@ class Patch(object):
         if inx == [] or iny == []:
             return (slice(0, 0), slice(0, 0)), (slice(0, 0), slice(0, 0))
         return (iny, inx), (outy, outx)
+
+    def getPixelIndicesGPU(self, parent, dtype=np.int32):
+        import cupy as cp
+        return cp.asarray(self.getPixelIndices(parent, dtype))
 
     def getPixelIndices(self, parent, dtype=np.int32):
         if self.patch is None:
