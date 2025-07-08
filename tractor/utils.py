@@ -13,6 +13,7 @@ could be useful outside the Tractor context.
 """
 from __future__ import print_function
 import numpy as np
+import os
 
 try:
     # New in python 2.7
@@ -28,6 +29,10 @@ def savetxt_cpu_append(fname, obj):
     f1.close()
     with open(fname, 'a') as f:
         np.savetxt(f, obj.ravel())
+    #j = 0
+    #while (os.access(fname+'.'+str(j), os.F_OK)):
+    #    j += 1
+    #np.savetxt(fname+'.'+str(j), obj)
 
 def get_class_from_name(objclass):
     try:
@@ -1137,6 +1142,10 @@ class MultiParams(BaseParams, NamedParams):
         '''
         return sum(s.numberOfParams() for s in self._getActiveSubs())
 
+    def getParamsGPU(self):
+        import cupy as cp
+        return cp.asarray(self.getParams())
+
     def getParams(self):
         '''
         Returns a *copy* of the current active parameter values (as a flat list)
@@ -1164,6 +1173,10 @@ class MultiParams(BaseParams, NamedParams):
             n = s.numberOfParams()
             s.setAllParams(p[i:i + n])
             i += n
+
+    def setParamsGPU(self, p):
+        import cupy as cp
+        self.setParams(p.get())
 
     def setParams(self, p):
         i = 0
@@ -1241,6 +1254,14 @@ class MultiParams(BaseParams, NamedParams):
         for s in self._getActiveSubs():
             lnp += s.getLogPrior()
         return lnp
+
+    def getLogPriorDerivativesGPU(self):
+        pd = self.getLogPriorDerivatives()
+        if pd is None:
+            return pd
+        import cupy as cp
+        rA, cA, vA, pb, mub = pd
+        return cp.asarray(rA), cp.asarray(cA), cp.asarray(vA), cp.asarray(pb), cp.asarray(mub)
 
     def getLogPriorDerivatives(self):
         """

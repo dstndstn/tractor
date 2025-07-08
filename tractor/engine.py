@@ -18,6 +18,14 @@ from tractor.patch import Patch, ModelMask
 from tractor.image import Image
 from tractor.utils import savetxt_cpu_append
 
+import time
+td = np.zeros(2)
+tl = np.zeros(6)
+gtl = np.zeros(6)
+cl = np.zeros(4, dtype=np.int32)
+gcl = np.zeros(4, dtype=np.int32)
+gi = np.zeros(6)
+
 logger = logging.getLogger('tractor.engine')
 def logverb(*args):
     if logger.isEnabledFor(logging.DEBUG):
@@ -118,6 +126,7 @@ class Tractor(MultiParams):
         - `images:` list of Image objects (data)
         - `catalog:` list of Source objects
         '''
+        self.blobid = None
         if images is None:
             images = []
         if catalog is None:
@@ -177,6 +186,9 @@ class Tractor(MultiParams):
              self.expectModelMasks, self.optimizer) = state
         self.subs = [images, catalog]
 
+    def printDerivTiming(self):
+        print ("TDeriv:", td)
+
     def getNImages(self):
         return len(self.images)
 
@@ -186,8 +198,15 @@ class Tractor(MultiParams):
     def getImages(self):
         return self.images
 
+    def getImagesGPU(self):
+        import cupy as cp
+        return [cp.asarray(im) for im in self.images]
+
     def getCatalog(self):
         return self.catalog
+
+    def setBlobid(self, blobid):
+        self.blobid = blobid
 
     def setCatalog(self, srcs):
         # FIXME -- ensure that "srcs" is a Catalog?  Or duck-type it?
@@ -275,6 +294,7 @@ class Tractor(MultiParams):
         '''
         kw = self.model_kwargs.copy()
         kw.update(kwargs)
+        #print ("OPTIMIZER = ", self.optimizer, self.optimizer.optimize_loop)
         return self.optimizer.optimize_loop(self, **kw)
 
     def getDerivs(self, **kwargs):
@@ -292,6 +312,7 @@ class Tractor(MultiParams):
         Where the *derivs* are *Patch* objects and *imgs* are *Image*
         objects.
         '''
+        t = time.time()
         allderivs = []
 
         if self.isParamFrozen('catalog'):
@@ -303,10 +324,12 @@ class Tractor(MultiParams):
 
         kw = self.model_kwargs.copy()
         kw.update(kwargs)
+        #print ("TEST1")
 
         if not self.isParamFrozen('images'):
             for i in self.images.getThawedParamIndices():
                 img = self.images[i]
+                #print ("IMG", img)
                 derivs = img.getParamDerivatives(self, allsrcs, **kw)
                 mod0 = None
                 for di, deriv in enumerate(derivs):
@@ -324,9 +347,11 @@ class Tractor(MultiParams):
                     allderivs.append([(deriv, img)])
                 del mod0
 
+        #print ("TEST2")
         for src in srcs:
             srcderivs = [[] for i in range(src.numberOfParams())]
             for img in self.images:
+                #print ("IMG2", img)
                 derivs = self._getSourceDerivatives(src, img, **kwargs)
                 for k, deriv in enumerate(derivs):
                     if deriv is None:
@@ -335,6 +360,7 @@ class Tractor(MultiParams):
             allderivs.extend(srcderivs)
         #print('allderivs:', len(allderivs))
         #print('N params:', self.numberOfParams())
+        td[0] += time.time()-t
 
         assert(len(allderivs) == self.numberOfParams())
         return allderivs
@@ -401,6 +427,7 @@ class Tractor(MultiParams):
         # HACK! -- assume no modelMask -> no overlap
         if self.expectModelMasks and mask is None:
             return [None] * src.numberOfParams()
+        #print ("D1", src.getParamDerivatives)
         derivs = src.getParamDerivatives(img, modelMask=mask, **kwargs)
 
         # HACK -- auto-add?
@@ -427,7 +454,9 @@ class Tractor(MultiParams):
             return None
         kw = self.model_kwargs.copy()
         kw.update(kwargs)
+        t = time.time()
         mod = src.getModelPatch(img, modelMask=mask, **kw)
+        gi[3] += time.time()-t
         return mod
 
     def getModelImage(self, img, srcs=None, sky=True, minsb=None, **kwargs):
@@ -437,13 +466,18 @@ class Tractor(MultiParams):
         then only those sources will be rendered into the image.
         Otherwise, the whole catalog will be.
         '''
+        t = time.time()
         if _isint(img):
             img = self.getImage(img)
         mod = np.zeros(img.getModelShape(), self.modtype)
+        gi[0] += time.time()-t
+        t = time.time()
         if sky:
             img.getSky().addTo(mod)
         if srcs is None:
             srcs = self.catalog
+        gi[1] += time.time()-t
+        t = time.time()
         for src in srcs:
             if src is None:
                 continue
@@ -451,21 +485,42 @@ class Tractor(MultiParams):
             if patch is None:
                 continue
             patch.addTo(mod)
+        gi[2] += time.time()-t
         return mod
 
     def getModelImages(self, **kwargs):
         for img in self.images:
             yield self.getModelImage(img, **kwargs)
 
+    def getChiImagesGPU(self, **kwargs):
+        for img in self.images:
+            yield self.getChiImageGPU(img=img, **kwargs)
+
     def getChiImages(self, **kwargs):
         for img in self.images:
             yield self.getChiImage(img=img, **kwargs)
 
+    def getChiImageGPU(self, imgi=-1, img=None, srcs=None, minsb=0., **kwargs):
+        import cupy as cp
+        gcl[2] += 1
+        t = time.time()
+        gi = cp.asarray(self.getChiImage(imgi, img, srcs, minsb, **kwargs))
+        gtl[0] += time.time()-t
+        #return cp.asarray(self.getChiImage(imgi, img, srcs, minsb, **kwargs))
+        return gi
+
     def getChiImage(self, imgi=-1, img=None, srcs=None, minsb=0., **kwargs):
+        cl[2] += 1
+        t = time.time()
         if img is None:
             img = self.getImage(imgi)
+        tl[0] += time.time()-t
+        t = time.time()
         mod = self.getModelImage(img, srcs=srcs, minsb=minsb, **kwargs)
+        tl[4] += time.time()-t
+        t = time.time()
         chi = (img.getImage() - mod) * img.getInvError()
+        tl[5] += time.time()-t
         #savetxt_cpu_append('cmod.txt', mod)
         #savetxt_cpu_append('cie.txt', img.getInvError())
         #savetxt_cpu_append('cpix.txt', img.getImage())
@@ -484,20 +539,63 @@ class Tractor(MultiParams):
             print('psf:', img.getPsf())
         return chi
 
+    def getLogLikelihoodGPU(self, **kwargs):
+        chisq = 0.
+        for i, chi in enumerate(self.getChiImagesGPU(**kwargs)):
+            gcl[1] += 1
+            t = time.time()
+            chisq += (chi.astype(float) ** 2).sum()
+            gtl[1] += time.time()-t
+        return -0.5 * chisq
+
     def getLogLikelihood(self, **kwargs):
         chisq = 0.
         for i, chi in enumerate(self.getChiImages(**kwargs)):
+            cl[1] += 1
+            t = time.time()
             chisq += (chi.astype(float) ** 2).sum()
+            tl[1] += time.time()-t
         return -0.5 * chisq
+
+    def getLogProbGPU(self, **kwargs):
+        '''
+        Return the posterior log PDF, evaluated at the current parameters.
+        '''
+        import cupy as cp
+        gcl[0]+=1
+        t = time.time()
+        lnprior = self.getLogPrior()
+        gtl[2] += time.time()-t
+        if lnprior == -np.inf:
+            return lnprior
+        t = time.time()
+        lnl = self.getLogLikelihoodGPU(**kwargs)
+        gtl[3] += time.time()-t
+        #print ("GTL:", gtl, gcl, cl, "GI:", gi)
+        lnp = lnprior + lnl
+        if cp.isnan(lnp):
+            print('Tractor.getLogProb() returning NaN.')
+            print('Params:')
+            self.printThawedParams()
+            print('log likelihood:', lnl)
+            print('log prior:', lnprior)
+            return -np.inf
+        return lnp
 
     def getLogProb(self, **kwargs):
         '''
         Return the posterior log PDF, evaluated at the current parameters.
         '''
+        cl[0] += 1
+        t = time.time()
         lnprior = self.getLogPrior()
+        tl[2] += time.time()-t
         if lnprior == -np.inf:
             return lnprior
+        t = time.time()
         lnl = self.getLogLikelihood(**kwargs)
+        tl[3] += time.time()-t
+        #print ("TL:", tl, gcl, cl, "GI", gi)
         lnp = lnprior + lnl
         if np.isnan(lnp):
             print('Tractor.getLogProb() returning NaN.')

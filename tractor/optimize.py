@@ -423,6 +423,7 @@ class Optimizer(object):
         return IV
 
     def tryUpdates(self, tractor, X, alphas=None):
+        #print ("ORIG UPDATES")
         if alphas is None:
             # 1/1024 to 1 in factors of 2, + sqrt(2.) + 2.
             alphas = np.append(2.**np.arange(-10, 1), [np.sqrt(2.), 2.])

@@ -1,6 +1,10 @@
 from __future__ import print_function
 from tractor.lsqr_optimizer import LsqrOptimizer
 import numpy as np
+import time
+
+dt = np.zeros(5)
+tu = np.zeros(5)
 
 logverb = print
 logmsg  = print
@@ -10,6 +14,9 @@ class ConstrainedOptimizer(LsqrOptimizer):
     def __init__(self, *args, **kwargs):
         super(ConstrainedOptimizer, self).__init__(*args, **kwargs)
         self.stepLimited = False
+
+    def printTiming(self):
+        print ("DTimes:", dt)
     
     def optimize_loop(self, tractor, dchisq=0., steps=50,
                       dchisq_limited=1e-6, **kwargs):
@@ -17,6 +24,8 @@ class ConstrainedOptimizer(LsqrOptimizer):
         # print('Optimize_loop:')
         # for s in tractor.catalog:
         #     print(s)
+        #print ("Constrained OPTIMIZE")
+        t = time.time()
         R = {}
         self.hit_limit = False
         self.last_step_hit_limit = False
@@ -33,12 +42,18 @@ class ConstrainedOptimizer(LsqrOptimizer):
                 break
             if self.stepLimited and dlnp <= dchisq_limited:
                 break
+        dt[2] += time.time()-t
         R.update(steps=step)
         R.update(hit_limit=self.last_step_hit_limit,
                  ever_hit_limit=self.hit_limit)
+        dt[3] += time.time()-t
+        #print ("DTimes:", dt)
+        #self.printTiming()
         return R
 
     def tryUpdates(self, tractor, X, alphas=None):
+        t = time.time()
+        t0 = time.time()
         #print('Trying parameter updates:', X)
         if alphas is None:
             # 1/1024 to 1 in factors of 2, + sqrt(2.) + 2.
@@ -49,6 +64,8 @@ class ConstrainedOptimizer(LsqrOptimizer):
         pBest = pBefore
         alphaBest = None
         p0 = tractor.getParams()
+        tu[0] += time.time()-t
+        t = time.time()
 
         lowers = tractor.getLowerBounds()
         uppers = tractor.getUpperBounds()
@@ -58,8 +75,11 @@ class ConstrainedOptimizer(LsqrOptimizer):
 
         maxsteps = tractor.getMaxStep()
         #print('Max step sizes:', maxsteps)
+        #print ("updates - ",len(alphas), len(lowers))
+        tu[1] += time.time()-t
 
         for alpha in alphas:
+            t = time.time()
             #print('Stepping with alpha =', alpha)
             #logverb('  Stepping with alpha =', alpha)
             pa = [p + alpha * d for p, d in zip(p0, X)]
@@ -101,6 +121,8 @@ class ConstrainedOptimizer(LsqrOptimizer):
                 self.hit_limit = True
                 break
 
+            tu[2] += time.time()-t
+            t = time.time()
             # Check parameter step-size limits
             for i,(d,m) in enumerate(zip(X, maxsteps)):
                 if m is None:
@@ -112,6 +134,8 @@ class ConstrainedOptimizer(LsqrOptimizer):
                     #       X[i]*alpha, 'would exceed max step', m, '; max alpha', a)
                     maxalpha = min(maxalpha, a)
                     #print('Limiting step size for param max-step: param', i, 'max-step', m, 'step size->', a)
+            tu[3] += time.time()-t
+            t = time.time()
 
             if maxalpha < alpha:
                 alpha = maxalpha
@@ -146,6 +170,7 @@ class ConstrainedOptimizer(LsqrOptimizer):
             #logverb('  delta log-prob:', pAfter - pBefore)
 
             #print('Step', alpha, 'p', pAfter, 'dlnp', pAfter-pBefore)
+            tu[4] += time.time()-t
 
             if not np.isfinite(pAfter):
                 logmsg('  Got bad log-prob', pAfter)
@@ -181,4 +206,6 @@ class ConstrainedOptimizer(LsqrOptimizer):
         #    print(s)
         pa = [p + alphaBest * d for p, d in zip(p0, X)]
         tractor.setParams(pa)
+        dt[0] += time.time()-t0
+        #print ("DTimesx:", dt, tu, tu.sum())
         return pBest - pBefore, alphaBest
