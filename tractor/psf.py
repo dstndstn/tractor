@@ -15,6 +15,7 @@ from tractor.patch import Patch
 from tractor.utils import BaseParams, ParamList, MultiParams, MogParams
 from tractor import mixture_profiles as mp
 from tractor import ducks
+from tractor.utils import savetxt_cpu_append
 
 if sys.version_info[0] == 2:
     # Py2
@@ -73,6 +74,52 @@ def lanczos_shift_image_batch_gpu(imgs, dxs, dys):
     sx = batch_correlate1d_gpu(imgs, Lx, axis=2, mode='constant')
     outimg = batch_correlate1d_gpu(sx, Ly, axis=1, mode='constant')
     return outimg
+
+def get_overlapping_region(xlo, xhi, xmin, xmax):
+    '''
+    Given a range of integer coordinates that you want to, eg, cut out
+    of an image, [xlo, xhi], and bounds for the image [xmin, xmax],
+    returns the range of coordinates that are in-bounds, and the
+    corresponding region within the desired cutout.
+
+    For example, say you have an image of shape H,W and you want to
+    cut out a region of halfsize "hs" around pixel coordinate x,y, but
+    so that coordinate x,y is centered in the cutout even if x,y is
+    close to the edge.  You can do:
+
+    cutout = np.zeros((hs*2+1, hs*2+1), img.dtype)
+    iny,outy = get_overlapping_region(y-hs, y+hs, 0, H-1)
+    inx,outx = get_overlapping_region(x-hs, x+hs, 0, W-1)
+    cutout[outy,outx] = img[iny,inx]
+
+    '''
+    if xlo > xmax or xhi < xmin or xlo > xhi or xmin > xmax:
+        return ([], [])
+
+    assert(xlo <= xhi)
+    assert(xmin <= xmax)
+
+    xloclamp = max(xlo, xmin)
+    Xlo = xloclamp - xlo
+
+    xhiclamp = min(xhi, xmax)
+    Xhi = Xlo + (xhiclamp - xloclamp)
+
+    #print 'xlo, xloclamp, xhiclamp, xhi', xlo, xloclamp, xhiclamp, xhi
+    assert(xloclamp >= xlo)
+    assert(xloclamp >= xmin)
+    assert(xloclamp <= xmax)
+    assert(xhiclamp <= xhi)
+    assert(xhiclamp >= xmin)
+    assert(xhiclamp <= xmax)
+    #print 'Xlo, Xhi, (xmax-xmin)', Xlo, Xhi, xmax-xmin
+    assert(Xlo >= 0)
+    assert(Xhi >= 0)
+    assert(Xlo <= (xhi-xlo))
+    assert(Xhi <= (xhi-xlo))
+
+    return (slice(xloclamp, xhiclamp+1), slice(Xlo, Xhi+1))
+
 
 # GLOBAL scratch array for lanczos_shift_image!
 work_corr7f = np.zeros((4096, 4096), np.float32)
@@ -153,6 +200,7 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
 
     def getPointSourcePatch(self, px, py, minval=0., modelMask=None,
                             radius=None, **kwargs):
+        #print ("getPointSourcePatch1", self)
         if self.sampling != 1.:
             return self._getOversampledPointSourcePatch(px, py, minval=minval,
                                                         modelMask=modelMask,
@@ -162,6 +210,7 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
 
         # get PSF image at desired pixel location
         img = self.getImage(px, py)
+        #print (f'{px=} {py=} {radius=} {minval=}')
 
         if radius is not None:
             R = int(np.ceil(radius))
@@ -172,6 +221,7 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
                       max(cx-R, 0) : min(cx+R+1,W-1)]
             
         H, W = img.shape
+        #print (f'{H=} {W=}')
         # float() required because builtin round(np.float64(11.0)) returns 11.0 !!
         ix = round(float(px))
         iy = round(float(py))
@@ -179,13 +229,16 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         dy = py - iy
         x0 = ix - W // 2
         y0 = iy - H // 2
+        #print (f'{ix=} {iy=} {dx=} {dy=} {x0=} {y0=}')
 
         if modelMask is None:
+            #print ("NO MM")
             outimg = lanczos_shift_image(img, dx, dy)
             return Patch(x0, y0, outimg)
 
         mh, mw = modelMask.shape
         mx0, my0 = modelMask.x0, modelMask.y0
+        #print ("MM", mh, mw, mx0, my0, modelMask)
 
         # print 'PixelizedPSF + modelMask'
         # print 'mx0,my0', mx0,my0, '+ mw,mh', mw,mh
@@ -193,18 +246,23 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
 
         if ((mx0 >= x0 + W) or (mx0 + mw <= x0) or
             (my0 >= y0 + H) or (my0 + mh <= y0)):
+            #print ("NO OVERLAP")
             # No overlap
             return None
         # Otherwise, we'll just produce the Lanczos-shifted PSF
         # image as usual, and then copy it into the modelMask
         # space.
+        #print ("OVERLAP")
         L = 3
         padding = L
         # Create a modelMask + padding sized stamp and insert PSF image into it
         mm = np.zeros((mh+2*padding, mw+2*padding), np.float32)
+        #print ("OVERLAPY", my0-y0-padding,my0-y0+mh-1+padding, 0, H-1)
         yi,yo = get_overlapping_region(my0-y0-padding, my0-y0+mh-1+padding, 0, H-1)
+        #print ("YI", yi, "YO", yo)
         xi,xo = get_overlapping_region(mx0-x0-padding, mx0-x0+mw-1+padding, 0, W-1)
         mm[yo,xo] = img[yi,xi]
+        #print (mm[yo,xo].shape, img[yi,xi].shape)
         mm = lanczos_shift_image(mm, dx, dy)
         mm = mm[padding:-padding, padding:-padding]
         assert(np.all(np.isfinite(mm)))
@@ -269,11 +327,11 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
             return self._getOversampledFourierTransform(px, py, radius)
 
         sz = self.getFourierTransformSize(radius)
-        # print 'PixelizedPSF FFT size', sz
         if sz in self.fftcache:
             return self.fftcache[sz]
 
         pad, cx, cy = self._padInImage(sz, sz)
+        #savetxt_cpu_append("cpad.txt", pad)
         # cx,cy: coordinate of the PSF center in *pad*
         P = np.fft.rfft2(pad)
         P = P.astype(np.complex64)
@@ -281,6 +339,7 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         v = np.fft.rfftfreq(pW)
         w = np.fft.fftfreq(pH)
         rtn = P, (cx, cy), (pH, pW), (v, w)
+        #savetxt_cpu_append("cp2.txt", P)
         self.fftcache[sz] = rtn
         return rtn
 

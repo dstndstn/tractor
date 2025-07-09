@@ -78,6 +78,15 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
         '''
         # ensure float32 and align
         N = len(psfs)
+        self.ex_indices = np.zeros(N, dtype=bool)
+        self.psfexs = []
+        self.normalized = False
+        for i,psf in enumerate(psfs):
+            if str(psf.pix) == 'NormalizedPixelizedPsfEx' or str(psf.pix) == 'NormalizedPixelizedPsf':
+                self.normalized = True
+            if hasattr(psf, 'psfex'):
+                self.psfexs.append(psf.psfex)
+                self.ex_indices[i] = True
         #iH = np.zeros(N, dtype=np.int32) #individual height
         #iW = np.zeros(N, dtype=np.int32) #individual width
 
@@ -202,6 +211,42 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
         pad[:, y0:y0 + sh, x0:x0 + sw] = subimg
         return pad, cx, cy
 
+    def _padInImageBatchGPUBases(self, H, W, img=None):
+        '''
+        Embeds this PSF image into a larger or smaller image of shape H,W.
+
+        Return (img, cx, cy), where *cx*,*cy* are the coordinates of the PSF
+        center in *img*.
+        '''
+        if img is None:
+            img = self.img
+        N, Nb, ph, pw = img.shape
+        subimg = img
+
+        if H >= ph:
+            y0 = (H - ph) // 2
+            cy = y0 + ph // 2
+        else:
+            y0 = 0
+            cut = (ph - H) // 2
+            subimg = subimg[:, :, cut:cut + H, :]
+            cy = ph // 2 - cut
+
+        if W >= pw:
+            x0 = (W - pw) // 2
+            cx = x0 + pw // 2
+        else:
+            x0 = 0
+            cut = (pw - W) // 2
+            subimg = subimg[:, :, :, cut:cut + W]
+            cx = pw // 2 - cut
+        N, Nb, sh, sw = subimg.shape
+
+        pad = np.zeros((N, Nb, H, W), img.dtype)
+        pad[:, :, y0:y0 + sh, x0:x0 + sw] = subimg
+        pad = cp.asarray(pad)
+        return pad, cx, cy
+
     def getFourierTransformBatchGPU(self, px, py, radius):
         '''
         Returns the Fourier Transform of this PSF, with the
@@ -214,8 +259,12 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
         *yc*:    ditto
         *imh,imw*: ints, shape of the padded PSF image
         *v,w*: v=np.fft.rfftfreq(imw), w=np.fft.fftfreq(imh)
-            
         '''
+        if len(self.psfexs) == self.N:
+            #All are psfEx
+            if self.normalized:
+                return self.getFourierTransformExNormalizedBatchGPU(px, py, radius)
+            return self.getFourierTransformExBatchGPU(px, py, radius)
         import cupy as cp
         px = cp.asarray(px)
         py = cp.asarray(py)
@@ -224,18 +273,33 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
             return self._getOversampledFourierTransformBatchGPU(px, py, radius)
     
         sz = self.getFourierTransformSizeBatchGPU(radius)
-        # print 'PixelizedPSF FFT size', sz
         if sz in self.fftcache:
+            #print ("CACHE1")
             return self.fftcache[sz]
         
         pad, cx, cy = self._padInImageBatchGPU(sz, sz)
+        #print ("PAD", pad.shape)
+        #cp.savetxt("gpad.txt", pad.ravel())
         # cx,cy: coordinate of the PSF center in *pad*
         P = cp.fft.rfft2(pad)
         P = P.astype(cp.complex64)
+        #cp.savetxt("gp2.txt", P.ravel())
         nimages, pH, pW = pad.shape
         v = cp.fft.rfftfreq(pW)
         w = cp.fft.fftfreq(pH)
+        if (len(self.psfexs) > 0):
+            #print ("CX1", cx, cy, pH, pW)
+            #Only some are psfEx - others have been calculated above
+            if self.normalized:
+                sumfft, (cx, cy), shape, (v, w) = self.getFourierTransformExNormalizedBatchGPU(px, py, radius)
+            else:
+                sumfft, (cx, cy), shape, (v, w) = self.getFourierTransformExBatchGPU(px, py, radius)
+            #print ("P SHAPE", P.shape, "SUMFFT", sumfft.shape, "PAD", pad.shape)
+            #print ("CX2", cx, cy, shape)
+            #print ("IND", self.ex_indices)
+            P[self.ex_indices,:,:] = sumfft
         rtn = P, (cx, cy), (pH, pW), (v, w)
+        #cp.savetxt("gp3.txt", P.ravel())
         self.fftcache[sz] = rtn
         return rtn
 
@@ -291,3 +355,174 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
         self.fftcache[key] = rtn
         return rtn
 
+    def getFourierTransformExNormalizedBatchGPU(self, px, py, radius):
+        fft, (cx,cy), shape, (v,w) = self.getFourierTransformExBatchGPU(px, py, radius)
+        n = cp.abs(fft[:,0,0])
+        mask = n != 0
+        fft[mask,:,:] /= n[mask,None,None]
+        #print ("NORM", fft.shape)
+        return fft, (cx,cy), shape, (v,w)
+
+    def getFourierTransformExBatchGPU(self, px, py, radius):
+        import cupy as cp
+        px = cp.asarray(px[self.ex_indices])
+        py = cp.asarray(py[self.ex_indices])
+        radius = cp.asarray(radius[self.ex_indices])
+        
+        if self.sampling != 1.:
+            # The method below assumes that the eigenPSF bases can be
+            # Fourier-transformed and combined; that doesn't work for
+            # oversampled models.  Fall back (which does mean that
+            # we're evaluating the PSF model image every time and FFT'ing).
+            return self._getOversampledFourierTransformBatchGPU(px, py, radius)
+
+        sz = self.getFourierTransformSizeBatchGPU(radius)
+
+        N = len(self.psfexs)
+        Nb = 0
+        h = 0
+        w = 0
+        for pex in self.psfexs:
+            bshape = pex.bases().shape
+            Nb = max(Nb, bshape[0])
+            h = max(h, bshape[1])
+            w = max(w, bshape[2])
+        bases = np.zeros((N, Nb, h, w), dtype=np.float32)
+        for i, pex in enumerate(self.psfexs):
+            (iNb, ih, iw) = pex.bases().shape
+            bases[i,:iNb, :ih, :iw] = pex.bases()
+
+        if sz in self.fftcache:
+            fftbases, cx, cy, shape, v, w = self.fftcache[sz]
+            #print ("CACHE2")
+        else:
+            N, Nb, pH, pW = bases.shape
+            #bases = 4d image N x NB x H x W
+            pad, cx, cy = self._padInImageBatchGPUBases(sz, sz, img=bases)
+            #cp.savetxt("gpadex.txt", pad.ravel())
+            # cx,cy: coordinate of the PSF center in *pad*
+            P = cp.fft.rfft2(pad)
+            P = P.astype(cp.complex64)
+            nimages, Nb, pH, pW = pad.shape
+            v = cp.fft.rfftfreq(pW)
+            w = cp.fft.fftfreq(pH)
+            fftbases = P
+            self.fftcache[sz] = (fftbases, cx, cy, pad.shape, v, w)
+        #cp.savetxt("gp2ex.txt", fftbases.ravel())
+        # Now sum the bases by the polynomial coefficients
+        sumfft = cp.zeros(fftbases[:,0,:,:].shape, fftbases.dtype)
+        shape = pad[0,0].shape
+        #print ("SUMFFT", sumfft.shape)
+        #print (f'{N=} {Nb=} {h=} {w=}')
+        #print (len(self.psfexs))
+        for i, psfex in enumerate(self.psfexs):
+            #print ("PX", px, "PY", py)
+            #print (fftbases.shape)
+            for amp, base in zip(psfex.polynomials(px[i], py[i]), fftbases[i]):
+                #print('getFourierTransform: px,py', (px,py), 'amp', amp)
+                sumfft[i] += amp * base
+                #print('sum of inverse Fourier transform of component:', cp.sum(cp.fft.irfft2(amp * base, s=shape)))
+            #print('sum of inverse Fourier transform of PSF:', np.sum(np.fft.irfft2(sumfft, s=shape)))
+        #cp.savetxt("gsumfft.txt", sumfft.ravel())
+        return sumfft, (cx, cy), shape, (v, w)
+
+    def getPointSourcePatch(self, px, py, minval=0., modelMask=None,
+                            radius=None, **kwargs):
+        #print ("getPointSourcePatch1", self)
+        if self.sampling != 1.:
+            return self._getOversampledPointSourcePatch(px, py, minval=minval,
+                                                        modelMask=modelMask,
+                                                        radius=radius, **kwargs)
+            
+        import cupy as cp
+        px = cp.asarray(px)
+        py = cp.asarray(py)
+        radius = cp.asarray(radius)
+
+        from astrometry.util.miscutils import get_overlapping_region
+
+        # get PSF image at desired pixel location
+        img = self.getImage(px, py)
+
+        if radius is not None:
+            R = int(np.ceil(radius))
+            H,W = img.shape
+            cx = W//2
+            cy = H//2
+            img = img[max(cy-R, 0) : min(cy+R+1,H-1),
+                      max(cx-R, 0) : min(cx+R+1,W-1)]
+            
+        H, W = img.shape
+        # float() required because builtin round(np.float64(11.0)) returns 11.0 !!
+        ix = round(float(px))
+        iy = round(float(py))
+        dx = px - ix
+        dy = py - iy
+        x0 = ix - W // 2
+        y0 = iy - H // 2
+    
+        if modelMask is None:
+            outimg = lanczos_shift_image(img, dx, dy)
+            return Patch(x0, y0, outimg)
+    
+        mh, mw = modelMask.shape
+        mx0, my0 = modelMask.x0, modelMask.y0
+
+        # print 'PixelizedPSF + modelMask'
+        # print 'mx0,my0', mx0,my0, '+ mw,mh', mw,mh
+        # print 'PSF image x0,y0', x0,y0, '+ W,H', W,H
+
+        if ((mx0 >= x0 + W) or (mx0 + mw <= x0) or
+            (my0 >= y0 + H) or (my0 + mh <= y0)):
+            # No overlap
+            return None
+        # Otherwise, we'll just produce the Lanczos-shifted PSF
+        # image as usual, and then copy it into the modelMask
+        # space.
+        L = 3
+        padding = L
+        # Create a modelMask + padding sized stamp and insert PSF image into it
+        mm = np.zeros((mh+2*padding, mw+2*padding), np.float32)
+        yi,yo = get_overlapping_region(my0-y0-padding, my0-y0+mh-1+padding, 0, H-1)
+        xi,xo = get_overlapping_region(mx0-x0-padding, mx0-x0+mw-1+padding, 0, W-1)
+        mm[yo,xo] = img[yi,xi]
+        mm = lanczos_shift_image(mm, dx, dy)
+        mm = mm[padding:-padding, padding:-padding]
+        assert(np.all(np.isfinite(mm)))
+
+        return Patch(mx0, my0, mm)
+
+    def _getOversampledPointSourcePatch(self, px, py, minval=0., modelMask=None,
+                                        radius=None, **kwargs):
+        # get PSF image at desired pixel location
+        img = self.getImage(px, py)
+
+        ix = round(float(px))
+        iy = round(float(py))
+        dx = px - ix
+        dy = py - iy
+
+        if modelMask is not None:
+            mh, mw = modelMask.shape
+            mx0, my0 = modelMask.x0, modelMask.y0
+            xl,yl,native_img = self._sampleImage(img, dx, dy, xlo=mx0-ix, ylo=my0-iy,
+                                                 width=mw, height=mh)
+            return Patch(xl+ix, yl+iy, native_img)
+
+        xl,yl,img = self._sampleImage(img, dx, dy)
+        x0 = ix + xl
+        y0 = iy + yl
+
+        if radius is not None:
+            R = int(np.ceil(radius))
+            H,W = img.shape
+            cx = W//2
+            cy = H//2
+            xlo = max(cx-R, 0)
+            ylo = max(cy-R, 0)
+            img = img[ylo : min(cy+R+1,H-1),
+                      xlo : min(cx+R+1,W-1)]
+            x0 += xlo
+            y0 += ylo
+
+        return Patch(x0, y0, img)

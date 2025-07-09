@@ -110,9 +110,13 @@ class BatchImageDerivs(object):
             var = cp.zeros((self.Nimages, self.N, self.maxNmogs, self.D, self.D))
             IM2 = IM[nmogs > 0]
             #print ("IM2", IM2.shape)
+            #print (IM2)
+            #print (nmogs)
             #flipped_mask = IM2.sum(1, keepdims=1) > cp.arange(self.maxNmogs-1,-1,-1)
             #flipped_mask = flipped_mask[:,::-1]
-            flipped_mask = IM2.sum(2, keepdims=1) > cp.arange(self.maxNmogs-1,-1,-1)
+            #flipped_mask = IM2.sum(2, keepdims=1) > cp.arange(self.maxNmogs-1,-1,-1)
+            flipped_mask = IM.sum(2, keepdims=1) > cp.arange(self.maxNmogs-1,-1,-1)
+            #print ("F1", flipped_mask.shape)
             flipped_mask = flipped_mask[:,:,::-1]
             for i, amix in enumerate(amixes):
                 (name, mix, step) = amix
@@ -135,10 +139,27 @@ class BatchImageDerivs(object):
                 #amp[i][:nm] = mix.amp[IM[i]] * mogweights[i][IM[i]]
                 #mean[i][:nm] = mix.mean[IM[i], :] + np.array([px, py])[np.newaxis, :]
                 #var[i][:nm] = mix.var[IM[i], :, :]
+                #print ("IM", IM[:,i])
+                #print ("AVM", amp[:,i].shape, var[:,i].shape, mean[:,i].shape, flipped_mask[:,i].shape)
+
+                #print ("I", i, self.Nimages)
+                #print ("AMP", amp[:,i].shape)
+                #print ("IM", IM.shape, IM[:,i].shape)
+                #print ("FLIPPED", flipped_mask.shape, flipped_mask[:,i].shape)
+                #print ((cp.tile(mix.amp, (self.Nimages,1)) * mogweights[:,i]).shape)
+                #print (((cp.tile(mix.amp, (self.Nimages,1)) * mogweights[:,i])[IM[:,i]]).shape)
+                #print ("TILE", cp.tile(mix.amp, (self.Nimages,1)).shape)
+                #print ("MOG", mogweights[:,i].shape)
+                #print (amp[:,i][flipped_mask[:,i]].shape)
 
                 amp[:,i][flipped_mask[:,i]] = (cp.tile(mix.amp, (self.Nimages,1)) * mogweights[:,i])[IM[:,i]]
                 mean[:,i][flipped_mask[:,i]] = (cp.tile(mix.mean, (self.Nimages, 1, 1)) + cp.array([px,py]).T[:,cp.newaxis,:])[IM[:,i]]
                 var[:,i][flipped_mask[:,i]] = mix.var[IM[:,i]]
+                #print ("MOG AMP", amp[:,i])
+                #print ("MOG MEAN", mean[:,i])
+                #print ("MOG VAR", var[:,i])
+                #print ("MIX VAR", mix.var)
+                #print ("IM", IM[:,i], IM[:,i].sum())
                 #for j,nm in enumerate(self.nmogs):
                 #    amp[j,i,:nm] = mix.amp[IM[j]]*mogweights[j]
                 #    mean[j,i,:nm] = mix.mean[IM[j],:] + np.array([px[j],py[j]])[np.newaxis,:]
@@ -186,6 +207,8 @@ class BatchImageDerivs(object):
             flipped_mask = flipped_mask[:,:,::-1]
             #flipped_mask = IF.sum(1, keepdims=1) > cp.arange(self.maxNfft-1,-1,-1)
             #flipped_mask = flipped_mask[:,::-1]
+            #print ("F1", flipped_mask.shape)
+            #print ("IF2", IF2.shape, nfft.sum())
             for i, amix in enumerate(amixes):
                 (name, mix, step) = amix
                 #print ("FAMP", amp.shape, "FMEAN", mean.shape, "FVAR", var.shape)
@@ -208,10 +231,17 @@ class BatchImageDerivs(object):
                 #var[:,i][flipped_mask] = mix.var[IF]
                 #amp[:,i][flipped_mask] = (cp.tile(mix.amp, (self.Nimages,1)) * fftweights[:,None])[IF]
                 #mean[:,i][flipped_mask] = cp.tile(mix.mean, (self.Nimages,1,1))[IF]
+                #print ("AVM", amp[:,i].shape, var[:,i].shape, mean[:,i].shape, flipped_mask[:,i].shape)
 
                 var[:,i][flipped_mask[:,i]] = mix.var[IF[:,i]]
                 amp[:,i][flipped_mask[:,i]] = (cp.tile(mix.amp, (self.Nimages,1)) * fftweights[:,i])[IF[:,i]]
                 mean[:,i][flipped_mask[:,i]] = cp.tile(mix.mean, (self.Nimages,1,1))[IF[:,i]]
+
+                #print ("FFT AMP", amp[:,i])
+                #print ("FFT MEAN", mean[:,i])
+                #print ("FFT VAR", var[:,i])
+                #print ("MIX VAR", mix.var)
+                #print ("IF", IF[:,i], IF[:,i].sum())
 
                 #print ("TYPES", type(amp), type(mix.amp), type(IF), type(fftweights))
                 #for j, nf in enumerate(self.nfft):
@@ -306,6 +336,8 @@ class ImageDerivs(object):
         self.dy = dy
         self.fit_pos = fit_pos
 
+        #print ("NMOGS", self.nmogs, "NFFT", self.nfft)
+        #print ("IM", IM.shape, IM)
         if self.nmogs > 0:
             amp = np.zeros((N, nmogs))
             mean = np.zeros((N, nmogs, D))
@@ -313,6 +345,9 @@ class ImageDerivs(object):
             for i, amix in enumerate(amixes):
                 (name, mix, step) = amix
                 nm = IM[i].sum()
+                #print ("NM", nm)
+                #print (IM[i].shape)
+                #print (amp.shape, amp[i].shape, amp[i][:nm].shape)
                 amp[i][:nm] = mix.amp[IM[i]] * mogweights[i][IM[i]]
                 mean[i][:nm] = mix.mean[IM[i], :] + np.array([px, py])[np.newaxis, :]
                 var[i][:nm] = mix.var[IM[i], :, :]
@@ -790,6 +825,10 @@ class BatchMixtureOfGaussians(object):
         a = self.var[:,:,:,0,0]
         b = self.var[:,:,:,0,1]
         d = self.var[:,:,:,1,1]
+        #print ("GFT VAR", self.var, self.var.shape)
+        #print ("MEAN", self.mean)
+        #print ("AMP", self.amp)
+        #np.savetxt('gvar.txt', self.var.ravel())
 
         #n, K
         #5D arrays are fun!

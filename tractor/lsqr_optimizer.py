@@ -4,9 +4,13 @@ from astrometry.util.ttime import Time
 from tractor.engine import logverb, isverbose, logmsg
 from tractor.optimize import Optimizer
 from tractor.utils import listmax
+import time
 
+lt = np.zeros(5)
 
 class LsqrOptimizer(Optimizer):
+    def printTiming(self):
+        print ("LTimes:", lt)
 
     def _optimize_forcedphot_core(
             self, tractor,
@@ -106,10 +110,16 @@ class LsqrOptimizer(Optimizer):
 
             #logverb('forced phot: getting update with damp=', damping)
             #t0 = Time()
-            X = self.getUpdateDirection(tractor, derivs, damp=damping,
+            try:
+                X = self.getUpdateDirection(tractor, derivs, damp=damping,
                                         priors=priors,
                                         scale_columns=False, chiImages=chis0,
                                         shared_params=shared_params)
+            except AssertionError as ex:
+                import traceback
+                print ("AssertionError in CPU code:")
+                traceback.print_exc()
+                break
             if X is None or len(X) == 0:
                 print('Error getting update direction')
                 break
@@ -280,7 +290,11 @@ class LsqrOptimizer(Optimizer):
                  **nil):
         kwa = dict(damp=damp, priors=priors,
                    scale_columns=scale_columns, shared_params=shared_params)
+        t = time.time()
+        #print ("GETLIN", self.getLinearUpdateDirection)
         X = self.getLinearUpdateDirection(tractor, **kwa)
+        lt[0] += time.time()-t
+        t = time.time()
         #print('Update:', X)
         if X is None:
             # Failure
@@ -300,6 +314,7 @@ class LsqrOptimizer(Optimizer):
         logverb('Finding optimal step size...')
         #t0 = Time()
         (dlogprob, alpha) = self.tryUpdates(tractor, X, alphas=alphas)
+        lt[1] += time.time()-t
         #tstep = Time() - t0
         #logverb('Finished opt2.')
         #logverb('  alpha =', alpha)
@@ -307,19 +322,26 @@ class LsqrOptimizer(Optimizer):
         #logverb('  Topt  ', topt)
         #logverb('  Tstep ', tstep)
         # print('Stepped alpha=', alpha, 'for dlogprob', dlogprob)
+        #print ("LTimes:", lt) 
         if variance:
             return dlogprob, X, alpha, var
         return dlogprob, X, alpha
 
     def optimize_loop(self, tractor, dchisq=0., steps=50, **kwargs):
         R = {}
+        #print ("LSQR OPTIMIZE")
+        t = time.time()
         for step in range(steps):
             dlnp, X, alpha = self.optimize(tractor, **kwargs)
             # print('Opt step: dlnp', dlnp,
             #      ', '.join([str(src) for src in tractor.getCatalog()]))
             if dlnp <= dchisq:
                 break
+        lt[2] += time.time()-t
+        t = time.time()
         R.update(steps=step)
+        lt[3] += time.time()-t
+        #print ("LTimesx:", lt)
         return R
 
     def getUpdateDirection(self, tractor, allderivs, damp=0., priors=True,
@@ -327,6 +349,7 @@ class LsqrOptimizer(Optimizer):
                            chiImages=None, variance=False,
                            shared_params=True,
                            get_A_matrix=False):
+        t = time.time()
         #
         # Returns: numpy array containing update direction.
         # If *variance* is True, return    (update,variance)
@@ -637,6 +660,8 @@ class LsqrOptimizer(Optimizer):
         del b
 
         if bail:
+            lt[4] += time.time()-t
+            #print ("LTimesy:",lt)
             if shared_params:
                 return np.zeros(len(paramindexmap))
             return np.zeros(len(allderivs))
@@ -671,6 +696,8 @@ class LsqrOptimizer(Optimizer):
         if scale_columns:
             X[colscales > 0] /= colscales[colscales > 0]
         logverb('  X=', X)
+        lt[4] += time.time()-t
+        #print ("LTimesy:",lt)
 
         if variance:
             if shared_params:

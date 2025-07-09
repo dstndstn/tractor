@@ -4,6 +4,7 @@ from tractor.utils import MultiParams, getClassName
 from tractor.psf import GaussianMixturePSF, PixelizedPSF
 from tractor import mixture_profiles as mp
 from tractor import ducks
+from tractor.utils import savetxt_cpu_append
 
 class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
     '''
@@ -488,6 +489,7 @@ class PixelizedPsfEx(PixelizedPSF):
 
         sz = self.getFourierTransformSize(radius)
 
+        #self.clear_cache()
         if sz in self.fftcache:
             fftbases, cx, cy, shape, v, w = self.fftcache[sz]
         else:
@@ -496,11 +498,13 @@ class PixelizedPsfEx(PixelizedPSF):
             nb, h, w = bases.shape
             for i in range(nb):
                 pad, cx, cy = self._padInImage(sz, sz, img=bases[i, :, :])
+                #savetxt_cpu_append("cpadex.txt", pad)
                 shape = pad.shape
                 #print('  basis image size:', bases[i,:,:].shape, 'padded to', shape)
 
                 #print('  sum of basis image:', np.sum(bases[i,:,:]), np.sum(pad))
                 P = np.fft.rfft2(pad)
+                #savetxt_cpu_append("cp2ex.txt", P)
                 #print('  sum of inverse-Fourier-transformed image:', np.sum(np.fft.irfft2(P, s=shape)))
                 fftbases.append(P)
             H, W = shape
@@ -514,6 +518,7 @@ class PixelizedPsfEx(PixelizedPSF):
             #print('getFourierTransform: px,py', (px,py), 'amp', amp)
             sumfft += amp * base
             #print('sum of inverse Fourier transform of component:', np.sum(np.fft.irfft2(amp * base, s=shape)))
+        #savetxt_cpu_append("csumfft.txt", sumfft)
         #print('sum of inverse Fourier transform of PSF:', np.sum(np.fft.irfft2(sumfft, s=shape)))
         return sumfft, (cx, cy), shape, (v, w)
 

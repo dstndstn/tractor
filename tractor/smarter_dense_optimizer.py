@@ -73,7 +73,27 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
                     x0,x1,y0,y1 = img_bounds[img]
                     img_bounds[img] = min(dx0, x0), max(dx1, x1), min(dy0, y0), max(dy1, y1)
                 else:
+                    ieshape = img.getInvError().shape
+                    #print ("IESHAPE", ieshape, "DY", dy0, dy1, "DX", dx0, dx1)
+                    assert(dy0 < ieshape[0])
+                    assert(dx0 < ieshape[1])
+                    if (dy1 > ieshape[0]):
+                        dy1 = ieshape[0]
+                        deriv.clipToRoi(dx0, dx1, dy0, dy1)
+                        #print (deriv)
+                        #print (type(deriv))
+                        #print (deriv.extent)
+                    if (dx1 > ieshape[1]):
+                        dx1 = ieshape[1]
+                        deriv.clipToRoi(dx0, dx1, dy0, dy1)
+                        #print (deriv)
+                        #print (type(deriv))
+                        #print (deriv.extent)
                     img_bounds[img] = dx0, dx1, dy0, dy1
+                    #print ("TEST")
+                    #print ("EXT", deriv.extent)
+                    #print (f'{dx0=} {dx1=} {dy0=} {dy1=}')
+                    #print ("IES", img.getInvError().shape) 
         Ncols = len(live_params)
 
         # Where in the A & B arrays will the image pixels start?
@@ -160,13 +180,49 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
 
                 dx0,dx1,dy0,dy1 = deriv.extent
                 x0,x1,y0,y1 = img_bounds[img]
+                if x1 < 0 or y1 < 0:
+                    print ("Img bounds are entirely out of image: ",x0, x1, y0, y1)
+                    return None
+                elif x0 < 0:
+                    x0 = 0
+                elif y0 < 0:
+                    y0 = 0
                 if x0 == dx0 and x1 == dx1 and y0 == dy0 and y1 == dy1:
                     rowstart = img_offsets[img]
                     #print('row start:', rowstart)
                     #print('col', col)
                     w = x1-x0
                     h = y1-y0
-                    apix = (deriv.patch * inverrs[y0:y1, x0:x1])
+                    #print ("DERIV PATCH", deriv.patch.shape, inverrs.shape, y0, y1, x0, x1)
+                    if y1 > inverrs.shape[0] or x1 > inverrs.shape[1]:
+                        if y1 > inverrs.shape[0] and x1 > inverrs.shape[1]:
+                            #Edge case
+                            x1 = inverrs.shape[1]
+                            y1 = inverrs.shape[0]
+                            apix = (deriv.patch[:(y1-y0),:(x1-x0)] * inverrs[y0:y1,x0:x1])
+                        elif y1 > inverrs.shape[0]:
+                            #Edge case
+                            y1 = inverrs.shape[0]
+                            apix = (deriv.patch[:(y1-y0),:] * inverrs[y0:y1,x0:x1])
+                            #print ("APIX", apix.shape)
+                            #ie_pad = np.zeros((y1-y0, x1-x0), dtype=np.float32)
+                            #ie_pad[:ysz-y0,:] = inverrs[y0:,x0:x1]
+                            #print ("IE PAD", ie_pad.shape)
+                            #apix = (deriv.patch * ie_pad)
+                        else:
+                            #Edge case
+                            x1 = inverrs.shape[1]
+                            apix = (deriv.patch[:,:(x1-x0)] * inverrs[y0:y1,x0:x1])
+                    else:
+                        try:
+                            apix = (deriv.patch * inverrs[y0:y1, x0:x1])
+                        except Exception as e:
+                            print('Exception:', e)
+                            print (f'{y0=} {y1=} {x0=} {x1}')
+                            import traceback
+                            traceback.print_exc()
+                            return None
+
                     #print (f'{y0=} {y1=} {x0=} {x1=} {w=} {h=}')
                     #savetxt_cpu_append('cderiv.txt', deriv.patch)
                     #savetxt_cpu_append('cie2.txt', inverrs[y0:y1, x0:x1])
@@ -191,6 +247,8 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
                     #           (jj2.min() - x0, jj2.max()+1 - x0), 'y [%i,%i)' % (ii2.min()-y0, ii2.max()+1-y0))
                     # 
                     ####
+                    #print (f'{rowstart=} {w=} {h=} {col=}')
+                    #print (apix.shape)
                     A[rowstart:rowstart+w*h, col] = apix.flat
                     if scale_columns:
                         # accumulate L2 norm
@@ -274,6 +332,9 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
         #savetxt_cpu_append('ca1.txt', A)
         #savetxt_cpu_append('cb1.txt', B)
 
+        if A is not None:
+            Aorig = A.copy()
+
         if not get_A_matrix:
             del A
             del B
@@ -314,6 +375,6 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
                 A_full[:,c] = A[:,i]
             A = A_full
 
-            return X,A,colscales,B
+            return X,A,colscales,B,Aorig
 
         return X
