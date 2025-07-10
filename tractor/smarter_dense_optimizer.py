@@ -3,7 +3,7 @@ import numpy as np
 from numpy.linalg import lstsq, LinAlgError
 from tractor.utils import savetxt_cpu_append
 
-class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
+class SmarterDenseOptimizer(ConstrainedOptimizer):
 
     def getUpdateDirection(self, tractor, allderivs, damp=0., priors=True,
                            scale_columns=True, scales_only=False,
