@@ -2222,9 +2222,32 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         """
         if self._gpumode == 0:
             return super().tryUpdates(tractor, X, alphas=alphas)
-        return super().tryUpdates(tractor, X, alphas=alphas)
+
         print ("GPU FACTORED TRY UPDATES")
+
+        if not ((len(tractor.catalog) == 1) and
+                isinstance(tractor.catalog[0], ProfileGalaxy) and
+                tractor.isParamFrozen('images')):
+            print('Calling superclass tryUpdates')
+            return super().tryUpdates(tractor, X, alphas=alphas)
+
+        print('number of images:', len(tractor.images))
+        src = tractor.catalog[0]
+        steps = self.getParameterSteps(tractor, X, alphas)
+        print('number of steps to try:', len(steps))
+        print('alphas:', [s[0] for s in steps])
+
+        # print('modelmasks:')
+        # for img in tractor.images:
+        #     mm = tractor._getModelMaskFor(img, src)
+        #     print('  ', img, ':', mm)
+
+        # modelmasks are set
+
+        return super().tryUpdates(tractor, X, alphas=alphas)
+
         t = time.time()
+
         # Reset flags for this call
         self.hit_limit = False
         self.stepLimited = False
