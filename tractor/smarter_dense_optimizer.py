@@ -1,4 +1,4 @@
-from tractor.dense_optimizer import ConstrainedDenseOptimizer
+from tractor.constrained_optimizer import ConstrainedOptimizer
 import numpy as np
 from numpy.linalg import lstsq, LinAlgError
 from tractor.utils import savetxt_cpu_append
