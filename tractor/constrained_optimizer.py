@@ -103,11 +103,17 @@ class ConstrainedOptimizer(LsqrOptimizer):
 
         tractor.setParams(p_best)
         if alpha_best is None:
-            return 0, 0.
+            return 0., 0.
 
         return logprob_best - logprob_before, alpha_best
 
     def getParameterSteps(self, tractor, step_direction, alphas):
+        '''
+        Returns a list of
+          [ (float alpha, list parameters, bool step_limit, bool hit_limit), ... ]
+        where *step_limit* means the step was limited by a max parameter step size
+        and *hit_limit* means the step was limited by an upper or lower bound on a parameter.
+        '''
         if alphas is None:
             # 1/1024 to 1 in factors of 2, + sqrt(2.) + 2.
             alphas = np.append(2.**np.arange(-10, 1), [np.sqrt(2.), 2.])
