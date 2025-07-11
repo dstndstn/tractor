@@ -26,9 +26,6 @@ cl = np.zeros(4, dtype=np.int32)
 gcl = np.zeros(4, dtype=np.int32)
 gi = np.zeros(6)
 
-from collections import Counter
-chi_image_calls = Counter()
-
 logger = logging.getLogger('tractor.engine')
 def logverb(*args):
     if logger.isEnabledFor(logging.DEBUG):
@@ -500,10 +497,6 @@ class Tractor(MultiParams):
             yield self.getChiImageGPU(img=img, **kwargs)
 
     def getChiImages(self, **kwargs):
-
-        global chi_image_calls
-        chi_image_calls[(len(self.images), len(self.catalog))] += 1
-
         for img in self.images:
             yield self.getChiImage(img=img, **kwargs)
 
