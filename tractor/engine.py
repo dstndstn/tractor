@@ -26,6 +26,14 @@ cl = np.zeros(4, dtype=np.int32)
 gcl = np.zeros(4, dtype=np.int32)
 gi = np.zeros(6)
 
+def printTiming():
+    print ("TD:",td)
+    print ("TL:",tl)
+    print ("GTL:",gtl)
+    print ("CL:",cl)
+    print ("GCL:",gcl)
+    print ("GI:",gi)
+
 logger = logging.getLogger('tractor.engine')
 def logverb(*args):
     if logger.isEnabledFor(logging.DEBUG):
@@ -504,10 +512,23 @@ class Tractor(MultiParams):
         import cupy as cp
         gcl[2] += 1
         t = time.time()
+        """
         gi = cp.asarray(self.getChiImage(imgi, img, srcs, minsb, **kwargs))
         gtl[0] += time.time()-t
-        #return cp.asarray(self.getChiImage(imgi, img, srcs, minsb, **kwargs))
         return gi
+        """
+        if img is None:
+            img = self.getImage(imgi)
+        gtl[0] += time.time()-t
+        t = time.time()
+        mod = self.getModelImage(img, srcs=srcs, minsb=minsb, **kwargs)
+        gtl[1] += time.time()-t
+        t = time.time()
+        chi = (img.getImage(use_gpu=True) - cp.asarray(mod)) * img.getInvError(use_gpu=True)
+        gtl[2] += time.time()-t
+        if not np.all(np.isfinite(chi)):
+            print('ERROR: Chi not finite')
+        return chi
 
     def getChiImage(self, imgi=-1, img=None, srcs=None, minsb=0., **kwargs):
         cl[2] += 1

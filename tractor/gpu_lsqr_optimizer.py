@@ -12,7 +12,12 @@ from tractor.lsqr_optimizer import LsqrOptimizer
 import time
 
 glt = np.zeros(10)
+gsub = np.zeros(10)
 gc = np.zeros(3, dtype=np.int32)
+gs2 = np.zeros(5)
+
+def printTiming():
+    print ("GLTimes:",glt, gc, "SUB", gsub, "GS2", gs2)
 
 def listmax_gpu(X, default=0):
     # X is expected to be a list of CuPy arrays
@@ -38,17 +43,19 @@ class GPULsqrOptimizer(LsqrOptimizer):
         gc[0] += 1
 
         if shared_params:
+            tx = time.time()
             # Assuming tractor.getParams() now returns CuPy arrays
-            p0 = tractor.getParamsGPU()
-            tractor.setParamsGPU(cp.arange(len(p0))) # Using cp.arange directly
-            p1 = tractor.getParamsGPU()
-            tractor.setParamsGPU(p0) # Restore original params
+            p0 = tractor.getParams()
+            tractor.setParams(np.arange(len(p0))) # Using cp.arange directly
+            p1 = tractor.getParams()
+            tractor.setParams(p0) # Restore original params
             
             # np.unique replaced by cp.unique, returns CuPy arrays
-            U, I = cp.unique(p1, return_inverse=True)
+            U, I = np.unique(p1, return_inverse=True)
             logverb(len(p0), 'params;', len(U), 'unique')
             paramindexmap = I # I is already a CuPy array
             
+            gs2[2] += time.time()-tx
         # Build the sparse matrix of derivatives:
         sprows = [] # Will hold CuPy arrays of row indices
         spcols = [] # Will hold CuPy arrays of column indices (or just ints if single col)
@@ -78,12 +85,16 @@ class GPULsqrOptimizer(LsqrOptimizer):
                 gc[1] += 1
                 tx = time.time()
                 # Assuming img.getInvError() returns CuPy array
-                inverrs = img.getInvErrorGPU() 
+                inverrs = img.getInvError(use_gpu=False) 
+                #inverrs = img.getInvErrorGPU()
                 (H, W) = img.shape
                 row0 = imgoffs[img]
-                deriv.clipTo(W, H)
+                deriv.clipTo(W, H, use_gpu=False)
+                #pix = deriv.getPixelIndices(img)
+                #gsub[3] += time.time()-tx
                 # Assuming deriv.getPixelIndices() returns CuPy array
-                pix = deriv.getPixelIndicesGPU(img) 
+                pix = deriv.getPixelIndices(img, use_gpu=False) 
+                #print ("PIX", pix.shape, pix)
                 glt[6] += time.time()-tx
                 tx = time.time()
 
@@ -91,12 +102,24 @@ class GPULsqrOptimizer(LsqrOptimizer):
                     logverb('Col %i: this param does not influence this image!' % col)
                     continue
 
-                assert(cp.all(pix < img.numberOfPixels()))
+                #assert(cp.all(pix < img.numberOfPixels()))
+                #assert(np.all(pix < img.numberOfPixels()))
+                #assert(pix.max() < img.numberOfPixels())
+                assert(pix[-1] < img.numberOfPixels())
 
                 # Assuming deriv.getImage() returns CuPy array
-                dimg = deriv.getImageGPU()
-                nz = cp.flatnonzero(dimg)
-                glt[7] += time.time()-tx
+                dimg = deriv.getImage(use_gpu=False)
+                #nz = cp.flatnonzero(dimg)
+                #dimg = deriv.getImage()
+                #gsub[4] += time.time()-tx
+                #dgpu = deriv.getImage(use_gpu=True) 
+                #gsub[3] += time.time()-tx
+                #nz = cp.flatnonzero(dgpu)
+                #nz = dgpu.ravel() != 0
+                #gsub[4] += time.time()-tx
+                #nz = np.flatnonzero(dimg)
+                nz = dimg.ravel() != 0
+                gsub[0] += time.time()-tx
                 tx = time.time()
 
                 if len(nz) == 0:
@@ -108,22 +131,30 @@ class GPULsqrOptimizer(LsqrOptimizer):
                 inverrs_patch = inverrs[deriv.getSlice(img)]
                 w = inverrs_patch.ravel()[nz] # Fixed here
                 #w = inverrs[deriv.getSlice(img)].flat[nz]
+                gsub[1] += time.time()-tx
                 
                 assert(vals.shape == w.shape)
                 
                 RR.append(rows)
                 VV.append(vals)
                 WW.append(w)
-                glt[8] += time.time()-tx
+                glt[7] += time.time()-tx
 
             if len(VV) == 0:
                 continue
-            
+
             tx = time.time()
-            rows = cp.hstack(RR)
-            VV = cp.hstack(VV)
-            WW = cp.hstack(WW)
+            rows = np.hstack(RR)
+            VV = np.hstack(VV)
+            WW = np.hstack(WW)
+            gsub[2] += time.time()-tx
+            tx = time.time()
+            rows = cp.asarray(rows)
+            VV = cp.asarray(VV)
+            WW = cp.asarray(WW)
             vals = VV * WW
+            gsub[3] += time.time()-tx
+            tx = time.time()
 
             mx = cp.max(cp.abs(vals))
             if mx == 0:
@@ -132,13 +163,16 @@ class GPULsqrOptimizer(LsqrOptimizer):
                        len(cp.flatnonzero(vals)), 'non-zero products')
                 continue
             
+            gsub[6] += time.time()-tx
             FACTOR = 1.e-10
             I = (cp.abs(vals) > (FACTOR * mx))
             rows = rows[I]
             vals = vals[I]
+            gsub[7] += time.time()-tx
             
             scale = cp.sqrt(cp.dot(vals, vals))
             colscales[col] = scale
+            gsub[8] += time.time()-tx
 
             if scales_only:
                 continue
@@ -155,12 +189,11 @@ class GPULsqrOptimizer(LsqrOptimizer):
                     spvals.append(vals / scale)
             else:
                 spvals.append(vals)
-            glt[9] += time.time()-tx
+            glt[8] += time.time()-tx
 
         glt[0] += time.time()-t
         if scales_only:
             glt[4] += time.time()-t
-            print ("GLTimes:",glt)
             return colscales.get()
 
         b = None
@@ -176,7 +209,7 @@ class GPULsqrOptimizer(LsqrOptimizer):
                 # If rA contains lists of ints, np.array() converts them.
                 # rA elements are typically 1D NumPy arrays, so addition is element-wise.
                 # Then append these NumPy arrays to the list sprows.
-                sprows.extend([np.array(rij) + Nrows for rij in rA])
+                sprows.extend([cp.array(rij) + Nrows for rij in rA])
                 
                 # cA is a List
                 spcols.extend(cA)
@@ -210,7 +243,6 @@ class GPULsqrOptimizer(LsqrOptimizer):
         if len(spcols) == 0:
             logverb("len(spcols) == 0")
             glt[4] += time.time()-t
-            print ("GLTimes:",glt)
             return []
 
         # Convert spcols list of Python ints to a CuPy array
@@ -225,6 +257,7 @@ class GPULsqrOptimizer(LsqrOptimizer):
 
         if b is None:
             b = cp.zeros(Nrows)
+            print ("NROWS",Nrows, Ncols)
 
         # Build chi vector 'b'
         # Assuming tractor.getChiImage() returns CuPy arrays
@@ -242,10 +275,12 @@ class GPULsqrOptimizer(LsqrOptimizer):
             if chi is None:
                 # Assuming tractor.getChiImage() returns CuPy array
                 chi = tractor.getChiImageGPU(img=img)
+            gs2[0] += time.time()-tx
             chi_ravelled = chi.ravel()
             NP = len(chi_ravelled)
             assert(cp.all(b[row0: row0 + NP] == 0))
             assert(cp.all(cp.isfinite(chi_ravelled)))
+            gs2[1] += time.time()-tx
             b[row0: row0 + NP] = chi_ravelled
             glt[5] += time.time()-tx
 
@@ -287,6 +322,7 @@ class GPULsqrOptimizer(LsqrOptimizer):
 
 
         # Build sparse matrix A
+        tx = time.time()
         A = cpxr_matrix((spvals_cp, (sprows_cp, spcols_cp)), shape=(Nrows, Ncols))
 
         # Remove the complex damping augmentation logic, as lsmr handles it internally
@@ -312,6 +348,7 @@ class GPULsqrOptimizer(LsqrOptimizer):
         except Exception as e:
             print(f'General error caught: {e}. Returning zero.')
             bail = True
+        gs2[4] += time.time()-tx
 
         del A
         del b
@@ -319,7 +356,6 @@ class GPULsqrOptimizer(LsqrOptimizer):
 
         if bail:
             glt[4] += time.time()-t
-            print ("GLTimes:",glt)
             if shared_params:
                 return cp.zeros(len(paramindexmap)).get()
             return cp.zeros(len(allderivs)).get()
@@ -335,7 +371,6 @@ class GPULsqrOptimizer(LsqrOptimizer):
         logverb('  X=', X)
 
         glt[4] += time.time()-t
-        print ("GLTimes:",glt, gc)
 
         if variance:
             if shared_params:
@@ -423,7 +458,6 @@ class GPULsqrOptimizer(LsqrOptimizer):
         logverb('  X=', X)
 
         glt[4] += time.time()-t
-        print ("GLTimes:",glt)
 
         if variance:
             if shared_params:

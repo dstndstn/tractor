@@ -8,9 +8,10 @@ import time
 
 lt = np.zeros(5)
 
+def printTiming():
+    print ("LTimes [getLin tryUpdates optimize 0 getUpdateDir]:", lt)
+
 class LsqrOptimizer(Optimizer):
-    def printTiming(self):
-        print ("LTimes:", lt)
 
     def _optimize_forcedphot_core(
             self, tractor,
@@ -322,7 +323,6 @@ class LsqrOptimizer(Optimizer):
         #logverb('  Topt  ', topt)
         #logverb('  Tstep ', tstep)
         # print('Stepped alpha=', alpha, 'for dlogprob', dlogprob)
-        print ("LTimes:", lt) 
         if variance:
             return dlogprob, X, alpha, var
         return dlogprob, X, alpha
@@ -338,10 +338,7 @@ class LsqrOptimizer(Optimizer):
             if dlnp <= dchisq:
                 break
         lt[2] += time.time()-t
-        t = time.time()
         R.update(steps=step)
-        lt[3] += time.time()-t
-        print ("LTimesx:", lt)
         return R
 
     def getUpdateDirection(self, tractor, allderivs, damp=0., priors=True,

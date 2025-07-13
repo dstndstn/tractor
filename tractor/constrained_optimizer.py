@@ -9,15 +9,16 @@ tu = np.zeros(5)
 logverb = print
 logmsg  = print
 
+def printTiming():
+    print ("DTimesx [tryUpdates 0 optimize]:", dt)
+    print ("TryUpdates:", tu, tu.sum())
+
 class ConstrainedOptimizer(LsqrOptimizer):
 
     def __init__(self, *args, **kwargs):
         super(ConstrainedOptimizer, self).__init__(*args, **kwargs)
         self.stepLimited = False
 
-    def printTiming(self):
-        print ("DTimes:", dt)
-    
     def optimize_loop(self, tractor, dchisq=0., steps=50,
                       dchisq_limited=1e-6, **kwargs):
         # print()
@@ -46,9 +47,6 @@ class ConstrainedOptimizer(LsqrOptimizer):
         R.update(steps=step)
         R.update(hit_limit=self.last_step_hit_limit,
                  ever_hit_limit=self.hit_limit)
-        dt[3] += time.time()-t
-        print ("DTimes:", dt)
-        #self.printTiming()
         return R
 
     def tryUpdates(self, tractor, X, alphas=None):
@@ -207,5 +205,4 @@ class ConstrainedOptimizer(LsqrOptimizer):
         pa = [p + alphaBest * d for p, d in zip(p0, X)]
         tractor.setParams(pa)
         dt[0] += time.time()-t0
-        print ("DTimesx:", dt, tu, tu.sum())
         return pBest - pBefore, alphaBest

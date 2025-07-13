@@ -142,9 +142,9 @@ class FactoredOptimizer(object):
         t = time.time()
         x_imgs = None
         image_thawed = tr.isParamThawed('images')
-        print ("LIN1")
+        #print ("LIN1")
         if image_thawed:
-            print ("LIN2")
+            #print ("LIN2")
             tct[6] += 1
             cat_frozen = tr.isParamFrozen('catalog')
             if not cat_frozen:
@@ -168,12 +168,12 @@ class FactoredOptimizer(object):
         if image_thawed:
             tr.freezeParam('images')
         #print('getLinearUpdateDirection( kwargs=', kwargs, ')')
-        print ("LIN3")
+        #print ("LIN3")
         img_opts = self.getSingleImageUpdateDirections(tr, **kwargs)
         tt[4] += time.time()-t
         if len(img_opts) == 0:
             tctnew[1] += 1
-            print ("LIN4")
+            #print ("LIN4")
             if x_imgs is not None:
                 return x_imgs
             return None
@@ -501,8 +501,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #assert(all([tim.sky.getConstant() == 0 for tim in tr.images]))
         # Assume single source
         assert(len(tr.catalog) == 1)
-        img_pix = [tim.data for tim in tr.images]
-        img_ie  = [tim.getInvError() for tim in tr.images]
+        #img_pix = [tim.data for tim in tr.images]
+        img_pix = [tim.getImage(use_gpu=True) for tim in tr.images]
+        img_ie  = [tim.getInvError(use_gpu=True) for tim in tr.images]
         # Assume galaxy
         src = tr.catalog[0]
         assert(isinstance(src, ProfileGalaxy))
@@ -563,7 +564,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #print (f'{px=} {x0=} {x1=} {py=} {y0=} {y1=} {sourceOut=}')
         #print (f'{gpu_halfsize}')
 
-        print (f'{sourceOut=}')
+        #print (f'{sourceOut=}')
         """
         if np.any(sourceOut):
             print ("running CPU version")
@@ -637,8 +638,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             assert(np.abs(muy) <= 0.5)
 
             # Embed pix and ie in images the same size as pW,pH.
-            padpix = np.zeros((pH,pW), np.float32)
-            padie  = np.zeros((pH,pW), np.float32)
+            padpix = cp.zeros((pH,pW), cp.float32)
+            padie  = cp.zeros((pH,pW), cp.float32)
             assert(sy <= 0 and sx <= 0)
             #padpix[-sy-1: -sy+mh, -sx-1: -sx+mw] = mmpix
             #padie [-sy-1: -sy+mh, -sx-1: -sx+mw] = mmie
@@ -867,8 +868,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         t1 = time.time()
         Nimages = len(tr.images)
 
-        img_pix = [tim.data for tim in tr.images]
-        img_ie  = [tim.getInvError() for tim in tr.images]
+        #img_pix = [tim.data for tim in tr.images]
+        img_pix = [tim.getImage(use_gpu=True) for tim in tr.images]
+        img_ie  = [tim.getInvError(use_gpu=True) for tim in tr.images]
         # Assume galaxy
         src = tr.catalog[0]
         assert(isinstance(src, ProfileGalaxy))
@@ -923,7 +925,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                             1+px-x0, 1+x1-px, 1+py-y0, 1+y1-py,
                             psfH//2, psfW//2]), axis=0)
         sourceOut = (px < x0) + (px > x1 - 1) + (py < y0) + (py > y1 - 1)
-        print (f'{sourceOut=}')
+        #print (f'{sourceOut=}')
         """
         if np.any(sourceOut):
             print ("V: running CPU version")
@@ -972,8 +974,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         assert(np.abs(muy).max() <= 0.5)
 
         # Embed pix and ie in images the same size as pW,pH.
-        padpix = np.zeros((Nimages, pH,pW), np.float32)
-        padie  = np.zeros((Nimages, pH,pW), np.float32)
+        padpix = cp.zeros((Nimages, pH,pW), cp.float32)
+        padie  = cp.zeros((Nimages, pH,pW), cp.float32)
         assert(np.all(sy <= 0) and np.all(sx <= 0))
 
         x_delta = np.ones(mx0.shape, np.int32)
