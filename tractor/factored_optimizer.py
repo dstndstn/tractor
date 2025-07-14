@@ -2144,15 +2144,40 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         logpriors = []
         for _,p,_,_ in steps:
             tractor.setParams(p)
-            # for itim,tim in enumerate(tractor.images):
-            #     x,y = xy[itim]
-            #     pro = src._getShearedProfile(tim, x, y)
-            #     # for _getBatchGalaxyProfiles we need tuples of (name, amix, step)...
-            #     profiles.append(('', pro, 0.))
+            # for _getBatchGalaxyProfiles we need tuples of (name, amix, step)...
             profiles.append(('', getShearedProfileGPU(src, tractor.images, px, py), 0.))
-
+            # While we're stepping through the parameters, compute log-priors...
             lp = tractor.getLogPrior()
             logpriors.append(lp)
+        # Unfortunately, Sersic galaxies can get a different number of Gaussian mixture components
+        # as we step the Sersic index parameter, so in the "profiles" above, they can have different
+        # sizes; _getBatchGalaxyProfiles requires them to be the same sizes - so check and pad if
+        # necessary.
+        ng = np.unique([pro.var.shape[1] for _,pro,_ in profiles])
+        if len(ng) != 1:
+            # pad
+            padsize = max(ng)
+            for _,pro,_ in profiles:
+                shape = pro.var.shape
+                # needs padding?
+                oldsize = shape[1]
+                if shape[1] == padsize:
+                    continue
+                newshape = (shape[0], padsize, shape[2], shape[3])
+                # var: size (nimages, ng, 2, 2) - cupy
+                padded = cp.zeros(newshape)
+                padded[:,:oldsize,:,:] = pro.var
+                pro.var = padded
+                # amp: size (ng,) -- a numpy array (not cupy) for some reason
+                padded = np.zeros(padsize)
+                padded[:oldsize] = pro.amp
+                pro.amp = padded
+                # mean: size (ng,2) -- also a numpy array
+                shape = pro.mean.shape
+                newshape = (padsize, shape[1])
+                padded = np.zeros(newshape)
+                padded[:oldsize,:] = pro.mean
+                pro.mean = padded
 
         print('Total of', len(profiles), 'galaxy profiles to compute')
 
