@@ -1912,6 +1912,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         return Xic
 
     def computeGalaxyModelsVectorized(self, img_params):
+        # Note, this does *not* scale by *counts*, it produces unit-flux models
         t1 = time.time()
         #assert(img_params.mogs is None)
         assert(img_params.ffts is not None)
@@ -2100,7 +2101,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # - pass in / cache initial logprob / model?
         # - pass in / cache BatchPixelizedPSF ??
 
-
         if not ((len(tractor.catalog) == 1) and
                 isinstance(tractor.catalog[0], ProfileGalaxy) and
                 tractor.isParamFrozen('images')):
@@ -2110,15 +2110,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         print('number of images:', len(tractor.images))
         src = tractor.catalog[0]
         steps = self.getParameterSteps(tractor, X, alphas)
-        print('number of steps to try:', len(steps))
-        print('alphas:', [s[0] for s in steps])
-
-        # modelmasks are set
-        # print('modelmasks:')
-        # for img in tractor.images:
-        #     mm = tractor._getModelMaskFor(img, src)
-        #     print('  ', img, ':', mm)
-
+        print('number of steps (alphas) to try:', len(steps))
         if len(steps) == 0:
             return 0., 0.
 
@@ -2132,8 +2124,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # pixel position of the source in each image
         xy = [tim.getWcs().positionToPixel(src.pos) for tim in tractor.images]
         px, py = np.array(xy).T
-        # brightness
-        fluxes = [tim.getPhotoCal().brightnessToCounts(src.brightness) for tim in tractor.images]
         # pixel region to render
         masks = [tractor._getModelMaskFor(tim, src) for tim in tractor.images]
         img_sky = [tim.getSky().getConstant() for tim in tractor.images]
@@ -2141,11 +2131,14 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         img_ie  = [tim.getInvError() for tim in tractor.images]
 
         profiles = []
+        fluxes = []
         logpriors = []
         for _,p,_,_ in steps:
             tractor.setParams(p)
             # for _getBatchGalaxyProfiles we need tuples of (name, amix, step)...
             profiles.append(('', getShearedProfileGPU(src, tractor.images, px, py), 0.))
+            # grab the brightnesses
+            fluxes.append([tim.getPhotoCal().brightnessToCounts(src.brightness) for tim in tractor.images])
             # While we're stepping through the parameters, compute log-priors...
             lp = tractor.getLogPrior()
             logpriors.append(lp)
@@ -2179,8 +2172,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 padded[:oldsize,:] = pro.mean
                 pro.mean = padded
 
-        print('Total of', len(profiles), 'galaxy profiles to compute')
-
         img_params, cx,cy,pW,pH = self._getBatchImageParams(tractor, masks, xy)
 
         gals = self._getBatchGalaxyProfiles(profiles, masks, px, py, cx, cy, pW, pH,
@@ -2190,6 +2181,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         # CRAIG -- at this point, we have rendered the galaxy models, in G.
         # We should have the (padded) image pixels and inverse-errors in 'mmpix' and 'mmie' on the GPU.
+        # (ie, I think they're all the same shape and ready to go...)
         # At this point, we need to compute the log-probs for each step in `steps`.
         # The log-probs are equal to the logpriors plus the log-likelihoods, which are
         # equal to the -0.5 * the sum of chi-squared values: (data - model) * inverr.
@@ -2200,8 +2192,20 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # of the best one.  delta-logprob will be the log-prob relative to the last one
         # (corresponding to the "step" we added at p0).
 
+        # copy-pasting some additional description from slack:
 
-
+        # I don’t know exactly what shape G is at this point, but conceptually it is
+        #   N_steps x N_images x postage-stamp-size
+        # For each step, we want to compute
+        #    chisq = sum([((G[i_step, i_image] * fluxes[i_step, i_image] - mm_pix[i_image]) * mm_ie[i_image])**2 for i_image in range(N_images)])
+        # that is,
+        #    chisq = sum over i_image:
+        #                 of chi**2  (pixelwise)
+        #                 where chi = (model - data) * inverr
+        #                 and data = mm_pix[i_image,...], and inverr = mm_ie[i_image...]
+        #                 and model = G * flux[i_step,i_image] + sky[i_image]
+        # and then
+        #    logprob = logprior[i_step] + -0.5*chisq
 
         # HACK - superclass
         tractor.setParams(p0)
