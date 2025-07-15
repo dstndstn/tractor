@@ -144,7 +144,7 @@ class ConstrainedOptimizer(LsqrOptimizer):
                     step_limit = True
                     do_break = True
                     # reduce alpha to correspond to the max step size
-                    alpha = mx / step
+                    alpha = mx / abs(step_direction[i])
 
             # 2. apply lower and upper bounds
             hit_limit = False
