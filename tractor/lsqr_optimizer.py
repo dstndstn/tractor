@@ -7,9 +7,10 @@ from tractor.utils import listmax
 import time
 
 lt = np.zeros(5)
+lct = np.zeros(2, dtype=np.int32)
 
 def printTiming():
-    print ("LTimes [getLin tryUpdates optimize 0 getUpdateDir]:", lt)
+    print ("LTimes [getLin tryUpdates optimize 0 getUpdateDir]:", lt, "LCT", lct)
 
 class LsqrOptimizer(Optimizer):
 
@@ -314,6 +315,7 @@ class LsqrOptimizer(Optimizer):
         #logverb('X: len', len(X), '; non-zero entries:', np.count_nonzero(X))
         logverb('Finding optimal step size...')
         #t0 = Time()
+        lct[0] += 1
         (dlogprob, alpha) = self.tryUpdates(tractor, X, alphas=alphas)
         lt[1] += time.time()-t
         #tstep = Time() - t0
@@ -658,7 +660,7 @@ class LsqrOptimizer(Optimizer):
 
         if bail:
             lt[4] += time.time()-t
-            print ("LTimesy:",lt)
+            #print ("LTimesy:",lt)
             if shared_params:
                 return np.zeros(len(paramindexmap))
             return np.zeros(len(allderivs))
@@ -694,7 +696,7 @@ class LsqrOptimizer(Optimizer):
             X[colscales > 0] /= colscales[colscales > 0]
         logverb('  X=', X)
         lt[4] += time.time()-t
-        print ("LTimesy:",lt)
+        #print ("LTimesy:",lt)
 
         if variance:
             if shared_params:

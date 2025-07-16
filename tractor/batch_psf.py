@@ -428,7 +428,7 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
 
     def getPointSourcePatch(self, px, py, minval=0., modelMask=None,
                             radius=None, **kwargs):
-        print ("getPointSourcePatch1", self)
+        #print ("getPointSourcePatch1", self)
         if self.sampling != 1.:
             return self._getOversampledPointSourcePatch(px, py, minval=minval,
                                                         modelMask=modelMask,

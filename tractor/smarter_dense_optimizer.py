@@ -1,9 +1,9 @@
-from tractor.dense_optimizer import ConstrainedDenseOptimizer
+from tractor.constrained_optimizer import ConstrainedOptimizer
 import numpy as np
 from numpy.linalg import lstsq, LinAlgError
 from tractor.utils import savetxt_cpu_append
 
-class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
+class SmarterDenseOptimizer(ConstrainedOptimizer):
 
     def getUpdateDirection(self, tractor, allderivs, damp=0., priors=True,
                            scale_columns=True, scales_only=False,
@@ -309,7 +309,6 @@ class SmarterDenseOptimizer(ConstrainedDenseOptimizer):
             chi = chi[y0:y1, x0:x1]
             w = x1-x0
             h = y1-y0
-            #print ("CHI", chi.shape, "B",B.shape, "Row",rowstart, "WxH",w, h, "Y0Y1X0X1",y0, y1, x0, x1)
             B[rowstart: rowstart + w*h] = chi.flat
             del chi
         #savetxt_cpu_append('cb1.txt', B)

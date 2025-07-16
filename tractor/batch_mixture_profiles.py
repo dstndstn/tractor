@@ -34,7 +34,7 @@ dev_var = np.append(dev_var, 0.)
 ####################
 
 
-class BatchImageDerivs(object):
+class BatchGalaxyProfiles(object):
     '''This supercedes the img_dervis list
         N = number of blobs
         nmogs = number of mogs
@@ -46,7 +46,7 @@ class BatchImageDerivs(object):
         step = list of amixes.step
     ''' 
 
-    def __init__(self, amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi, sky, dx, dy, fit_pos):
+    def __init__(self, amixes, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, roi, sky, dx, dy):
         t = time.time()
         self.Nimages = len(counts)
         N = len(amixes)
@@ -78,13 +78,11 @@ class BatchImageDerivs(object):
         self.mh = mh
         self.mw = mw
         self.counts = counts
-        self.cdi = cdi
         self.roi = roi
         self.sky = sky
 
         self.dx = dx
         self.dy = dy
-        self.fit_pos = fit_pos
 
         #self.maxNmogs = IM.shape[1] 
         #self.maxNfft = IF.shape[1] 
@@ -278,7 +276,7 @@ class BatchImageDerivs(object):
         tb[7] += time.time()-t
 
     def tostr(self):
-        print("****** BatchImageDerivs *****")
+        print("****** BatchGalaxyProfiles *****")
         print(f'\t{self.N=}, {self.nmogs=}, {self.nfft=}, {self.K=}, {self.D=}')
         if self.mogs is None:
             print ("No Mogs")
@@ -291,7 +289,7 @@ class BatchImageDerivs(object):
         print ("Names ", self.names)
         print ("Steps ", self.steps)
         print (f'\t{self.mux=}, {self.muy=}, {self.mh=}, {self.mw=}')
-        print (f'\t{self.counts=}, {self.cdi=}, {self.roi=}')
+        print (f'\t{self.counts=}, {self.roi=}')
 
 class ImageDerivs(object):
     '''This supercedes the img_dervis list
@@ -449,7 +447,11 @@ class BatchImageParams(object):
         self.mh = max(self.mh, imderiv.mh)
         self.mw = max(self.mw, imderiv.mw)
 
-    def addBatchImageDerivs(self, bimderiv):
+    def addBatchGalaxyDerivs(self, cdi, fit_pos):
+        self.cdi = cdi
+        self.fit_pos = fit_pos
+
+    def addBatchGalaxyProfiles(self, bimderiv):
         t = time.time()
         #print ("ADD_BATCH")
         assert(self._initialized is False)
@@ -467,13 +469,11 @@ class BatchImageParams(object):
         self.mux = cp.array([bimderiv.mux]*self.maxNd).T.ravel()
         self.muy = cp.array([bimderiv.muy]*self.maxNd).T.ravel()
         self.counts = bimderiv.counts
-        self.cdi = bimderiv.cdi
         self.roi = bimderiv.roi
         self.steps = bimderiv.steps
         self.sky = bimderiv.sky
         self.dx = bimderiv.dx
         self.dy = bimderiv.dy
-        self.fit_pos = bimderiv.fit_pos
         tb[0] += time.time()-t
         t = time.time()
 
