@@ -5,14 +5,14 @@ from tractor.utils import ParamList
 from tractor import ducks
 
 def median_estimator(pix, mask, min_fraction=None, **kwargs):
-    N = len(pix)
+    N = len(pix.ravel())
     if mask is not None:
         pix = pix[mask]
+        if min_fraction is not None:
+            if len(pix) <= (N * min_fraction):
+                return 0.
     if len(pix) == 0:
         return 0.
-    if min_fraction is not None:
-        if len(pix) <= (N * min_fraction):
-            return 0.
     return np.median(pix)
 
 class SplineSky(ParamList, ducks.ImageCalibration):
