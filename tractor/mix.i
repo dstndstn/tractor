@@ -9,6 +9,8 @@
 #include <assert.h>
 #include <sys/param.h>
 
+// numpy leaves the symbol "I" defined!!!  RUDE!
+#undef I
 /*
  static int n_exp = 0;
  static int n_expf = 0;
