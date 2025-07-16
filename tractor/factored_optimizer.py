@@ -501,8 +501,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #assert(all([tim.sky.getConstant() == 0 for tim in tr.images]))
         # Assume single source
         assert(len(tr.catalog) == 1)
-        img_pix = [tim.data for tim in tr.images]
-        img_ie  = [tim.getInvError() for tim in tr.images]
+        #img_pix = [tim.data for tim in tr.images]
+        img_pix = [tim.getImage(use_gpu=True) for tim in tr.images]
+        img_ie  = [tim.getInvError(use_gpu=True) for tim in tr.images]
         # Assume galaxy
         src = tr.catalog[0]
         assert(isinstance(src, ProfileGalaxy))
@@ -637,8 +638,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             assert(np.abs(muy) <= 0.5)
 
             # Embed pix and ie in images the same size as pW,pH.
-            padpix = np.zeros((pH,pW), np.float32)
-            padie  = np.zeros((pH,pW), np.float32)
+            padpix = cp.zeros((pH,pW), cp.float32)
+            padie  = cp.zeros((pH,pW), cp.float32)
             assert(sy <= 0 and sx <= 0)
             #padpix[-sy-1: -sy+mh, -sx-1: -sx+mw] = mmpix
             #padie [-sy-1: -sy+mh, -sx-1: -sx+mw] = mmie
@@ -867,8 +868,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         t1 = time.time()
         Nimages = len(tr.images)
 
-        img_pix = [tim.data for tim in tr.images]
-        img_ie  = [tim.getInvError() for tim in tr.images]
+        #img_pix = [tim.data for tim in tr.images]
+        img_pix = [tim.getImage(use_gpu=True) for tim in tr.images]
+        img_ie  = [tim.getInvError(use_gpu=True) for tim in tr.images]
         # Assume galaxy
         src = tr.catalog[0]
         assert(isinstance(src, ProfileGalaxy))
@@ -2410,8 +2412,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
     def _getBatchGalaxyProfiles(self, amixes_gpu, masks, px, py, cx, cy, pW, pH,
                                 img_counts, img_sky, img_pix, img_ie):
-        #Nimages = len(img_counts)
-        Nimages = len(img_pix)
+        Nimages = len(img_counts)
+        #Nimages = len(img_pix)
 
         #Not optimal but for now go back into loop
         mx0, mx1, my0, my1, mh, mw = np.array([(mm.x0, mm.x1, mm.y0, mm.y1)+mm.shape for mm in masks]).T
@@ -2436,8 +2438,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         assert(np.abs(muy).max() <= 0.5)
 
         # Embed pix and ie in images the same size as pW,pH.
-        padpix = np.zeros((Nimages, pH,pW), np.float32)
-        padie  = np.zeros((Nimages, pH,pW), np.float32)
+        padpix = cp.zeros((Nimages, pH,pW), cp.float32)
+        padie  = cp.zeros((Nimages, pH,pW), cp.float32)
         assert(np.all(sy <= 0) and np.all(sx <= 0))
 
         x_delta = np.ones(mx0.shape, np.int32)

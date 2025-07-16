@@ -11,8 +11,8 @@ logverb = print
 logmsg  = print
 
 def printTiming():
-    print ("DTimes:", dt)
-    print ("TryUpdates:", tu, "TC", tc)
+    print ("DTimesx [tryUpdates 0 optimize]:", dt)
+    print ("TryUpdates:", tu, tu.sum(), "TC", tc)
 
 class ConstrainedOptimizer(LsqrOptimizer):
 
