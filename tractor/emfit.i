@@ -7,6 +7,10 @@
 #include <numpy/arrayobject.h>
 #include <math.h>
 #include <assert.h>
+
+// numpy leaves the symbol "I" defined!!!  RUDE!
+#undef I
+
     %}
 
 %init %{
