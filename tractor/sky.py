@@ -71,3 +71,20 @@ class ConstantSky(ScalarParam, ducks.ImageCalibration):
         self.toFitsHeader(hdr, prefix='SKY_')
 
         fitsio.write(filename, None, header=hdr, clobber=True)
+
+    def to_fits_table(self):
+        # Returns a single-row FITS table
+        from astrometry.util.fits import fits_table
+        import numpy as np
+        T = fits_table()
+        tt = type(self)
+        sky_type = '%s.%s' % (tt.__module__, tt.__name__)
+        T.skyclass = np.array([sky_type])
+        T.value = np.array([self.val])
+        assert(len(T) == 1)
+        return T
+
+    @classmethod
+    def from_fits_row(cls, Ti):
+        sky = cls(Ti.value)
+        return sky
