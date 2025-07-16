@@ -2095,6 +2095,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         if self._gpumode == 0:
             return super().tryUpdates(tractor, X, alphas=alphas)
 
+        return super().tryUpdates(tractor, X, alphas=alphas)
         print ("GPU FACTORED TRY UPDATES")
 
         # Dustin's FIXME improvement ideas
@@ -2175,9 +2176,10 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         img_params, cx,cy,pW,pH = self._getBatchImageParams(tractor, masks, xy)
 
         gals = self._getBatchGalaxyProfiles(profiles, masks, px, py, cx, cy, pW, pH,
-                                            fluxes, img_sky, img_pix, img_ie)
+                                            fluxes[0], img_sky, img_pix, img_ie)
         img_params.addBatchGalaxyProfiles(gals)
         G = self.computeGalaxyModelsVectorized(img_params)
+        print ("G", G.shape)
 
         # CRAIG -- at this point, we have rendered the galaxy models, in G.
         # We should have the (padded) image pixels and inverse-errors in 'mmpix' and 'mmie' on the GPU.
@@ -2408,7 +2410,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
     def _getBatchGalaxyProfiles(self, amixes_gpu, masks, px, py, cx, cy, pW, pH,
                                 img_counts, img_sky, img_pix, img_ie):
-        Nimages = len(img_counts)
+        #Nimages = len(img_counts)
+        Nimages = len(img_pix)
 
         #Not optimal but for now go back into loop
         mx0, mx1, my0, my1, mh, mw = np.array([(mm.x0, mm.x1, mm.y0, mm.y1)+mm.shape for mm in masks]).T
@@ -2487,6 +2490,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # render w/ MoG.
         IM = ((pW/2)**2 < (nsigma2**2 * vv))
         IF = ((pW/2)**2 > (nsigma1**2 * vv))
+        print ("vv", vv.shape, "IM", IM.shape, "IF",IF.shape)
         ramp = np.any(IM*IF)
         #mogweights = cp.ones(Nimages, dtype=np.float32)
         #fftweights = cp.ones(Nimages, dtype=np.float32)
