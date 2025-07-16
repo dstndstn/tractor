@@ -1,7 +1,7 @@
 from __future__ import print_function
 import numpy as np
 from tractor.utils import MultiParams, _isint, listmax, get_class_from_name
-
+import traceback
 
 class Image(MultiParams):
     '''
@@ -36,12 +36,16 @@ class Image(MultiParams):
 
         If *photocal* is not given, assumes count units.
         '''
+        #import cupy as cp
+        #self.data = cp.asarray(data)
         self.data = data
+        self.data_gpu = None
         if inverr is not None:
             self.inverr = inverr
         elif invvar is not None:
             self.setInvvar(invvar)
 
+        self.inverr_gpu = None
         self.name = name
         self.zr = kwargs.pop('zr', None)
         self.time = time
@@ -157,15 +161,22 @@ class Image(MultiParams):
                 self.photocal.hashkey())
 
     def numberOfPixels(self):
-        (H, W) = self.data.shape
-        return W * H
+        #(H, W) = self.data.shape
+        #return W * H
+        return self.data.size
 
-    def getInvError(self):
+    def getInvError(self, use_gpu=False):
+        if use_gpu:
+            if self.inverr_gpu is None:
+                import cupy as cp
+                self.inverr_gpu = cp.asarray(self.inverr)
+            return self.inverr_gpu
         return self.inverr
 
-    def getInvErrorGPU(self):
-        import cupy as cp
-        return cp.asarray(self.inverr)
+    def setInvError(self, inverr):
+        self.inverr = inverr
+        #print ("Clearing GPU INVERR")
+        self.inverr_gpu = None #Clear GPU, will be copied again on demand
 
     def getInvvar(self):
         return self.inverr**2
@@ -175,12 +186,19 @@ class Image(MultiParams):
         # (intel mkl / intel-numpy bug)
         with np.errstate(invalid='ignore'):
             self.inverr = np.sqrt(iv)
+            self.inverr_gpu = None
 
-    def getImage(self):
+    def getImage(self, use_gpu=False):
+        if use_gpu:
+            if self.data_gpu is None:
+                import cupy as cp
+                self.data_gpu = cp.asarray(self.data)
+            return self.data_gpu
         return self.data
 
     def setImage(self, img):
         self.data = img
+        self.data_gpu = None
 
     def getPsf(self):
         return self.psf
