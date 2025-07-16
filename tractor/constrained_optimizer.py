@@ -35,13 +35,13 @@ class ConstrainedOptimizer(LsqrOptimizer):
         self.last_step_hit_limit = False
         tc[6] += 1
         for step in range(steps):
-            print('Optimize_loop: step', step)
+            #print('Optimize_loop: step', step)
             self.stepLimited = False
             dlnp,_,_ = self.optimize(tractor, **kwargs)
             tc[7] += 1
 
-            print('Optimize_loop: step', step, 'dlnp', dlnp, 'hit limit:',
-                  self.hit_limit, 'step limit:', self.stepLimited)
+            #print('Optimize_loop: step', step, 'dlnp', dlnp, 'hit limit:',
+            #      self.hit_limit, 'step limit:', self.stepLimited)
             #for s in tractor.catalog:
             #    print(s)
 
@@ -88,16 +88,13 @@ class ConstrainedOptimizer(LsqrOptimizer):
 
             tractor.setParams(p)
             logprob = tractor.getLogProb()
-            print (tc[0], tc[1], "LOGPROB", logprob, logprob_best, round(logprob, 5), round(logprob_best, 5), "ALPHA", alpha)
 
             if not np.isfinite(logprob):
-                print (tc[0], tc[1], "INFINITE")
                 logmsg('  Got bad log-prob', logprob)
                 break
 
             if logprob < (logprob_best - 1.):
                 # We're getting significantly worse -- quit line search
-                print (tc[0], tc[1], "WORSE", logprob, logprob_best) 
                 break
 
             if logprob > logprob_best:
@@ -106,9 +103,7 @@ class ConstrainedOptimizer(LsqrOptimizer):
                 alpha_best = alpha
                 logprob_best = logprob
                 p_best = p
-                print (tc[0], tc[1], "BEST", logprob, logprob_best, round(logprob, 5), round(logprob_best, 5), alpha_best, p_best)
 
-        print (tc[0], tc[1], tc[5], "FINAL", logprob_best, round(logprob_best, 5), alpha_best, p_best)
         tractor.setParams(p_best)
         tu[2] += time.time()-t0
         tc[5] += 1
@@ -201,5 +196,4 @@ class ConstrainedOptimizer(LsqrOptimizer):
 
             if do_break:
                 break
-        print (tc[0], tc[1], tc[2], "RESULTS", len(results))
         return results

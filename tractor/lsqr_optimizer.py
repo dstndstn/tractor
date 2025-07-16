@@ -660,7 +660,7 @@ class LsqrOptimizer(Optimizer):
 
         if bail:
             lt[4] += time.time()-t
-            print ("LTimesy:",lt)
+            #print ("LTimesy:",lt)
             if shared_params:
                 return np.zeros(len(paramindexmap))
             return np.zeros(len(allderivs))
@@ -696,7 +696,7 @@ class LsqrOptimizer(Optimizer):
             X[colscales > 0] /= colscales[colscales > 0]
         logverb('  X=', X)
         lt[4] += time.time()-t
-        print ("LTimesy:",lt)
+        #print ("LTimesy:",lt)
 
         if variance:
             if shared_params:
