@@ -10,7 +10,7 @@ import scipy
 import scipy.fft
 import time
 from tractor.batch_psf import BatchPixelizedPSF, lanczos_shift_image_batch_gpu
-from tractor.batch_mixture_profiles import ImageDerivs, BatchImageParams, BatchMixtureOfGaussians, BatchImageDerivs
+from tractor.batch_mixture_profiles import ImageDerivs, BatchImageParams, BatchMixtureOfGaussians, BatchGalaxyProfiles
 from tractor.batch_galaxy import getShearedProfileGPU, getDerivativeShearedProfilesGPU, print_tbs
 from tractor.patch import ModelMask
 import cupy as cp
@@ -222,7 +222,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
     def printTiming(self):
         print ("Times:",tt,tct)
         print ("Sout:", sout)
-        print ("newTimes", ttnew, tctnew)
+        #print ("newTimes", ttnew, tctnew)
 
     def getSingleImageUpdateDirections(self, tr, **kwargs):
         #import traceback
@@ -1058,8 +1058,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # are we fitting for the position of this source?
         fit_pos = np.asarray([(src.getPosition().numberOfParams() > 0)]*Nimages)
 
-        img_derivs = BatchImageDerivs(amixes_gpu, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi, sky, dxi, dyi, fit_pos)
-        img_params.addBatchImageDerivs(img_derivs)
+        img_derivs = BatchGalaxyProfiles(amixes_gpu, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, roi, sky, dxi, dyi)
+        img_params.addBatchGalaxyProfiles(img_derivs)
+        img_params.addBatchGalaxyDerivs(cdi, fit_pos)
         #img_derivs.tostr()
 
         i = 0
