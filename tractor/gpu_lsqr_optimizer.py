@@ -89,11 +89,11 @@ class GPULsqrOptimizer(LsqrOptimizer):
                 #inverrs = img.getInvErrorGPU()
                 (H, W) = img.shape
                 row0 = imgoffs[img]
-                deriv.clipTo(W, H, use_gpu=False)
+                deriv.clipTo(W, H)
                 #pix = deriv.getPixelIndices(img)
                 #gsub[3] += time.time()-tx
                 # Assuming deriv.getPixelIndices() returns CuPy array
-                pix = deriv.getPixelIndices(img, use_gpu=False) 
+                pix = deriv.getPixelIndices(img)
                 #print ("PIX", pix.shape, pix)
                 glt[6] += time.time()-tx
                 tx = time.time()
@@ -108,7 +108,7 @@ class GPULsqrOptimizer(LsqrOptimizer):
                 assert(pix[-1] < img.numberOfPixels())
 
                 # Assuming deriv.getImage() returns CuPy array
-                dimg = deriv.getImage(use_gpu=False)
+                dimg = deriv.getImage()
                 #nz = cp.flatnonzero(dimg)
                 #dimg = deriv.getImage()
                 #gsub[4] += time.time()-tx
@@ -122,7 +122,7 @@ class GPULsqrOptimizer(LsqrOptimizer):
                 gsub[0] += time.time()-tx
                 tx = time.time()
 
-                if len(nz) == 0:
+                if not np.any(nz):
                     logverb('Col %i: all derivs are zero')
                     continue
                 
@@ -156,6 +156,9 @@ class GPULsqrOptimizer(LsqrOptimizer):
             gsub[3] += time.time()-tx
             tx = time.time()
 
+            if len(vals) == 0:
+                print ("VALS LEN 0")   
+                continue
             mx = cp.max(cp.abs(vals))
             if mx == 0:
                 logmsg('mx == 0:', len(cp.flatnonzero(VV)), 'of', len(VV), 'non-zero derivatives,',

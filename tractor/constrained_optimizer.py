@@ -28,20 +28,20 @@ class ConstrainedOptimizer(LsqrOptimizer):
         # print('Optimize_loop:')
         # for s in tractor.catalog:
         #     print(s)
-        #print ("Constrained OPTIMIZE")
+        print ("Constrained OPTIMIZE")
         t = time.time()
         R = {}
         self.hit_limit = False
         self.last_step_hit_limit = False
         tc[6] += 1
         for step in range(steps):
-            #print('Optimize_loop: step', step)
+            print('Optimize_loop: step', step)
             self.stepLimited = False
             dlnp,_,_ = self.optimize(tractor, **kwargs)
             tc[7] += 1
 
-            #print('Optimize_loop: step', step, 'dlnp', dlnp, 'hit limit:',
-            #      self.hit_limit, 'step limit:', self.stepLimited)
+            print('Optimize_loop: step', step, 'dlnp', dlnp, 'hit limit:',
+                  self.hit_limit, 'step limit:', self.stepLimited)
             #for s in tractor.catalog:
             #    print(s)
 
@@ -88,6 +88,7 @@ class ConstrainedOptimizer(LsqrOptimizer):
 
             tractor.setParams(p)
             logprob = tractor.getLogProb()
+            print (f'{alpha=} {p=} {step_limit=} {hit_limit=} {logprob=}')
 
             if not np.isfinite(logprob):
                 logmsg('  Got bad log-prob', logprob)
@@ -105,6 +106,9 @@ class ConstrainedOptimizer(LsqrOptimizer):
                 p_best = p
 
         tractor.setParams(p_best)
+        print ("Pbest", p_best)
+        print ("LOGPROB", logprob_best, logprob_before)
+        print ("ALPHA", alpha_best, self.hit_limit, self.last_step_hit_limit)
         tu[2] += time.time()-t0
         tc[5] += 1
         if alpha_best is None:

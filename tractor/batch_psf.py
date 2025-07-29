@@ -39,10 +39,14 @@ def lanczos_shift_image_batch_gpu(imgs, dxs, dys):
     Lx = gpu_lanczos_filter(L, lr+dxs.reshape((nimg,1)))
     Ly = gpu_lanczos_filter(L, lr+dys.reshape((nimg,1)))
     # Normalize the Lanczos interpolants (preserve flux)
+    del lr
     Lx /= Lx.sum(1).reshape((nimg,1))
     Ly /= Ly.sum(1).reshape((nimg,1))
     sx = batch_correlate1d_gpu(imgs, Lx, axis=2, mode='constant')
+    del Lx
     outimg = batch_correlate1d_gpu(sx, Ly, axis=1, mode='constant')
+    del Ly
+    del sx
     if (do_reshape):
         outimg = outimg.reshape(oldshape)
     return outimg

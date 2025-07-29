@@ -10,13 +10,13 @@ import scipy
 import scipy.fft
 import time
 from tractor.batch_psf import BatchPixelizedPSF, lanczos_shift_image_batch_gpu
-from tractor.batch_mixture_profiles import ImageDerivs, BatchImageParams, BatchMixtureOfGaussians, BatchGalaxyProfiles
+from tractor.batch_mixture_profiles import ImageDerivs, BatchImageParams, BatchMixtureOfGaussians, BatchGalaxyProfiles, print_tb
 from tractor.batch_galaxy import getShearedProfileGPU, getDerivativeShearedProfilesGPU, print_tbs
 from tractor.patch import ModelMask
 import cupy as cp
 import time
 from tractor.galaxy import print_ts
-import os
+import os, gc
 
 tx = np.zeros(12)
 ty = np.zeros(4)
@@ -24,11 +24,13 @@ tc = np.zeros(4, np.int32)
 tt = np.zeros(8)
 tct = np.zeros(9, np.int32)
 tt2 = np.zeros(1, np.int32)
-ttnew = np.zeros(5)
+ttnew = np.zeros(8)
 tctnew = np.zeros(5, np.int32)
 sout = np.zeros(2, np.int32)
 
-gdt = np.zeros(8)
+gdt = np.zeros(12)
+fmem = np.zeros(2)
+fmem[0] = 40
 
 image_counter = 0
 #from astrometry.util.plotutils import PlotSequence
@@ -222,13 +224,23 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
     def printTiming(self):
         print ("Times:",tt,tct)
         print ("Sout:", sout)
-        #print ("newTimes", ttnew, tctnew)
+        print ("newTimes", ttnew, tctnew)
+        print(f"GDTimesx: {gdt}") # Original print statement
+        print_tb()
 
     def getSingleImageUpdateDirections(self, tr, **kwargs):
         #import traceback
         #traceback.print_stack()
         tct[4] += 1
         print ("GPU getSingleImageUpdateDirections")
+        #mempool = cp.get_default_memory_pool()
+        #used_bytes = mempool.used_bytes()
+        #tot_bytes = mempool.total_bytes()
+        #print (f'{used_bytes=} {tot_bytes=}')
+        #mempool.free_all_blocks()
+        #used_bytes = mempool.used_bytes()
+        #tot_bytes = mempool.total_bytes()
+        #print (f'After free {used_bytes=} {tot_bytes=}')
         #print ("profile galaxy", isinstance(tr.catalog[0], ProfileGalaxy))
         R_gpu = None
         R_cpu = None
@@ -409,7 +421,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         if s < 0.999 or s > 1.0001:
             src = tr.catalog[0]
             print('Source:', src)
-            self.outputPickle("full", tr)
+            self.outputPickle("full.new.good", tr)
             print ("SIMILARITY BAD  source="+str(tr.catalog[0]))
             #if self.gpuA is not None and self.cpuA is not None:
             #    print ("A matrix", len(self.cpuA)) 
@@ -427,10 +439,10 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                     print('Tim:', tim)
 
                     num = tt2[0]
-                    fname = os.getenv('SCRATCH')+'/pickles/bad_x_'+str(num)+'.pickle'
+                    fname = os.getenv('SCRATCH')+'/pickles/bad_x_new'+str(num)+'.pickle'
                     while os.access(fname, os.F_OK):
                         num += 100
-                        fname = os.getenv('SCRATCH')+'/pickles/bad_x_'+str(num)+'.pickle'
+                        fname = os.getenv('SCRATCH')+'/pickles/bad_x_new'+str(num)+'.pickle'
                     z = tr.images
                     tr.images = [tim]
                     self.outputPickle("x", tr, num=num)
@@ -544,9 +556,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         outer_real_nsigma = 4.
 
         nimages = len(masks)
-        gpu_px = np.zeros(nimages)
-        gpu_py = np.zeros(nimages)
-        gpu_halfsize = np.zeros(nimages)
+        gpu_px = np.zeros(nimages, dtype=np.float32)
+        gpu_py = np.zeros(nimages, dtype=np.float32)
+        gpu_halfsize = np.zeros(nimages, dtype=np.float32)
         sourceOut = np.zeros(nimages, dtype=bool)
         i = 0
         for mm,(px,py),(x0,x1,y0,y1),psf,pix,ie,counts,cdi,tim in zip(
@@ -915,6 +927,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # and centering.
         
         px, py = np.array(pxy).T
+        px = px.astype(np.float32)
+        py = py.astype(np.float32)
         amix_gpu = getShearedProfileGPU(src, tr.images, px, py)
         amixes_gpu = getDerivativeShearedProfilesGPU(src, tr.images, px, py)
         amixes_gpu = [('current', amix_gpu, 0.)] + amixes_gpu
@@ -954,6 +968,36 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         add_to_t2(2, time.time()-t2)
         Xic = self.computeUpdateDirectionsVectorized(img_params, priorVals)
+
+        t3 = time.time()
+        mpool = cp.get_default_memory_pool()
+        ttnew[4] += time.time()-t3
+        #used = mpool.used_bytes()
+        #tot = mpool.total_bytes()
+        #print (f'IP {used=} {tot=}')
+        free_memory, total_memory = cp.cuda.Device().mem_info
+        print(f"Total GPU memory: {total_memory / (1024**3):.2f} GB")
+        print(f"Free GPU memory: {free_memory / (1024**3):.2f} GB")
+        if (free_memory / (1024**3)) < fmem[0]:
+            fmem[0] = free_memory / (1024**3)
+            print(f"MIN GPU memory: {free_memory / (1024**3):.2f} GB")
+        t3 = time.time()
+        del img_params
+        del amixes_gpu
+        ttnew[5] += time.time()-t3
+        #t3 = time.time()
+        #gc.collect()
+        #ttnew[2] += time.time()-t3
+        t3 = time.time()
+        mpool.free_all_blocks()
+        ttnew[3] += time.time()-t3
+        #used = mpool.used_bytes()
+        #tot = mpool.total_bytes()
+        #print (f'IP2 {used=} {tot=}')
+        free_memory, total_memory = cp.cuda.Device().mem_info
+        print(f"Total GPU memory: {total_memory / (1024**3):.2f} GB")
+        print(f"Free GPU memory: {free_memory / (1024**3):.2f} GB")
+
         #print (f'{nbands=}')
         t1 = time.time()
 
@@ -1152,14 +1196,14 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #cp.savetxt('gfsum.txt', Fsum.ravel())
         #cp.savetxt('gp.txt', P.ravel())
         t1 = time.time()
-        G = cp.fft.irfft2(Fsum*P).astype(cp.float64)
+        G = cp.fft.irfft2(Fsum*P).astype(cp.float32)
         add_to_timer(5, time.time()-t1)
         t1 = time.time()
         #Do Lanczos shift
         G = lanczos_shift_image_batch_gpu(G, img_params.mux, img_params.muy)
         #cp.savetxt('gg.txt', G.ravel())
         add_to_timer(6, time.time()-t1)
-        del Fsum
+        del Fsum, P
         #G should be (nimages, maxNd, nw, nv) and mux and muy should be 1d vectors
         assert (G.shape == (img_params.Nimages, img_params.maxNd, img_params.mh, img_params.mw))
 
@@ -1296,7 +1340,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # t2 = (iv1[:,:,:,n,n] * (xx[n,n,n,n,:] - means[:,n,n,n,0][:,:,:,n,:]) * (yy[n,n,n,:,n] - means[:,n,n,n,1][:,:,:,:,n]))
             # print('t2', t2.shape)
             # Sum over the nmog
-            mog_g = cp.sum(scale[:,:,:,cp.newaxis,cp.newaxis] * cp.exp(-0.5*distsq), axis=2)
+            mog_g = cp.sum(scale[:,:,:,cp.newaxis,cp.newaxis] * cp.exp(-0.5*distsq), axis=2).astype(cp.float32)
+            del means, distsq, varcopy
             #print ("MOGG", mog_g.shape, np.where(mog_g == mog_g.max()))
             #cp.savetxt('gmogpatch.txt',mog_g.ravel())
             G += mog_g
@@ -1309,7 +1354,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #Npix is a scalar
         Nd = img_params.maxNd
         cdi = img_params.cdi
-        A = cp.zeros((img_params.Nimages, Npix + Npriors, Nd+2), cp.float64)
+        A = cp.zeros((img_params.Nimages, Npix + Npriors, Nd+2), cp.float32)
         # A is of shape (Nimages, Npix+Npriors, Nd+2)
         # The first element in img_derivs is the current galaxy model parameters.
         mod0 = G[:,0,:,:]
@@ -1318,10 +1363,10 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         ## 02-13-25 - make a mask with only the ROI as ones to mask out background
         roi = img_params.roi
         #roimask can be different for each image
-        roimask = cp.zeros((img_params.Nimages, mod0.shape[1], mod0.shape[2]))
+        roimask = cp.zeros((img_params.Nimages, mod0.shape[1], mod0.shape[2]), dtype=bool)
         #print ("ROI", roi)
         for i, ri in enumerate(roi): 
-            roimask[i, ri[1]:ri[1]+ri[3], ri[0]:ri[0]+ri[2]] = 1
+            roimask[i, ri[1]:ri[1]+ri[3], ri[0]:ri[0]+ri[2]] = True
         ###############
 
         # boolean vector, are we fitting for positions?
@@ -1375,9 +1420,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         #A[:Npix,:] *= ie.ravel()[:, cp.newaxis]
         A[:,:Npix,:] *= img_params.ie.reshape((img_params.Nimages, Npix))[:,:,cp.newaxis]
+        del G
 
-        B = cp.zeros((img_params.Nimages, Npix + Npriors), cp.float64)
+        B = cp.zeros((img_params.Nimages, Npix + Npriors), cp.float32)
         B[:,:Npix] = ((img_params.pix - (img_params.counts[:,cp.newaxis, cp.newaxis]*mod0 + img_params.sky[:, cp.newaxis, cp.newaxis])) * img_params.ie).reshape((img_params.Nimages, Npix))
+        del mod0
 
         #print ("Stepsizes", stepsizes)
         #print ("Counts", img_params.counts[0])
@@ -1412,8 +1459,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             print ("NO PRIORS")
         #cp.savetxt("gap.txt", A.ravel())
         #cp.savetxt("gbp.txt", B.ravel())
-        self.gpuA = A
-        self.gpuB = B 
+        #self.gpuA = A
+        #self.gpuB = B 
 
         # Compute the covariance matrix
         Xicov = cp.matmul(A.swapaxes(-1,-2), A)
@@ -1695,6 +1742,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             Xic.append((X, Xicov))
             print ("X2", X.shape, Xicov.shape)
         """
+        del img_params, A, B, X
         add_to_timer(7, time.time()-t1)
         #print_timer()
         return Xic
@@ -1782,7 +1830,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #Npix is a scalar
         Nd = img_params.maxNd
         cdi = img_params.cdi
-        A = cp.zeros((img_params.Nimages, Npix + Npriors, Nd+2), cp.float64)
+        A = cp.zeros((img_params.Nimages, Npix + Npriors, Nd+2), cp.float32)
         # A is of shape (Nimages, Npix+Npriors, Nd+2)
         # The first element in img_derivs is the current galaxy model parameters.
         mod0 = G[:,0,:,:]
@@ -1791,9 +1839,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         ## 02-13-25 - make a mask with only the ROI as ones to mask out background
         #print (img_params.roi.shape)
         roi = img_params.roi
-        roimask = cp.zeros((img_params.Nimages, mod0.shape[1], mod0.shape[2]))
+        roimask = cp.zeros((img_params.Nimages, mod0.shape[1], mod0.shape[2]), dtype=bool)
         for i, ri in enumerate(roi):
-            roimask[i, ri[1]:ri[1]+ri[3], ri[0]:ri[0]+ri[2]] = 1
+            roimask[i, ri[1]:ri[1]+ri[3], ri[0]:ri[0]+ri[2]] = True
         #roimask[roi[1]:roi[1]+roi[3], roi[0]:roi[0]+roi[2]] = 1
         ###############
 
@@ -1838,9 +1886,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         #A[:Npix,:] *= ie.ravel()[:, cp.newaxis]
         A[:,:Npix,:] *= img_params.ie.reshape((img_params.Nimages, Npix))[:,:,cp.newaxis]
+        del G
 
-        B = cp.zeros((img_params.Nimages, Npix + Npriors), cp.float64)
+        B = cp.zeros((img_params.Nimages, Npix + Npriors), cp.float32)
         B[:,:Npix] = ((img_params.pix - (img_params.counts[:,cp.newaxis, cp.newaxis]*mod0 + img_params.sky[:, cp.newaxis, cp.newaxis])) * img_params.ie).reshape((img_params.Nimages, Npix))
+        del mod0, img_params
         #B[:,:Npix] = ((img_params.pix - img_params.counts[:,cp.newaxis, cp.newaxis]*mod0) * img_params.ie).reshape((img_params.Nimages, Npix))
         # B should be of shape (Nimages, :)                           
         #B = cp.append(((pix - counts*mod0) * ie).ravel(),
@@ -1909,6 +1959,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #    Xic.append((X[i], Xicov[i]))
         ##Change return args to keep as cupy arrays
         Xic = (X, Xicov)
+        del A, B, X
         add_to_timer(9, time.time()-t1)
         add_to_t2(3, time.time()-t2)
         return Xic
@@ -1933,7 +1984,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #P shape (Nimages, nw, nv)
         P = img_params.P[:,cp.newaxis,:,:]
         #print ("FSUM", Fsum.shape, "P", P.shape)
-        G = cp.fft.irfft2(Fsum*P)
+        G = cp.fft.irfft2(Fsum*P).astype(cp.float32)
+        del Fsum, P
         add_to_timer(6, time.time()-t1)
         t1 = time.time()
         #Do Lanczos shift
@@ -1941,7 +1993,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #cp.savetxt('vgg.txt', G.ravel())
         add_to_timer(7, time.time()-t1)
         t1 = time.time()
-        del Fsum
         #G should be (nimages, maxNd, nw, nv) and mux and muy should be 1d vectors
         #print ("G shape", G.shape, img_params.Nimages,img_params.maxNd,img_params.mh,img_params.mw)
         assert (G.shape == (img_params.Nimages, img_params.maxNd, img_params.mh, img_params.mw))
@@ -2055,7 +2106,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # t2 = (iv1[:,:,:,n,n] * (xx[n,n,n,n,:] - means[:,n,n,n,0][:,:,:,n,:]) * (yy[n,n,n,:,n] - means[:,n,n,n,1][:,:,:,:,n]))
             # print('t2', t2.shape)
             # Sum over the nmog
-            mog_g = cp.sum(scale[:,:,:,cp.newaxis,cp.newaxis] * cp.exp(-0.5*distsq), axis=2)
+            mog_g = cp.sum(scale[:,:,:,cp.newaxis,cp.newaxis] * cp.exp(-0.5*distsq), axis=2).astype(cp.float32)
+            del means, distsq, varcopy
             #cp.savetxt('vgmogpatch.txt',mog_g.ravel())
             G += mog_g
 
@@ -2097,6 +2149,15 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         if self._gpumode == 0:
             return super().tryUpdates(tractor, X, alphas=alphas)
 
+        t = time.time()
+        #mempool = cp.get_default_memory_pool()
+        #used_bytes = mempool.used_bytes()
+        #tot_bytes = mempool.total_bytes()
+        #print (f'{used_bytes=} {tot_bytes=}')
+        #mempool.free_all_blocks()
+        #used_bytes = mempool.used_bytes()
+        #tot_bytes = mempool.total_bytes()
+        #print (f'After free {used_bytes=} {tot_bytes=}')
         return super().tryUpdates(tractor, X, alphas=alphas)
         print ("GPU FACTORED TRY UPDATES")
 
@@ -2111,10 +2172,14 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             return super().tryUpdates(tractor, X, alphas=alphas)
 
         print('number of images:', len(tractor.images))
+        Nimages = len(tractor.images)
         src = tractor.catalog[0]
         steps = self.getParameterSteps(tractor, X, alphas)
         print('number of steps (alphas) to try:', len(steps))
+        print ("Alphas", alphas)
         if len(steps) == 0:
+            self.last_step_hit_limit = True
+            self.hit_limit = True
             return 0., 0.
 
         p0 = tractor.getParams()
@@ -2130,13 +2195,16 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # pixel region to render
         masks = [tractor._getModelMaskFor(tim, src) for tim in tractor.images]
         img_sky = [tim.getSky().getConstant() for tim in tractor.images]
-        img_pix = [tim.data for tim in tractor.images]
-        img_ie  = [tim.getInvError() for tim in tractor.images]
+        img_pix = [tim.getImage(use_gpu=True) for tim in tractor.images]
+        img_ie  = [tim.getInvError(use_gpu=True) for tim in tractor.images]
+        #print ("MAXES", img_pix[0].max(), img_ie[0].max())
+        #print ("SUMS", img_pix[0].sum(), img_ie[0].sum())
 
         profiles = []
         fluxes = []
         logpriors = []
         for _,p,_,_ in steps:
+            #print ("P", p)
             tractor.setParams(p)
             # for _getBatchGalaxyProfiles we need tuples of (name, amix, step)...
             profiles.append(('', getShearedProfileGPU(src, tractor.images, px, py), 0.))
@@ -2181,7 +2249,41 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                                             fluxes[0], img_sky, img_pix, img_ie)
         img_params.addBatchGalaxyProfiles(gals)
         G = self.computeGalaxyModelsVectorized(img_params)
-        print ("G", G.shape)
+        gdt[8] += time.time()-t
+        t = time.time()
+        assert(G.shape == (Nimages, len(steps), pH, pW))
+        mmpix = gals.mmpix
+        mmie = gals.mmie
+        fluxes = cp.asarray(fluxes, dtype=cp.float32)
+        sky = cp.asarray(img_sky, dtype=cp.float32)
+        #print ("MMPIX", mmpix.shape, mmie.shape, mmpix.max(), mmpix.sum())
+        #print ("FLUXES", fluxes.shape, fluxes)
+        #print ("SKY", sky.shape, sky)
+
+        #print ("G", G.shape)
+        #chisq = cp.sum([((G[i_image] * fluxes[i_step, i_image] - mmpix[i_image]) * mmie[i_image])**2 for i_image in range(Nimages)])
+        chisq = self.calculate_chi2_cupy(G, fluxes, mmpix, mmie, sky) 
+        free_memory, total_memory = cp.cuda.Device().mem_info
+        print(f"Total GPU memory: {total_memory / (1024**3):.2f} GB")
+        print(f"Free GPU memory: {free_memory / (1024**3):.2f} GB")
+        if (free_memory / (1024**3)) < fmem[0]:
+            fmem[0] = free_memory / (1024**3)
+            print(f"MIN2 GPU memory: {free_memory / (1024**3):.2f} GB")
+        del G, img_params
+        mpool = cp.get_default_memory_pool()
+        mpool.free_all_blocks()
+        print(f"Total GPU memory: {total_memory / (1024**3):.2f} GB")
+        print(f"Free GPU memory: {free_memory / (1024**3):.2f} GB")
+        #print ("CHISQ", chisq.shape)
+        gdt[9] += time.time()-t
+        t = time.time()
+
+        #print ("CHISQ", chisq.get(), -0.5*chisq.get())
+        #print ("PRIOR", logpriors)
+        logprob = np.array(logpriors)-0.5*chisq.get()
+        #print ("LOGPROB", logprob.shape)
+        gdt[10] += time.time()-t
+        t = time.time()
 
         # CRAIG -- at this point, we have rendered the galaxy models, in G.
         # We should have the (padded) image pixels and inverse-errors in 'mmpix' and 'mmie' on the GPU.
@@ -2210,6 +2312,30 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #                 and model = G * flux[i_step,i_image] + sky[i_image]
         # and then
         #    logprob = logprior[i_step] + -0.5*chisq
+
+        max_idx = np.argmax(logprob)
+        print ("LOGPROB", logprob)
+        print ("MAX", max_idx, logprob[max_idx])
+        print ("Pbest", steps[max_idx][1])
+        pbest = steps[max_idx][1]
+        hit_limit = steps[max_idx][2]
+        tractor.setParams(pbest)
+        for i in range(len(steps)):
+            if steps[i][2]:
+                self.hit_limit = True #set if any hits limit
+        gdt[11] += time.time()-t
+        
+        if max_idx == len(logprob)-1:
+            print ("Best is previous")
+            return (0., 0.)
+
+        lp_best = logprob[max_idx]
+        lp_last = logprob[-1]
+        if lp_best > lp_last:
+            # Best we've found so far -- accept this step!
+            self.last_step_hit_limit = hit_limit
+        return (lp_best-lp_last, alphas[max_idx])
+
 
         # HACK - superclass
         tractor.setParams(p0)
@@ -2377,6 +2503,82 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         print(f"GDTimesx: {gdt}") # Original print statement
         return pBest - pBefore, alphaBest
 
+    def calculate_chi2_cupy(self, G, fluxes, mmpix, mmie, sky):
+        """
+        Calculates the chi-squared efficiently using CuPy.
+
+        Args:
+            G (cupy.ndarray): Shape (Nimages, nsteps, height, width).
+            fluxes (cupy.ndarray): Shape (nsteps, Nimages).
+            mmpix (cupy.ndarray): Shape (height, width).
+            mmie (cupy.ndarray): Shape (height, width).
+            sky (cupy.ndarray): Shape (Nimages,).
+
+        Returns:
+            cupy.ndarray: chi2 with shape (Nimages, nsteps).
+        """
+        Nimages, nsteps, height, width = G.shape
+
+        # 1. Reshape sky and fluxes for broadcasting
+        # sky needs to broadcast as (Nimages, 1, 1, 1)
+        sky_reshaped = sky[:, cp.newaxis, cp.newaxis, cp.newaxis]
+
+        # fluxes needs to broadcast as (1, nsteps, 1, 1) across height/width for G,
+        # but the i_image index needs to align with G's first dimension.
+        # It's better to think of fluxes as (nsteps, Nimages)
+        # and then carefully expand its dimensions for the multiplication.
+
+        # We need fluxes to be (Nimages, nsteps, 1, 1) for element-wise multiplication with G
+        # Let's reorder fluxes to (Nimages, nsteps) for easier broadcasting with G
+        # If fluxes is (nsteps, Nimages), we should transpose it for this logic
+        # Or, we can reshape fluxes to (1, nsteps, 1, 1) and G to (Nimages, nsteps, height, width)
+        # Let's adjust for the given fluxes shape (nsteps, Nimages)
+        # Model = G * fluxes[i_step, i_image] + sky[i_image]
+
+        # To align dimensions:
+        # G: (Nimages, nsteps, height, width)
+        # fluxes: (nsteps, Nimages) -> we want to multiply G[i,j,:,:] by fluxes[j,i]
+        # sky: (Nimages,) -> we want to add sky[i]
+
+        # The most straightforward way to handle fluxes given its shape (nsteps, Nimages)
+        # is to transpose it and then expand dimensions for broadcasting with G.
+        # We want fluxes_broadcastable[i_image, i_step, 1, 1]
+        # So, fluxes.T will be (Nimages, nsteps).
+        fluxes_broadcastable = fluxes.T[:, :, cp.newaxis, cp.newaxis] # Shape (Nimages, nsteps, 1, 1)
+
+        # Calculate the model: G * flux + sky
+        # G: (Nimages, nsteps, height, width)
+        # fluxes_broadcastable: (Nimages, nsteps, 1, 1) - broadcasts across height and width
+        # sky_reshaped: (Nimages, 1, 1, 1) - broadcasts across nsteps, height, and width
+        model = G * fluxes_broadcastable + sky_reshaped
+
+        # Calculate (model - data) * inverr
+        # mmpix: (Nimages, height, width)
+        # mmie: (Nimags, height, width)
+        diff = model - mmpix[:,cp.newaxis,:,:]
+        chi = diff * mmie[:,cp.newaxis,:,:] # This is (model - data) * inverr (mmie is inverr)
+        #b = cp.where(mmpix[0] == mmpix[0].max())
+        #try:
+        #    print ("B", b)
+        #    for i in range(len(G[0])):
+        #        print ("I", i, "G", G[0][i][b], "CHI", chi[0][i][b])
+        #    print ("IMG", mmpix[0][b], mmpix[0].sum())
+        #    print ("IE", mmie[0][b], mmie[0].sum())
+        #    for i in range(len(model[0])):
+        #        b = cp.where(model[0][i] == model[0][i].max())
+        #        print ("B", b, "MOD", model[0][i][b], "CHI", chi[0][i][b])
+        #except Exception as ex:
+        #    pass
+        #print ("CHI", cp.sum(chi, axis=(2,3)))
+
+        # Square chi and sum over Nimages, height and width
+        # Sum over Nimages (axis 0), height (axis 2), and width (axis 3)
+        # The result will be a 1D array of shape (nsteps,)
+        chi2 = cp.sum(chi**2, axis=(0, 2, 3))
+        #print ("CHI2", cp.sum(chi**2, axis=(2, 3)), chi2.dtype)
+
+        return chi2
+
     def _getBatchImageParams(self, tr, masks, pxy):
         t1 = time.time()
         Nimages = len(tr.images)
@@ -2388,6 +2590,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         extents = [mm.extent for mm in masks]
 
         px, py = np.array(pxy).T
+        px = px.astype(np.float32)
+        py = py.astype(np.float32)
         psfH, psfW = np.array([psf.shape for psf in psfs]).T
         x0, x1, y0, y1 = np.asarray(extents).T
         gpu_halfsize = np.max(([(x1-x0)/2, (y1-y0)/2,
@@ -2417,7 +2621,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         #Not optimal but for now go back into loop
         mx0, mx1, my0, my1, mh, mw = np.array([(mm.x0, mm.x1, mm.y0, mm.y1)+mm.shape for mm in masks]).T
-        counts = cp.asarray(img_counts, dtype=cp.float64)
+        counts = cp.asarray(img_counts, dtype=cp.float32)
 
         extents = [mm.extent for mm in masks]
         x0, x1, y0, y1 = np.asarray(extents).T
@@ -2451,13 +2655,15 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         for i, pix in enumerate(img_pix):
             #padpix[i, -sy[i]-1:-sy[i]+mh[i], -sx[i]-1:-sx[i]+mw[i]] = pix[my0[i]-1:my1[i], mx0[i]-1:mx1[i]]
             padpix[i, -sy[i]-y_delta[i]:-sy[i]+mh[i], -sx[i]-x_delta[i]:-sx[i]+mw[i]] = pix[my0[i]-y_delta[i]:my1[i], mx0[i]-x_delta[i]:mx1[i]]
+            #print ("PIX", pix.max(), pix[my0[i]-y_delta[i]:my1[i], mx0[i]-x_delta[i]:mx1[i]].max(), padpix[i].max(), pix[my0[i]-y_delta[i], mx0[i]-x_delta[i]], padpix[i, -sy[i]-y_delta[i], -sx[i]-x_delta[i]])
         for i, ie in enumerate(img_ie):
             #padie[i, -sy[i]-1:-sy[i]+mh[i], -sx[i]-1:-sx[i]+mw[i]] = ie[my0[i]-1:my1[i], mx0[i]-1:mx1[i]]
             padie[i, -sy[i]-y_delta[i]:-sy[i]+mh[i], -sx[i]-x_delta[i]:-sx[i]+mw[i]] = ie[my0[i]-y_delta[i]:my1[i], mx0[i]-x_delta[i]:mx1[i]]
+            #print ("IE",ie.max(), padie[i].max())
         roi = cp.asarray([-sx, -sy, mw, mh]).T
         mmpix = cp.asarray(padpix)
         mmie = cp.asarray(padie)
-        sky = cp.asarray(img_sky)
+        sky = cp.asarray(img_sky, dtype=cp.float32)
         #print("SKY", sky.shape)
 
         #print ("DX", dx.shape)
@@ -2492,7 +2698,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # render w/ MoG.
         IM = ((pW/2)**2 < (nsigma2**2 * vv))
         IF = ((pW/2)**2 > (nsigma1**2 * vv))
-        print ("vv", vv.shape, "IM", IM.shape, "IF",IF.shape)
         ramp = np.any(IM*IF)
         #mogweights = cp.ones(Nimages, dtype=np.float32)
         #fftweights = cp.ones(Nimages, dtype=np.float32)
