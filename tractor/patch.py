@@ -83,6 +83,7 @@ class Patch(object):
         self.x0 = x0
         self.y0 = y0
         self.patch = patch
+        self.patch_gpu = None
         self.name = ''
         if patch is not None:
             try:
@@ -226,10 +227,20 @@ class Patch(object):
     def getOrigin(self):
         return (self.x0, self.y0)
 
-    def getPatch(self):
+    def getPatch(self, use_gpu=False):
+        if use_gpu:
+            if self.patch_gpu is None:
+                import cupy as cp
+                self.patch_gpu = cp.asarray(self.patch)
+            return self.patch_gpu
         return self.patch
 
-    def getImage(self):
+    def getImage(self, use_gpu=False):
+        if use_gpu:
+            if self.patch_gpu is None:
+                import cupy as cp
+                self.patch_gpu = cp.asarray(self.patch)
+            return self.patch_gpu
         return self.patch
 
     def getImageGPU(self):
@@ -242,7 +253,7 @@ class Patch(object):
     def getY0(self):
         return self.y0
 
-    def clipTo(self, W, H):
+    def clipTo(self, W, H, use_gpu=False):
         if self.patch is None:
             return False
         if self.x0 >= W:
@@ -256,9 +267,13 @@ class Patch(object):
         #o0 = (self.x0, self.y0, self.patch.shape)
         if self.x0 < 0:
             self.patch = self.patch[:, -self.x0:]
+            if use_gpu:
+                self.patch_gpu = self.patch_gpu[:, -self.x0:]
             self.x0 = 0
         if self.y0 < 0:
             self.patch = self.patch[-self.y0:, :]
+            if use_gpu:
+                self.patch_gpu = self.patch_gpu[-self.y0:, :]
             self.y0 = 0
         # debug
         # S = self.patch.shape
@@ -270,8 +285,12 @@ class Patch(object):
         (h, w) = self.patch.shape
         if (self.x0 + w) > W:
             self.patch = self.patch[:, :(W - self.x0)]
+            if use_gpu:
+                self.patch_gpu = self.patch_gpu[:, :(W - self.x0)]
         if (self.y0 + h) > H:
             self.patch = self.patch[:(H - self.y0), :]
+            if use_gpu:
+                self.patch_gpu = self.patch_gpu[:(H - self.y0), :]
 
         assert(self.x0 >= 0)
         assert(self.y0 >= 0)
@@ -336,7 +355,15 @@ class Patch(object):
         import cupy as cp
         return cp.asarray(self.getPixelIndices(parent, dtype))
 
-    def getPixelIndices(self, parent, dtype=np.int32):
+    def getPixelIndices(self, parent, dtype=np.int32, use_gpu=False):
+        if use_gpu:
+            import cupy as cp
+            if self.patch is None:
+                return cp.array([], dtype)
+            (h, w) = self.shape
+            (H, W) = parent.shape
+            return ( (cp.arange(w, dtype=dtype) + dtype(self.x0))[cp.newaxis, :] +
+                ((cp.arange(h, dtype=dtype) + dtype(self.y0)) * dtype(W))[:, cp.newaxis]).ravel()
         if self.patch is None:
             return np.array([], dtype)
         (h, w) = self.shape
