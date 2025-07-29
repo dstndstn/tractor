@@ -1,13 +1,14 @@
 import numpy as np
 import cupy as cp
 from math import pi
+import gc
 
 def lanczos_filter(order, x, out=None):
     x = np.atleast_1d(x)
     nz = np.logical_and(x != 0., np.logical_and(x < order, x > -order))
     nz = np.flatnonzero(nz)
     if out is None:
-        out = np.zeros(x.shape, dtype=float)
+        out = np.zeros(x.shape, dtype=np.float32)
     else:
         out[x <= -order] = 0.
         out[x >=  order] = 0.
@@ -21,7 +22,7 @@ def gpu_lanczos_filter(order, x, out=None):
     nz = cp.logical_and(x != 0., cp.logical_and(x < order, x > -order))
     #nz = cp.flatnonzero(nz)
     if out is None:
-        out = cp.zeros(x.shape, dtype=float)
+        out = cp.zeros(x.shape, dtype=cp.float32)
     else:
         out[x <= -order] = 0.
         out[x >=  order] = 0.
@@ -91,11 +92,22 @@ def batch_correlate1d_gpu(a, b, axis=1, mode='constant'):
         padded_b = b
     f_a = cp.fft.fft(a, r, axis=axis)
     f_b = cp.fft.fft(padded_b, r, axis=1)
+    del padded_b
     if axis == 1:
         f_p = cp.einsum("ijk,ij->ijk", f_a, cp.conj(f_b))
     else:
         f_p = cp.einsum("ijk,ik->ijk", f_a, cp.conj(f_b))
+    del f_a, f_b
     c = cp.real(cp.fft.fftshift(cp.fft.ifft(f_p, axis=axis), axes=(axis)))
+    del f_p
+    if c.size > 5.e+8/8:
+        import time
+        t = time.time()
+        #Make sure memory is freed
+        gc.collect()
+        mpool = cp.get_default_memory_pool()
+        mpool.free_all_blocks()
+        print ("BATCH CORR", time.time()-t)
     if mode == 'full':
         return c
     if axis == 1:
