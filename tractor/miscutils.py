@@ -101,13 +101,10 @@ def batch_correlate1d_gpu(a, b, axis=1, mode='constant'):
     c = cp.real(cp.fft.fftshift(cp.fft.ifft(f_p, axis=axis), axes=(axis)))
     del f_p
     if c.size > 5.e+8/8:
-        import time
-        t = time.time()
         #Make sure memory is freed
-        gc.collect()
+        #gc.collect()
         mpool = cp.get_default_memory_pool()
         mpool.free_all_blocks()
-        print ("BATCH CORR", time.time()-t)
     if mode == 'full':
         return c
     if axis == 1:

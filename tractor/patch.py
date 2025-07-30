@@ -243,10 +243,6 @@ class Patch(object):
             return self.patch_gpu
         return self.patch
 
-    def getImageGPU(self):
-        import cupy as cp
-        return cp.asarray(self.patch)
-
     def getX0(self):
         return self.x0
 

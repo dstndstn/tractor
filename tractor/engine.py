@@ -19,20 +19,6 @@ from tractor.image import Image
 from tractor.utils import savetxt_cpu_append
 
 import time
-td = np.zeros(2)
-tl = np.zeros(6)
-gtl = np.zeros(6)
-cl = np.zeros(4, dtype=np.int32)
-gcl = np.zeros(4, dtype=np.int32)
-gi = np.zeros(6)
-
-def printTiming():
-    print ("TD:",td)
-    print ("TL:",tl)
-    print ("GTL:",gtl)
-    print ("CL:",cl)
-    print ("GCL:",gcl)
-    print ("GI:",gi)
 
 logger = logging.getLogger('tractor.engine')
 def logverb(*args):
@@ -193,9 +179,6 @@ class Tractor(MultiParams):
             (ver, images, catalog, self.liquid, self.modtype, self.modelMasks,
              self.expectModelMasks, self.optimizer) = state
         self.subs = [images, catalog]
-
-    def printDerivTiming(self):
-        print ("TDeriv:", td)
 
     def getNImages(self):
         return len(self.images)
@@ -368,7 +351,6 @@ class Tractor(MultiParams):
             allderivs.extend(srcderivs)
         #print('allderivs:', len(allderivs))
         #print('N params:', self.numberOfParams())
-        td[0] += time.time()-t
 
         assert(len(allderivs) == self.numberOfParams())
         return allderivs
@@ -462,9 +444,7 @@ class Tractor(MultiParams):
             return None
         kw = self.model_kwargs.copy()
         kw.update(kwargs)
-        t = time.time()
         mod = src.getModelPatch(img, modelMask=mask, **kw)
-        gi[3] += time.time()-t
         return mod
 
     def getModelImage(self, img, srcs=None, sky=True, minsb=None, **kwargs):
@@ -474,18 +454,13 @@ class Tractor(MultiParams):
         then only those sources will be rendered into the image.
         Otherwise, the whole catalog will be.
         '''
-        t = time.time()
         if _isint(img):
             img = self.getImage(img)
         mod = np.zeros(img.getModelShape(), self.modtype)
-        gi[0] += time.time()-t
-        t = time.time()
         if sky:
             img.getSky().addTo(mod)
         if srcs is None:
             srcs = self.catalog
-        gi[1] += time.time()-t
-        t = time.time()
         for src in srcs:
             if src is None:
                 continue
@@ -493,7 +468,6 @@ class Tractor(MultiParams):
             if patch is None:
                 continue
             patch.addTo(mod)
-        gi[2] += time.time()-t
         return mod
 
     def getModelImages(self, **kwargs):
@@ -510,12 +484,9 @@ class Tractor(MultiParams):
 
     def getChiImageGPU(self, imgi=-1, img=None, srcs=None, minsb=0., **kwargs):
         import cupy as cp
-        gcl[2] += 1
-        t = time.time()
         gi = cp.asarray(self.getChiImage(imgi, img, srcs, minsb, **kwargs))
-        gtl[0] += time.time()-t
-        return gi
         """
+        TODO: In future use factored_optimizer helpers to get chi2
         if img is None:
             img = self.getImage(imgi)
         gtl[0] += time.time()-t
@@ -529,25 +500,13 @@ class Tractor(MultiParams):
             print('ERROR: Chi not finite')
         return chi
         """
+        return gi
 
     def getChiImage(self, imgi=-1, img=None, srcs=None, minsb=0., **kwargs):
-        cl[2] += 1
-        t = time.time()
         if img is None:
             img = self.getImage(imgi)
-        tl[0] += time.time()-t
-        t = time.time()
         mod = self.getModelImage(img, srcs=srcs, minsb=minsb, **kwargs)
-        tl[4] += time.time()-t
-        t = time.time()
         chi = (img.getImage() - mod) * img.getInvError()
-        #b = np.where(img.getImage() == img.getImage().max())
-        #print ("IMGI", imgi, "IMG", img)
-        #print ("B", b, "IMG", img.getImage()[b], "CHI", chi[b])
-        #b = np.where(mod == mod.max())
-        #print ("B", b, "MOD", mod[b], "IE", img.getInvError()[b], "CHI", chi[b])
-        #print ("SHAPES", img.getImage().shape, mod.shape, img.getInvError().shape)
-        tl[5] += time.time()-t
         #savetxt_cpu_append('cmod.txt', mod)
         #savetxt_cpu_append('cie.txt', img.getInvError())
         #savetxt_cpu_append('cpix.txt', img.getImage())
@@ -569,20 +528,13 @@ class Tractor(MultiParams):
     def getLogLikelihoodGPU(self, **kwargs):
         chisq = 0.
         for i, chi in enumerate(self.getChiImagesGPU(**kwargs)):
-            gcl[1] += 1
-            t = time.time()
             chisq += (chi.astype(float) ** 2).sum()
-            gtl[1] += time.time()-t
         return -0.5 * chisq
 
     def getLogLikelihood(self, **kwargs):
         chisq = 0.
         for i, chi in enumerate(self.getChiImages(**kwargs)):
-            cl[1] += 1
-            t = time.time()
             chisq += (chi.astype(float) ** 2).sum()
-            #print ("I", i, "CHI", chi.sum(), (chi.astype(float) ** 2).sum())
-            tl[1] += time.time()-t
         return -0.5 * chisq
 
     def getLogProbGPU(self, **kwargs):
@@ -590,15 +542,11 @@ class Tractor(MultiParams):
         Return the posterior log PDF, evaluated at the current parameters.
         '''
         import cupy as cp
-        gcl[0]+=1
-        t = time.time()
         lnprior = self.getLogPrior()
-        gtl[2] += time.time()-t
         if lnprior == -np.inf:
             return lnprior
         t = time.time()
         lnl = self.getLogLikelihoodGPU(**kwargs)
-        gtl[3] += time.time()-t
         #print ("GTL:", gtl, gcl, cl, "GI:", gi)
         lnp = lnprior + lnl
         if cp.isnan(lnp):
@@ -614,15 +562,10 @@ class Tractor(MultiParams):
         '''
         Return the posterior log PDF, evaluated at the current parameters.
         '''
-        cl[0] += 1
-        t = time.time()
         lnprior = self.getLogPrior()
-        tl[2] += time.time()-t
         if lnprior == -np.inf:
             return lnprior
-        t = time.time()
         lnl = self.getLogLikelihood(**kwargs)
-        tl[3] += time.time()-t
         #print ("TL:", tl, gcl, cl, "GI", gi)
         lnp = lnprior + lnl
         #print ("LP", lnprior, "LNL", lnl, "LNP", lnp)

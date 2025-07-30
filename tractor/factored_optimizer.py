@@ -10,27 +10,18 @@ import scipy
 import scipy.fft
 import time
 from tractor.batch_psf import BatchPixelizedPSF, lanczos_shift_image_batch_gpu
-from tractor.batch_mixture_profiles import ImageDerivs, BatchImageParams, BatchMixtureOfGaussians, BatchGalaxyProfiles, print_tb
-from tractor.batch_galaxy import getShearedProfileGPU, getDerivativeShearedProfilesGPU, print_tbs
+from tractor.batch_mixture_profiles import ImageDerivs, BatchImageParams, BatchMixtureOfGaussians, BatchGalaxyProfiles
+from tractor.batch_galaxy import getShearedProfileGPU, getDerivativeShearedProfilesGPU
 from tractor.patch import ModelMask
 import cupy as cp
 import time
-from tractor.galaxy import print_ts
 import os, gc
 
-tx = np.zeros(12)
-ty = np.zeros(4)
-tc = np.zeros(4, np.int32)
 tt = np.zeros(8)
 tct = np.zeros(9, np.int32)
 tt2 = np.zeros(1, np.int32)
-ttnew = np.zeros(8)
-tctnew = np.zeros(5, np.int32)
-sout = np.zeros(2, np.int32)
 
 gdt = np.zeros(12)
-fmem = np.zeros(2)
-fmem[0] = 40
 
 image_counter = 0
 #from astrometry.util.plotutils import PlotSequence
@@ -43,9 +34,6 @@ independently, and then combines those results (via their covariances) into
 the overall result.
 '''
 class FactoredOptimizer(object):
-    cpuA = []
-    cpuB = [] 
-
     def __init__(self, *args, **kwargs):
         self.ps = None
         super().__init__(*args, **kwargs)
@@ -59,8 +47,6 @@ class FactoredOptimizer(object):
         #print ("X", x.shape, x)
         #print ("A", A.shape)
         #print ("B", B.shape)
-        self.cpuA.append(Ao)
-        self.cpuB.append(B)
         # print('SingeImageUpdateDirection: tr thawed params:')
         # tr.printThawedParams()
         # print('allderivs:', len(allderivs))
@@ -116,8 +102,6 @@ class FactoredOptimizer(object):
 
     def getSingleImageUpdateDirections(self, tr, **kwargs):
         from tractor import Images
-        self.cpuA = []
-        self.cpuB =[]
         img_opts = []
         imgs = tr.images
         mm = tr.modelMasks
@@ -140,42 +124,24 @@ class FactoredOptimizer(object):
         # We can fit for image-based parameters (eg, sky level) and source-based parameters.
         # If image parameters are being fit, use the base code (eg in lsqr_optimizer.py)
         # to fit those, and prepend them to the results below.
-        tct[5] += 1
         t = time.time()
         x_imgs = None
         image_thawed = tr.isParamThawed('images')
-        #print ("LIN1")
         if image_thawed:
-            #print ("LIN2")
-            tct[6] += 1
             cat_frozen = tr.isParamFrozen('catalog')
             if not cat_frozen:
                 tr.freezeParam('catalog')
             x_imgs = super().getLinearUpdateDirection(tr, **kwargs)
-            #x_imgs = self.getSingleImageUpdateDirections(tr, **kwargs)
-            #fname = "bad_linear6.pickle"
-            #print("LINEAR6: ",tr)
-            #if not os.access(fname, os.F_OK):
-            #  f = open(fname,'wb')
-            #  import pickle
-            #  pickle.dump(tr, f)
-            #  f.close()
-            tt[6] += time.time()-t
             if not cat_frozen:
                 tr.thawParam('catalog')
             else:
-                tct[8] += 1
                 return x_imgs
 
         if image_thawed:
             tr.freezeParam('images')
         #print('getLinearUpdateDirection( kwargs=', kwargs, ')')
-        #print ("LIN3")
         img_opts = self.getSingleImageUpdateDirections(tr, **kwargs)
-        tt[4] += time.time()-t
         if len(img_opts) == 0:
-            tctnew[1] += 1
-            #print ("LIN4")
             if x_imgs is not None:
                 return x_imgs
             return None
@@ -194,7 +160,6 @@ class FactoredOptimizer(object):
 
         if image_thawed:
             tr.thawParam('images')
-        tt[5] += time.time()-t
         return x
 
 from tractor.smarter_dense_optimizer import SmarterDenseOptimizer
@@ -206,8 +171,6 @@ class FactoredDenseOptimizer(FactoredOptimizer, SmarterDenseOptimizer):
 
 class GPUFriendlyOptimizer(FactoredDenseOptimizer):
     _gpumode = 3
-    gpuA = None
-    gpuB = None
 
     def setGPUMode(self, gpumode):
         print ("Setting GPUMODE = ",gpumode)
@@ -223,30 +186,16 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
     def printTiming(self):
         print ("Times:",tt,tct)
-        print ("Sout:", sout)
-        print ("newTimes", ttnew, tctnew)
         print(f"GDTimesx: {gdt}") # Original print statement
-        print_tb()
 
     def getSingleImageUpdateDirections(self, tr, **kwargs):
         #import traceback
         #traceback.print_stack()
-        tct[4] += 1
         print ("GPU getSingleImageUpdateDirections")
-        #mempool = cp.get_default_memory_pool()
-        #used_bytes = mempool.used_bytes()
-        #tot_bytes = mempool.total_bytes()
-        #print (f'{used_bytes=} {tot_bytes=}')
-        #mempool.free_all_blocks()
-        #used_bytes = mempool.used_bytes()
-        #tot_bytes = mempool.total_bytes()
-        #print (f'After free {used_bytes=} {tot_bytes=}')
         #print ("profile galaxy", isinstance(tr.catalog[0], ProfileGalaxy))
         R_gpu = None
         R_cpu = None
         R_gpuv = None
-        self.cpuA = []
-        self.cpuB = []
         if not (tr.isParamFrozen('images') and
                 (len(tr.catalog) == 1) and
                 isinstance(tr.catalog[0], ProfileGalaxy)):
@@ -303,16 +252,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 src = tr.catalog[0]
                 print('Source:', src)
                 print(repr(src))
-                if self._gpumode == 1 or self._gpumode == 11:
-                    print ("GPU FAIL1")
-                    self.outputPickle("gpufail1", tr)
-                    return []
-                #sys.exit(-1)
+                sys.exit(-1)
 
         if self._gpumode == 2 or self._gpumode == 3 or self._gpumode == 12 or self._gpumode == 13:
             try:
                 print ('Running VECTORIZED GPU code...')
-                tx[:] = 0
                 t = time.time()
                 R_gpuv = self.gpuSingleImageUpdateDirectionsVectorized(tr, **kwargs)
                 tt[2] += time.time()-t
@@ -339,11 +283,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 src = tr.catalog[0]
                 print('Source:', src)
                 print(repr(src))
-                if self._gpumode == 2 or self._gpumode == 12:
-                    print ("VEC FAIL1")
-                    self.outputPickle("vecfail1", tr)
-                    return []
-                #sys.exit(-1)
+                sys.exit(-1)
 
         if self._gpumode == 0 or self._gpumode == 3 or self._gpumode == 10 or self._gpumode == 13:
             try:
@@ -366,24 +306,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 src = tr.catalog[0]
                 print('Source:', src)
                 print(repr(src))
-                if self._gpumode == 0 or self._gpumode == 10:
-                    print ("CPU FAIL1")
-                    self.outputPickle("cpufail1", tr)
-                    return []
-                #sys.exit(-1)
-
-        if (R_cpu is None):
-            print ("CPU FAIL")
-            self.outputPickle("cpufail", tr)
-            return []
-        if (R_gpu is None):
-            print ("GPU FAIL")
-            self.outputPickle("gpufail", tr)
-            return []
-        if (R_gpuv is None):
-            print ("VEC FAIL")
-            self.outputPickle("vecfail", tr)
-            return []
+                sys.exit(-1)
 
         xicacc_cpu = 0.
         icacc_cpu = 0.
@@ -418,15 +341,12 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         print('Similarity CPU/GPU:', s)
         print('Similarity GPU/V:', sv)
         print ("Times:",tt,tct)
+        """
         if s < 0.999 or s > 1.0001:
             src = tr.catalog[0]
             print('Source:', src)
             self.outputPickle("full.new.good", tr)
             print ("SIMILARITY BAD  source="+str(tr.catalog[0]))
-            #if self.gpuA is not None and self.cpuA is not None:
-            #    print ("A matrix", len(self.cpuA)) 
-            #    self.outputPickleAB("AB", [self.cpuA, self.cpuB, self.gpuA, self.gpuB])
-            """
             for i,((x_cpu,ic_cpu), (x_gpu,ic_gpu)) in enumerate(zip(R_cpu, R_gpu)):
                 print('  CPU:', x_cpu)
                 print('  GPU:', x_gpu)
@@ -473,24 +393,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #f.close()
         #print ("SIMILARITY BAD blobid="+str(tr.blobid)+" source="+str(tr.catalog[0]))
         #print ("SIMILARITY BAD  source="+str(tr.catalog[0]))
-        return
-
-    def outputPickleAB(self, name, obj, num=None):
-        if not os.access(os.getenv('SCRATCH')+'/pickles',os.F_OK):
-            os.mkdir(os.getenv('SCRATCH')+'/pickles')
-        if num is None:
-            num = tt2[0]-1
-        if num < 0:
-            num = 0
-        fname = os.getenv('SCRATCH')+'/pickles/bad_'+name+'_'+str(num)+'.pickle'
-        if os.access(fname, os.F_OK):
-            print ("OUTPUT ERROR: "+fname+" already exists")
-            return
-        print ("OUTPUTTING "+fname)
-        f = open(fname,'wb')
-        import pickle
-        pickle.dump(obj, f)
-        f.close()
         return
 
     def gpuPointSourceUpdateDirections(self, tr, **kwargs):
@@ -598,7 +500,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         t1 = time.time()
         #print('Getting Fourier transform of PSF at', gpu_px,gpu_py)
         P, (cx, cy), (pH, pW), (v, w) = batch_psf.getFourierTransformBatchGPU(gpu_px, gpu_py, gpu_halfsize)
-        add_to_timer(0, time.time()-t1)
         assert(pW % 2 == 0)
         assert(pH % 2 == 0)
         assert(P.shape == (nimages,len(w),len(v)))
@@ -653,16 +554,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             padpix = cp.zeros((pH,pW), cp.float32)
             padie  = cp.zeros((pH,pW), cp.float32)
             assert(sy <= 0 and sx <= 0)
-            #padpix[-sy-1: -sy+mh, -sx-1: -sx+mw] = mmpix
-            #padie [-sy-1: -sy+mh, -sx-1: -sx+mw] = mmie
-            #print ("PADPIX", padpix.shape, "MMPIX", mmpix.shape, -sy-y_delta, -sy+mh, -sx-x_delta, -sx+mw)
-            #print ("PIX", pix.shape, "IE", ie.shape, pH, pW)
-            #print ("MM", mm.shape, mm.y0, mm.y1, mm.x0, mm.x1)
             #print (f'{sy=} {y_delta=} {mh=} {sx=} {x_delta=} {mw=}')
-            #import pylab as plt
-            #plt.imshow(mmpix, interpolation='nearest', origin='lower')
-            #plt.savefig('mmpix.png')
-            #plt.clf()
 
             padpix[-sy-y_delta: -sy+mh, -sx-x_delta: -sx+mw] = mmpix
             padie [-sy-y_delta: -sy+mh, -sx-x_delta: -sx+mw] = mmie
@@ -680,8 +572,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # Get derivatives for each galaxy shape parameter.
             amixes = src.getDerivativeShearedProfiles(tim, px, py)
             amixes = [('current', amix, 0.)] + amixes
-            #for i, am in enumerate(amixes):
-            #    print ("I",i, "AM", am[1].var)
 
             # Split "amix" into terms that we will evaluate using MoG vs FFT.
             # (we'll use that same split for the derivatives also)
@@ -706,10 +596,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # render w/ MoG.
             IM = ((pW/2)**2 < (nsigma2**2 * vv))
             IF = ((pW/2)**2 > (nsigma1**2 * vv))
-            #print ("GIF", IF, IF.sum())
-            #print ("GIM", IM, IM.sum())
-            #print ("pW", pW, "NSIG1", nsigma1)
-            #print ("VV", vv, vv.shape)
             ramp = np.any(IM*IF)
             #mogweights = 1.
             #fftweights = 1.
@@ -742,7 +628,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         #Call collect_params() to finalize BatchImageParams object with all ImageDerivs
         img_params.collect_params()
-        add_to_timer(1, time.time()-t1)
         #nbands = 1 + max(img_bands)
         nbands = len(bands)
 
@@ -758,7 +643,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             bright.thawParams(*pnames)
 
         Xic = self.computeUpdateDirections(img_params, priorVals)
-        print ("LEN Xic", len(Xic))
+        #print ("LEN Xic", len(Xic))
 
         if nbands > 1:
             t1 = time.time()
@@ -847,7 +732,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 full_xic.append((x2.get(),ic2.get()))
                 #print ("X2", x2, "IC2", ic2)
             Xic = full_xic
-            add_to_timer(2, time.time()-t1)
         else:
             print ("SKIPPING nbands branch - fullN=",fullN, "nbands=",nbands,"X",Xic[0][0])
 
@@ -858,8 +742,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         return Xic
 
     def gpuSingleImageUpdateDirectionsVectorized(self, tr, **kwargs):
-        t2 = time.time()
-        add_to_t2(0, 0)
         if not (tr.isParamFrozen('images') and
                 (len(tr.catalog) == 1) and
                 isinstance(tr.catalog[0], ProfileGalaxy)):
@@ -904,8 +786,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         # FIXME -- must handle priors (ellipticity)!!
 
-        #add_to_timer(10, time.time()-t2)
-        #t1 = time.time()
         # Pixel positions
         pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
                for tim in tr.images]
@@ -915,7 +795,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # Current counts
         img_counts = [tim.getPhotoCal().brightnessToCounts(src.brightness)
                       for tim in tr.images]
-        add_to_timer(10, time.time()-t2)
         bands = src.getBrightness().getParamNames()
         #print('Bands:', bands)
         img_bands = [bands.index(tim.getPhotoCal().band) for tim in tr.images]
@@ -945,13 +824,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #img_derivs.tostr()
 
         i = 0
-        #print_ts()
-        #print_tbs()
-        add_to_timer(2, time.time()-t1)
-        t1 = time.time()
         #Call collect_params() to finalize BatchImageParams object with all ImageDerivs
         #img_params.collect_params()
-        add_to_timer(3, time.time()-t1)
         #nbands = 1 + max(img_bands)
         nbands = len(bands)
 
@@ -966,40 +840,13 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             print('Prior vals with one band:', priorVals)
             bright.thawParams(*pnames)
 
-        add_to_t2(2, time.time()-t2)
         Xic = self.computeUpdateDirectionsVectorized(img_params, priorVals)
 
-        t3 = time.time()
         mpool = cp.get_default_memory_pool()
-        ttnew[4] += time.time()-t3
-        #used = mpool.used_bytes()
-        #tot = mpool.total_bytes()
-        #print (f'IP {used=} {tot=}')
-        free_memory, total_memory = cp.cuda.Device().mem_info
-        print(f"Total GPU memory: {total_memory / (1024**3):.2f} GB")
-        print(f"Free GPU memory: {free_memory / (1024**3):.2f} GB")
-        if (free_memory / (1024**3)) < fmem[0]:
-            fmem[0] = free_memory / (1024**3)
-            print(f"MIN GPU memory: {free_memory / (1024**3):.2f} GB")
-        t3 = time.time()
         del img_params
         del amixes_gpu
-        ttnew[5] += time.time()-t3
-        #t3 = time.time()
-        #gc.collect()
-        #ttnew[2] += time.time()-t3
-        t3 = time.time()
         mpool.free_all_blocks()
-        ttnew[3] += time.time()-t3
-        #used = mpool.used_bytes()
-        #tot = mpool.total_bytes()
-        #print (f'IP2 {used=} {tot=}')
-        free_memory, total_memory = cp.cuda.Device().mem_info
-        print(f"Total GPU memory: {total_memory / (1024**3):.2f} GB")
-        print(f"Free GPU memory: {free_memory / (1024**3):.2f} GB")
-
         #print (f'{nbands=}')
-        t1 = time.time()
 
         if nbands > 1:
             full_xic = []
@@ -1097,13 +944,10 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             for iband,x,ic in zip(img_bands, X, Xicov):
                 full_xic.append((x, ic))
             Xic = full_xic
-        add_to_timer(4, time.time()-t1)
 
         #
         #print('Calling original version...')
         #sXic = super().getSingleImageUpdateDirections(tr, **kwargs)
-
-        #print_timer()
         return Xic
 
     def computeUpdateDirections(self, img_params, priorVals):
@@ -1184,9 +1028,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         v = img_params.v
         w = img_params.w
         #img_params.ffts is a BatchMixtureOfGaussians (see batch_mixture_profiles.py)
-        t1 = time.time()
         Fsum = img_params.ffts.getFourierTransform(v, w, zero_mean=True)
-        add_to_timer(4, time.time()-t1)
         #Fsum shape (Nimages, maxNd, nw, nv)
         # P is created in psf.getFourierTransform - this should be done in batch on GPU
         # resulting in P already being a CuPy array
@@ -1195,14 +1037,10 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #print ("FSUM", Fsum.shape, "P", P.shape, P.max())
         #cp.savetxt('gfsum.txt', Fsum.ravel())
         #cp.savetxt('gp.txt', P.ravel())
-        t1 = time.time()
         G = cp.fft.irfft2(Fsum*P).astype(cp.float32)
-        add_to_timer(5, time.time()-t1)
-        t1 = time.time()
         #Do Lanczos shift
         G = lanczos_shift_image_batch_gpu(G, img_params.mux, img_params.muy)
         #cp.savetxt('gg.txt', G.ravel())
-        add_to_timer(6, time.time()-t1)
         del Fsum, P
         #G should be (nimages, maxNd, nw, nv) and mux and muy should be 1d vectors
         assert (G.shape == (img_params.Nimages, img_params.maxNd, img_params.mh, img_params.mw))
@@ -1457,10 +1295,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                     B[:,Npix + rij] += bij
         else:
             print ("NO PRIORS")
-        #cp.savetxt("gap.txt", A.ravel())
-        #cp.savetxt("gbp.txt", B.ravel())
-        #self.gpuA = A
-        #self.gpuB = B 
 
         # Compute the covariance matrix
         Xicov = cp.matmul(A.swapaxes(-1,-2), A)
@@ -1743,7 +1577,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             print ("X2", X.shape, Xicov.shape)
         """
         del img_params, A, B, X
-        add_to_timer(7, time.time()-t1)
         #print_timer()
         return Xic
 
@@ -1810,9 +1643,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         shuffling them around a bit.
 
         '''
-        t2 = time.time()
-        add_to_t2(1, 0)
-        t1 = time.time()
         use_roi = False
         Xic = []
 
@@ -1960,8 +1790,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         ##Change return args to keep as cupy arrays
         Xic = (X, Xicov)
         del A, B, X
-        add_to_timer(9, time.time()-t1)
-        add_to_t2(3, time.time()-t2)
         return Xic
 
     def computeGalaxyModelsVectorized(self, img_params):
@@ -1975,8 +1803,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         w = img_params.w
         #img_params.ffts is a BatchMixtureOfGaussians (see batch_mixture_profiles.py)
         Fsum = img_params.ffts.getFourierTransform(v, w, zero_mean=True)
-        add_to_timer(5, time.time()-t1)
-        t1 = time.time()
         #Fsum shape (Nimages, maxNd, nw, nv)
         #print ("Fsum", Fsum.shape, img_params.Nimages, img_params.maxNd, w.shape, v.shape)
         # P is created in psf.getFourierTransform - this should be done in batch on GPU
@@ -1986,13 +1812,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #print ("FSUM", Fsum.shape, "P", P.shape)
         G = cp.fft.irfft2(Fsum*P).astype(cp.float32)
         del Fsum, P
-        add_to_timer(6, time.time()-t1)
-        t1 = time.time()
         #Do Lanczos shift
         G = lanczos_shift_image_batch_gpu(G, img_params.mux, img_params.muy)
         #cp.savetxt('vgg.txt', G.ravel())
-        add_to_timer(7, time.time()-t1)
-        t1 = time.time()
         #G should be (nimages, maxNd, nw, nv) and mux and muy should be 1d vectors
         #print ("G shape", G.shape, img_params.Nimages,img_params.maxNd,img_params.mh,img_params.mw)
         assert (G.shape == (img_params.Nimages, img_params.maxNd, img_params.mh, img_params.mw))
@@ -2113,8 +1935,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         #Do no use roi since images are padded to be (mh, mw)
         use_roi = False
-
-        add_to_timer(8, time.time()-t1)
         return G
 
     def tryUpdates(self, tractor, X, alphas=None):
@@ -2263,27 +2083,14 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #print ("G", G.shape)
         #chisq = cp.sum([((G[i_image] * fluxes[i_step, i_image] - mmpix[i_image]) * mmie[i_image])**2 for i_image in range(Nimages)])
         chisq = self.calculate_chi2_cupy(G, fluxes, mmpix, mmie, sky) 
-        free_memory, total_memory = cp.cuda.Device().mem_info
-        print(f"Total GPU memory: {total_memory / (1024**3):.2f} GB")
-        print(f"Free GPU memory: {free_memory / (1024**3):.2f} GB")
-        if (free_memory / (1024**3)) < fmem[0]:
-            fmem[0] = free_memory / (1024**3)
-            print(f"MIN2 GPU memory: {free_memory / (1024**3):.2f} GB")
         del G, img_params
         mpool = cp.get_default_memory_pool()
         mpool.free_all_blocks()
-        print(f"Total GPU memory: {total_memory / (1024**3):.2f} GB")
-        print(f"Free GPU memory: {free_memory / (1024**3):.2f} GB")
         #print ("CHISQ", chisq.shape)
-        gdt[9] += time.time()-t
-        t = time.time()
 
-        #print ("CHISQ", chisq.get(), -0.5*chisq.get())
         #print ("PRIOR", logpriors)
         logprob = np.array(logpriors)-0.5*chisq.get()
         #print ("LOGPROB", logprob.shape)
-        gdt[10] += time.time()-t
-        t = time.time()
 
         # CRAIG -- at this point, we have rendered the galaxy models, in G.
         # We should have the (padded) image pixels and inverse-errors in 'mmpix' and 'mmie' on the GPU.
@@ -2314,16 +2121,15 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #    logprob = logprior[i_step] + -0.5*chisq
 
         max_idx = np.argmax(logprob)
-        print ("LOGPROB", logprob)
-        print ("MAX", max_idx, logprob[max_idx])
-        print ("Pbest", steps[max_idx][1])
+        #print ("LOGPROB", logprob)
+        #print ("MAX", max_idx, logprob[max_idx])
+        #print ("Pbest", steps[max_idx][1])
         pbest = steps[max_idx][1]
         hit_limit = steps[max_idx][2]
         tractor.setParams(pbest)
         for i in range(len(steps)):
             if steps[i][2]:
                 self.hit_limit = True #set if any hits limit
-        gdt[11] += time.time()-t
         
         if max_idx == len(logprob)-1:
             print ("Best is previous")
@@ -2336,172 +2142,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             self.last_step_hit_limit = hit_limit
         return (lp_best-lp_last, alphas[max_idx])
 
-
-        # HACK - superclass
-        tractor.setParams(p0)
-        return super().tryUpdates(tractor, X, alphas=alphas)
-
-        t = time.time()
-
-        # Reset flags for this call
-        self.hit_limit = False
-        self.stepLimited = False
-        self.last_step_hit_limit = False
-
-        # Prepare alpha values: use default if None, ensure CuPy array
-        if alphas is None:
-            alphas_np = np.append(2.**np.arange(-10, 1), [np.sqrt(2.), 2.])
-            alphas_cp = cp.asarray(alphas_np, dtype=X.dtype) # Use the same dtype as X
-        else:
-            alphas_cp = cp.asarray(alphas, dtype=X.dtype) # Convert input alphas to CuPy
-
-        # Get initial parameters (expected to be CuPy array)
-        p0_cp = tractor.getParamsGPU()
-
-        # Get bounds and max step sizes, convert to CuPy arrays once
-        # Handle None values by replacing with +/- inf for numerical operations
-        lowers_cp = cp.asarray(tractor.getLowerBounds(), dtype=p0_cp.dtype)
-        uppers_cp = cp.asarray(tractor.getUpperBounds(), dtype=p0_cp.dtype)
-        maxsteps_cp = cp.asarray(tractor.getMaxStep(), dtype=p0_cp.dtype)
-        gdt[0] += time.time()-t
-
-        lowers_cp[cp.isnan(lowers_cp)] = -cp.inf
-        uppers_cp[cp.isnan(uppers_cp)] = cp.inf
-        maxsteps_cp[cp.isnan(maxsteps_cp)] = cp.inf # 'None' in maxsteps usually means no limit
-
-        # Get initial log probability (ensure GPU path is used if available)
-        #pBefore = tractor.getLogProb(use_gpu=True)
-        pBefore = tractor.getLogProbGPU()
-        pBest = pBefore
-        alphaBest = None # To track the best alpha found
-
-        print(f'Trying {len(alphas_cp)} parameter updates.')
-        print(f"updates - {len(alphas_cp)} {len(lowers_cp)}") # Original print statement
-        gdt[1] += time.time()-t
-
-        # --- GPU Parallel Calculation of Candidate Steps and Limits ---
-
-        # 1. Generate all candidate parameter sets for all alphas
-        # p0_cp (N_params), X (N_params), alphas_cp (N_alphas)
-        # Broadcasting creates (N_alphas, N_params) array of candidate parameters
-        X = cp.asarray(X) 
-        candidate_pas = p0_cp[cp.newaxis, :] + alphas_cp[:, cp.newaxis] * X[cp.newaxis, :]
-
-        # 2. Check parameter limits for all candidates in parallel
-        # Calculate alpha needed to hit lower bound for params that go below
-        # Handle X[i] == 0 to avoid division by zero (will result in inf, which is correct)
-        alpha_to_hit_lower = cp.where(X[cp.newaxis, :] != 0,
-                                     (lowers_cp[cp.newaxis, :] - p0_cp[cp.newaxis, :]) / X[cp.newaxis, :],
-                                     cp.inf)
-        # Only consider these limits if the candidate parameter actually attempts to go below the lower bound
-        alpha_to_hit_lower = cp.where(candidate_pas < lowers_cp[cp.newaxis, :], alpha_to_hit_lower, cp.inf)
-
-        # Calculate alpha needed to hit upper bound for params that go above
-        alpha_to_hit_upper = cp.where(X[cp.newaxis, :] != 0,
-                                     (uppers_cp[cp.newaxis, :] - p0_cp[cp.newaxis, :]) / X[cp.newaxis, :],
-                                     cp.inf)
-        # Only consider these limits if the candidate parameter actually attempts to go above the upper bound
-        alpha_to_hit_upper = cp.where(candidate_pas > uppers_cp[cp.newaxis, :], alpha_to_hit_upper, cp.inf)
-
-        # Combine alpha limits from both lower and upper bounds for each parameter
-        maxalpha_param_limits = cp.minimum(alpha_to_hit_lower, alpha_to_hit_upper)
-
-        # 3. Check parameter step-size limits for all candidates in parallel
-        # Calculate alpha needed to satisfy maxstep constraint
-        alpha_to_hit_maxstep = cp.where(cp.abs(X[cp.newaxis, :]) > 1e-12, # Avoid division by zero for X values near 0
-                                        maxsteps_cp[cp.newaxis, :] / cp.abs(X[cp.newaxis, :]),
-                                        cp.inf)
-        
-        # Take the minimum alpha from all constraints (original alpha, parameter limits, and max step size limits)
-        # This gives us the effective (clamped) alpha for EACH original alpha in alphas_cp
-        effective_alphas = cp.min(cp.minimum(alphas_cp[:, cp.newaxis], # Current nominal alpha value
-                                             cp.minimum(maxalpha_param_limits, alpha_to_hit_maxstep)
-                                            ), axis=1) # Reduce across the parameter dimension
-
-        # Update class-wide flags if any step was limited during the entire search
-        self.hit_limit = cp.any(effective_alphas < alphas_cp).item()
-        self.stepLimited = cp.any(effective_alphas < alphas_cp).item()
-
-        # 4. Re-calculate candidate_pas with effective_alphas and apply clipping
-        # This creates the final, valid parameter sets to test
-        final_candidate_pas = p0_cp[cp.newaxis, :] + effective_alphas[:, cp.newaxis] * X[cp.newaxis, :]
-        final_candidate_pas = cp.clip(final_candidate_pas, lowers_cp[cp.newaxis, :], uppers_cp[cp.newaxis, :])
-        gdt[2] += time.time()-t
-
-        # --- CPU Loop for Evaluation (due to tractor.setParams and break conditions) ---
-
-        # Bring effective_alphas and original alphas to CPU for loop conditions and comparisons
-        effective_alphas_cpu = effective_alphas.get()
-        alphas_cp_cpu = alphas_cp.get()
-
-        for i, alpha_val in enumerate(effective_alphas_cpu):
-            tx = time.time()
-            # Check for very small effective alpha (original bailout logic)
-            if alpha_val < 1e-8:
-                # If we're effectively not stepping, break the line search
-                self.last_step_hit_limit = True # Signify that the last step hit a limit (or became tiny)
-                self.hit_limit = True          # General flag that limits were hit
-                break
-
-            current_pa = final_candidate_pas[i, :] # This slice is a CuPy array, no CPU copy yet
-
-            # Set parameters for evaluation.
-            # IMPORTANT: This is where a GPU->CPU transfer occurs (current_pa.get() inside tractor.setParams)
-            #tractor.setParams(current_pa)
-            tractor.setParamsGPU(current_pa)
-
-            # Get log probability.
-            # This calls tractor.getLogProb(use_gpu=True) which in turn uses
-            # the GPU-accelerated getLogLikelihood, bringing only the final scalar back.
-            #pAfter = tractor.getLogProb(use_gpu=True)
-            pAfter = tractor.getLogProbGPU()
-            gdt[6] += time.time()-tx
-            tx = time.time()
-
-            if not np.isfinite(pAfter):
-                print(f'Got bad log-prob {pAfter} for alpha={alpha_val}')
-                break # Stop line search if non-finite log-prob is encountered
-
-            if pAfter < (pBest - 1.):
-                # We're getting significantly worse -- quit line search
-                break
-
-            if pAfter > pBest:
-                # This is the best step found so far!
-                # Update last_step_hit_limit based on whether this specific alpha was clamped
-                self.last_step_hit_limit = (alpha_val < alphas_cp_cpu[i])
-                alphaBest = alphas_cp_cpu[i] # Store the original alpha that led to this best prob
-                pBest = pAfter
-            gdt[7] += time.time()-tx
-
-        # --- Final Parameter Application ---
-        gdt[3] += time.time()-t
-
-        # If no improvement was found or an early break occurred, revert to original parameters
-        if alphaBest is None:
-            tractor.setParamsGPU(p0_cp) # Restore original parameters (triggers GPU->CPU transfer)
-            gdt[4] += time.time()-t
-            return 0., 0. # Return no change in logprob and zero alpha
-
-        # Apply the parameters corresponding to the best found alpha
-        # Find the index of the original alpha that matched alphaBest
-        try:
-            best_alpha_idx_orig = np.where(alphas_cp_cpu == alphaBest)[0][0]
-            # Retrieve the already computed and clipped parameter set for the best alpha
-            pa_best = final_candidate_pas[best_alpha_idx_orig, :] # This is a CuPy array
-        except (ValueError, IndexError):
-            # Fallback if alphaBest cannot be found (e.g., due to tiny floating point differences)
-            # Recalculate it, ensuring clipping is applied.
-            pa_best = p0_cp + alphaBest * X
-            pa_best = cp.clip(pa_best, lowers_cp, uppers_cp)
-
-        # Apply the best parameter set. This also triggers a GPU->CPU transfer.
-        tractor.setParamsGPU(pa_best)
-
-        # --- Timing and Return ---
-        gdt[4] += time.time()-t
-        print(f"GDTimesx: {gdt}") # Original print statement
-        return pBest - pBefore, alphaBest
 
     def calculate_chi2_cupy(self, G, fluxes, mmpix, mmie, sky):
         """
@@ -2557,30 +2197,15 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # mmie: (Nimags, height, width)
         diff = model - mmpix[:,cp.newaxis,:,:]
         chi = diff * mmie[:,cp.newaxis,:,:] # This is (model - data) * inverr (mmie is inverr)
-        #b = cp.where(mmpix[0] == mmpix[0].max())
-        #try:
-        #    print ("B", b)
-        #    for i in range(len(G[0])):
-        #        print ("I", i, "G", G[0][i][b], "CHI", chi[0][i][b])
-        #    print ("IMG", mmpix[0][b], mmpix[0].sum())
-        #    print ("IE", mmie[0][b], mmie[0].sum())
-        #    for i in range(len(model[0])):
-        #        b = cp.where(model[0][i] == model[0][i].max())
-        #        print ("B", b, "MOD", model[0][i][b], "CHI", chi[0][i][b])
-        #except Exception as ex:
-        #    pass
-        #print ("CHI", cp.sum(chi, axis=(2,3)))
 
         # Square chi and sum over Nimages, height and width
         # Sum over Nimages (axis 0), height (axis 2), and width (axis 3)
         # The result will be a 1D array of shape (nsteps,)
         chi2 = cp.sum(chi**2, axis=(0, 2, 3))
         #print ("CHI2", cp.sum(chi**2, axis=(2, 3)), chi2.dtype)
-
         return chi2
 
     def _getBatchImageParams(self, tr, masks, pxy):
-        t1 = time.time()
         Nimages = len(tr.images)
         # pxy: [(x,y), ...] length tr.images
         psfs = [tim.getPsf() for tim in tr.images]
@@ -2600,13 +2225,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         # PSF Fourier transforms
         batch_psf = BatchPixelizedPSF(psfs)
-        add_to_timer(0, time.time()-t1)
-        t1 = time.time()
         P, (cx, cy), (pH, pW), (v, w) = batch_psf.getFourierTransformBatchGPU(px, py, gpu_halfsize)
         #print ("pH", pH, pW)
         #print ("Cx", cx, cy)
-        add_to_timer(1, time.time()-t1)
-        t1 = time.time()
         assert(pW % 2 == 0)
         assert(pH % 2 == 0)
         assert(P.shape == (Nimages,len(w),len(v)))
@@ -2664,14 +2285,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         mmpix = cp.asarray(padpix)
         mmie = cp.asarray(padie)
         sky = cp.asarray(img_sky, dtype=cp.float32)
-        #print("SKY", sky.shape)
-
-        #print ("DX", dx.shape)
-        #print ("MX0", mx0.shape)
-
-        #for tim in tr.images:
-        #    print (type(tim), type(tim.getWcs()), type(tim.getWcs().cdInverseAtPixel(px[0], py[0])))
-        #    print (tim.getWcs().cdInverseAtPixel(px[0], py[0]))
 
         # Split "amix" into terms that we will evaluate using MoG vs FFT.
         # (we'll use that same split for the derivatives also)
@@ -2726,7 +2339,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         #img_derivs = BatchImageDerivs(amixes_gpu, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, cdi, roi, sky, dxi, dyi, fit_pos)
         #img_params.addBatchImageDerivs(img_derivs)
-        
         return BatchGalaxyProfiles(amixes_gpu, IM, IF, K, D, mogweights, fftweights, px, py, mux, muy, mmpix, mmie, mh, mw, counts, roi, sky, dxi, dyi)
 
 class MyAwesomeGpuImplementation(GPUFriendlyOptimizer):
@@ -2887,17 +2499,3 @@ if __name__ == '__main__':
         plt.imshow(mods2_after[i], **ima)
     plt.suptitle('GPU-friendly optimizer, after')
     plt.savefig('3.png')
-
-def add_to_timer(i, tm):
-    global tx
-    tx[i] += tm
-
-def print_timer():
-    global tx
-    print ("TX:", tx)
-
-def add_to_t2(i, tm):
-    global ty, tc
-    ty[i] += tm
-    tc[i] += 1
-

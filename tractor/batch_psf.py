@@ -283,27 +283,20 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
         
         pad, cx, cy = self._padInImageBatchGPU(sz, sz)
         #print ("PAD", pad.shape)
-        #cp.savetxt("gpad.txt", pad.ravel())
         # cx,cy: coordinate of the PSF center in *pad*
         P = cp.fft.rfft2(pad)
         P = P.astype(cp.complex64)
-        #cp.savetxt("gp2.txt", P.ravel())
         nimages, pH, pW = pad.shape
         v = cp.fft.rfftfreq(pW)
         w = cp.fft.fftfreq(pH)
         if (len(self.psfexs) > 0):
-            #print ("CX1", cx, cy, pH, pW)
             #Only some are psfEx - others have been calculated above
             if self.normalized:
                 sumfft, (cx, cy), shape, (v, w) = self.getFourierTransformExNormalizedBatchGPU(px, py, radius)
             else:
                 sumfft, (cx, cy), shape, (v, w) = self.getFourierTransformExBatchGPU(px, py, radius)
-            #print ("P SHAPE", P.shape, "SUMFFT", sumfft.shape, "PAD", pad.shape)
-            #print ("CX2", cx, cy, shape)
-            #print ("IND", self.ex_indices)
             P[self.ex_indices,:,:] = sumfft
         rtn = P, (cx, cy), (pH, pW), (v, w)
-        #cp.savetxt("gp3.txt", P.ravel())
         self.fftcache[sz] = rtn
         return rtn
 
@@ -364,7 +357,6 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
         n = cp.abs(fft[:,0,0])
         mask = n != 0
         fft[mask,:,:] /= n[mask,None,None]
-        #print ("NORM", fft.shape)
         return fft, (cx,cy), shape, (v,w)
 
     def getFourierTransformExBatchGPU(self, px, py, radius):
@@ -403,7 +395,6 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
             N, Nb, pH, pW = bases.shape
             #bases = 4d image N x NB x H x W
             pad, cx, cy = self._padInImageBatchGPUBases(sz, sz, img=bases)
-            #cp.savetxt("gpadex.txt", pad.ravel())
             # cx,cy: coordinate of the PSF center in *pad*
             P = cp.fft.rfft2(pad)
             P = P.astype(cp.complex64)
@@ -412,16 +403,10 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
             w = cp.fft.fftfreq(pH)
             fftbases = P
             self.fftcache[sz] = (fftbases, cx, cy, pad.shape, v, w)
-        #cp.savetxt("gp2ex.txt", fftbases.ravel())
         # Now sum the bases by the polynomial coefficients
         sumfft = cp.zeros(fftbases[:,0,:,:].shape, fftbases.dtype)
         shape = pad[0,0].shape
-        #print ("SUMFFT", sumfft.shape)
-        #print (f'{N=} {Nb=} {h=} {w=}')
-        #print (len(self.psfexs))
         for i, psfex in enumerate(self.psfexs):
-            #print ("PX", px, "PY", py)
-            #print (fftbases.shape)
             for amp, base in zip(psfex.polynomials(px[i], py[i]), fftbases[i]):
                 #print('getFourierTransform: px,py', (px,py), 'amp', amp)
                 sumfft[i] += amp * base

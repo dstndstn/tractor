@@ -19,11 +19,7 @@ from tractor.utils import ParamList, MultiParams, ScalarParam, BaseParams
 from tractor.patch import Patch, add_patches, ModelMask
 from tractor.basics import SingleProfileSource, BasicSource
 import time
-from tractor.utils import savetxt_cpu_append
-ts1 = np.zeros(10)
-ts2 = np.zeros(10)
-ts3 = np.zeros(10)
-ct2 = np.zeros(2, dtype=np.int32)
+#from tractor.utils import savetxt_cpu_append
 
 debug_ps = None
 
@@ -38,11 +34,6 @@ def set_galaxy_cache_size(N=10000):
 
 
 enable_galaxy_cache = set_galaxy_cache_size
-
-def print_ts():
-    print ("TS1:", ts1)
-    print ("TS2:", ts2)
-    print ("TS3:", ts3)
 
 def disable_galaxy_cache():
     pass
@@ -312,8 +303,6 @@ class ProfileGalaxy(object):
                                    outer_real_nsigma = 4.,
                                    force_halfsize=None,
                                    **kwargs):
-        ct2[1] += 1
-        #print ("CT2:",ct2)
         from astrometry.util.miscutils import get_overlapping_region
         if modelMask is not None:
             x0, y0 = modelMask.x0, modelMask.y0
@@ -772,24 +761,12 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
         return amix
 
     def _getShearedProfileGPU(self, imgs, px, py):
-        ts3[9] += 1
-        t = time.time()
         import cupy as cp
         galmix = self.getProfile()
-        ts3[0] += time.time()-t
-        t = time.time()
         cdinv = cp.array([img.getWcs().cdInverseAtPixel(px[i], py[i]) for i, img in enumerate(imgs)])
-        ts3[1] += time.time()-t
-        t = time.time()
         G = cp.asarray(self.shape.getRaDecBasis())
-        ts3[2] += time.time()-t
-        t = time.time()
         Tinv = cp.dot(cdinv, G)
-        ts3[3] += time.time()-t
-        t = time.time()
-        print (type(galmix))
         amix = galmix.apply_shear_GPU(Tinv)
-        ts3[4] += time.time()-t
         return amix
 
     def _getShearedProfile(self, img, px, py):
@@ -1218,8 +1195,6 @@ class CompositeGalaxy(MultiParams, BasicSource):
         return (pe, pd)
 
     def getModelPatch(self, img, minsb=0., modelMask=None, **kwargs):
-        ct2[0] += 1
-        #print ("CT2:",ct2)
         pe, pd = self._getModelPatches(img, minsb=minsb, modelMask=modelMask,
                                        **kwargs)
         return add_patches(pe, pd)
