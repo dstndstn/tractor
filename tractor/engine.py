@@ -26,6 +26,14 @@ cl = np.zeros(4, dtype=np.int32)
 gcl = np.zeros(4, dtype=np.int32)
 gi = np.zeros(6)
 
+def printTiming():
+    print ("TD:",td)
+    print ("TL:",tl)
+    print ("GTL:",gtl)
+    print ("CL:",cl)
+    print ("GCL:",gcl)
+    print ("GI:",gi)
+
 logger = logging.getLogger('tractor.engine')
 def logverb(*args):
     if logger.isEnabledFor(logging.DEBUG):
@@ -506,8 +514,21 @@ class Tractor(MultiParams):
         t = time.time()
         gi = cp.asarray(self.getChiImage(imgi, img, srcs, minsb, **kwargs))
         gtl[0] += time.time()-t
-        #return cp.asarray(self.getChiImage(imgi, img, srcs, minsb, **kwargs))
         return gi
+        """
+        if img is None:
+            img = self.getImage(imgi)
+        gtl[0] += time.time()-t
+        t = time.time()
+        mod = self.getModelImage(img, srcs=srcs, minsb=minsb, **kwargs)
+        gtl[1] += time.time()-t
+        t = time.time()
+        chi = (img.getImage(use_gpu=True) - cp.asarray(mod)) * img.getInvError(use_gpu=True)
+        gtl[2] += time.time()-t
+        if not np.all(np.isfinite(chi)):
+            print('ERROR: Chi not finite')
+        return chi
+        """
 
     def getChiImage(self, imgi=-1, img=None, srcs=None, minsb=0., **kwargs):
         cl[2] += 1
@@ -520,6 +541,12 @@ class Tractor(MultiParams):
         tl[4] += time.time()-t
         t = time.time()
         chi = (img.getImage() - mod) * img.getInvError()
+        #b = np.where(img.getImage() == img.getImage().max())
+        #print ("IMGI", imgi, "IMG", img)
+        #print ("B", b, "IMG", img.getImage()[b], "CHI", chi[b])
+        #b = np.where(mod == mod.max())
+        #print ("B", b, "MOD", mod[b], "IE", img.getInvError()[b], "CHI", chi[b])
+        #print ("SHAPES", img.getImage().shape, mod.shape, img.getInvError().shape)
         tl[5] += time.time()-t
         #savetxt_cpu_append('cmod.txt', mod)
         #savetxt_cpu_append('cie.txt', img.getInvError())
@@ -554,6 +581,7 @@ class Tractor(MultiParams):
             cl[1] += 1
             t = time.time()
             chisq += (chi.astype(float) ** 2).sum()
+            #print ("I", i, "CHI", chi.sum(), (chi.astype(float) ** 2).sum())
             tl[1] += time.time()-t
         return -0.5 * chisq
 
@@ -597,6 +625,7 @@ class Tractor(MultiParams):
         tl[3] += time.time()-t
         #print ("TL:", tl, gcl, cl, "GI", gi)
         lnp = lnprior + lnl
+        #print ("LP", lnprior, "LNL", lnl, "LNP", lnp)
         if np.isnan(lnp):
             print('Tractor.getLogProb() returning NaN.')
             print('Params:')

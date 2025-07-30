@@ -7,10 +7,12 @@ from tractor.utils import listmax
 import time
 
 lt = np.zeros(5)
+lct = np.zeros(2, dtype=np.int32)
+
+def printTiming():
+    print ("LTimes [getLin tryUpdates optimize 0 getUpdateDir]:", lt, "LCT", lct)
 
 class LsqrOptimizer(Optimizer):
-    def printTiming(self):
-        print ("LTimes:", lt)
 
     def _optimize_forcedphot_core(
             self, tractor,
@@ -291,7 +293,7 @@ class LsqrOptimizer(Optimizer):
         kwa = dict(damp=damp, priors=priors,
                    scale_columns=scale_columns, shared_params=shared_params)
         t = time.time()
-        #print ("GETLIN", self.getLinearUpdateDirection)
+        print ("GETLIN", self.getLinearUpdateDirection)
         X = self.getLinearUpdateDirection(tractor, **kwa)
         lt[0] += time.time()-t
         t = time.time()
@@ -313,6 +315,7 @@ class LsqrOptimizer(Optimizer):
         #logverb('X: len', len(X), '; non-zero entries:', np.count_nonzero(X))
         logverb('Finding optimal step size...')
         #t0 = Time()
+        lct[0] += 1
         (dlogprob, alpha) = self.tryUpdates(tractor, X, alphas=alphas)
         lt[1] += time.time()-t
         #tstep = Time() - t0
@@ -322,14 +325,13 @@ class LsqrOptimizer(Optimizer):
         #logverb('  Topt  ', topt)
         #logverb('  Tstep ', tstep)
         # print('Stepped alpha=', alpha, 'for dlogprob', dlogprob)
-        #print ("LTimes:", lt) 
         if variance:
             return dlogprob, X, alpha, var
         return dlogprob, X, alpha
 
     def optimize_loop(self, tractor, dchisq=0., steps=50, **kwargs):
         R = {}
-        #print ("LSQR OPTIMIZE")
+        print ("LSQR OPTIMIZE")
         t = time.time()
         for step in range(steps):
             dlnp, X, alpha = self.optimize(tractor, **kwargs)
@@ -338,10 +340,7 @@ class LsqrOptimizer(Optimizer):
             if dlnp <= dchisq:
                 break
         lt[2] += time.time()-t
-        t = time.time()
         R.update(steps=step)
-        lt[3] += time.time()-t
-        #print ("LTimesx:", lt)
         return R
 
     def getUpdateDirection(self, tractor, allderivs, damp=0., priors=True,
