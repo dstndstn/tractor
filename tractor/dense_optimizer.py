@@ -201,9 +201,6 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
             print('B finite:', Counter(np.isfinite(B.ravel())))
             return None
 
-        ## X, resids, rank, singular_vals
-        #X,_,_,_ = lstsq(A, B, rcond=None)
-
         if False:
             Aold = super(ConstrainedDenseOptimizer, self).getUpdateDirection(
                 tractor, allderivs, damp=damp, priors=priors,

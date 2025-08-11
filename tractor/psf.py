@@ -369,7 +369,7 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         ystart = (cy - dy/self.sampling) + ylo * ystep
 
         native_img = np.zeros((height, width), np.float32)
-        lanczos3_interpolate_grid(xstart, xstep, ystart, ystep,
+        lanczos3_interpolate_grid(float(xstart), float(xstep), float(ystart), float(ystep),
                                   native_img, img)
         return xlo, ylo, native_img
 
@@ -960,7 +960,7 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
 
     # returns a Patch object.
     def getPointSourcePatch(self, px, py, minval=0., radius=None,
-                            modelMask=None, **kwargs):
+                            modelMask=None, clipExtent=None, **kwargs):
         if modelMask is not None:
             x0, x1, y0, y1 = modelMask.extent
         else:
@@ -974,6 +974,13 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
             x1 = ix + rad + 1
             y0 = iy - rad
             y1 = iy + rad + 1
+        if clipExtent is not None:
+            [xl, xh, yl, yh] = clipExtent
+            # clip
+            x0 = max(x0, xl)
+            x1 = min(x1, xh)
+            y0 = max(y0, yl)
+            y1 = min(y1, yh)
         # UGH - API question -- is the getMixtureOfGaussians() result read-only?
         mix = self.getMixtureOfGaussians()
         oldmean = mix.mean

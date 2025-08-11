@@ -182,8 +182,8 @@ class PsfExModel(object):
             else:
                 assert(hdr['POLNGRP'] == 1)
                 # PSF distortion bases are polynomials of x,y
-                assert(hdr['POLNAME1'].strip() == 'X_IMAGE')
-                assert(hdr['POLNAME2'].strip() == 'Y_IMAGE')
+                assert(hdr['POLNAME1'].strip() in ['X_IMAGE','XWIN_IMAGE'])
+                assert(hdr['POLNAME2'].strip() in ['Y_IMAGE','YWIN_IMAGE'])
                 assert(hdr['POLGRP1'] == 1)
                 assert(hdr['POLGRP2'] == 1)
                 x0 = hdr.get('POLZERO1')
