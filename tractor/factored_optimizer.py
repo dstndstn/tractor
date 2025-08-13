@@ -208,13 +208,13 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             t = time.time()
             #print ("SRC", type(tr.catalog[0]))
             R = super().getSingleImageUpdateDirections(tr, **kwargs)
-            if len(R) != 0:
-                fname = "bad_nonprofile.pickle"
-                if not os.access(fname, os.F_OK):
-                    f = open(fname,'wb')
-                    import pickle
-                    pickle.dump(tr, f)
-                    f.close()
+            #if len(R) != 0:
+            #    fname = "bad_nonprofile.pickle"
+            #    if not os.access(fname, os.F_OK):
+            #        f = open(fname,'wb')
+            #        import pickle
+            #        pickle.dump(tr, f)
+            #        f.close()
             tt[0] += time.time()-t
             tct[0] += 1
             #self.ps = p
