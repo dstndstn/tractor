@@ -424,18 +424,17 @@ class Optimizer(object):
                 # the positive end)
 
                 # also need to slice the unit flux model properly if they extend off the image, 
-                # From Dan Masters
                 if x0 < 0:
                     uw += x0
-                    x0 = 0
                     um_start_x = -x0
+                    x0 = 0
                 else: 
                     um_start_x = 0
 
                 if y0 < 0:
                     uh += y0
-                    y0 = 0
                     um_start_y = -y0
+                    y0 = 0
                 else: 
                     um_start_y = 0
 
