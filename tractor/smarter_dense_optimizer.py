@@ -11,13 +11,14 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                            variance=False,
                            shared_params=True,
                            get_A_matrix=False):
+        print ("Smarter Dense Opt")
+        print ("TIM:", tractor.images)
         if shared_params or scales_only or damp>0 or variance:
             raise RuntimeError('Not implemented')
         assert(shared_params == False)
         assert(scales_only == False)
         assert(variance == False)
         assert(damp == 0.)
-
 
         # Returns: numpy array containing update direction.
         # If *variance* is True, return    (update,variance)
@@ -325,7 +326,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             print('A finite:', Counter(np.isfinite(A.ravel())))
             print('B finite:', Counter(np.isfinite(B.ravel())))
             return None
-        #print ("OUTPUT SHAPES CPU ", A.shape, B.shape, X.shape)
+        print ("OUTPUT SHAPES CPU1 ", A.shape, B.shape, X.shape)
         #print ("CA", A)
         #print ("CB", B)
         #print ("CX", X)
@@ -350,13 +351,13 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
 
         # Expand x back out (undo the column_map)
         #print('Expanding X: column_map =', column_map)
-        #print('X:', X)
+        print('X:', X)
         X_full = np.zeros(1+max(live_params))
         for c,i in column_map.items():
             #print ("C", c, "I", i, X[i])
             X_full[c] = X[i]
         X = X_full
-        #print('-> X', X)
+        print('-> SMARTER X', X)
 
         if get_A_matrix:
             if scale_columns:

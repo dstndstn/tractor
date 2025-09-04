@@ -39,14 +39,25 @@ class FactoredOptimizer(object):
         super().__init__(*args, **kwargs)
 
     def getSingleImageUpdateDirection(self, tr, **kwargs):
+        print ("FactoredOptimizer GSUID")
         allderivs = tr.getDerivs()
         r = self.getUpdateDirection(tr, allderivs, get_A_matrix=True, **kwargs)
         if r is None:
             return None
         x,A,colscales,B,Ao = r
-        #print ("X", x.shape, x)
-        #print ("A", A.shape)
-        #print ("B", B.shape)
+        print ("X", x.shape, x)
+        print ("A", A.shape, A.max())
+        print ("B", B.shape, B.max())
+        #Uncomment lines below to check SmarterDenseOptimizer vs ConstrainedDenseOptimizer for single images:
+        #opt2 = ConstrainedDenseOptimizer()
+        #r2 = ConstrainedDenseOptimizer.getUpdateDirection(self, tr, allderivs, get_A_matrix=True, **kwargs)
+        #x2,A2,c2,B2 = r2
+        #print ("x2", x2.shape, x2)
+        #print ("A2", A2.shape, A2.max())
+        #print ("B2", B2.shape, B2.max())
+        #if not np.allclose(x,x2, atol=1.e-6):
+        #    sys.exit(0)
+
         # print('SingeImageUpdateDirection: tr thawed params:')
         # tr.printThawedParams()
         # print('allderivs:', len(allderivs))
@@ -101,10 +112,31 @@ class FactoredOptimizer(object):
         return x, icov
 
     def getSingleImageUpdateDirections(self, tr, **kwargs):
+        print ("FactoredOptimizer GSUIDS (plural)")
         from tractor import Images
         img_opts = []
         imgs = tr.images
         mm = tr.modelMasks
+
+        #Uncomment the block below to test running all images at once in SmarterDenseOptimizer vs ConstrainedDenseOptimizer
+        """
+        allderivs = tr.getDerivs()
+        r = self.getUpdateDirection(tr, allderivs, get_A_matrix=True, **kwargs)
+        opt2 = ConstrainedDenseOptimizer()
+        r2 = ConstrainedDenseOptimizer.getUpdateDirection(self, tr, allderivs, get_A_matrix=True, **kwargs)
+        x,A,colscales,B,Ao = r
+        x2,A2,c2,B2 = r2
+        print ("AllX", x.shape, x)
+        print ("Allx2", x2.shape, x2)
+        print ("A", A.shape, A.max())
+        print ("B", B.shape, B.max())
+        print ("A2", A2.shape, A2.max())
+        print ("B2", B2.shape, B2.max())
+        if not np.allclose(x,x2, atol=1.e-6):
+            sys.exit(0)
+
+        """
+
         for i,img in enumerate(imgs):
             tr.images = Images(img)
             if mm is not None:
@@ -140,6 +172,7 @@ class FactoredOptimizer(object):
         if image_thawed:
             tr.freezeParam('images')
         #print('getLinearUpdateDirection( kwargs=', kwargs, ')')
+        print ("Running Factored getSingleImageUpdateDirections")
         img_opts = self.getSingleImageUpdateDirections(tr, **kwargs)
         if len(img_opts) == 0:
             if x_imgs is not None:
@@ -153,10 +186,16 @@ class FactoredOptimizer(object):
             icsum = icsum + ic
         #C = np.linalg.inv(icsum)
         #x = np.dot(C, xicsum)
-        #print (f'{icsum=} {xicsum=}')
+        print (f'{icsum=} {xicsum=}')
         x,_,_,_ = np.linalg.lstsq(icsum, xicsum, rcond=None)
         if x_imgs is not None:
             x = np.append(x_imgs, x)
+
+        #UNCOMMENT these lines to run all images through SmarterDenseOptimizer in the original style
+        #This should result in a match to the original but a mismatch with the GPU
+        #allderivs = tr.getDerivs()
+        #r = self.getUpdateDirection(tr, allderivs, get_A_matrix=True, **kwargs)
+        #x,A,colscales,B,Ao = r
 
         if image_thawed:
             tr.thawParam('images')

@@ -28,8 +28,8 @@ class ConstrainedOptimizer(LsqrOptimizer):
             self.stepLimited = False
             dlnp,_,_ = self.optimize(tractor, **kwargs)
 
-            #print('Optimize_loop: step', step, 'dlnp', dlnp, 'hit limit:',
-            #      self.hit_limit, 'step limit:', self.stepLimited)
+            print('Optimize_loop: step', step, 'dlnp', dlnp, 'hit limit:',
+                  self.hit_limit, 'step limit:', self.stepLimited)
             #for s in tractor.catalog:
             #    print(s)
 
@@ -61,7 +61,7 @@ class ConstrainedOptimizer(LsqrOptimizer):
 
             tractor.setParams(p)
             logprob = tractor.getLogProb()
-            #print (f'{alpha=} {p=} {step_limit=} {hit_limit=} {logprob=}')
+            print (f'{alpha=} {p=} {step_limit=} {hit_limit=} {logprob=}')
 
             if not np.isfinite(logprob):
                 logmsg('  Got bad log-prob', logprob)
@@ -79,6 +79,9 @@ class ConstrainedOptimizer(LsqrOptimizer):
                 p_best = p
 
         tractor.setParams(p_best)
+        print ("Pbest", p_best)
+        print ("LOGPROB", logprob_best, logprob_before)
+        print ("ALPHA", alpha_best, self.hit_limit, self.last_step_hit_limit)
         if alpha_best is None:
             return 0., 0.
 
