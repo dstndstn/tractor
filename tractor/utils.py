@@ -1158,9 +1158,10 @@ class MultiParams(BaseParams, NamedParams):
         for s in self.subs:
             if s is None:
                 continue
-            n = s.numberOfParams()
+            n = len(s.getAllParams())
             s.setAllParams(p[i:i + n])
             i += n
+        assert(i == len(self.getAllParams()))
 
     def setParams(self, p):
         i = 0
