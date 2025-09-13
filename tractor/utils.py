@@ -1145,6 +1145,8 @@ class MultiParams(BaseParams, NamedParams):
     def getAllParams(self):
         p = []
         for s in self.subs:
+            if s is None:
+                continue
             pp = s.getAllParams()
             if pp is None:
                 continue
@@ -1154,6 +1156,8 @@ class MultiParams(BaseParams, NamedParams):
     def setAllParams(self, p):
         i = 0
         for s in self.subs:
+            if s is None:
+                continue
             n = s.numberOfParams()
             s.setAllParams(p[i:i + n])
             i += n
