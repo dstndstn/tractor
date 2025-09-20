@@ -5,14 +5,56 @@ from tractor.utils import savetxt_cpu_append
 
 class SmarterDenseOptimizer(ConstrainedOptimizer):
 
+
+    # In SmarterDenseOptimizer (or appropriate parent class)
+    def getPriorsHessianAndGradient(self, tr):
+        priorVals = tr.getLogPriorDerivatives()
+        # Get the total number of parameters from the tractor object
+        Ntotal = tr.numberOfParams()
+
+        if priorVals is None:
+            # Return zeros of the correct size if there are no priors.
+            return np.zeros((Ntotal, Ntotal), np.float32), np.zeros(Ntotal, np.float32)
+
+        rA, cA, vA, pb, mub = priorVals
+
+        # Initialize the full Hessian and gradient matrices for the priors
+        ATA_prior = np.zeros((Ntotal, Ntotal), np.float32)
+        ATB_prior = np.zeros(Ntotal, np.float32)
+
+        # Use a set for live parameters to ensure uniqueness and then convert to a sorted list
+        # The columns of the prior matrices correspond to the indices of the parameters.
+        # We can directly use cA as indices into the full-sized matrices.
+
+        # Loop through the prior contributions and place them into the full-sized matrices
+        for ri, ci, vi, bi in zip(rA, cA, vA, pb):
+            # ci is the column index for the parameter with a prior
+            col = ci
+
+            # Loop through the rows of the sparse prior matrices
+            for rij, vij, bij in zip(ri, vi, bi):
+                # This is the `A` matrix for priors, which is 1-D for each prior term.
+                # We need to construct the A_T_dot_A and A_T_dot_B terms.
+                # A_ij = vij
+                # B_i = bij
+
+                # The prior's Hessian term is A.T @ A. In this case, for a single row,
+                # this is just vij^2, and it goes in the (col, col) element of the matrix.
+                ATA_prior[col, col] += vij * vij
+
+                # The prior's gradient term is A.T @ B. For a single row,
+                # this is vij * bij. It goes in the `col` element of the vector.
+                ATB_prior[col] += vij * bij
+
+        return ATA_prior, ATB_prior
+
+
     def getUpdateDirection(self, tractor, allderivs, damp=0., priors=True,
                            scale_columns=True, scales_only=False,
                            chiImages=None,
                            variance=False,
                            shared_params=True,
                            get_A_matrix=False):
-        print ("Smarter Dense Opt")
-        print ("TIM:", tractor.images)
         if shared_params or scales_only or damp>0 or variance:
             raise RuntimeError('Not implemented')
         assert(shared_params == False)
@@ -266,8 +308,6 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
 
             if scale_columns:
                 colscales2[col] = scale2
-        #print('colscales2:', colscales2)
-        #savetxt_cpu_append('ca1.txt', A)
 
         if Npriors > 0:
             rA, cA, vA, pb, mub = priorVals
@@ -282,8 +322,6 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                     A[Npixels + rij, col] = vij
                     B[Npixels + rij] += bij
             del priorVals, rA, cA, vA, pb, mub
-        #savetxt_cpu_append('cap.txt', A)
-        #savetxt_cpu_append('cbp.txt', B)
 
         if scale_columns:
             for col,scale2 in enumerate(colscales2):
@@ -294,7 +332,6 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                     colscales2[col] = 1.
             colscales = np.sqrt(colscales2)
             #print('colscales:', colscales)
-        #savetxt_cpu_append('ca2.txt', A)
 
         chimap = {}
         if chiImages is not None:
@@ -312,7 +349,6 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             h = y1-y0
             B[rowstart: rowstart + w*h] = chi.flat
             del chi
-        #savetxt_cpu_append('cb1.txt', B)
 
         try:
             X,_,_,_ = lstsq(A, B, rcond=None)
@@ -326,12 +362,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             print('A finite:', Counter(np.isfinite(A.ravel())))
             print('B finite:', Counter(np.isfinite(B.ravel())))
             return None
-        print ("OUTPUT SHAPES CPU1 ", A.shape, B.shape, X.shape)
-        #print ("CA", A)
-        #print ("CB", B)
-        #print ("CX", X)
-        #savetxt_cpu_append('ca1.txt', A)
-        #savetxt_cpu_append('cb1.txt', B)
+        #print ("OUTPUT SHAPES CPU1 ", A.shape, B.shape, X.shape)
 
         if A is not None:
             Aorig = A.copy()
@@ -351,13 +382,13 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
 
         # Expand x back out (undo the column_map)
         #print('Expanding X: column_map =', column_map)
-        print('X:', X)
+        #print('X:', X)
         X_full = np.zeros(1+max(live_params))
         for c,i in column_map.items():
             #print ("C", c, "I", i, X[i])
             X_full[c] = X[i]
         X = X_full
-        print('-> SMARTER X', X)
+        #print('-> SMARTER X', X)
 
         if get_A_matrix:
             if scale_columns:

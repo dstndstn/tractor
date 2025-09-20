@@ -21,8 +21,6 @@ tt = np.zeros(8)
 tct = np.zeros(9, np.int32)
 tt2 = np.zeros(1, np.int32)
 
-gdt = np.zeros(12)
-
 image_counter = 0
 #from astrometry.util.plotutils import PlotSequence
 #ps = PlotSequence('fourier')
@@ -39,39 +37,17 @@ class FactoredOptimizer(object):
         super().__init__(*args, **kwargs)
 
     def getSingleImageUpdateDirection(self, tr, **kwargs):
-        print ("FactoredOptimizer GSUID")
         allderivs = tr.getDerivs()
         r = self.getUpdateDirection(tr, allderivs, get_A_matrix=True, **kwargs)
         if r is None:
             return None
         x,A,colscales,B,Ao = r
-        print ("X", x.shape, x)
-        print ("A", A.shape, A.max())
-        print ("B", B.shape, B.max())
-        #Uncomment lines below to check SmarterDenseOptimizer vs ConstrainedDenseOptimizer for single images:
-        #opt2 = ConstrainedDenseOptimizer()
-        #r2 = ConstrainedDenseOptimizer.getUpdateDirection(self, tr, allderivs, get_A_matrix=True, **kwargs)
-        #x2,A2,c2,B2 = r2
-        #print ("x2", x2.shape, x2)
-        #print ("A2", A2.shape, A2.max())
-        #print ("B2", B2.shape, B2.max())
-        #if not np.allclose(x,x2, atol=1.e-6):
-        #    sys.exit(0)
-
+        #print ("X", x.shape, x)
+        #print ("A", A.shape, A.max())
+        #print ("B", B.shape, B.max())
         # print('SingeImageUpdateDirection: tr thawed params:')
         # tr.printThawedParams()
         # print('allderivs:', len(allderivs))
-        # print('x:', x)
-
-        if False:
-            print('Got A matrix:', A.shape)
-            global image_counter
-            n,m = A.shape
-            for i in range(m):
-                plt.clf()
-                plt.imshow(A[:,i].reshape((50,50)), interpolation='nearest', origin='lower')
-                plt.savefig('orig-img%i-d%i.png' % (image_counter, i))
-            image_counter += 1
 
         if self.ps is not None:
             mod0 = tr.getModelImage(0)
@@ -112,36 +88,19 @@ class FactoredOptimizer(object):
         return x, icov
 
     def getSingleImageUpdateDirections(self, tr, **kwargs):
-        print ("FactoredOptimizer GSUIDS (plural)")
         from tractor import Images
         img_opts = []
         imgs = tr.images
         mm = tr.modelMasks
 
-        #Uncomment the block below to test running all images at once in SmarterDenseOptimizer vs ConstrainedDenseOptimizer
-        """
-        allderivs = tr.getDerivs()
-        r = self.getUpdateDirection(tr, allderivs, get_A_matrix=True, **kwargs)
-        opt2 = ConstrainedDenseOptimizer()
-        r2 = ConstrainedDenseOptimizer.getUpdateDirection(self, tr, allderivs, get_A_matrix=True, **kwargs)
-        x,A,colscales,B,Ao = r
-        x2,A2,c2,B2 = r2
-        print ("AllX", x.shape, x)
-        print ("Allx2", x2.shape, x2)
-        print ("A", A.shape, A.max())
-        print ("B", B.shape, B.max())
-        print ("A2", A2.shape, A2.max())
-        print ("B2", B2.shape, B2.max())
-        if not np.allclose(x,x2, atol=1.e-6):
-            sys.exit(0)
-
-        """
-
+        #Remove 'priors' from kwargs
+        orig_priors = kwargs.pop('priors', True)
         for i,img in enumerate(imgs):
             tr.images = Images(img)
             if mm is not None:
                 tr.modelMasks = [mm[i]]
-            r = self.getSingleImageUpdateDirection(tr, **kwargs)
+            #Run with PRIORS = FALSE
+            r = self.getSingleImageUpdateDirection(tr, priors=False, **kwargs)
             if r is None:
                 continue
             x,x_icov = r
@@ -172,7 +131,9 @@ class FactoredOptimizer(object):
         if image_thawed:
             tr.freezeParam('images')
         #print('getLinearUpdateDirection( kwargs=', kwargs, ')')
-        print ("Running Factored getSingleImageUpdateDirections")
+        #print ("Running Factored getSingleImageUpdateDirections")
+        #Store original value of priors
+        orig_priors = kwargs['priors']
         img_opts = self.getSingleImageUpdateDirections(tr, **kwargs)
         if len(img_opts) == 0:
             if x_imgs is not None:
@@ -186,17 +147,19 @@ class FactoredOptimizer(object):
             icsum = icsum + ic
         #C = np.linalg.inv(icsum)
         #x = np.dot(C, xicsum)
-        print (f'{icsum=} {xicsum=}')
+        #print (f'{icsum=} {xicsum=}')
+
+        #Add the priors if needed.
+        if orig_priors:
+            priors_ATA, priors_ATB = self.getPriorsHessianAndGradient(tr)
+            #print (f'{priors_ATA=}, {priors_ATB=}')
+            # Add the raw priors to the sums
+            icsum += priors_ATA
+            xicsum += priors_ATB
         x,_,_,_ = np.linalg.lstsq(icsum, xicsum, rcond=None)
         if x_imgs is not None:
             x = np.append(x_imgs, x)
-
-        #UNCOMMENT these lines to run all images through SmarterDenseOptimizer in the original style
-        #This should result in a match to the original but a mismatch with the GPU
-        #allderivs = tr.getDerivs()
-        #r = self.getUpdateDirection(tr, allderivs, get_A_matrix=True, **kwargs)
-        #x,A,colscales,B,Ao = r
-
+        #print (f'{icsum=} {xicsum=}')
         if image_thawed:
             tr.thawParam('images')
         return x
@@ -225,12 +188,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
     def printTiming(self):
         print ("Times:",tt,tct)
-        print(f"GDTimesx: {gdt}") # Original print statement
 
     def getSingleImageUpdateDirections(self, tr, **kwargs):
         #import traceback
         #traceback.print_stack()
-        print ("GPU getSingleImageUpdateDirections")
+        #print ("GPU getSingleImageUpdateDirections")
         #print ("profile galaxy", isinstance(tr.catalog[0], ProfileGalaxy))
         R_gpu = None
         R_cpu = None
@@ -241,7 +203,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             if self._gpumode >= 10:
                 print ("Skipping non-profile galaxy")
                 return []
-            print ("Running CPU version, frozen = ", tr.isParamFrozen('images'), "len = ", len(tr.catalog), " profile = ", isinstance(tr.catalog[0], ProfileGalaxy))
+            #print ("Running CPU version, frozen = ", tr.isParamFrozen('images'), "len = ", len(tr.catalog), " profile = ", isinstance(tr.catalog[0], ProfileGalaxy))
             #p = self.ps
             #self.ps = None
             t = time.time()
@@ -261,7 +223,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         if self._gpumode == 1 or self._gpumode == 3 or self._gpumode == 11 or self._gpumode == 13:
             try:
-                print('Running GPU code...')
+                #print('Running GPU code...')
                 if not (tr.isParamFrozen('images') and (len(tr.catalog) == 1) and isinstance(tr.catalog[0], ProfileGalaxy)):
                     print ("Running GPU version, frozen = ", tr.isParamFrozen('images'), "len = ", len(tr.catalog), " profile = ", isinstance(tr.catalog[0], ProfileGalaxy))
                     tct[0] += 1
@@ -269,7 +231,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 R_gpu = self.gpuSingleImageUpdateDirections(tr, **kwargs)
                 tt[1] += time.time()-t
                 tct[1] += 1
-                print ("GPU time:",time.time()-t)
+                #print ("GPU time:",time.time()-t)
                 if self._gpumode == 1 or self._gpumode == 11:
                     return R_gpu
             except AssertionError:
@@ -279,8 +241,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 print ("Running CPU version instead...")
                 t = time.time()
                 R_gpu = super().getSingleImageUpdateDirections(tr, **kwargs)
-                ttnew[0] += time.time()-t
-                tctnew[0] += 1
                 if self._gpumode == 1 or self._gpumode == 11:
                     return R_gpu
             except:
@@ -300,7 +260,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 R_gpuv = self.gpuSingleImageUpdateDirectionsVectorized(tr, **kwargs)
                 tt[2] += time.time()-t
                 tct[2] += 1
-                print ("GPU Vectorized time:", time.time()-t)
+                #print ("GPU Vectorized time:", time.time()-t)
                 if self._gpumode == 2 or self._gpumode == 12:
                     return R_gpuv
             except AssertionError:
@@ -310,8 +270,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 print ("Running CPU version instead...")
                 t = time.time()
                 R_gpuv = super().getSingleImageUpdateDirections(tr, **kwargs)
-                ttnew[0] += time.time()-t
-                tctnew[0] += 1
                 if self._gpumode == 2 or self._gpumode == 12:
                     return R_gpuv
             except:
@@ -326,7 +284,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         if self._gpumode == 0 or self._gpumode == 3 or self._gpumode == 10 or self._gpumode == 13:
             try:
-                print('Running CPU code for comparison...')
+               # print('Running CPU code for comparison...')
                 if not (tr.isParamFrozen('images') and (len(tr.catalog) == 1) and isinstance(tr.catalog[0], ProfileGalaxy)):
                     print ("Running CPU version, frozen = ", tr.isParamFrozen('images'), "len = ", len(tr.catalog), " profile = ", isinstance(tr.catalog[0], ProfileGalaxy))
                     tct[0] += 1
@@ -334,7 +292,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 R_cpu = super().getSingleImageUpdateDirections(tr, **kwargs)
                 tt[3] += time.time()-t
                 tct[3] += 1
-                print ("CPU time", time.time()-t)
+                #print ("CPU time", time.time()-t)
                 if self._gpumode == 0 or self._gpumode == 10:
                     return R_cpu
             except:
@@ -790,7 +748,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             self.ps = p
             return R
 
-        print('Using GpuFriendly vectorized code')
+        #print('Using GpuFriendly vectorized code')
         # Assume we're not fitting any of the image parameters.
         assert(tr.isParamFrozen('images'))
         # Assume no (varying) sky background levels
@@ -839,7 +797,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         img_bands = [bands.index(tim.getPhotoCal().band) for tim in tr.images]
         #print('ibands', img_bands)
 
-        print ("Calling VECTORIZED version")
+        #print ("Calling VECTORIZED version")
         img_params, cx,cy,pW,pH = self._getBatchImageParams(tr, masks, pxy)
         # Dustin FIXME - cx,cy,pW,pH should probably be in img_params, they're about the PSF sizes
         # and centering.
@@ -868,6 +826,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #nbands = 1 + max(img_bands)
         nbands = len(bands)
 
+        """
+        #Comment out priorVals
         priorVals = tr.getLogPriorDerivatives()
         if priorVals is not None:
             # Adjust the priors to handle the single-band case that we consider...
@@ -878,6 +838,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             priorVals = tr.getLogPriorDerivatives()
             print('Prior vals with one band:', priorVals)
             bright.thawParams(*pnames)
+        """
+        priorVals = None
 
         Xic = self.computeUpdateDirectionsVectorized(img_params, priorVals)
 
@@ -1688,9 +1650,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         Npriors = 0
         if priorVals is not None:
             rA, cA, vA, pb, mub = priorVals
-            print ("PRIOR CA", cA)
             Npriors = max(Npriors, max([1+max(r) for r in rA]))
-            print ("NPRIORS", Npriors)
 
         G = self.computeGalaxyModelsVectorized(img_params)
 
@@ -1775,6 +1735,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # Append priors --do priors depend on which image I am looking at?
         #TODO not sure if this is correct for priors? 
 
+        """
+        Priors should NOT be added in here - this will be removed
         if priorVals is not None:
             print ("Using PRIORS")
             rA, cA, vA, pb, mub = priorVals
@@ -1787,6 +1749,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                     B[:,Npix + rij] += bij
         else:
             print ("NO PRIORS")
+        """
 
         # Compute the covariance matrix
         Xicov = cp.matmul(A.swapaxes(-1,-2), A)
@@ -2108,7 +2071,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                                             fluxes[0], img_sky, img_pix, img_ie)
         img_params.addBatchGalaxyProfiles(gals)
         G = self.computeGalaxyModelsVectorized(img_params)
-        gdt[8] += time.time()-t
         t = time.time()
         assert(G.shape == (Nimages, len(steps), pH, pW))
         mmpix = gals.mmpix

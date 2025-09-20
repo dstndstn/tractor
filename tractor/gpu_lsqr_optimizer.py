@@ -29,7 +29,7 @@ class GPULsqrOptimizer(LsqrOptimizer):
                            chiImages=None, variance=False,
                            shared_params=True,
                            get_A_matrix=False):
-        print ("GPULsqrOptimizer!")
+        #print ("GPULsqrOptimizer!")
         #print ("TRACTOR", type(tractor), tractor.getParams, tractor.setParams)
 
         if shared_params:

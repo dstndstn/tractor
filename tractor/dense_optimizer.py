@@ -202,7 +202,7 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
             print('B finite:', Counter(np.isfinite(B.ravel())))
             return None
 
-        print ("OUTPUT SHAPES CPU2 ", A.shape, B.shape, X.shape)
+        #print ("OUTPUT SHAPES CPU2 ", A.shape, B.shape, X.shape)
 
         if False:
             Aold = super(ConstrainedDenseOptimizer, self).getUpdateDirection(
@@ -253,11 +253,10 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
             del A
             del B
 
-        print ("XD1", X)
         if scale_columns:
             X /= colscales
 
-        print ("X DENSE:", X)
+        #print ("X DENSE:", X)
         if False:
             print('Returning:  ', X)
             Xold = super(ConstrainedDenseOptimizer, self).getUpdateDirection(

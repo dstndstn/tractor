@@ -264,7 +264,6 @@ class LsqrOptimizer(Optimizer):
         return lnp, chis, ims
 
     def getLinearUpdateDirection(self, tractor,
-                                 retall=False,
                                  damp=0,
                                  priors=True,
                                  scale_columns=True,
@@ -284,14 +283,13 @@ class LsqrOptimizer(Optimizer):
         #       print('patch mean', np.mean(p.patch))
         #logverb('Finding optimal update direction...')
         #t0 = Time()
-        print ("LSQR GLUD")
         X = self.getUpdateDirection(tractor, allderivs, damp=damp,
                                     priors=priors,
                                     scale_columns=scale_columns,
                                     shared_params=shared_params,
                                     variance=variance)
 
-        print (f"LSQR {X=}")
+        #print (f"LSQR {X=}")
         return X
 
     def optimize(self, tractor, alphas=None, damp=0, priors=True,
@@ -301,26 +299,7 @@ class LsqrOptimizer(Optimizer):
         kwa = dict(damp=damp, priors=priors,
                    scale_columns=scale_columns, shared_params=shared_params)
         t = time.time()
-        print ("GETLIN", self.getLinearUpdateDirection)
         X = self.getLinearUpdateDirection(tractor, **kwa)
-        print(f'Update {X=}')
-        from tractor.dense_optimizer import ConstrainedDenseOptimizer
-        X2 = ConstrainedDenseOptimizer.getLinearUpdateDirection(self, tractor, **kwa)
-        lt[0] += time.time()-t
-        t = time.time()
-        print(f'Update CD Opt {X2=}')
-        """
-        #Uncommment this block to break when a mismatch occurs between Factored and ConstrainedDense
-        import sys
-        if (not np.allclose(X, X2, atol=1.e-4)):
-            fname="err.pickle"
-            f = open(fname,'wb')
-            import pickle
-            pickle.dump(tractor, f)
-            f.close()
-            print ("Mismatch3", X, X2)
-            sys.exit(0)
-        """
         if X is None:
             # Failure
             return (0., None, 0.)
@@ -340,7 +319,7 @@ class LsqrOptimizer(Optimizer):
         #t0 = Time()
         lct[0] += 1
         (dlogprob, alpha) = self.tryUpdates(tractor, X, alphas=alphas)
-        print (f"LSQR TryUpdates Results: {dlogprob=}, {alpha=}")
+        #print (f"LSQR TryUpdates Results: {dlogprob=}, {alpha=}")
         lt[1] += time.time()-t
         #tstep = Time() - t0
         #logverb('Finished opt2.')
@@ -355,8 +334,8 @@ class LsqrOptimizer(Optimizer):
 
     def optimize_loop(self, tractor, dchisq=0., steps=50, **kwargs):
         R = {}
-        print ("LSQR OPTIMIZE")
-        print (self.optimize)
+        #print ("LSQR OPTIMIZE")
+        #print (self.optimize)
         t = time.time()
         for step in range(steps):
             dlnp, X, alpha = self.optimize(tractor, **kwargs)
@@ -374,8 +353,8 @@ class LsqrOptimizer(Optimizer):
                            shared_params=True,
                            get_A_matrix=False):
         t = time.time()
-        print ("LSQR GUD")
-        print ("CHI", chiImages)
+        #print ("LSQR GUD")
+        #print ("CHI", chiImages)
         #import traceback
         #traceback.print_stack()
         #
@@ -724,7 +703,6 @@ class LsqrOptimizer(Optimizer):
         if scale_columns:
             X[colscales > 0] /= colscales[colscales > 0]
         logverb('  X=', X)
-        print ("L X = ", X)
         lt[4] += time.time()-t
         #print ("LTimesy:",lt)
 
