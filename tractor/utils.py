@@ -1161,6 +1161,8 @@ class MultiParams(BaseParams, NamedParams):
     def getAllParams(self):
         p = []
         for s in self.subs:
+            if s is None:
+                continue
             pp = s.getAllParams()
             if pp is None:
                 continue
@@ -1170,9 +1172,12 @@ class MultiParams(BaseParams, NamedParams):
     def setAllParams(self, p):
         i = 0
         for s in self.subs:
-            n = s.numberOfParams()
+            if s is None:
+                continue
+            n = len(s.getAllParams())
             s.setAllParams(p[i:i + n])
             i += n
+        assert(i == len(self.getAllParams()))
 
     def setParamsGPU(self, p):
         import cupy as cp
