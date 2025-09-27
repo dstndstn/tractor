@@ -36,9 +36,9 @@ class FactoredOptimizer(object):
         self.ps = None
         super().__init__(*args, **kwargs)
 
-    def getSingleImageUpdateDirection(self, tr, **kwargs):
+    def getSingleImageUpdateDirection(self, tr, max_size=0, **kwargs):
         allderivs = tr.getDerivs()
-        r = self.getUpdateDirection(tr, allderivs, get_A_matrix=True, **kwargs)
+        r = self.getUpdateDirection(tr, allderivs, get_A_matrix=True, max_size=max_size, **kwargs)
         if r is None:
             return None
         x,A,colscales,B,Ao = r
@@ -95,15 +95,17 @@ class FactoredOptimizer(object):
 
         #Remove 'priors' from kwargs
         orig_priors = kwargs.pop('priors', True)
+        max_size = 0
         for i,img in enumerate(imgs):
             tr.images = Images(img)
             if mm is not None:
                 tr.modelMasks = [mm[i]]
             #Run with PRIORS = FALSE
-            r = self.getSingleImageUpdateDirection(tr, priors=False, **kwargs)
+            r = self.getSingleImageUpdateDirection(tr, priors=False, max_size=max_size, **kwargs)
             if r is None:
                 continue
             x,x_icov = r
+            max_size = max(max_size, len(x))
             #print('FO: X', x, 'x_icov', x_icov)
             img_opts.append((x,x_icov))
         tr.images = imgs

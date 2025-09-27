@@ -54,7 +54,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                            chiImages=None,
                            variance=False,
                            shared_params=True,
-                           get_A_matrix=False):
+                           get_A_matrix=False, max_size=0):
         if shared_params or scales_only or damp>0 or variance:
             raise RuntimeError('Not implemented')
         assert(shared_params == False)
@@ -383,7 +383,12 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
         # Expand x back out (undo the column_map)
         #print('Expanding X: column_map =', column_map)
         #print('X:', X)
-        X_full = np.zeros(1+max(live_params))
+        if max_size > 1+max(live_params):
+            print ("Using max_size", max_size)
+        else:
+            max_size = 1+max(live_params)
+        #X_full = np.zeros(1+max(live_params))
+        X_full = np.zeros(max_size)
         for c,i in column_map.items():
             #print ("C", c, "I", i, X[i])
             X_full[c] = X[i]
