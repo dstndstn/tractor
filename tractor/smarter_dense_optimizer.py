@@ -149,7 +149,9 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                     continue
                 x0,x1,y0,y1 = img_bounds[img]
                 img_offsets[img] = Npixels
-                Npixels += (x1-x0) * (y1-y0)
+                # pixel coords can end up as int16; cast to int
+                # to avoid overflow!
+                Npixels += (int(x1)-int(x0)) * (int(y1)-int(y0))
 
         Npriors = 0
         if priors:
