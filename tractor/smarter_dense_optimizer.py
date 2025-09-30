@@ -111,6 +111,10 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                 #print ("\tIMG ",img)
                 #print('\t\tderiv', deriv, deriv.extent)
                 dx0,dx1,dy0,dy1 = deriv.extent
+                dx0 = int(dx0)
+                dx1 = int(dx1)
+                dy0 = int(dy0)
+                dy1 = int(dy1)
 
                 if img in img_bounds:
                     x0,x1,y0,y1 = img_bounds[img]
@@ -294,6 +298,14 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                     ####
                     #print (f'{rowstart=} {w=} {h=} {col=}')
                     #print (apix.shape)
+                    w = int(w)
+                    h = int(h)
+                    if w*h != len(apix.flat):
+                        print (f'{rowstart=} {w=} {h=} {col=} APIX len ', len(apix.flat))
+                        import sys
+                        import traceback
+                        traceback.print_exc()
+                        sys.exit(-1)
                     A[rowstart:rowstart+w*h, col] = apix.flat
                     if scale_columns:
                         # accumulate L2 norm
