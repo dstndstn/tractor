@@ -843,6 +843,12 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         """
         priorVals = None
 
+
+        if img_params.ffts is None:
+            print ("Warning> img_params.ffts is None!  Running CPU version")
+            xout = super().getSingleImageUpdateDirections(tr, **kwargs)
+            return xout
+
         Xic = self.computeUpdateDirectionsVectorized(img_params, priorVals)
 
         mpool = cp.get_default_memory_pool()
