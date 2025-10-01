@@ -124,6 +124,9 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                     #print ("IESHAPE", ieshape, "DY", dy0, dy1, "DX", dx0, dx1)
                     assert(dy0 < ieshape[0])
                     assert(dx0 < ieshape[1])
+                    if (dy0 >= ieshape[0] or dx0 >= ieshape[1]):
+                        print ("Warning: Img lower bounds are larger than inv error shape")
+                        return None
                     if (dy1 > ieshape[0]):
                         dy1 = ieshape[0]
                         deriv.clipToRoi(dx0, dx1, dy0, dy1)
