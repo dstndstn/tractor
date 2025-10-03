@@ -11,6 +11,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
         priorVals = tr.getLogPriorDerivatives()
         # Get the total number of parameters from the tractor object
         Ntotal = tr.numberOfParams()
+        #print (f'{Ntotal=}')
 
         if priorVals is None:
             # Return zeros of the correct size if there are no priors.
@@ -122,11 +123,11 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                 else:
                     ieshape = img.getInvError().shape
                     #print ("IESHAPE", ieshape, "DY", dy0, dy1, "DX", dx0, dx1)
-                    assert(dy0 < ieshape[0])
-                    assert(dx0 < ieshape[1])
                     if (dy0 >= ieshape[0] or dx0 >= ieshape[1]):
                         print ("Warning: Img lower bounds are larger than inv error shape")
                         return None
+                    assert(dy0 < ieshape[0])
+                    assert(dx0 < ieshape[1])
                     if (dy1 > ieshape[0]):
                         dy1 = ieshape[0]
                         deriv.clipToRoi(dx0, dx1, dy0, dy1)
@@ -145,6 +146,8 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                     #print (f'{dx0=} {dx1=} {dy0=} {dy1=}')
                     #print ("IES", img.getInvError().shape) 
         Ncols = len(live_params)
+        nd = len(allderivs)
+        #print (f'{nd=} {Ncols=} {max_size=}')
 
         # Where in the A & B arrays will the image pixels start?
 
@@ -400,8 +403,11 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
         # Expand x back out (undo the column_map)
         #print('Expanding X: column_map =', column_map)
         #print('X:', X)
-        if max_size > 1+max(live_params):
-            print ("Using max_size", max_size)
+        #if max_size > 1+max(live_params):
+        #    print ("Using max_size", max_size)
+        if nd > 1+max(live_params):
+            print ("Re-sizing X array for n derivs = ", nd)
+            max_size = nd
         else:
             max_size = 1+max(live_params)
         #X_full = np.zeros(1+max(live_params))
