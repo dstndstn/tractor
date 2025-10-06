@@ -388,7 +388,6 @@ class ProfileGalaxy(object):
                                          max(1 + py - y0, 1 + y1 - py)))
             psfh, psfw = psf.shape
             halfsize = max(halfsize, max(psfw / 2., psfh / 2.))
-            #print('Halfsize:', halfsize)
             if force_halfsize is not None:
                 halfsize = force_halfsize
             #if not hasattr(img, 'halfsize'):
@@ -451,10 +450,13 @@ class ProfileGalaxy(object):
                 return Patch(x0, y0,
                              bigmodel.patch[boffy:boffy + mh, boffx:boffx + mw])
 
-        #print('Getting Fourier transform of PSF at', px,py)
+        #print('Getting Fourier transform of PSF at', px,py, halfsize)
         #print(type(psf))
         #print (psf.getFourierTransform)
-        # print('Tim shape:', img.shape)
+        #print('Tim shape:', img.shape)
+        if halfsize > 32768:
+            print (f"WARNING: Bad positionToPixel results {px=} {py=} {halfsize=}")
+            return None
         P, (cx, cy), (pH, pW), (v, w) = psf.getFourierTransform(px, py, halfsize)
 
         dx = px - cx

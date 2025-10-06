@@ -156,8 +156,16 @@ class FactoredOptimizer(object):
             priors_ATA, priors_ATB = self.getPriorsHessianAndGradient(tr)
             #print (f'{priors_ATA=}, {priors_ATB=}')
             # Add the raw priors to the sums
-            icsum += priors_ATA
-            xicsum += priors_ATB
+            #icsum += priors_ATA
+            #xicsum += priors_ATB
+            if priors_ATA.shape == icsum.shape:
+                icsum += priors_ATA
+                xicsum += priors_ATB
+            elif np.all(priors_ATA == 0) and np.all(priors_ATB == 0):
+                print (f"WARNING: Prior shape mismatch {icsum.shape=} {xicsum.shape=} {priors_ATA.shape=} {priors_ATB.shape=} but priors are zero so ignorning.")
+            else:
+                print (f"WARNING: Prior shape mismatch {icsum.shape=} {xicsum.shape=} {priors_ATA.shape=} {priors_ATB.shape=}; using CPU mode instead.")
+                return super().getLinearUpdateDirection(tr, **kwargs)
         x,_,_,_ = np.linalg.lstsq(icsum, xicsum, rcond=None)
         if x_imgs is not None:
             x = np.append(x_imgs, x)
@@ -796,10 +804,19 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                       for tim in tr.images]
         bands = src.getBrightness().getParamNames()
         #print('Bands:', bands)
-        img_bands = [bands.index(tim.getPhotoCal().band) for tim in tr.images]
+        try:
+            img_bands = [bands.index(tim.getPhotoCal().band) for tim in tr.images]
+        except ValueError as ex:
+            print (f'WARNING: Image bands error - {bands=} - '+str(ex))
+            xout = super().getSingleImageUpdateDirections(tr, **kwargs)
+            return xout 
         #print('ibands', img_bands)
 
         #print ("Calling VECTORIZED version")
+        if len(tr.images) == 0: 
+            print (f"WARNING: pxy is empty, len images == 0, running CPU version")
+            xout = super().getSingleImageUpdateDirections(tr, **kwargs)
+            return xout 
         img_params, cx,cy,pW,pH = self._getBatchImageParams(tr, masks, pxy)
         # Dustin FIXME - cx,cy,pW,pH should probably be in img_params, they're about the PSF sizes
         # and centering.
