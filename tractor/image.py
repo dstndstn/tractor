@@ -163,6 +163,9 @@ class Image(MultiParams):
     def getInvError(self):
         return self.inverr
 
+    def setInvError(self, inverr):
+        self.inverr = inverr
+
     def getInvvar(self):
         return self.inverr**2
 
