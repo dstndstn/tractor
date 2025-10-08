@@ -134,6 +134,10 @@ class FactoredOptimizer(object):
             tr.freezeParam('images')
         #print('getLinearUpdateDirection( kwargs=', kwargs, ')')
         #print ("Running Factored getSingleImageUpdateDirections")
+        if len(tr.images) == 0:
+            if x_imgs is not None:
+                return x_imgs
+            return None
         #Store original value of priors
         orig_priors = kwargs['priors']
         img_opts = self.getSingleImageUpdateDirections(tr, **kwargs)
