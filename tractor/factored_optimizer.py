@@ -272,6 +272,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 print ('Running VECTORIZED GPU code...')
                 t = time.time()
                 R_gpuv = self.gpuSingleImageUpdateDirectionsVectorized(tr, **kwargs)
+                print ("Finished VECTORIZED code")
                 tt[2] += time.time()-t
                 tct[2] += 1
                 #print ("GPU Vectorized time:", time.time()-t)
@@ -761,6 +762,10 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             R = super().getSingleImageUpdateDirections(tr, **kwargs)
             self.ps = p
             return R
+        if len(tr.images) == 0: 
+            print (f"WARNING: len images == 0, running CPU version")
+            xout = super().getSingleImageUpdateDirections(tr, **kwargs)
+            return xout 
 
         #print('Using GpuFriendly vectorized code')
         # Assume we're not fitting any of the image parameters.
@@ -791,6 +796,10 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # Assume model masks are set (ie, pixel ROIs of interest are defined)
         masks = [tr._getModelMaskByIdx(i, src) for i in range(len(tr.images))]
         #masks = [tr._getModelMaskFor(tim, src) for tim in tr.images]
+        if any(m is None for m in masks):
+            print (f"WARNING: One or more modelMasks is None; running CPU version.")
+            xout = super().getSingleImageUpdateDirections(tr, **kwargs)
+            return xout
         assert(all([m is not None for m in masks]))
 
         assert(src.isParamThawed('pos'))
@@ -817,10 +826,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #print('ibands', img_bands)
 
         #print ("Calling VECTORIZED version")
-        if len(tr.images) == 0: 
-            print (f"WARNING: pxy is empty, len images == 0, running CPU version")
-            xout = super().getSingleImageUpdateDirections(tr, **kwargs)
-            return xout 
         img_params, cx,cy,pW,pH = self._getBatchImageParams(tr, masks, pxy)
         # Dustin FIXME - cx,cy,pW,pH should probably be in img_params, they're about the PSF sizes
         # and centering.
@@ -870,7 +875,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             xout = super().getSingleImageUpdateDirections(tr, **kwargs)
             return xout
 
+        print ("computeUpdateDirectionsVectorized")
         Xic = self.computeUpdateDirectionsVectorized(img_params, priorVals)
+        print ("Done computeUpdateDirctionsVectorized")
 
         mpool = cp.get_default_memory_pool()
         del img_params
@@ -878,7 +885,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         mpool.free_all_blocks()
         #print (f'{nbands=}')
 
-        if nbands > 1:
+        if nbands >= 1:
             full_xic = []
             fullN = tr.numberOfParams()
             # number of source position parameters
