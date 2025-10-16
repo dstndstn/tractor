@@ -89,7 +89,7 @@ class BatchGalaxyProfiles(object):
             amp = cp.zeros((self.Nimages, self.N, self.maxNmogs), dtype=cp.float32)
             mean = cp.zeros((self.Nimages, self.N, self.maxNmogs, self.D), dtype=cp.float32)
             var = cp.zeros((self.Nimages, self.N, self.maxNmogs, self.D, self.D), dtype=cp.float32)
-            IM2 = IM[nmogs > 0]
+            #IM2 = IM[nmogs > 0]
             #flipped_mask = IM2.sum(1, keepdims=1) > cp.arange(self.maxNmogs-1,-1,-1)
             flipped_mask = IM.sum(2, keepdims=1) > cp.arange(self.maxNmogs-1,-1,-1)
             flipped_mask = flipped_mask[:,:,::-1]
@@ -115,8 +115,9 @@ class BatchGalaxyProfiles(object):
             amp = cp.zeros((self.Nimages, self.N, self.maxNfft), dtype=cp.float32)
             mean = cp.zeros((self.Nimages, self.N, self.maxNfft, self.D), dtype=cp.float32)
             var = cp.zeros((self.Nimages, self.N, self.maxNfft, self.D, self.D), dtype=cp.float32)
-            IF2 = IF[nfft > 0]
-            flipped_mask = IF2.sum(2, keepdims=1) > cp.arange(self.maxNfft-1,-1,-1)
+            #IF2 = IF[nfft > 0]
+            #flipped_mask = IF2.sum(2, keepdims=1) > cp.arange(self.maxNfft-1,-1,-1)
+            flipped_mask = IF.sum(2, keepdims=1) > cp.arange(self.maxNfft-1,-1,-1)
             flipped_mask = flipped_mask[:,:,::-1]
             #flipped_mask = IF.sum(1, keepdims=1) > cp.arange(self.maxNfft-1,-1,-1)
             #flipped_mask = flipped_mask[:,::-1]
