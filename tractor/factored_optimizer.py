@@ -265,14 +265,37 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 src = tr.catalog[0]
                 print('Source:', src)
                 print(repr(src))
-                sys.exit(-1)
+                print ("Running CPU version instead...")
+                t = time.time()
+                R_gpu = super().getSingleImageUpdateDirections(tr, **kwargs)
+                if self._gpumode == 1 or self._gpumode == 11:
+                    return R_gpu
 
         if self._gpumode == 2 or self._gpumode == 3 or self._gpumode == 12 or self._gpumode == 13:
+            free_mem, total_mem = cp.cuda.runtime.memGetInfo()
+            nimages = len(tr.images)
+            imsize = tr.images[0].data.size
+            nd = tr.numberOfParams()+2
+            kmax = 9
+            #Double size of 16 bit (complex 128) array x nimage x
+            #n derivs x kmax x imsize.  5D array in batch_mixture_profiles.py
+            est_mem = nimages*imsize*nd*kmax*16
+
+            if free_mem < est_mem:
+                print (f"Estimated memory {est_mem} is greater than free memory {free_mem}; Running CPU mode instead!")
+                R_gpuv = super().getSingleImageUpdateDirections(tr, **kwargs)
+                return R_gpuv
+            else:
+                print (f"Estimated memory {est_mem} is less than free memory {free_mem}")
+
             try:
-                print ('Running VECTORIZED GPU code...')
+                import datetime
+                print ('Running VECTORIZED GPU code...', datetime.datetime.now())
                 t = time.time()
                 R_gpuv = self.gpuSingleImageUpdateDirectionsVectorized(tr, **kwargs)
-                print ("Finished VECTORIZED code")
+                mempool = cp.get_default_memory_pool()
+                mempool.free_all_blocks()
+                #print ("Finished VECTORIZED code")
                 tt[2] += time.time()-t
                 tct[2] += 1
                 #print ("GPU Vectorized time:", time.time()-t)
@@ -287,7 +310,20 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 R_gpuv = super().getSingleImageUpdateDirections(tr, **kwargs)
                 if self._gpumode == 2 or self._gpumode == 12:
                     return R_gpuv
-            except:
+            except cp.cuda.memory.OutOfMemoryError:
+                free_mem, total_mem = cp.cuda.runtime.memGetInfo()
+                mempool = cp.get_default_memory_pool()
+                used_bytes = mempool.used_bytes()
+                tot_bytes = mempool.total_bytes()
+                print (f"Out of Memory for source "+str(tr.catalog[0]))
+                print (f'OOM Device {free_mem=} {total_mem=}; This mempool {used_bytes=} {tot_bytes=}')
+                print ("Running CPU version instead...")
+                mempool.free_all_blocks()
+                t = time.time()
+                R_gpuv = super().getSingleImageUpdateDirections(tr, **kwargs)
+                if self._gpumode == 2 or self._gpumode == 12:
+                    return R_gpuv
+            except Exception as ex:
                 import traceback
                 print('Exception in GPU Vectorized code:')
                 traceback.print_exc()
@@ -295,7 +331,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 src = tr.catalog[0]
                 print('Source:', src)
                 print(repr(src))
-                sys.exit(-1)
+                print ("Running CPU version instead...")
+                t = time.time()
+                R_gpuv = super().getSingleImageUpdateDirections(tr, **kwargs)
+                if self._gpumode == 2 or self._gpumode == 12:
+                    return R_gpuv
 
         if self._gpumode == 0 or self._gpumode == 3 or self._gpumode == 10 or self._gpumode == 13:
             try:
@@ -310,7 +350,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 #print ("CPU time", time.time()-t)
                 if self._gpumode == 0 or self._gpumode == 10:
                     return R_cpu
-            except:
+            except Exception as ex:
                 import traceback
                 print('Exception in CPU code:')
                 traceback.print_exc()
@@ -318,7 +358,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 src = tr.catalog[0]
                 print('Source:', src)
                 print(repr(src))
-                sys.exit(-1)
+                raise(ex)
+                #sys.exit(-1)
 
         xicacc_cpu = 0.
         icacc_cpu = 0.
@@ -875,9 +916,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             xout = super().getSingleImageUpdateDirections(tr, **kwargs)
             return xout
 
-        print ("computeUpdateDirectionsVectorized")
+        #print ("computeUpdateDirectionsVectorized")
         Xic = self.computeUpdateDirectionsVectorized(img_params, priorVals)
-        print ("Done computeUpdateDirctionsVectorized")
+        #print ("Done computeUpdateDirctionsVectorized")
 
         mpool = cp.get_default_memory_pool()
         del img_params
@@ -1694,6 +1735,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         Npix = img_params.mh*img_params.mw
         #Npix is a scalar
         Nd = img_params.maxNd
+        Nimages = img_params.Nimages
         cdi = img_params.cdi
         A = cp.zeros((img_params.Nimages, Npix + Npriors, Nd+2), cp.float32)
         # A is of shape (Nimages, Npix+Npriors, Nd+2)
@@ -1804,12 +1846,27 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #A_T_dot_B = cp.einsum("...ji,...j", A, B)
         #X = cp.linalg.solve(A_T_dot_A, A_T_dot_B)
         #print ("X DOT V", X)
-        X = cp.einsum("ijk,ik->ij", cp.linalg.pinv(A), B)
+        #X = cp.einsum("ijk,ik->ij", cp.linalg.pinv(A), B)
         #X[fit_pos,0:2] = 0
         #print ("A", A)
         #print ("B", B)
         #print ("XV", X)
         #X = cp.einsum("ijk,ik->ij", cp.linalg.pinv(A), B)
+
+        ## TAG: indidious hang issue 10/17/25 - pinv can occasionally hang.
+        # But we had the issue where if fit_pos is False for all images, and
+        # first two columns of A are all zero, the ATA ATB method fails with
+        # NaNs.  But we can strip out those rows and zero-pad the output!
+        if not np.any(fit_pos):
+            print ("WARNING: fit_pos is False for all images, stripping off rows to prevent NaNs before fitting")
+            A_T_dot_A = cp.einsum("...ji,...jk", A[:,:,2:], A[:,:,2:])
+            A_T_dot_B = cp.einsum("...ji,...j", A[:,:,2:], B)
+            X = cp.zeros((Nimages, Nd+2), dtype=cp.float32)
+            X[:,2:] = cp.linalg.solve(A_T_dot_A, A_T_dot_B)
+        else:
+            A_T_dot_A = cp.einsum("...ji,...jk", A, A)
+            A_T_dot_B = cp.einsum("...ji,...j", A, B)
+            X = cp.linalg.solve(A_T_dot_A, A_T_dot_B)
 
         # Undo pre-scaling
         ###  TAG: ISSUE 1 4/9/25 - uncomment and move divide within block to get rid of NaNs 
@@ -1817,7 +1874,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         X /= colscales
         #print ("NANs", cp.isnan(X).sum())
         X[cp.isnan(X)] = 0
-        #print ("X NORM", X)
+        #print ("X NORM", X.shape)
         #    print ("X norm", X)
         #else:
         #    X[cp.isnan(X)] = 0
