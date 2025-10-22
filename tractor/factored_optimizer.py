@@ -282,15 +282,15 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             est_mem = nimages*imsize*nd*kmax*16
 
             if free_mem < est_mem:
-                print (f"Estimated memory {est_mem} is greater than free memory {free_mem}; Running CPU mode instead!")
+                print (f"Warning: Estimated memory {est_mem} is greater than free memory {free_mem}; Running CPU mode instead!")
                 R_gpuv = super().getSingleImageUpdateDirections(tr, **kwargs)
                 return R_gpuv
             else:
-                print (f"Estimated memory {est_mem} is less than free memory {free_mem}")
+                #print (f"Estimated memory {est_mem} is less than free memory {free_mem}")
 
             try:
-                import datetime
-                print ('Running VECTORIZED GPU code...', datetime.datetime.now())
+                #import datetime
+                #print ('Running VECTORIZED GPU code...', datetime.datetime.now())
                 t = time.time()
                 R_gpuv = self.gpuSingleImageUpdateDirectionsVectorized(tr, **kwargs)
                 mempool = cp.get_default_memory_pool()
@@ -916,9 +916,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             xout = super().getSingleImageUpdateDirections(tr, **kwargs)
             return xout
 
-        #print ("computeUpdateDirectionsVectorized")
         Xic = self.computeUpdateDirectionsVectorized(img_params, priorVals)
-        #print ("Done computeUpdateDirctionsVectorized")
 
         mpool = cp.get_default_memory_pool()
         del img_params
@@ -1858,7 +1856,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # first two columns of A are all zero, the ATA ATB method fails with
         # NaNs.  But we can strip out those rows and zero-pad the output!
         if not np.any(fit_pos):
-            print ("WARNING: fit_pos is False for all images, stripping off rows to prevent NaNs before fitting")
+            #print ("WARNING: fit_pos is False for all images, stripping off rows to prevent NaNs before fitting")
             A_T_dot_A = cp.einsum("...ji,...jk", A[:,:,2:], A[:,:,2:])
             A_T_dot_B = cp.einsum("...ji,...j", A[:,:,2:], B)
             X = cp.zeros((Nimages, Nd+2), dtype=cp.float32)

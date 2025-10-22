@@ -53,7 +53,7 @@ def getDerivativeShearedProfilesGPU(galaxy, img, px, py):
             galaxy.shape.setParam(i, oldval)
             derivs.append(('shape.'+gnames[i], pro, gstep))
     if type(galaxy) == SersicGalaxy:
-        print ("SERSIC")
+        #print ("SERSIC")
         if galaxy.isParamThawed('sersicindex'):
             steps = galaxy.sersicindex.getStepSizes()
             inames = galaxy.sersicindex.getParamNames()
