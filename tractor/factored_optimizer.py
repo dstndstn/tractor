@@ -285,7 +285,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 print (f"Warning: Estimated memory {est_mem} is greater than free memory {free_mem}; Running CPU mode instead!")
                 R_gpuv = super().getSingleImageUpdateDirections(tr, **kwargs)
                 return R_gpuv
-            else:
+            #else:
                 #print (f"Estimated memory {est_mem} is less than free memory {free_mem}")
 
             try:
