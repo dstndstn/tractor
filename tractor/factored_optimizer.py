@@ -1,21 +1,24 @@
 import sys
+import time
+import os
+import gc
+
+import numpy as np
+import scipy
+import scipy.fft
+
+import cupy as cp
+
 from tractor.dense_optimizer import ConstrainedDenseOptimizer
 from tractor import ProfileGalaxy, HybridPSF
 from tractor import mixture_profiles as mp
 from tractor.psf import lanczos_shift_image
 from tractor.sky import ConstantSky
 from astrometry.util.miscutils import get_overlapping_region
-import numpy as np
-import scipy
-import scipy.fft
-import time
 from tractor.batch_psf import BatchPixelizedPSF, lanczos_shift_image_batch_gpu
 from tractor.batch_mixture_profiles import ImageDerivs, BatchImageParams, BatchMixtureOfGaussians, BatchGalaxyProfiles
 from tractor.batch_galaxy import getShearedProfileGPU, getDerivativeShearedProfilesGPU
 from tractor.patch import ModelMask
-import cupy as cp
-import time
-import os, gc
 
 tt = np.zeros(8)
 tct = np.zeros(9, np.int32)
@@ -36,18 +39,13 @@ class FactoredOptimizer(object):
         self.ps = None
         super().__init__(*args, **kwargs)
 
-    def getSingleImageUpdateDirection(self, tr, max_size=0, **kwargs):
+    def one_image_update(self, tr, max_size=0, *kwargs):
         allderivs = tr.getDerivs()
-        r = self.getUpdateDirection(tr, allderivs, get_A_matrix=True, max_size=max_size, **kwargs)
+        r = self.getUpdateDirection(tr, allderivs, get_A_matrix=True,
+                                    max_size=max_size, **kwargs)
         if r is None:
             return None
         x,A,colscales,B,Ao = r
-        #print ("X", x.shape, x)
-        #print ("A", A.shape, A.max())
-        #print ("B", B.shape, B.max())
-        # print('SingeImageUpdateDirection: tr thawed params:')
-        # tr.printThawedParams()
-        # print('allderivs:', len(allderivs))
 
         if self.ps is not None:
             mod0 = tr.getModelImage(0)
@@ -87,21 +85,19 @@ class FactoredOptimizer(object):
         del A
         return x, icov
 
-    def getSingleImageUpdateDirections(self, tr, **kwargs):
+    def all_image_updates(self, tr, priors=False, *kwargs):
         from tractor import Images
         img_opts = []
         imgs = tr.images
         mm = tr.modelMasks
 
-        #Remove 'priors' from kwargs
-        orig_priors = kwargs.pop('priors', True)
         max_size = 0
         for i,img in enumerate(imgs):
             tr.images = Images(img)
             if mm is not None:
                 tr.modelMasks = [mm[i]]
-            #Run with PRIORS = FALSE
-            r = self.getSingleImageUpdateDirection(tr, priors=False, max_size=max_size, **kwargs)
+            # Run with PRIORS = FALSE
+            r = self.one_image_update(tr, priors=False, max_size=max_size, **kwargs)
             if r is None:
                 continue
             x,x_icov = r
@@ -113,55 +109,53 @@ class FactoredOptimizer(object):
         return img_opts
 
     def getLinearUpdateDirection(self, tr, **kwargs):
+        '''
+        This is the function in LsqrOptimizer that is being overridden.
+        '''
 
-        # We can fit for image-based parameters (eg, sky level) and source-based parameters.
-        # If image parameters are being fit, use the base code (eg in lsqr_optimizer.py)
-        # to fit those, and prepend them to the results below.
-        t = time.time()
+        # We can be fitting for image-based parameters (eg, sky level) and
+        # source-based parameters.  If image parameters are being fit, use the
+        # base code (eg in lsqr_optimizer.py) to fit those, and prepend them to
+        # the source-based parameters computed below.
         x_imgs = None
         image_thawed = tr.isParamThawed('images')
         if image_thawed:
             cat_frozen = tr.isParamFrozen('catalog')
             if not cat_frozen:
                 tr.freezeParam('catalog')
+            # call superclass...
             x_imgs = super().getLinearUpdateDirection(tr, **kwargs)
-            if not cat_frozen:
-                tr.thawParam('catalog')
-            else:
+            if cat_frozen:
+                # no need to do anything beyond the superclass...
                 return x_imgs
-
-        if image_thawed:
+            else:
+                tr.thawParam('catalog')
+            # Freeze the images for the rest of the call (until the end...)
             tr.freezeParam('images')
-        #print('getLinearUpdateDirection( kwargs=', kwargs, ')')
-        #print ("Running Factored getSingleImageUpdateDirections")
+
         if len(tr.images) == 0:
             if x_imgs is not None:
                 return x_imgs
             return None
-        #Store original value of priors
-        orig_priors = kwargs['priors']
-        img_opts = self.getSingleImageUpdateDirections(tr, **kwargs)
+
+        # FIXME
+        img_opts = self.all_image_updates(tr, **kwargs)
         if len(img_opts) == 0:
             if x_imgs is not None:
                 return x_imgs
             return None
-        # ~ inverse-covariance-weighted sum of img_opts...
+
+        # Compute inverse-covariance-weighted sum of img_opts...
         xicsum = 0
         icsum = 0
         for x,ic in img_opts:
             xicsum = xicsum + np.dot(ic, x)
             icsum = icsum + ic
-        #C = np.linalg.inv(icsum)
-        #x = np.dot(C, xicsum)
-        #print (f'{icsum=} {xicsum=}')
 
-        #Add the priors if needed.
-        if orig_priors:
+        # Add the priors if needed.
+        if kwargs.get('priors', False):
             priors_ATA, priors_ATB = self.getPriorsHessianAndGradient(tr)
-            #print (f'{priors_ATA=}, {priors_ATB=}')
             # Add the raw priors to the sums
-            #icsum += priors_ATA
-            #xicsum += priors_ATB
             if priors_ATA.shape == icsum.shape:
                 icsum += priors_ATA
                 xicsum += priors_ATB
@@ -169,20 +163,23 @@ class FactoredOptimizer(object):
                 print (f"WARNING: Prior shape mismatch {icsum.shape=} {xicsum.shape=} {priors_ATA.shape=} {priors_ATB.shape=} but priors are zero so ignorning.")
             else:
                 print (f"WARNING: Prior shape mismatch {icsum.shape=} {xicsum.shape=} {priors_ATA.shape=} {priors_ATB.shape=}; using CPU mode instead.")
+                if image_thawed:
+                    tr.thawParam('images')
                 return super().getLinearUpdateDirection(tr, **kwargs)
+
         x,_,_,_ = np.linalg.lstsq(icsum, xicsum, rcond=None)
         if x_imgs is not None:
             x = np.append(x_imgs, x)
-        #print (f'{icsum=} {xicsum=}')
         if image_thawed:
             tr.thawParam('images')
         return x
 
+
 from tractor.smarter_dense_optimizer import SmarterDenseOptimizer
 
-#class FactoredDenseOptimizer(FactoredOptimizer, ConstrainedDenseOptimizer):
 class FactoredDenseOptimizer(FactoredOptimizer, SmarterDenseOptimizer):
     pass
+
 
 
 class GPUFriendlyOptimizer(FactoredDenseOptimizer):
