@@ -20,6 +20,10 @@ class FactoredOptimizer(object):
         super().__init__(*args, **kwargs)
 
     def one_image_update(self, tr, max_size=0, *kwargs):
+        '''
+        Called by all_image_updates, where "tr" has been modified to have only
+        one image, this method returns its update direction and inverse-covariance.
+        '''
         allderivs = tr.getDerivs()
         r = self.getUpdateDirection(tr, allderivs, get_A_matrix=True,
                                     max_size=max_size, **kwargs)

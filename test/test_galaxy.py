@@ -11,7 +11,7 @@ from tractor.patch import ModelMask
 
 #from astrometry.util.plotutils import PlotSequence
 #ps = PlotSequence('gal')
-#ps = None
+ps = None
 
 class GalaxyTest(unittest.TestCase):
     def setUp(self):
