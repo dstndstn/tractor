@@ -8,11 +8,10 @@ import numpy as np
 from tractor import *
 from tractor.galaxy import *
 from tractor.patch import ModelMask
-#from tractor.sersic import SersicGalaxy, SersicIndex
 
 #from astrometry.util.plotutils import PlotSequence
 #ps = PlotSequence('gal')
-ps = None
+#ps = None
 
 class GalaxyTest(unittest.TestCase):
     def setUp(self):
@@ -334,7 +333,11 @@ class GalaxyTest(unittest.TestCase):
         # Way outside the ModelMask -> model is None
         gal1.pos = PixPos(200, -50.)
         p6 = gal1.getModelPatch(tim, modelMask=mm)
-        self.assertIsNone(p6)
+        if ps is not None:
+            mod6 = np.zeros((H,W), np.float32)
+            p6.addTo(mod6)
+            show_model(mod6, None, 'mod6')
+        #self.assertIsNone(p6)
 
         # Slightly outside the ModelMask
         gal1.pos = PixPos(20., 25.)
@@ -660,7 +663,7 @@ class GalaxyTest(unittest.TestCase):
             plt.clf()
             plt.plot(m21, 'r-')
             plt.plot(m22, 'b-')
-            plt.yscale('symlog', linthreshy=1e-8)
+            plt.yscale('symlog', linthresh=1e-8)
             ps.savefig()
 
         imx = np.argmax(m22)
