@@ -178,9 +178,9 @@ workflows:
   build:
     jobs:
       - "build-from-docker-u2004-py3.8"
-      - "build-from-docker-u2004-py3.8-pip"
+      #- "build-from-docker-u2004-py3.8-pip"
       - "build-from-docker-u2004-py3.8-setup"
       - "build-from-docker-u2004-py3.9"
-      - "build-from-docker-u1804-py3.6"
-      - "build-from-docker-u1804-py3.7"
+      #- "build-from-docker-u1804-py3.6"
+      #- "build-from-docker-u1804-py3.7"
       - "build-from-docker-u1804-py3.8"
