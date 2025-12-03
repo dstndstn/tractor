@@ -309,13 +309,14 @@ class ProfileGalaxy(object):
         else:
             # choose the patch size
             halfsize = self._getUnitFluxPatchSize(img, px=px, py=py, minval=minval)
+            H,W = img.shape
             # find overlapping pixels to render
             (outx, inx) = get_overlapping_region(
                 int(np.floor(px - halfsize)), int(np.ceil(px + halfsize + 1)),
-                0, img.getWidth())
+                0, W-1)
             (outy, iny) = get_overlapping_region(
                 int(np.floor(py - halfsize)), int(np.ceil(py + halfsize + 1)),
-                0, img.getHeight())
+                0, H-1)
             if inx == [] or iny == []:
                 # no overlap
                 return None
@@ -367,15 +368,7 @@ class ProfileGalaxy(object):
             return run_mog(mm=modelMask)
 
         # Otherwise, FFT:
-        imh, imw = img.shape
-        if modelMask is None:
-            # Avoid huge galaxies -> huge halfsize in a tiny image (blob)
-            imsz = max(imh, imw)
-            halfsize = min(halfsize, imsz)
-            # FIXME -- should take some kind of combination of
-            # modelMask, PSF, and Galaxy sizes!
-
-        else:
+        if modelMask is not None:
             # ModelMask sets the sizes.
             mh, mw = modelMask.shape
             x1 = x0 + mw
@@ -390,6 +383,7 @@ class ProfileGalaxy(object):
             halfsize = max(halfsize, max(psfw / 2., psfh / 2.))
             if force_halfsize is not None:
                 halfsize = force_halfsize
+
             #if not hasattr(img, 'halfsize'):
             #    img.halfsize = halfsize
             #elif int(np.ceil(np.log2(halfsize))) < int(np.ceil(np.log2(img.halfsize))):
@@ -797,6 +791,9 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
         halfsize = max(1., self.getRadius() / pixscale)
         halfsize += img.psf.getRadius()
         halfsize = int(np.ceil(halfsize))
+        # clip halfsize down to half the actual image size!
+        h,w = img.shape
+        halfsize = min(halfsize, max(h, w)//2)
         return halfsize
 
     def getDerivativeShearedProfiles(self, img, px, py):

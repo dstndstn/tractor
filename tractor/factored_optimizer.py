@@ -19,7 +19,7 @@ class FactoredOptimizer(object):
         self.ps = None
         super().__init__(*args, **kwargs)
 
-    def one_image_update(self, tr, max_size=0, *kwargs):
+    def one_image_update(self, tr, max_size=0, **kwargs):
         '''
         Called by all_image_updates, where "tr" has been modified to have only
         one image, this method returns its update direction and inverse-covariance.
@@ -69,7 +69,7 @@ class FactoredOptimizer(object):
         del A
         return x, icov
 
-    def all_image_updates(self, tr, priors=False, *kwargs):
+    def all_image_updates(self, tr, priors=False, **kwargs):
         from tractor import Images
         img_opts = []
         imgs = tr.images
@@ -122,7 +122,6 @@ class FactoredOptimizer(object):
                 return x_imgs
             return None
 
-        # FIXME
         img_opts = self.all_image_updates(tr, **kwargs)
         if len(img_opts) == 0:
             if x_imgs is not None:
@@ -162,3 +161,89 @@ from tractor.smarter_dense_optimizer import SmarterDenseOptimizer
 
 class FactoredDenseOptimizer(FactoredOptimizer, SmarterDenseOptimizer):
     pass
+
+
+if __name__ == '__main__':
+    from tractor.galaxy import ExpGalaxy
+    from tractor.ellipses import EllipseE
+    from tractor.basics import PixPos, Flux, ConstantSky
+    from tractor.psfex import PixelizedPsfEx
+    from tractor.psf import HybridPixelizedPSF, NCircularGaussianPSF
+    from tractor import Image, NullWCS, Tractor
+    import os
+    import pylab as plt
+    
+    h,w = 100,100
+    gal = ExpGalaxy(PixPos(h/2., w/2+.7), Flux(2000.), EllipseE(10., 0.1, 0.4))
+
+    psf = PixelizedPsfEx(os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                                      'test',
+                                      'psfex-decam-00392360-S31.fits'))
+    psf = HybridPixelizedPSF(psf, #cx=w/2., cy=h/2.,
+                             gauss=NCircularGaussianPSF([psf.fwhm / 2.35], [1.]))
+    print('psf', psf)
+    print('psf size', psf.shape)
+
+    sig1 = 1.0
+    sig2 = 1.0
+    tim1 = Image(np.zeros((h,w), np.float32),
+                 inverr=np.ones((h,w), np.float32) / sig1,
+                 psf=psf, sky=ConstantSky(0.),
+                 wcs=NullWCS(),
+                )
+
+    tr = Tractor([tim1], [gal])
+
+    mod = tr.getModelImage(0)
+
+    noisy1 = mod + np.random.normal(scale=sig1, size=(h,w))
+    noisy2 = mod + np.random.normal(scale=sig2, size=(h,w))
+
+    tim1.data = noisy1
+    tim2 = Image(noisy2,
+                 inverr=np.ones((h,w), np.float32) / sig2,
+                 psf=psf, sky=ConstantSky(0.),
+                 wcs=NullWCS(),
+                )
+
+    tr = Tractor([tim1, tim2], [gal])
+    tr.freezeParam('images')
+
+    true_params = np.array(tr.getParams())
+    
+    g = gal.shape.getParams()
+    g[0] = 15
+    g[2] = 0.
+    gal.shape.setParams(g)
+
+    plt.clf()
+    plt.subplot(2,2,1)
+    plt.imshow(noisy1)
+    plt.subplot(2,2,2)
+    plt.imshow(noisy2)
+    plt.subplot(2,2,3)
+    mod = tr.getModelImage(0)
+    plt.imshow(mod)
+    plt.savefig('mod.png')
+
+    p0 = tr.getParams()
+    
+    print('Opt', tr.optimizer)
+
+    optargs = dict(shared_params=False)
+    
+    up = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+    print('Update:', up)
+
+    tr.setParams(p0)
+
+    #print('Get derivs...')
+    #allderivs = tr.getDerivs()
+
+    facopt = FactoredDenseOptimizer()
+    print('Factored...')
+    tr.optimizer = facopt
+    up2 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+    print('Update:', up2)
+
+    print('Fractional difference in update directions:', np.sum(np.abs(up - up2) / (np.abs(up) + np.abs(up2)) / 2.))

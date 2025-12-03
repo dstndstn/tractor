@@ -112,6 +112,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                 #print ("\tIMG ",img)
                 #print('\t\tderiv', deriv, deriv.extent)
                 dx0,dx1,dy0,dy1 = deriv.extent
+                #print('Parameter', iparam, 'deriv extent', (dx0,dx1,dy0,dy1))
                 dx0 = int(dx0)
                 dx1 = int(dx1)
                 dy0 = int(dy0)
@@ -320,6 +321,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                 else:
                     # There are multiple modelMasks for this image
                     # (eg from multiple sources), so need to pad it out
+                    print('multiple modelMasks for this image?')
                     print('\tderiv extent', dx0,dx1, dy0,dy1)
                     print('\timage bounds', x0,x1,y0,y1, img)
                     return None
