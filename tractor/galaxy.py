@@ -368,14 +368,7 @@ class ProfileGalaxy(object):
 
         # Otherwise, FFT:
         imh, imw = img.shape
-        if modelMask is None:
-            # Avoid huge galaxies -> huge halfsize in a tiny image (blob)
-            imsz = max(imh, imw)
-            halfsize = min(halfsize, imsz)
-            # FIXME -- should take some kind of combination of
-            # modelMask, PSF, and Galaxy sizes!
-
-        else:
+        if modelMask is not None:
             # ModelMask sets the sizes.
             mh, mw = modelMask.shape
             x1 = x0 + mw
@@ -795,7 +788,11 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
             return self.halfsize
         pixscale = img.wcs.pixscale_at(px, py)
         halfsize = max(1., self.getRadius() / pixscale)
-        halfsize += img.psf.getRadius()
+        # limit to image size
+        h,w = img.shape
+        halfsize = min(halfsize, max(h, w)//2)
+        # but then increase up to the PSF size
+        halfsize = max(halfsize, img.psf.getRadius())
         halfsize = int(np.ceil(halfsize))
         return halfsize
 
