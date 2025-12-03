@@ -307,11 +307,12 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                     w = int(w)
                     h = int(h)
                     if w*h != len(apix.flat):
-                        print (f'{rowstart=} {w=} {h=} {col=} APIX len ', len(apix.flat))
-                        import sys
-                        import traceback
-                        traceback.print_exc()
-                        sys.exit(-1)
+                        print (f'Error: w*h != len(apix.flat) - {rowstart=} {w=} {h=} {col=} APIX len ', len(apix.flat))
+                        #import sys
+                        #import traceback
+                        #traceback.print_exc()
+                        #sys.exit(-1)
+                        return None
                     A[rowstart:rowstart+w*h, col] = apix.flat
                     if scale_columns:
                         # accumulate L2 norm
