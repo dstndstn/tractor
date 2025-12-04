@@ -66,8 +66,10 @@ class FactoredOptimizer(object):
             self.ps.savefig()
 
         icov = np.matmul(A.T, A)
+        #atb = np.matmul(A.T, B)
+        atb = None
         del A
-        return x, icov, colscales
+        return x, icov, colscales, atb
 
     def all_image_updates(self, tr, priors=False, **kwargs):
         from tractor import Images
@@ -84,9 +86,9 @@ class FactoredOptimizer(object):
             r = self.one_image_update(tr, priors=False, max_size=max_size, **kwargs)
             if r is None:
                 continue
-            x,x_icov,colscales = r
+            x,x_icov,colscales,atb = r
             max_size = max(max_size, len(x))
-            img_opts.append((x,x_icov,colscales))
+            img_opts.append(r)#(x,x_icov,colscales))
         tr.images = imgs
         tr.modelMasks = mm
         return img_opts
@@ -130,7 +132,10 @@ class FactoredOptimizer(object):
         # Compute inverse-covariance-weighted sum of img_opts...
         xicsum = 0
         icsum = 0
-        for x,ic,colscales in img_opts:
+        for x,ic,colscales,atb in img_opts:
+            #print('ic x:', np.dot(ic, x))
+            #print('atb:', atb)
+            #xicsum = xicsum + atb
             xicsum = xicsum + np.dot(ic, x)
             icsum = icsum + ic
 
