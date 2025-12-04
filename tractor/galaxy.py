@@ -789,11 +789,14 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
             return self.halfsize
         pixscale = img.wcs.pixscale_at(px, py)
         halfsize = max(1., self.getRadius() / pixscale)
-        halfsize += img.psf.getRadius()
-        halfsize = int(np.ceil(halfsize))
-        # clip halfsize down to half the actual image size!
+        # limit to image size
         h,w = img.shape
-        halfsize = min(halfsize, max(h, w)//2)
+        imsize = max(h, w)//2
+        halfsize = min(halfsize, imsize)
+        # ... but then increase up to PSF size
+        psfsize = img.psf.getRadius()
+        halfsize = max(halfsize, psfsize)
+        halfsize = int(np.ceil(halfsize))
         return halfsize
 
     def getDerivativeShearedProfiles(self, img, px, py):
