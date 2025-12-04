@@ -67,7 +67,7 @@ class FactoredOptimizer(object):
 
         icov = np.matmul(A.T, A)
         del A
-        return x, icov
+        return x, icov, colscales
 
     def all_image_updates(self, tr, priors=False, **kwargs):
         from tractor import Images
@@ -84,10 +84,9 @@ class FactoredOptimizer(object):
             r = self.one_image_update(tr, priors=False, max_size=max_size, **kwargs)
             if r is None:
                 continue
-            x,x_icov = r
+            x,x_icov,colscales = r
             max_size = max(max_size, len(x))
-            #print('FO: X', x, 'x_icov', x_icov)
-            img_opts.append((x,x_icov))
+            img_opts.append((x,x_icov,colscales))
         tr.images = imgs
         tr.modelMasks = mm
         return img_opts
@@ -131,7 +130,7 @@ class FactoredOptimizer(object):
         # Compute inverse-covariance-weighted sum of img_opts...
         xicsum = 0
         icsum = 0
-        for x,ic in img_opts:
+        for x,ic,colscales in img_opts:
             xicsum = xicsum + np.dot(ic, x)
             icsum = icsum + ic
 
@@ -150,7 +149,14 @@ class FactoredOptimizer(object):
                     tr.thawParam('images')
                 return super().getLinearUpdateDirection(tr, **kwargs)
 
+        #x,_,_,_ = np.linalg.lstsq(icsum, xicsum, rcond=None)
+        # cheap preconditioning to reduce the condition number from column scaling
+        scale = np.sqrt(np.diag(icsum))
+        icsum /= (scale[:,np.newaxis] * scale[np.newaxis,:])
+        xicsum /= scale
         x,_,_,_ = np.linalg.lstsq(icsum, xicsum, rcond=None)
+        x /= scale
+
         if x_imgs is not None:
             x = np.append(x_imgs, x)
         if image_thawed:
@@ -165,11 +171,12 @@ class FactoredDenseOptimizer(FactoredOptimizer, SmarterDenseOptimizer):
 
 if __name__ == '__main__':
     from tractor.galaxy import ExpGalaxy
-    from tractor.ellipses import EllipseE
+    from tractor.ellipses import EllipseE, EllipseESoft
     from tractor.basics import PixPos, Flux, ConstantSky
     from tractor.psfex import PixelizedPsfEx
     from tractor.psf import HybridPixelizedPSF, NCircularGaussianPSF
     from tractor import Image, NullWCS, Tractor
+    from tractor.utils import _GaussianPriors
     import os
     import pylab as plt
     
@@ -182,7 +189,6 @@ if __name__ == '__main__':
     psf = HybridPixelizedPSF(psf, #cx=w/2., cy=h/2.,
                              gauss=NCircularGaussianPSF([psf.fwhm / 2.35], [1.]))
     print('psf', psf)
-    print('psf size', psf.shape)
 
     sig1 = 1.0
     sig2 = 1.0
@@ -231,17 +237,56 @@ if __name__ == '__main__':
     print('Opt', tr.optimizer)
 
     optargs = dict(shared_params=False)
-    
+
+    orig_opt = tr.optimizer
+
     up = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
     print('Update:', up)
 
     tr.setParams(p0)
 
-    #print('Get derivs...')
-    #allderivs = tr.getDerivs()
-
     facopt = FactoredDenseOptimizer()
     print('Factored...')
+    tr.optimizer = facopt
+    up2 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+    print('Update:', up2)
+
+    print('Fractional difference in update directions:', np.sum(np.abs(up - up2) / (np.abs(up) + np.abs(up2)) / 2.))
+
+    print('Optimizing with priors...')
+    print('Tractor images:', len(tr.images))
+
+    # From legacypipe, a simplified EllipseESoft object with priors on the ellipticities.
+    class EllipseWithPriors(EllipseESoft):
+        ellipticityStd = 0.25
+        ellipsePriors = None
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            if self.ellipsePriors is None:
+                ellipsePriors = _GaussianPriors(None)
+                ellipsePriors.add('ee1', 0., self.ellipticityStd,
+                                param=EllipseESoft(1.,0.,0.))
+                ellipsePriors.add('ee2', 0., self.ellipticityStd,
+                                param=EllipseESoft(1.,0.,0.))
+                self.__class__.ellipsePriors = ellipsePriors
+            self.gpriors = self.ellipsePriors
+        @classmethod
+        def getName(cls):
+            return "EllipseWithPriors(%g)" % cls.ellipticityStd
+
+    shape = gal.shape
+    shape2 = EllipseWithPriors(np.log(shape.re), shape.e1, shape.e2)
+
+    gal.shape = shape2
+
+    p0 = tr.getParams()
+    optargs = dict(shared_params=False, priors=True)
+
+    tr.optimizer = orig_opt
+    up = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+    print('Update:', up)
+
+    tr.setParams(p0)
     tr.optimizer = facopt
     up2 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
     print('Update:', up2)
