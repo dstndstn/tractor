@@ -8,6 +8,15 @@ import scipy
 import scipy.fft
 
 from tractor.dense_optimizer import ConstrainedDenseOptimizer
+
+def shownonzero(A):
+    if len(A.shape) == 2:
+        r,c = A.shape
+        for i in range(r):
+            print('[ ' + ' '.join('*' if x != 0 else ' ' for x in A[i,:]) + ' ]')
+    elif len(A.shape) == 1:
+        print('[ ' + ' '.join('*' if x != 0 else ' ' for x in A) + ' ]')
+
 '''
 A mixin class for LsqrOptimizer that does the linear update direction step
 by factorizing over images -- it solves the linear problem for each image
@@ -70,8 +79,7 @@ class FactoredOptimizer(object):
         #atb = np.matmul(A.T, B)
         #atb = None
         #del A
-
-        print('norm Ax-B:', np.linalg.norm(np.dot(A, x) - B))
+        #print('norm Ax-B:', np.linalg.norm(np.dot(A, x) - B))
         
         return x, icov, colscales, A, B
 
@@ -139,7 +147,12 @@ class FactoredOptimizer(object):
         icsum = 0
         #for x,ic,colscales,atb in img_opts:
         for x,ic,colscales,A,B in img_opts:
-            #print('ic x:', np.dot(ic, x))
+            print('ic x:', np.dot(ic, x))
+            print('ic:', ic)
+            print('ic x:')
+            shownonzero(np.dot(ic,x))
+            print('ic:')
+            shownonzero(ic)
             #print('atb:', atb)
             #xicsum = xicsum + atb
             xicsum = xicsum + np.dot(ic, x)
@@ -152,6 +165,8 @@ class FactoredOptimizer(object):
             if priors_ATA.shape == icsum.shape:
                 icsum += priors_ATA
                 xicsum += priors_ATB
+                print('Priors: xic:', priors_ATB)
+                print('Priors: ic:', priors_ATA)
             elif np.all(priors_ATA == 0) and np.all(priors_ATB == 0):
                 print (f"WARNING: Prior shape mismatch {icsum.shape=} {xicsum.shape=} {priors_ATA.shape=} {priors_ATB.shape=} but priors are zero so ignorning.")
             else:
@@ -163,16 +178,23 @@ class FactoredOptimizer(object):
         #x,_,_,_ = np.linalg.lstsq(icsum, xicsum, rcond=None)
         # cheap preconditioning to reduce the condition number from column scaling
         scale = np.sqrt(np.diag(icsum))
+        scale[scale == 0.] = 1.
         icsum /= (scale[:,np.newaxis] * scale[np.newaxis,:])
         xicsum /= scale
-        print('condition number:', np.linalg.cond(icsum))
+
+        # print('Final icsum:')
+        # print(icsum)
+        # print('Final xicsum:')
+        # print(xicsum)
+        Z = np.flatnonzero(xicsum == 0)
+        
+        #print('condition number:', np.linalg.cond(icsum))
         x,_,_,_ = np.linalg.lstsq(icsum, xicsum, rcond=None)
-        print('scaled x', x)
+        #print('scaled x', x)
         x /= scale
 
-        for _,ic,colscales,A,B in img_opts:
-            print('norm AX - B:', np.linalg.norm(np.dot(A, x) - B))
-
+        x[Z] = 0.
+        
         if x_imgs is not None:
             x = np.append(x_imgs, x)
         if image_thawed:
@@ -193,9 +215,14 @@ if __name__ == '__main__':
     from tractor.psf import HybridPixelizedPSF, NCircularGaussianPSF
     from tractor import Image, NullWCS, Tractor
     from tractor.utils import _GaussianPriors
+    from tractor import NanoMaggies, LinearPhotoCal
     import os
     import pylab as plt
-    
+
+    def difference(x1, x2):
+        #return np.abs(x1 - x2) / np.maximum(1e-16, (np.abs(x1) + np.abs(x2)) / 2.)
+        return np.sum(np.abs(x1 - x2) / np.maximum(1e-16, (np.abs(x1) + np.abs(x2)) / 2.))
+
     h,w = 100,100
     gal = ExpGalaxy(PixPos(h/2., w/2+.7), Flux(2000.), EllipseE(10., 0.1, 0.4))
 
@@ -237,6 +264,7 @@ if __name__ == '__main__':
     g[0] = 15
     g[2] = 0.
     gal.shape.setParams(g)
+    print('Galaxy shape:', gal.shape)
 
     plt.clf()
     plt.subplot(2,2,1)
@@ -274,7 +302,7 @@ if __name__ == '__main__':
     up2 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
     print('Update:', up2)
 
-    print('Fractional difference in update directions:', np.sum(np.abs(up - up2) / (np.abs(up) + np.abs(up2)) / 2.))
+    print('Fractional difference in update directions:', difference(up, up2))
 
     print('Optimizing with priors...')
     print('Tractor images:', len(tr.images))
@@ -319,8 +347,43 @@ if __name__ == '__main__':
     up2 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
     print('Update:', up2)
 
-    print('Fractional difference in update directions (LSQR - Fac):', np.sum(np.abs(up - up2) / (np.abs(up) + np.abs(up2)) / 2.))
+    print('Fractional difference in update directions (LSQR - Fac):', difference(up, up2))
 
-    print('Fractional difference (LSQR - SM):', np.sum(np.abs(up - up1) / (np.abs(up) + np.abs(up1)) / 2.))
-    print('Fractional difference (SM - Fac):', np.sum(np.abs(up1 - up2) / (np.abs(up1) + np.abs(up2)) / 2.))
+    print('Fractional difference (LSQR - SM):', difference(up, up1))
+    print('Fractional difference (SM - Fac):', difference(up1, up2))
+
+    # Give the source fluxes in multiple bands; set each tim's band.
+    print()
+    print('Multi-band fluxes')
+    print()
+    
+    gal.brightness = NanoMaggies(g=1., r=1., z=1.)
+    tim1.band = 'g'
+    tim2.band = 'r'
+    tim1.photocal = LinearPhotoCal(1.0, band='g')
+    tim2.photocal = LinearPhotoCal(1.0, band='r')
+
+    print('Galaxy:', gal)
+
+    p0 = tr.getParams()
+
+    tr.optimizer = orig_opt
+    up = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+    print('LSQR Update:', up)
+    
+    tr.setParams(p0)
+    tr.optimizer = sm_opt
+    up1 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+    print('Smarter Update:', up1)
+
+    tr.setParams(p0)
+    tr.optimizer = fac_opt
+    up2 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+
+    print('LSQR Update    :', up)
+    print('Smarter Update :', up1)
+    print('Factored Update:', up2)
+
+    print('Fractional difference in update directions (LSQR - Fac):', difference(up, up2))
+    print('Fractional difference (LSQR - SM):', difference(up, up1))
     
