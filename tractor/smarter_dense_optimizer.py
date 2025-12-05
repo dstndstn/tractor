@@ -51,11 +51,13 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
 
 
     def getUpdateDirection(self, tractor, allderivs, damp=0., priors=True,
-                           scale_columns=True, scales_only=False,
+                           scale_columns=True,
+                           scales_only=False,
                            chiImages=None,
                            variance=False,
                            shared_params=True,
-                           get_A_matrix=False, max_size=0):
+                           get_A_matrix=False,
+                           max_size=0):
         if shared_params or scales_only or damp>0 or variance:
             raise RuntimeError('Not implemented')
         assert(shared_params == False)
@@ -372,6 +374,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             B[rowstart: rowstart + w*h] = chi.flat
             del chi
 
+        print('condition number:', np.linalg.cond(A))
         try:
             X,_,_,_ = lstsq(A, B, rcond=None)
         except LinAlgError as e:
@@ -386,9 +389,12 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             return None
         #print ("OUTPUT SHAPES CPU1 ", A.shape, B.shape, X.shape)
 
-        if A is not None:
-            Aorig = A.copy()
+        #if A is not None:
+        #    Aorig = A.copy()
 
+        print('smarter: norm Ax-b:', np.linalg.norm(np.dot(A*colscales[np.newaxis,:], X/colscales) - B))
+        print('smarter: norm Ax-b:', np.linalg.norm(np.dot(A, X) - B))
+        
         if not get_A_matrix:
             del A
             del B
@@ -437,6 +443,6 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                 A_full[:,c] = A[:,i]
             A = A_full
 
-            return X,A,colscales,B,Aorig
+            return X,A,colscales,B #,Aorig
 
         return X

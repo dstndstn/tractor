@@ -29,7 +29,8 @@ class FactoredOptimizer(object):
                                     max_size=max_size, **kwargs)
         if r is None:
             return None
-        x,A,colscales,B,Ao = r
+        #x,A,colscales,B,Ao = r
+        x,A,colscales,B = r
 
         if self.ps is not None:
             mod0 = tr.getModelImage(0)
@@ -67,9 +68,12 @@ class FactoredOptimizer(object):
 
         icov = np.matmul(A.T, A)
         #atb = np.matmul(A.T, B)
-        atb = None
-        del A
-        return x, icov, colscales, atb
+        #atb = None
+        #del A
+
+        print('norm Ax-B:', np.linalg.norm(np.dot(A, x) - B))
+        
+        return x, icov, colscales, A, B
 
     def all_image_updates(self, tr, priors=False, **kwargs):
         from tractor import Images
@@ -86,7 +90,8 @@ class FactoredOptimizer(object):
             r = self.one_image_update(tr, priors=False, max_size=max_size, **kwargs)
             if r is None:
                 continue
-            x,x_icov,colscales,atb = r
+            #x,x_icov,colscales,atb = r
+            x = r[0]
             max_size = max(max_size, len(x))
             img_opts.append(r)#(x,x_icov,colscales))
         tr.images = imgs
@@ -132,7 +137,8 @@ class FactoredOptimizer(object):
         # Compute inverse-covariance-weighted sum of img_opts...
         xicsum = 0
         icsum = 0
-        for x,ic,colscales,atb in img_opts:
+        #for x,ic,colscales,atb in img_opts:
+        for x,ic,colscales,A,B in img_opts:
             #print('ic x:', np.dot(ic, x))
             #print('atb:', atb)
             #xicsum = xicsum + atb
@@ -159,8 +165,13 @@ class FactoredOptimizer(object):
         scale = np.sqrt(np.diag(icsum))
         icsum /= (scale[:,np.newaxis] * scale[np.newaxis,:])
         xicsum /= scale
+        print('condition number:', np.linalg.cond(icsum))
         x,_,_,_ = np.linalg.lstsq(icsum, xicsum, rcond=None)
+        print('scaled x', x)
         x /= scale
+
+        for _,ic,colscales,A,B in img_opts:
+            print('norm AX - B:', np.linalg.norm(np.dot(A, x) - B))
 
         if x_imgs is not None:
             x = np.append(x_imgs, x)
@@ -246,13 +257,20 @@ if __name__ == '__main__':
     orig_opt = tr.optimizer
 
     up = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
-    print('Update:', up)
+    print('LSQR Update:', up)
 
     tr.setParams(p0)
 
-    facopt = FactoredDenseOptimizer()
+    sm_opt = SmarterDenseOptimizer()
+    tr.optimizer = sm_opt
+    up1 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+    print('Smarter Update:', up1)
+
+    tr.setParams(p0)
+
+    fac_opt = FactoredDenseOptimizer()
     print('Factored...')
-    tr.optimizer = facopt
+    tr.optimizer = fac_opt
     up2 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
     print('Update:', up2)
 
@@ -289,11 +307,20 @@ if __name__ == '__main__':
 
     tr.optimizer = orig_opt
     up = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
-    print('Update:', up)
+    print('LSQR Update:', up)
 
     tr.setParams(p0)
-    tr.optimizer = facopt
+    tr.optimizer = sm_opt
+    up1 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+    print('Smarter Update:', up1)
+
+    tr.setParams(p0)
+    tr.optimizer = fac_opt
     up2 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
     print('Update:', up2)
 
-    print('Fractional difference in update directions:', np.sum(np.abs(up - up2) / (np.abs(up) + np.abs(up2)) / 2.))
+    print('Fractional difference in update directions (LSQR - Fac):', np.sum(np.abs(up - up2) / (np.abs(up) + np.abs(up2)) / 2.))
+
+    print('Fractional difference (LSQR - SM):', np.sum(np.abs(up - up1) / (np.abs(up) + np.abs(up1)) / 2.))
+    print('Fractional difference (SM - Fac):', np.sum(np.abs(up1 - up2) / (np.abs(up1) + np.abs(up2)) / 2.))
+    
