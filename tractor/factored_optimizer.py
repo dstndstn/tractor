@@ -34,8 +34,7 @@ class FactoredOptimizer(object):
         one image, this method returns its update direction and inverse-covariance.
         '''
         allderivs = tr.getDerivs()
-        r = self.getUpdateDirection(tr, allderivs, get_A_matrix=True,
-                                    max_size=max_size, **kwargs)
+        r = self.getUpdateDirection(tr, allderivs, get_A_matrix=True, **kwargs)
         if r is None:
             return None
         #x,A,colscales,B,Ao = r
@@ -89,18 +88,16 @@ class FactoredOptimizer(object):
         imgs = tr.images
         mm = tr.modelMasks
 
-        max_size = 0
         for i,img in enumerate(imgs):
             tr.images = Images(img)
             if mm is not None:
                 tr.modelMasks = [mm[i]]
             # Run with PRIORS = FALSE
-            r = self.one_image_update(tr, priors=False, max_size=max_size, **kwargs)
+            r = self.one_image_update(tr, priors=False, **kwargs)
             if r is None:
                 continue
             #x,x_icov,colscales,atb = r
             x = r[0]
-            max_size = max(max_size, len(x))
             img_opts.append(r)#(x,x_icov,colscales))
         tr.images = imgs
         tr.modelMasks = mm

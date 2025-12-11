@@ -56,8 +56,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                            chiImages=None,
                            variance=False,
                            shared_params=True,
-                           get_A_matrix=False,
-                           max_size=0):
+                           get_A_matrix=False):
         if shared_params or scales_only or damp>0 or variance:
             raise RuntimeError('Not implemented')
         assert(shared_params == False)
