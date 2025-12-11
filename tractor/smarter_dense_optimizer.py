@@ -5,6 +5,7 @@ from tractor.utils import savetxt_cpu_append
 
 class SmarterDenseOptimizer(ConstrainedOptimizer):
 
+    # this isn't actually used at present
     def getPriorsHessianAndGradient(self, tr):
         priorVals = tr.getLogPriorDerivatives()
         if priorVals is None:

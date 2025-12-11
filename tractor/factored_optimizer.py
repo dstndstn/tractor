@@ -94,7 +94,7 @@ class FactoredOptimizer(object):
         tr.modelMasks = mm
         return img_opts
 
-    def getLinearUpdateDirection(self, tr, priors=True, **kwargs):
+    def getLinearUpdateDirection(self, tr, priors=True, get_icov=False, **kwargs):
         '''
         This is the function in LsqrOptimizer that is being overridden.
         '''
@@ -177,7 +177,7 @@ class FactoredOptimizer(object):
         x,_,_,_ = np.linalg.lstsq(icsum, xicsum, rcond=None)
         x /= scale
 
-        del icsum, xicsum
+        #del icsum, xicsum
 
         # expand back out to full size
         x_full = np.zeros(Ncols, np.float32)
@@ -188,6 +188,13 @@ class FactoredOptimizer(object):
             x = np.append(x_imgs, x)
         if image_thawed:
             tr.thawParam('images')
+
+        if get_icov:
+            ic = np.zeros((Ncols,Ncols), np.float32)
+            ic[cols_active[:,np.newaxis],cols_active[np.newaxis,:]] = (
+                icsum * scale[:,np.newaxis] * scale[np.newaxis,:])
+            return x, ic
+
         return x
 
 from tractor.smarter_dense_optimizer import SmarterDenseOptimizer
@@ -381,7 +388,7 @@ if __name__ == '__main__':
 
         tr.setParams(p0)
         tr.optimizer = fac_opt
-        up2 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+        up2,ic = tr.optimizer.getLinearUpdateDirection(tr, get_icov=True, **optargs)
 
         print('LSQR Update    :', up)
         print('Smarter Update :', up1)
@@ -390,3 +397,10 @@ if __name__ == '__main__':
         print('Fractional difference in update directions (LSQR - Fac):', difference(up, up2))
         print('Fractional difference (LSQR - SM):', difference(up, up1))
         print('Fractional difference (Fac - SM):', difference(up1, up2))
+
+        print('ic:', ic)
+        #cov = np.linalg.inv(ic)
+        #print('covariance:', cov)
+
+        chisq = (up - up2).T @ (ic @ (up - up2))
+        print('chisq:', chisq)
