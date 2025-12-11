@@ -427,9 +427,6 @@ class LsqrOptimizer(Optimizer):
 
         colscales = np.zeros(Ncols)
         for col, param in enumerate(allderivs):
-            RR = []
-            VV = []
-            WW = []
             for (deriv, img) in param:
                 inverrs = img.getInvError()
                 (H, W) = img.shape
@@ -443,52 +440,25 @@ class LsqrOptimizer(Optimizer):
                 assert(np.all(pix < img.numberOfPixels()))
                 # (grab non-zero indices)
                 dimg = deriv.getImage()
-                nz = np.flatnonzero(dimg)
-                #print('  source', j, 'derivative', p, 'has', len(nz), 'non-zero entries')
+                w = inverrs[deriv.getSlice(img)]
+                vals = dimg * w
+                nz = np.flatnonzero(vals)
                 if len(nz) == 0:
-                    logverb('Col %i: all derivs are zero')
+                    logverb('Col %i: all (weighted) derivs are zero')
+                    continue
+                vals = vals.flat[nz]
+                if scale_columns:
+                    colscales[col] += np.dot(vals, vals)
+                if scales_only:
                     continue
                 rows = row0 + pix[nz]
-                #print('Adding derivative', deriv.getName(), 'for image', img.name)
-                vals = dimg.flat[nz]
-                w = inverrs[deriv.getSlice(img)].flat[nz]
-                assert(vals.shape == w.shape)
-                # if not scales_only:
-                RR.append(rows)
-                VV.append(vals)
-                WW.append(w)
+                sprows.append(rows)
+                spvals.append(vals)
+                spcols.append(col)
 
-            # massage, re-scale, and clean up matrix elements
-            if len(VV) == 0:
-                continue
-            rows = np.hstack(RR)
-            VV = np.hstack(VV)
-            WW = np.hstack(WW)
-            vals = VV * WW
-
-            mx = np.max(np.abs(vals))
-            if mx == 0:
-                logmsg('mx == 0:', len(np.flatnonzero(VV)), 'of', len(VV), 'non-zero derivatives,',
-                       len(np.flatnonzero(WW)), 'of', len(
-                           WW), 'non-zero weights;',
-                       len(np.flatnonzero(vals)), 'non-zero products')
-                continue
-            # MAGIC number: near-zero matrix elements -> 0
-            # 'mx' is the max value in this column.
-            FACTOR = 1.e-10
-            I = (np.abs(vals) > (FACTOR * mx))
-            rows = rows[I]
-            vals = vals[I]
-
-            colscales[col] = np.dot(vals,vals)
-            if scales_only:
-                continue
-
-            sprows.append(rows)
-            spcols.append(col)
-            spvals.append(vals)
-
+        # DEBUG
         if True:
+            print('length of sprows:', len(sprows), 'cols:', len(spcols), 'vals', len(spvals), 'n elements', sum([len(x) for x in spvals]))
             # To build the csr matrix below, we need to expand the columns from
             # scalars to arrays; this is how many elements are in those arrays.
             nrowspercol = np.array([len(x) for x in sprows])
@@ -497,7 +467,7 @@ class LsqrOptimizer(Optimizer):
             for c, n in zip(spcols, nrowspercol):
                 cc[i: i + n] = c
                 i += n
-            spv = np.hstack([v/np.sqrt(c) for v,c in zip(spvals, colscales)])
+            spv = np.hstack([v/np.sqrt(colscales[c]) for v,c in zip(spvals, spcols)])
             A = csr_matrix((spv, (np.hstack(sprows), cc)), shape=(Nrows, Ncols))
             print('LSQR cond before priors:', np.linalg.cond(A.todense()))
 
@@ -508,12 +478,6 @@ class LsqrOptimizer(Optimizer):
 
         b = None
         if priors:
-            # We don't include the priors in the "colscales"
-            # computation above, mostly because the priors are
-            # returned as sparse additions to the matrix, and not
-            # necessarily column-oriented the way the other params
-            # are.  It would be possible to make it work, but dstn is
-            # not convinced it's worth the effort right now.
             X = tractor.getLogPriorDerivatives()
             if X is not None:
                 rA, cA, vA, pb, _ = X
@@ -545,27 +509,35 @@ class LsqrOptimizer(Optimizer):
         assert(len(sprows) == len(spcols))
         assert(len(sprows) == len(spvals))
 
-        if variance:
-            var = colscales
-
         if scales_only:
             return np.sqrt(colscales)
 
+        if variance:
+            var = colscales
+
         if scale_columns:
             colscales = np.sqrt(colscales)
-            vv = []
-            for c,v in zip(spcols, spvals):
+            rr,cc,vv = [],[],[]
+            for r,c,v in zip(sprows, spcols, spvals):
                 scale = colscales[c]
                 if scale == 0:
-                    vv.append(v)
                     continue
-                vv.append(v / scale)
+                v = v / scale
+                # Magic number -- drop any matrix values that are tiny
+                TINY = 1e-8
+                I = np.flatnonzero(np.abs(v) > TINY)
+                if len(I) == 0:
+                    continue
+                rr.append(r[I])
+                vv.append(v[I])
+                cc.append(c)
             spvals = vv
+            sprows = rr
+            spcols = cc
 
         # 'spcols' has one integer per 'sprows' block.
         # below we hstack the rows, but before doing that, remember how
         # many rows are in each chunk.
-        spcols = np.array(spcols)
         nrowspercol = np.array([len(x) for x in sprows])
 
         if shared_params:
@@ -573,7 +545,7 @@ class LsqrOptimizer(Optimizer):
             #print('Before applying shared parameter map:')
             #print('spcols:', len(spcols), 'elements')
             #print('  ', len(set(spcols)), 'unique')
-            spcols = paramindexmap[spcols]
+            spcols = [paramindexmap[c] for c in spcols]
             # print('After:')
             #print('spcols:', len(spcols), 'elements')
             #print('  ', len(set(spcols)), 'unique')
@@ -595,7 +567,6 @@ class LsqrOptimizer(Optimizer):
 
         # FIXME -- could compute just chi ROIs here.
 
-        # iterating this way avoids setting the elements more than once
         for img, row0 in imgoffs.items():
             chi = chimap.get(img, None)
             if chi is None:
@@ -614,10 +585,10 @@ class LsqrOptimizer(Optimizer):
             return None
         assert(np.all(np.isfinite(spvals)))
 
-        sprows = np.hstack(sprows)  # hogg's lovin' hstack *again* here
+        sprows = np.hstack(sprows)
         assert(len(sprows) == len(spvals))
 
-        # For LSQR (actually csr_matrix), expand 'spcols' to be the same length as 'sprows'.
+        # For csr_matrix, expand 'spcols' to be the same length as 'sprows'.
         cc = np.empty(len(sprows), np.int32)
         i = 0
         for c, n in zip(spcols, nrowspercol):
@@ -642,12 +613,14 @@ class LsqrOptimizer(Optimizer):
         # FIXME -- does it make LSQR faster if we remap the row and column
         # indices so that no rows/cols are empty?
 
-        # FIXME -- we could probably construct the CSC matrix ourselves!
+        # FIXME -- we could probably construct a duck-typed CSR matrix ourselves
+        # to avoid expanding out the columns
 
         # Build sparse matrix
         A = csr_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
 
         if get_A_matrix:
+            # FIXME -- this isn't much good without colscales...
             return A
 
         lsqropts = dict(show=isverbose(), damp=damp)
