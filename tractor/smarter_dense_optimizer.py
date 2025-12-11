@@ -5,40 +5,25 @@ from tractor.utils import savetxt_cpu_append
 
 class SmarterDenseOptimizer(ConstrainedOptimizer):
 
-
-    # In SmarterDenseOptimizer (or appropriate parent class)
     def getPriorsHessianAndGradient(self, tr):
         priorVals = tr.getLogPriorDerivatives()
+        if priorVals is None:
+            return None
+
         # Get the total number of parameters from the tractor object
         Ntotal = tr.numberOfParams()
-        #print (f'{Ntotal=}')
-
-        if priorVals is None:
-            # Return zeros of the correct size if there are no priors.
-            return np.zeros((Ntotal, Ntotal), np.float32), np.zeros(Ntotal, np.float32)
-
-        rA, cA, vA, pb, mub = priorVals
+        rA, cA, vA, pb, _ = priorVals
 
         # Initialize the full Hessian and gradient matrices for the priors
         ATA_prior = np.zeros((Ntotal, Ntotal), np.float32)
         ATB_prior = np.zeros(Ntotal, np.float32)
 
-        # Use a set for live parameters to ensure uniqueness and then convert to a sorted list
         # The columns of the prior matrices correspond to the indices of the parameters.
         # We can directly use cA as indices into the full-sized matrices.
-
-        # Loop through the prior contributions and place them into the full-sized matrices
         for ri, ci, vi, bi in zip(rA, cA, vA, pb):
             # ci is the column index for the parameter with a prior
             col = ci
-
-            # Loop through the rows of the sparse prior matrices
             for rij, vij, bij in zip(ri, vi, bi):
-                # This is the `A` matrix for priors, which is 1-D for each prior term.
-                # We need to construct the A_T_dot_A and A_T_dot_B terms.
-                # A_ij = vij
-                # B_i = bij
-
                 # The prior's Hessian term is A.T @ A. In this case, for a single row,
                 # this is just vij^2, and it goes in the (col, col) element of the matrix.
                 ATA_prior[col, col] += vij * vij
@@ -48,7 +33,6 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                 ATB_prior[col] += vij * bij
 
         return ATA_prior, ATB_prior
-
 
     def getUpdateDirection(self, tractor, allderivs, damp=0., priors=True,
                            scale_columns=True,
@@ -95,75 +79,35 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
         # Parameters to optimize go in the columns of matrix A
         # Pixels go in the rows.
 
-
         # Keep track of active pixels in each image
         img_bounds = {}
-        # which parameters actually have derivatives?
-        # FIXME -- careful with how this interacts with priors!
-        live_params = set()
 
-        #print ("CPU SmarterDenseOptimizer::getUpdateDirection len derivs = ", len(allderivs))
+        # which parameters actually have derivatives (or priors)?
+        Ncols_total = len(allderivs)
+        cols_live = np.zeros(Ncols_total, bool)
+
         for iparam,derivs in enumerate(allderivs):
             if len(derivs) == 0:
                 continue
-            live_params.add(iparam)
-
-            #print ("\tLEN DERIV", len(derivs))
+            cols_live[iparam] = True
             for deriv, img in derivs:
-                #print ("\tIMG ",img)
-                #print('\t\tderiv', deriv, deriv.extent)
+                h,w = img.shape
+                # FIXME - use_gpu arg!
+                use_gpu = False
+                if not deriv.clipTo(w, h, use_gpu=use_gpu):
+                    print('No overlap between derivative and image.')
+                    print('deriv extents:', deriv.extent, 'image size %i x %i' % (w,h))
+                    continue
                 dx0,dx1,dy0,dy1 = deriv.extent
-                #print('Parameter', iparam, 'deriv extent', (dx0,dx1,dy0,dy1))
-                dx0 = int(dx0)
-                dx1 = int(dx1)
-                dy0 = int(dy0)
-                dy1 = int(dy1)
-
+                assert(type(dx0) is int)
+                assert(type(dx1) is int)
+                assert(type(dy0) is int)
+                assert(type(dy1) is int)
                 if img in img_bounds:
                     x0,x1,y0,y1 = img_bounds[img]
                     img_bounds[img] = min(dx0, x0), max(dx1, x1), min(dy0, y0), max(dy1, y1)
                 else:
-                    ieshape = img.getInvError().shape
-                    #print ("IESHAPE", ieshape, "DY", dy0, dy1, "DX", dx0, dx1)
-                    if (dy0 >= ieshape[0] or dx0 >= ieshape[1]):
-                        print ("Warning: Img lower bounds are larger than inv error shape")
-                        return None
-                    assert(dy0 < ieshape[0])
-                    assert(dx0 < ieshape[1])
-                    if (dy1 > ieshape[0]):
-                        dy1 = ieshape[0]
-                        deriv.clipToRoi(dx0, dx1, dy0, dy1)
-                        #print (deriv)
-                        #print (type(deriv))
-                        #print (deriv.extent)
-                    if (dx1 > ieshape[1]):
-                        dx1 = ieshape[1]
-                        deriv.clipToRoi(dx0, dx1, dy0, dy1)
-                        #print (deriv)
-                        #print (type(deriv))
-                        #print (deriv.extent)
                     img_bounds[img] = dx0, dx1, dy0, dy1
-                    #print ("TEST")
-                    #print ("EXT", deriv.extent)
-                    #print (f'{dx0=} {dx1=} {dy0=} {dy1=}')
-                    #print ("IES", img.getInvError().shape) 
-        Ncols = len(live_params)
-        nd = len(allderivs)
-        #print (f'{nd=} {Ncols=} {max_size=}')
-
-        # Where in the A & B arrays will the image pixels start?
-
-        img_offsets = {}
-        Npixels = 0
-        for iparam,derivs in enumerate(allderivs):
-            for deriv, img in derivs:
-                if img in img_offsets:
-                    continue
-                x0,x1,y0,y1 = img_bounds[img]
-                img_offsets[img] = Npixels
-                # pixel coords can end up as int16; cast to int
-                # to avoid overflow!
-                Npixels += (int(x1)-int(x0)) * (int(y1)-int(y0))
 
         Npriors = 0
         if priors:
@@ -178,58 +122,61 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             rowA, colA, valA: describe a sparse matrix pA
             pA: has shape N x numberOfParams
             pb: has shape N
-            mub: has shape N
             rowA: list of iterables of ints
             colA: list of ints
             valA: list of iterables of floats
             pb:   list of iterables of floats
-            mub:  list of iterables of floats
 
             where "N" is the number of "pseudo-pixels" or Gaussian terms.
             "pA" will be appended to the least-squares "A" matrix, and
             "pb" will be appended to the least-squares "b" vector, and the
             least-squares problem is minimizing
             || A * (delta-params) - b ||^2
-
-            We also require *mub*, which is like "pb" but not shifted
-            relative to the current parameter values; ie, it's the mean of
-            the Gaussian.
             '''
             priorVals = tractor.getLogPriorDerivatives()
-            #print('Priors:', priorVals)
             if priorVals is not None:
-                rA, cA, vA, pb, mub = priorVals
+                rA, cA, vA, pb, _ = priorVals
                 Npriors = max(Npriors, max([1+max(r) for r in rA]))
-                #print('Priors.  live_params:', live_params, ', cA:', cA)
-                live_params.update(cA)
-                #print('live_params after:', live_params)
-                Ncols = len(live_params)
-                #print('new Ncols:', Ncols)
+                cols_live[cA] = True
 
-        #print('DenseOptimizer.getUpdateDirection : N params (cols) %i, N pix %i, N priors %i' %
-        #      (Ncols, Npixels, Npriors))
+        # Where in the A & B arrays will the image pixels start?
+        img_offsets = {}
+        Npixels = 0
+        for iparam,derivs in enumerate(allderivs):
+            for deriv, img in derivs:
+                if img in img_offsets:
+                    continue
+                x0,x1,y0,y1 = img_bounds[img]
+                img_offsets[img] = Npixels
+                # pixel coords can end up as int16; cast to int
+                # to avoid overflow!
+                Npixels += (int(x1)-int(x0)) * (int(y1)-int(y0))
+
+        Ncols_live = np.sum(cols_live)
 
         Nrows = Npixels + Npriors
         if Nrows == 0:
-            #print('ConstrainedDenseOptimizer.getUpdateDirection: Nrows = 0')
             return None
-        #print('Allocating', Nrows, 'x', Ncols, 'matrix for update direction')
-        A = np.zeros((Nrows, Ncols), np.float32)
+
+        A = np.zeros((Nrows, Ncols_live), np.float32)
         # 'B' holds the chi values
         B = np.zeros(Nrows, np.float32)
 
-        live_params = list(live_params)
-        live_params.sort()
-
-        column_map = dict([(c,i) for i,c in enumerate(live_params)])
+        # Original -> live mapping
+        inv_column_map = np.flatnonzero(cols_live)
+        column_map = np.empty(Ncols_total, int)
+        column_map[:] = -1
+        column_map[inv_column_map] = np.arange(len(inv_column_map))
         #print('Column map:', column_map)
+        #print('Inv column map:', inv_column_map)
 
-        colscales2 = np.ones(Ncols)
+        colscales = np.zeros(Ncols_live, np.float32)
         for iparam,derivs in enumerate(allderivs):
             if len(derivs) == 0:
                 continue
             col = column_map[iparam]
-            scale2 = 0.
+            assert(col >= 0)
+            scale = 0.
             for deriv, img in derivs:
                 if deriv.patch is None:
                     continue
@@ -237,124 +184,51 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
 
                 dx0,dx1,dy0,dy1 = deriv.extent
                 x0,x1,y0,y1 = img_bounds[img]
-                if x1 < 0 or y1 < 0:
-                    print ("Img bounds are entirely out of image: ",x0, x1, y0, y1)
-                    return None
-                elif x0 < 0:
-                    x0 = 0
-                elif y0 < 0:
-                    y0 = 0
+
+                # The derivative covers the whole area for this image.
                 if x0 == dx0 and x1 == dx1 and y0 == dy0 and y1 == dy1:
                     rowstart = img_offsets[img]
-                    #print('row start:', rowstart)
-                    #print('col', col)
                     w = x1-x0
                     h = y1-y0
-                    #print ("DERIV PATCH", deriv.patch.shape, inverrs.shape, y0, y1, x0, x1)
-                    if y1 > inverrs.shape[0] or x1 > inverrs.shape[1]:
-                        if y1 > inverrs.shape[0] and x1 > inverrs.shape[1]:
-                            #Edge case
-                            x1 = inverrs.shape[1]
-                            y1 = inverrs.shape[0]
-                            apix = (deriv.patch[:(y1-y0),:(x1-x0)] * inverrs[y0:y1,x0:x1])
-                        elif y1 > inverrs.shape[0]:
-                            #Edge case
-                            y1 = inverrs.shape[0]
-                            apix = (deriv.patch[:(y1-y0),:] * inverrs[y0:y1,x0:x1])
-                            #print ("APIX", apix.shape)
-                            #ie_pad = np.zeros((y1-y0, x1-x0), dtype=np.float32)
-                            #ie_pad[:ysz-y0,:] = inverrs[y0:,x0:x1]
-                            #print ("IE PAD", ie_pad.shape)
-                            #apix = (deriv.patch * ie_pad)
-                        else:
-                            #Edge case
-                            x1 = inverrs.shape[1]
-                            apix = (deriv.patch[:,:(x1-x0)] * inverrs[y0:y1,x0:x1])
-                    else:
-                        try:
-                            apix = (deriv.patch * inverrs[y0:y1, x0:x1])
-                        except Exception as e:
-                            print('Exception:', e)
-                            print (f'{y0=} {y1=} {x0=} {x1}')
-                            import traceback
-                            traceback.print_exc()
-                            return None
-
-                    #print (f'{y0=} {y1=} {x0=} {x1=} {w=} {h=}')
-                    #savetxt_cpu_append('cderiv.txt', deriv.patch)
-                    #savetxt_cpu_append('cie2.txt', inverrs[y0:y1, x0:x1])
-                    #savetxt_cpu_append('apix.txt', apix)
-                    ### HACK
-                    # ii0,jj0 = np.nonzero(deriv.patch)
-                    # ii1,jj1 = np.nonzero(inverrs[y0:y1, x0:x1])
-                    # if len(ii0) == 0:
-                    #     print('modelmask: deriv is all zeros')
-                    # else:
-                    #     print('modelmask: deriv  non-zero region: x [%i,%i)' % (jj0.min(), jj0.max()+1),
-                    #           'y [%i,%i)' % (ii0.min(), ii0.max()+1))
-                    # if len(ii1) == 0:
-                    #     print('modelmask: inverr is all zeros')
-                    # else:
-                    #     print('modelmask: inverr non-zero region: x [%i,%i)' % (jj1.min(), jj1.max()+1),
-                    #           'y [%i,%i)' % (ii1.min(), ii1.max()+1))
-                    # 
-                    # ii2,jj2 = np.nonzero(inverrs)
-                    # if len(ii2):
-                    #     print('whole      inverr non-zero region (relative to modelmask origin): x [%i,%i)' %
-                    #           (jj2.min() - x0, jj2.max()+1 - x0), 'y [%i,%i)' % (ii2.min()-y0, ii2.max()+1-y0))
-                    # 
-                    ####
-                    #print (f'{rowstart=} {w=} {h=} {col=}')
-                    #print (apix.shape)
-                    w = int(w)
-                    h = int(h)
-                    if w*h != len(apix.flat):
-                        print (f'{rowstart=} {w=} {h=} {col=} APIX len ', len(apix.flat))
-                        import sys
-                        import traceback
-                        traceback.print_exc()
-                        sys.exit(-1)
-                    A[rowstart:rowstart+w*h, col] = apix.flat
+                    apix = (deriv.patch * inverrs[y0:y1, x0:x1])
+                    A[rowstart: rowstart+(h*w), col] = apix.flat
                     if scale_columns:
                         # accumulate L2 norm
-                        scale2 += np.sum(apix**2)
+                        scale += np.sum(apix**2)
                     del apix
+
                 else:
                     # There are multiple modelMasks for this image
                     # (eg from multiple sources), so need to pad it out
-                    print('multiple modelMasks for this image?')
+                    print('multiple modelMasks (sources) for this image?')
                     print('\tderiv extent', dx0,dx1, dy0,dy1)
                     print('\timage bounds', x0,x1,y0,y1, img)
                     return None
-                    #assert(False)
-                    #sys.exit(-1)
 
             if scale_columns:
-                colscales2[col] = scale2
+                colscales[col] = scale
 
         if Npriors > 0:
-            rA, cA, vA, pb, mub = priorVals
-            #print('Priors: pb', pb, 'mub', mub)
+            rA, cA, vA, pb, _ = priorVals
             for ri,ci,vi,bi in zip(rA, cA, vA, pb):
-                #print('prior: r,c', ri, ci, 'v', vi, 'b', bi)
                 col = column_map[ci]
+                assert(col >= 0)
                 if scale_columns:
-                    # (note, np.dot work when vi is a list)
-                    colscales2[col] += np.dot(vi, vi)
+                    # (note, np.dot works when vi is a list)
+                    colscales[col] += np.dot(vi, vi)
                 for rij,vij,bij in zip(ri, vi, bi):
                     A[Npixels + rij, col] = vij
                     B[Npixels + rij] += bij
-            del priorVals, rA, cA, vA, pb, mub
+            del priorVals, rA, cA, vA, pb, _
 
         if scale_columns:
-            for col,scale2 in enumerate(colscales2):
-                if scale2 > 0:
-                    A[:,col] /= np.sqrt(scale2)
+            colscales = np.sqrt(colscales)
+            for col,scale in enumerate(colscales):
+                if scale > 0:
+                    A[:,col] /= scale
                 else:
                     # Set to safe value...
-                    colscales2[col] = 1.
-            colscales = np.sqrt(colscales2)
-            #print('colscales:', colscales)
+                    colscales[col] = 1.
 
         chimap = {}
         if chiImages is not None:
@@ -364,7 +238,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
         for img,rowstart in img_offsets.items():
             chi = chimap.get(img, None)
             if chi is None:
-                ### FIXME.... set tractor's modelMask???
+                ### FIXME.... set tractor's modelMask???  Get only the pixel area we need?
                 chi = tractor.getChiImage(img=img)
             x0,x1,y0,y1 = img_bounds[img]
             chi = chi[y0:y1, x0:x1]
@@ -373,8 +247,8 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             B[rowstart: rowstart + w*h] = chi.flat
             del chi
 
-        print('condition number:', np.linalg.cond(A))
         try:
+            #print('Smarter: cond', np.linalg.cond(A))
             X,_,_,_ = lstsq(A, B, rcond=None)
         except LinAlgError as e:
             print('Exception in lstsq:', e)
@@ -386,18 +260,10 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             print('A finite:', Counter(np.isfinite(A.ravel())))
             print('B finite:', Counter(np.isfinite(B.ravel())))
             return None
-        #print ("OUTPUT SHAPES CPU1 ", A.shape, B.shape, X.shape)
 
-        #if A is not None:
-        #    Aorig = A.copy()
-
-        print('smarter: norm Ax-b:', np.linalg.norm(np.dot(A*colscales[np.newaxis,:], X/colscales) - B))
-        print('smarter: norm Ax-b:', np.linalg.norm(np.dot(A, X) - B))
-        
         if not get_A_matrix:
             del A
             del B
-        #del B
 
         if scale_columns:
             X /= colscales
@@ -408,40 +274,23 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             return None
 
         # Expand x back out (undo the column_map)
-        #print('Expanding X: column_map =', column_map)
-        #print('X:', X)
-        #if max_size > 1+max(live_params):
-        #    print ("Using max_size", max_size)
-        if nd > 1+max(live_params):
-            print ("Re-sizing X array for n derivs = ", nd)
-            max_size = nd
-        else:
-            max_size = 1+max(live_params)
-        #X_full = np.zeros(1+max(live_params))
-        X_full = np.zeros(max_size)
-        for c,i in column_map.items():
-            #print ("C", c, "I", i, X[i])
-            X_full[c] = X[i]
-        X = X_full
-        #print('-> SMARTER X', X)
+        X_full = np.zeros(Ncols_total, np.float32)
+        X_full[inv_column_map] = X
 
         if get_A_matrix:
             if scale_columns:
                 A *= colscales[np.newaxis,:]
             # HACK
             # expand the colscales array too!
-            c_full = np.zeros(len(X))
-            for c,i in column_map.items():
-                c_full[c] = colscales[i]
-            colscales = c_full
+            c_full = np.zeros(Ncols_total, np.float32)
+            c_full[inv_column_map] = colscales
 
             # Expand A matrix
             r,c = A.shape
-            A_full = np.zeros((r, len(X)), np.float32)
-            for c,i in column_map.items():
-                A_full[:,c] = A[:,i]
-            A = A_full
+            assert(r == Nrows)
+            A_full = np.zeros((Nrows, Ncols_total), np.float32)
+            A_full[:,inv_column_map] = A
 
-            return X,A,colscales,B #,Aorig
+            return X_full, A_full, c_full, B
 
-        return X
+        return X_full
