@@ -103,7 +103,7 @@ class FactoredOptimizer(object):
         tr.modelMasks = mm
         return img_opts
 
-    def getLinearUpdateDirection(self, tr, **kwargs):
+    def getLinearUpdateDirection(self, tr, priors=True, **kwargs):
         '''
         This is the function in LsqrOptimizer that is being overridden.
         '''
@@ -119,7 +119,7 @@ class FactoredOptimizer(object):
             if not cat_frozen:
                 tr.freezeParam('catalog')
             # call superclass...
-            x_imgs = super().getLinearUpdateDirection(tr, **kwargs)
+            x_imgs = super().getLinearUpdateDirection(tr, priors=priors, **kwargs)
             if cat_frozen:
                 # no need to do anything beyond the superclass...
                 return x_imgs
@@ -133,7 +133,7 @@ class FactoredOptimizer(object):
                 return x_imgs
             return None
 
-        img_opts = self.all_image_updates(tr, **kwargs)
+        img_opts = self.all_image_updates(tr, priors=priors, **kwargs)
         if len(img_opts) == 0:
             if x_imgs is not None:
                 return x_imgs
@@ -155,22 +155,24 @@ class FactoredOptimizer(object):
             xicsum = xicsum + np.dot(ic, x)
             icsum = icsum + ic
 
+        ## FIXME -- should change the getPriorsHessianAndGradient function to just
+        ## ADD the priors into existing arrays.
         # Add the priors if needed.
-        if kwargs.get('priors', False):
-            priors_ATA, priors_ATB = self.getPriorsHessianAndGradient(tr)
-            # Add the raw priors to the sums
-            if priors_ATA.shape == icsum.shape:
-                icsum += priors_ATA
-                xicsum += priors_ATB
-                #print('Priors: xic:', priors_ATB)
-                #print('Priors: ic:', priors_ATA)
-            elif np.all(priors_ATA == 0) and np.all(priors_ATB == 0):
-                print (f"WARNING: Prior shape mismatch {icsum.shape=} {xicsum.shape=} {priors_ATA.shape=} {priors_ATB.shape=} but priors are zero so ignorning.")
-            else:
-                print (f"WARNING: Prior shape mismatch {icsum.shape=} {xicsum.shape=} {priors_ATA.shape=} {priors_ATB.shape=}; using CPU mode instead.")
-                if image_thawed:
-                    tr.thawParam('images')
-                return super().getLinearUpdateDirection(tr, **kwargs)
+        if priors:
+            p = self.getPriorsHessianAndGradient(tr)
+            if p is not None:
+                priors_ATA, priors_ATB = p
+                # Add the raw priors to the sums
+                if priors_ATA.shape == icsum.shape:
+                    icsum += priors_ATA
+                    xicsum += priors_ATB
+                elif np.all(priors_ATA == 0) and np.all(priors_ATB == 0):
+                    print (f"WARNING: Prior shape mismatch {icsum.shape=} {xicsum.shape=} {priors_ATA.shape=} {priors_ATB.shape=} but priors are zero so ignorning.")
+                else:
+                    print (f"WARNING: Prior shape mismatch {icsum.shape=} {xicsum.shape=} {priors_ATA.shape=} {priors_ATB.shape=}; using CPU mode instead.")
+                    if image_thawed:
+                        tr.thawParam('images')
+                    return super().getLinearUpdateDirection(tr, priors=priors, **kwargs)
 
         # cheap preconditioning to reduce the condition number from column scaling
         # just estimate the scale from the sqrt(diagonal)
@@ -195,13 +197,13 @@ class FactoredOptimizer(object):
             NZ = np.flatnonzero(xicsum != 0)
             icsum = icsum[NZ, :][:, NZ]
             xicsum = xicsum[NZ]
-            print('FO: cond', np.linalg.cond(icsum))
+            #print('FO: cond', np.linalg.cond(icsum))
             x2,_,_,_ = np.linalg.lstsq(icsum, xicsum, rcond=None)
             x2 /= scale[NZ]
             x = np.zeros(Norig, np.float32)
             x[NZ] = x2
         else:
-            print('FO: cond', np.linalg.cond(icsum))
+            #print('FO: cond', np.linalg.cond(icsum))
             x,_,_,_ = np.linalg.lstsq(icsum, xicsum, rcond=None)
             x /= scale
 
@@ -268,7 +270,7 @@ if __name__ == '__main__':
     tr.freezeParam('images')
 
     true_params = np.array(tr.getParams())
-    
+
     g = gal.shape.getParams()
     g[0] = 15
     g[2] = 0.
@@ -286,7 +288,7 @@ if __name__ == '__main__':
     plt.savefig('mod.png')
 
     p0 = tr.getParams()
-    
+
     print('Opt', tr.optimizer)
 
     optargs = dict(shared_params=False)
@@ -411,6 +413,3 @@ if __name__ == '__main__':
         print('Fractional difference in update directions (LSQR - Fac):', difference(up, up2))
         print('Fractional difference (LSQR - SM):', difference(up, up1))
         print('Fractional difference (Fac - SM):', difference(up1, up2))
-
-
-    
