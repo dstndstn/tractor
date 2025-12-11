@@ -144,12 +144,12 @@ class FactoredOptimizer(object):
         icsum = 0
         #for x,ic,colscales,atb in img_opts:
         for x,ic,colscales,A,B in img_opts:
-            print('ic x:', np.dot(ic, x))
-            print('ic:', ic)
-            print('ic x:')
-            shownonzero(np.dot(ic,x))
-            print('ic:')
-            shownonzero(ic)
+            # print('ic x:', np.dot(ic, x))
+            # print('ic:', ic)
+            # print('ic x:')
+            # shownonzero(np.dot(ic,x))
+            # print('ic:')
+            # shownonzero(ic)
             #print('atb:', atb)
             #xicsum = xicsum + atb
             xicsum = xicsum + np.dot(ic, x)
@@ -162,8 +162,8 @@ class FactoredOptimizer(object):
             if priors_ATA.shape == icsum.shape:
                 icsum += priors_ATA
                 xicsum += priors_ATB
-                print('Priors: xic:', priors_ATB)
-                print('Priors: ic:', priors_ATA)
+                #print('Priors: xic:', priors_ATB)
+                #print('Priors: ic:', priors_ATA)
             elif np.all(priors_ATA == 0) and np.all(priors_ATB == 0):
                 print (f"WARNING: Prior shape mismatch {icsum.shape=} {xicsum.shape=} {priors_ATA.shape=} {priors_ATB.shape=} but priors are zero so ignorning.")
             else:
@@ -172,26 +172,39 @@ class FactoredOptimizer(object):
                     tr.thawParam('images')
                 return super().getLinearUpdateDirection(tr, **kwargs)
 
-        #x,_,_,_ = np.linalg.lstsq(icsum, xicsum, rcond=None)
         # cheap preconditioning to reduce the condition number from column scaling
+        # just estimate the scale from the sqrt(diagonal)
         scale = np.sqrt(np.diag(icsum))
+
+        #print('FO scales:', scale)
+
         scale[scale == 0.] = 1.
         icsum /= (scale[:,np.newaxis] * scale[np.newaxis,:])
         xicsum /= scale
 
-        # print('Final icsum:')
+        # print('FO Final icsum:')
         # print(icsum)
-        # print('Final xicsum:')
+        # print('FO Final xicsum:')
         # print(xicsum)
-        Z = np.flatnonzero(xicsum == 0)
-        
-        #print('condition number:', np.linalg.cond(icsum))
-        x,_,_,_ = np.linalg.lstsq(icsum, xicsum, rcond=None)
-        #print('scaled x', x)
-        x /= scale
+        # FIXME -- in theory you could get zeros in other ways, but in practice
+        # this is fine.
+        # BUT, we already know which parameters are actually active, and we should use
+        # that instead!
+        if np.any(xicsum == 0):
+            Norig = len(xicsum)
+            NZ = np.flatnonzero(xicsum != 0)
+            icsum = icsum[NZ, :][:, NZ]
+            xicsum = xicsum[NZ]
+            print('FO: cond', np.linalg.cond(icsum))
+            x2,_,_,_ = np.linalg.lstsq(icsum, xicsum, rcond=None)
+            x2 /= scale[NZ]
+            x = np.zeros(Norig, np.float32)
+            x[NZ] = x2
+        else:
+            print('FO: cond', np.linalg.cond(icsum))
+            x,_,_,_ = np.linalg.lstsq(icsum, xicsum, rcond=None)
+            x /= scale
 
-        x[Z] = 0.
-        
         if x_imgs is not None:
             x = np.append(x_imgs, x)
         if image_thawed:
@@ -202,7 +215,6 @@ from tractor.smarter_dense_optimizer import SmarterDenseOptimizer
 
 class FactoredDenseOptimizer(FactoredOptimizer, SmarterDenseOptimizer):
     pass
-
 
 if __name__ == '__main__':
     from tractor.galaxy import ExpGalaxy
@@ -322,7 +334,8 @@ if __name__ == '__main__':
         def getName(cls):
             return "EllipseWithPriors(%g)" % cls.ellipticityStd
 
-    shape = gal.shape
+    orig_shape = gal.shape
+    shape = orig_shape
     shape2 = EllipseWithPriors(np.log(shape.re), shape.e1, shape.e2)
 
     gal.shape = shape2
@@ -353,34 +366,51 @@ if __name__ == '__main__':
     print()
     print('Multi-band fluxes')
     print()
-    
-    gal.brightness = NanoMaggies(g=1., r=1., z=1.)
+
     tim1.band = 'g'
     tim2.band = 'r'
     tim1.photocal = LinearPhotoCal(1.0, band='g')
     tim2.photocal = LinearPhotoCal(1.0, band='r')
 
+    # -- two images, gr, priors -> ok (1e-5)
+    # Galaxy: ExpGalaxy at pixel (50.00, 50.70) with NanoMaggies: g=22.5, r=22.5 and EllipseWithPriors(0.25): log r_e=2.70805, ee1=0.1, ee2=0
+    #gal.brightness = NanoMaggies(g=1., r=1.)
+
+    # --> ok
+    gal.brightness = NanoMaggies(g=1., r=1., z=1.)
+
     print('Galaxy:', gal)
 
     p0 = tr.getParams()
 
-    tr.optimizer = orig_opt
-    up = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
-    print('LSQR Update:', up)
-    
-    tr.setParams(p0)
-    tr.optimizer = sm_opt
-    up1 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
-    print('Smarter Update:', up1)
+    for priors in [False, True]:
+        print()
+        print('Priors:', priors)
+        print()
 
-    tr.setParams(p0)
-    tr.optimizer = fac_opt
-    up2 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+        optargs.update(priors=priors)
 
-    print('LSQR Update    :', up)
-    print('Smarter Update :', up1)
-    print('Factored Update:', up2)
+        tr.setParams(p0)
+        tr.optimizer = orig_opt
+        up = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+        print('LSQR Update:', up)
 
-    print('Fractional difference in update directions (LSQR - Fac):', difference(up, up2))
-    print('Fractional difference (LSQR - SM):', difference(up, up1))
+        tr.setParams(p0)
+        tr.optimizer = sm_opt
+        up1 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+        print('Smarter Update:', up1)
+
+        tr.setParams(p0)
+        tr.optimizer = fac_opt
+        up2 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+
+        print('LSQR Update    :', up)
+        print('Smarter Update :', up1)
+        print('Factored Update:', up2)
+
+        print('Fractional difference in update directions (LSQR - Fac):', difference(up, up2))
+        print('Fractional difference (LSQR - SM):', difference(up, up1))
+        print('Fractional difference (Fac - SM):', difference(up1, up2))
+
+
     
