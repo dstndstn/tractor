@@ -456,25 +456,8 @@ class LsqrOptimizer(Optimizer):
                 spvals.append(vals)
                 spcols.append(col)
 
-        # DEBUG
-        if True:
-            print('length of sprows:', len(sprows), 'cols:', len(spcols), 'vals', len(spvals), 'n elements', sum([len(x) for x in spvals]))
-            # To build the csr matrix below, we need to expand the columns from
-            # scalars to arrays; this is how many elements are in those arrays.
-            nrowspercol = np.array([len(x) for x in sprows])
-            cc = np.empty(np.sum(nrowspercol), np.int32)
-            i = 0
-            for c, n in zip(spcols, nrowspercol):
-                cc[i: i + n] = c
-                i += n
-            spv = np.hstack([v/np.sqrt(colscales[c]) for v,c in zip(spvals, spcols)])
-            A = csr_matrix((spv, (np.hstack(sprows), cc)), shape=(Nrows, Ncols))
-            print('LSQR cond before priors:', np.linalg.cond(A.todense()))
-
         assert(len(sprows) == len(spcols))
         assert(len(sprows) == len(spvals))
-
-        print('colscales before priors:', np.sqrt(colscales))
 
         b = None
         if priors:
@@ -494,13 +477,9 @@ class LsqrOptimizer(Optimizer):
                 oldnrows = Nrows
                 nr = listmax(rA, -1) + 1
                 Nrows += nr
-                logverb('Nrows was %i, added %i rows of priors => %i' %
-                        (oldnrows, nr, Nrows))
-
+                #logverb('Nrows was %i, added %i rows of priors => %i' % (oldnrows, nr, Nrows))
                 b = np.zeros(Nrows, np.float32)
                 b[oldnrows:] = np.hstack(pb)
-
-        print('colscales after priors:', np.sqrt(colscales))
 
         if len(spcols) == 0:
             logverb("len(spcols) == 0")
@@ -595,20 +574,25 @@ class LsqrOptimizer(Optimizer):
             cc[i: i + n] = c
             i += n
         spcols = cc
+        del cc
+        del nrowspercol
         assert(i == len(sprows))
         assert(len(sprows) == len(spcols))
 
-        logverb('  Number of sparse matrix elements:', len(sprows))
-        urows = np.unique(sprows)
-        ucols = np.unique(spcols)
-        logverb('  Unique rows (pixels):', len(urows))
-        logverb('  Unique columns (params):', len(ucols))
-        if len(urows) == 0 or len(ucols) == 0:
-            return []
-        logverb('  Max row:', urows[-1])
-        logverb('  Max column:', ucols[-1])
-        logverb('  Sparsity factor (possible elements / filled elements):',
-                float(len(urows) * len(ucols)) / float(len(sprows)))
+        import logging
+        logger = logging.getLogger('tractor.engine')
+        if logger.isEnabledFor(logging.DEBUG):
+            logverb('  Number of sparse matrix elements:', len(sprows))
+            urows = np.unique(sprows)
+            ucols = np.unique(spcols)
+            logverb('  Unique rows (pixels):', len(urows))
+            logverb('  Unique columns (params):', len(ucols))
+            logverb('  Max row:', urows[-1])
+            logverb('  Max column:', ucols[-1])
+            logverb('  Sparsity factor (possible elements / filled elements):',
+                    float(len(urows) * len(ucols)) / float(len(sprows)))
+            logverb('LSQR: %i cols (%i unique), %i elements' %
+                    (Ncols, len(ucols), len(spvals) - 1))
 
         # FIXME -- does it make LSQR faster if we remap the row and column
         # indices so that no rows/cols are empty?
@@ -618,16 +602,13 @@ class LsqrOptimizer(Optimizer):
 
         # Build sparse matrix
         A = csr_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
+        del spvals, sprows, spcols
 
         if get_A_matrix:
             # FIXME -- this isn't much good without colscales...
             return A
 
         lsqropts = dict(show=isverbose(), damp=damp)
-
-        # Run lsqr()
-        logverb('LSQR: %i cols (%i unique), %i elements' %
-                (Ncols, len(ucols), len(spvals) - 1))
 
         bail = False
         try:
@@ -638,8 +619,6 @@ class LsqrOptimizer(Optimizer):
         except ZeroDivisionError:
             print('ZeroDivisionError caught.  Returning zero.')
             bail = True
-        print('LSQR acond:', acond)
-        print('vs', np.linalg.cond(A.todense()))
         # finally:
         np.seterr(**oldsettings)
 
@@ -664,7 +643,7 @@ class LsqrOptimizer(Optimizer):
         # print('  xnorm =', xnorm)
         # print('  var =', var)
 
-        logverb('scaled  X=', X)
+        #logverb('scaled  X=', X)
         X = np.array(X)
 
         if shared_params:
@@ -682,7 +661,7 @@ class LsqrOptimizer(Optimizer):
 
         if scale_columns:
             X[colscales > 0] /= colscales[colscales > 0]
-        logverb('  X=', X)
+        #logverb('  X=', X)
         lt[4] += time.time()-t
         #print ("LTimesy:",lt)
 
@@ -694,10 +673,3 @@ class LsqrOptimizer(Optimizer):
             return X, 1./np.array(var)
 
         return X
-
-    # def getParameterScales(self):
-    #     print(self.getName()+': Finding derivs...')
-    #     allderivs = self.getDerivs()
-    #     print('Finding column scales...')
-    #     s = self.getUpdateDirection(allderivs, scales_only=True)
-    #     return s
