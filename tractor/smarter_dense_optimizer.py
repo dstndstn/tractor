@@ -40,7 +40,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                            chiImages=None,
                            variance=False,
                            shared_params=True,
-                           get_A_matrix=False):
+                           get_cov=False):
         if shared_params or scales_only or damp>0 or variance:
             raise RuntimeError('Not implemented')
         assert(shared_params == False)
@@ -50,7 +50,6 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
 
         # Returns: numpy array containing update direction.
         # If *variance* is True, return    (update,variance)
-        # If *get_A_matrix* is True, returns the matrix of derivatives.
         # If *scale_only* is True, return column scalings
         # In cases of an empty matrix, returns the list []
         #
@@ -261,7 +260,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             print('B finite:', Counter(np.isfinite(B.ravel())))
             return None
 
-        if not get_A_matrix:
+        if not get_cov:
             del A
             del B
 
@@ -273,24 +272,23 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             print('X = ', X)
             return None
 
+        if get_cov:
+            ic = np.matmul(A.T, A)
+            ic *= colscales[np.newaxis,:] * colscales[:,np.newaxis]
+            return X, ic, inv_column_map
+            # # expand the colscales array too!
+            # c_full = np.zeros(Ncols_total, np.float32)
+            # c_full[inv_column_map] = colscales
+            # 
+            # # Expand A matrix
+            # r,c = A.shape
+            # assert(r == Nrows)
+            # A_full = np.zeros((Nrows, Ncols_total), np.float32)
+            # A_full[:,inv_column_map] = A
+            # 
+            # return X_full, A_full, c_full, B
+
         # Expand x back out (undo the column_map)
         X_full = np.zeros(Ncols_total, np.float32)
         X_full[inv_column_map] = X
-
-        if get_A_matrix:
-            if scale_columns:
-                A *= colscales[np.newaxis,:]
-            # HACK
-            # expand the colscales array too!
-            c_full = np.zeros(Ncols_total, np.float32)
-            c_full[inv_column_map] = colscales
-
-            # Expand A matrix
-            r,c = A.shape
-            assert(r == Nrows)
-            A_full = np.zeros((Nrows, Ncols_total), np.float32)
-            A_full[:,inv_column_map] = A
-
-            return X_full, A_full, c_full, B
-
         return X_full
