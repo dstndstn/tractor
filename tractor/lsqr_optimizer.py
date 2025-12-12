@@ -340,7 +340,7 @@ class LsqrOptimizer(Optimizer):
         for step in range(steps):
             dlnp, X, alpha = self.optimize(tractor, **kwargs)
             if check_step is not None:
-                r = check_step(self, tractor, dlnp, X, alpha)
+                r = check_step(optimizer=self, tractor=tractor, dlnp=dlnp, X=X, alpha=alpha)
                 if not r:
                     break
             # print('Opt step: dlnp', dlnp,

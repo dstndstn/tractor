@@ -30,7 +30,7 @@ class ConstrainedOptimizer(LsqrOptimizer):
             self.stepLimited = False
             dlnp,X,alpha = self.optimize(tractor, **kwargs)
             if check_step is not None:
-                r = check_step(self, tractor, dlnp, X, alpha)
+                r = check_step(optimizer=self, tractor=tractor, dlnp=dlnp, X=X, alpha=alpha)
                 if not r:
                     break
             #print('Optimize_loop: step', step, 'dlnp', dlnp, 'hit limit:',
