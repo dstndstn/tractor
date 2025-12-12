@@ -41,7 +41,8 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                            chiImages=None,
                            variance=False,
                            shared_params=True,
-                           get_cov=False):
+                           get_cov=False,
+                           get_A=False):
         if shared_params or scales_only or damp>0 or variance:
             raise RuntimeError('Not implemented')
         assert(shared_params == False)
@@ -261,7 +262,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             print('B finite:', Counter(np.isfinite(B.ravel())))
             return None
 
-        if not get_cov:
+        if not (get_cov or get_A):
             del A
             del B
 
@@ -272,6 +273,9 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             print('ConstrainedDenseOptimizer.getUpdateDirection: X not all finite!')
             print('X = ', X)
             return None
+
+        if get_A:
+            return A, B, X, colscales
 
         if get_cov:
             ic = np.matmul(A.T, A)

@@ -1,7 +1,8 @@
 import time
 
 import numpy as np
-import cupy as cp
+from cupy_wrapper import cp
+#import cupy as cp
 
 from tractor.factored_optimizer import FactoredDenseOptimizer
 from tractor import ProfileGalaxy, HybridPSF, ConstantSky

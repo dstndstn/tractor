@@ -1,4 +1,5 @@
-import cupy as cp
+from cupy_wrapper import cp
+#import cupy as cp
 
 from tractor import Image
 

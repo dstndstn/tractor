@@ -218,6 +218,16 @@ if __name__ == '__main__':
         #return np.abs(x1 - x2) / np.maximum(1e-16, (np.abs(x1) + np.abs(x2)) / 2.)
         return np.sum(np.abs(x1 - x2) / np.maximum(1e-16, (np.abs(x1) + np.abs(x2)) / 2.))
 
+    def compare(meth1, meth2, vec1, vec2, icov):
+        m = max(len(meth1), len(meth2))
+        for meth,vec in [(meth1,vec1), (meth2,vec2)]:
+            print(meth + ' '*(m-len(meth)) + ': [' +
+                  ', '.join(['%12.5f' % v for v in vec]) + ' ]')
+        print('Fractional difference (%s - %s): %.4g' % (meth1,meth2, difference(vec1, vec2)))
+        chisq = (vec1 - vec2).T @ (icov @ (vec1 - vec2))
+        print('Chi difference: %.4g' % np.sqrt(chisq))
+
+        
     h,w = 100,100
     gal = ExpGalaxy(PixPos(h/2., w/2+.7), Flux(2000.), EllipseE(10., 0.1, 0.4))
 
@@ -405,10 +415,96 @@ if __name__ == '__main__':
         chisq = (up - up2).T @ (ic @ (up - up2))
         print('chisq:', chisq)
 
+    from tractor import Images
+    orig_images = tr.images
+    tr.images = Images(tim1)
+    oa = dict(shared_params=False)
+    A,B,X,colscales = fac_opt.one_image_update(tr, priors=False, get_A=True, **oa)
+    print('A', A.shape)
+    print('B', B.shape)
+    print('X', X.shape)
+    print('colscales', colscales)
 
-    import cupy as cp
-    if not cp.cuda.is_available():
-        print('No Cupy/CUDA')
+    tr.setModelMasks([{gal: ModelMask(10, 10, 80, 80)}])
+    mA,mB,mX,mcolscales = fac_opt.one_image_update(tr, priors=False, get_A=True, **oa)
+    tr.images = orig_images
+    print('mA', mA.shape)
+    print('mB', mB.shape)
+    print('mX', mX.shape)
+    print('mcolscales', mcolscales)
+
+    print()
+    print('Testing with modelMasks...')
+    tr.setModelMasks([{gal: ModelMask(10, 10, 80, 80)} for tim in tr.images])
+    #tr.setModelMasks([{gal: ModelMask(5, 5, 90, 90)} for tim in tr.images])
+
+    tr.setParams(p0)
+    tr.optimizer = orig_opt
+    mup = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+
+    compare('LSQR', 'LSQR w/ModelMasks', up, mup, ic)
+    print()
+
+    plt.figure(figsize=(12,7))
+    plt.clf()
+    slc = slice(10,90),slice(10,90)
+    for col in range(6):
+        ima = dict(interpolation='nearest', origin='lower',
+                   vmin=-0.06, vmax=0.06)
+        plt.subplot(3, 6, 1 + col)
+        plt.imshow(A[:,col].reshape((100,100))[slc], **ima)
+
+        plt.subplot(3, 6, 6 + 1 + col)
+        plt.imshow(mA[:,col].reshape((80,80)), **ima)
+
+    ima = dict(interpolation='nearest', origin='lower')
+    plt.subplot(3, 6, 12 + 1)
+    plt.imshow(B.reshape((100,100))[slc], **ima)
+    #plt.colorbar()
+    plt.subplot(3, 6, 12 + 2)
+    plt.imshow(mB.reshape((80,80)), **ima)
+    #plt.colorbar()
+
+    tr.setParams(p0)
+    mod = tr.getModelImage(0)
+    plt.subplot(3, 6, 12 + 3)
+    plt.imshow(mod, **ima)
+
+    tr.setParams(p0 + 0.5 * up)
+    mod = tr.getModelImage(0)
+    plt.subplot(3, 6, 12 + 4)
+    plt.imshow(mod, **ima)
+
+    tr.setParams(p0 + 0.5 * mup)
+    mod = tr.getModelImage(0)
+    plt.subplot(3, 6, 12 + 5)
+    plt.imshow(mod, **ima)
+
+    plt.savefig('derivs.png')
+
+
+    tr.setParams(p0)
+    tr.optimizer = fac_opt
+    mup2,ic = tr.optimizer.getLinearUpdateDirection(tr, get_icov=True, **optargs)
+
+    compare('LSQR', 'Factored', mup, mup2, ic)
+
+    # print('LSQR Update    :', mup)
+    # print('Factored Update:', mup2)
+    # print('Fractional difference in update directions (LSQR - Fac):', difference(mup, mup2))
+    # chisq = (mup - mup2).T @ (ic @ (mup - mup2))
+    # print('chisq diff (LSQR - Fac):', chisq)
+    # 
+    # print('Fractional difference due to ModelMasks:', difference(up, mup))
+    # chisq = (mup - up).T @ (ic @ (up - mup))
+    # print('chisq diff (ModelMasks):', chisq)
+    
+
+    #import cupy as cp
+    from cupy_wrapper import cp
+
+    #if not cp.cuda.is_available():
+    #    print('No Cupy/CUDA')
 
     from tractor.cupy_tractor import CupyImage
     from tractor.gpu_optimizer import GPUOptimizer
