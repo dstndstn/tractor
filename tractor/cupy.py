@@ -1,6 +1,6 @@
-from tractor import Image
-
 import cupy as cp
+
+from tractor import Image
 
 class CupyImage(Image):
     def __init__(self, **kwargs):
