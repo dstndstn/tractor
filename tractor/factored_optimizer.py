@@ -405,6 +405,10 @@ if __name__ == '__main__':
         print('chisq:', chisq)
 
 
+    import cupy as cp
+    if not cp.cuda.is_available():
+        print('No Cupy/CUDA')
+
     from tractor.cupy import CupyImage
     from tractor.gpu_optimizer import GPUOptimizer
 
