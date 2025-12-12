@@ -1,8 +1,10 @@
+import time
+
 import numpy as np
 import cupy as cp
 
 from tractor.factored_optimizer import FactoredDenseOptimizer
-from tractor import ProfileGalaxy, HybridPSF
+from tractor import ProfileGalaxy, HybridPSF, ConstantSky
 
 class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
@@ -36,7 +38,7 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         kmax = 9
         # Double size of 16 bit (complex 128) array x npix x
         # n derivs x kmax.  5D array in batch_mixture_profiles.py
-        est_mem = totalpix * imsize * nd * kmax * 16
+        est_mem = totalpix * nd * kmax * 16
 
         if free_mem < est_mem:
             print (f"Warning: Estimated memory {est_mem} is greater than free memory {free_mem}; Running CPU mode instead!")
@@ -68,6 +70,7 @@ class GPUOptimizer(GPUFriendlyOptimizer):
             traceback.print_exc()
 
         # Fallback to CPU version
+        print('Falling back to CPU code...')
         t0 = time.time()
         R = super().one_galaxy_updates(tr, **kwargs)
         dt = time.time() - t0
@@ -102,7 +105,6 @@ class GPUOptimizer(GPUFriendlyOptimizer):
             raise RuntimeError('One or more modelMasks is None in GPU code')
 
         assert(all([m is not None for m in masks]))
-
         assert(src.isParamThawed('pos'))
 
         # Pixel positions

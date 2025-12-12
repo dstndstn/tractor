@@ -210,6 +210,7 @@ if __name__ == '__main__':
     from tractor import Image, NullWCS, Tractor
     from tractor.utils import _GaussianPriors
     from tractor import NanoMaggies, LinearPhotoCal
+    from tractor.patch import ModelMask
     import os
     import pylab as plt
 
@@ -409,20 +410,24 @@ if __name__ == '__main__':
     if not cp.cuda.is_available():
         print('No Cupy/CUDA')
 
-    from tractor.cupy import CupyImage
+    from tractor.cupy_tractor import CupyImage
     from tractor.gpu_optimizer import GPUOptimizer
-
+    
     cutim1 = CupyImage(data=tim1.data, inverr=tim1.inverr, psf=tim1.psf, sky=tim1.sky,
-                       wcs=tim1.wcs)
+                       wcs=tim1.wcs, photocal=tim1.photocal)
     cutim2 = CupyImage(data=tim2.data, inverr=tim2.inverr, psf=tim2.psf, sky=tim2.sky,
-                       wcs=tim2.wcs)
+                       wcs=tim2.wcs, photocal=tim2.photocal)
     cutr = Tractor([cutim1, cutim2], [gal])
     cutr.freezeParam('images')
 
-    cutr.optimizer = GPUOptimizer()
-    cutr.setParams(p0)
+    #cutr.setModelMasks([{gal: ModelMask(0, 0, w, h)} for tim in cutr.images])
+    cutr.setModelMasks([{gal: ModelMask(10, 10, 80, 80)} for tim in cutr.images])
+    #cutr.setModelMasks([{gal: ModelMask(25, 25, 50, 50)} for tim in cutr.images])
 
-    up3 = cutr.optimizer.getLinearUpdateDirection(tr, **optargs)
+    cutr.setParams(p0)
+    cutr.printThawedParams()
+    cutr.optimizer = GPUOptimizer()
+    up3 = cutr.optimizer.getLinearUpdateDirection(cutr, **optargs)
 
     print('GPU update:', up3)
 
