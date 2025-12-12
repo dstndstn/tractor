@@ -1,7 +1,168 @@
-import cupy as cp
+import numpy as np
 
 from tractor.factored_optimizer import FactoredDenseOptimizer
 from tractor import ProfileGalaxy, HybridPSF
+
+class GPUFriendlyOptimizer(FactoredDenseOptimizer):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.t_super = 0.
+        self.n_super = 0
+
+    def all_image_updates(self, tr, **kwargs):
+        if not (tr.isParamFrozen('images') and
+            (len(tr.catalog) == 1) and
+            isinstance(tr.catalog[0], ProfileGalaxy)):
+            t0 = time.time()
+            R = super().all_image_updates(tr, **kwargs)
+            dt = time.time() - t0
+            self.t_super += dt
+            self.n_super += 1
+            return R
+        return self.one_galaxy_updates(tr, **kwargs)
+
+    def one_galaxy_updates(self, tr, **kwargs):
+        return super().all_image_updates(tr, **kwargs)
+
+import cupy as cp
+
+class GPUOptimizer(GPUFriendlyOptimizer):
+    # This is the Vectorized version. (gpumode = 2)
+    def one_galaxy_updates(self, tr, **kwargs):
+        free_mem, total_mem = cp.cuda.runtime.memGetInfo()
+        # predict memory required
+        totalpix = sum([np.prod(tim.shape) for tim in tr.images])
+        nd = tr.numberOfParams()+2
+        kmax = 9
+        # Double size of 16 bit (complex 128) array x npix x
+        # n derivs x kmax.  5D array in batch_mixture_profiles.py
+        est_mem = totalpix * imsize * nd * kmax * 16
+
+        if free_mem < est_mem:
+            print (f"Warning: Estimated memory {est_mem} is greater than free memory {free_mem}; Running CPU mode instead!")
+            R_gpuv = super().one_galaxy_updates(tr, **kwargs)
+            return R_gpuv
+
+        try:
+            t0 = time.time()
+            R_gpuv = self.gpu_one_galaxy_updates(tr, **kwargs)
+            mempool = cp.get_default_memory_pool()
+            mempool.free_all_blocks()
+            dt = time.time() - t0
+            return R_gpuv
+        except AssertionError:
+            import traceback
+            print ("AssertionError in VECTORIZED GPU code:")
+            traceback.print_exc()
+        except cp.cuda.memory.OutOfMemoryError:
+            free_mem, total_mem = cp.cuda.runtime.memGetInfo()
+            mempool = cp.get_default_memory_pool()
+            used_bytes = mempool.used_bytes()
+            tot_bytes = mempool.total_bytes()
+            print ('Out of Memory for source: ', tr.catalog[0])
+            print (f'OOM Device {free_mem=} {total_mem=}; This mempool {used_bytes=} {tot_bytes=}')
+            mempool.free_all_blocks()
+        except Exception as ex:
+            import traceback
+            print('Exception in GPU Vectorized code:')
+            traceback.print_exc()
+
+        # Fallback to CPU version
+        t0 = time.time()
+        R = super().one_galaxy_updates(tr, **kwargs)
+        dt = time.time() - t0
+        return R
+
+    def gpu_one_galaxy_updates(self, tr, **kwargs):
+        # Assume no (varying) sky background levels
+        assert(all([isinstance(tim.sky, ConstantSky) for tim in tr.images]))
+        # Assume single source
+        assert(len(tr.catalog) == 1)
+
+        t0 = time.time()
+
+        Nimages = len(tr.images)
+        img_pix = [tim.getGpuImage() for tim in tr.images]
+        img_ie  = [tim.getGpuInvError() for tim in tr.images]
+
+        # Assume galaxy
+        src = tr.catalog[0]
+        assert(isinstance(src, ProfileGalaxy))
+        psfs = [tim.getPsf() for tim in tr.images]
+        # Assume hybrid PSF model
+        assert(all([isinstance(psf, HybridPSF) for psf in psfs]))
+        # Assume ConstantSky models, grab constant sky levels
+        # NOTE - instead of building this list and passing it around in ImageDerivs, etc,
+        # we could perhaps just subtract it off img_pix at the start...
+        img_sky = [tim.getSky().getConstant() for tim in tr.images]
+        # Assume model masks are set (ie, pixel ROIs of interest are defined)
+        masks = [tr._getModelMaskByIdx(i, src) for i in range(len(tr.images))]
+        #masks = [tr._getModelMaskFor(tim, src) for tim in tr.images]
+        if any(m is None for m in masks):
+            raise RuntimeError('One or more modelMasks is None in GPU code')
+
+        assert(all([m is not None for m in masks]))
+
+        assert(src.isParamThawed('pos'))
+
+        # Pixel positions
+        pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
+               for tim in tr.images]
+        # WCS inv(CD) matrix
+        img_cdi = [tim.getWcs().cdInverseAtPosition(src.getPosition(), src=src)
+                   for tim in tr.images]
+        # Current counts
+        img_counts = [tim.getPhotoCal().brightnessToCounts(src.brightness)
+                      for tim in tr.images]
+        bands = src.getBrightness().getParamNames()
+
+        img_bands = [bands.index(tim.getPhotoCal().band) for tim in tr.images]
+
+        img_params, cx,cy,pW,pH = self._getBatchImageParams(tr, masks, pxy)
+
+        px, py = np.array(pxy).T
+        px = px.astype(np.float32)
+        py = py.astype(np.float32)
+        amix_gpu = getShearedProfileGPU(src, tr.images, px, py)
+        amixes_gpu = getDerivativeShearedProfilesGPU(src, tr.images, px, py)
+        amixes_gpu = [('current', amix_gpu, 0.)] + amixes_gpu
+
+        img_derivs = self._getBatchGalaxyProfiles(amixes_gpu, masks, px, py, cx, cy, pW, pH,
+                                                  img_counts, img_sky, img_pix, img_ie)
+        img_params.addBatchGalaxyProfiles(img_derivs)
+
+        # are we fitting for the position of this source?
+        fit_pos = np.asarray([(src.getPosition().numberOfParams() > 0)]*Nimages)
+        cdi = cp.asarray(img_cdi)
+        img_params.addBatchGalaxyDerivs(cdi, fit_pos)
+
+        #img_derivs.tostr()
+
+        i = 0
+        #Call collect_params() to finalize BatchImageParams object with all ImageDerivs
+        #img_params.collect_params()
+        #nbands = 1 + max(img_bands)
+        nbands = len(bands)
+
+        if img_params.ffts is None:
+            raise RuntimeError('Warning> img_params.ffts is None!  Running CPU version')
+
+        Xic = self.computeUpdateDirectionsVectorized(img_params, priorVals)
+
+        mpool = cp.get_default_memory_pool()
+        del img_params
+        del amixes_gpu
+        mpool.free_all_blocks()
+
+        return Xic
+
+    def gpu_one_galaxy_updates_2(self, img_params):
+        print('gpu_one_galaxy_updates_2')
+        raise RuntimeError('not implemented')
+
+
+    
 #from tractor import mixture_profiles as mp
 from tractor.sky import ConstantSky
 from tractor.psf import lanczos_shift_image
@@ -15,7 +176,7 @@ tt2 = np.zeros(1, np.int32)
 
 image_counter = 0
 
-class GPUFriendlyOptimizer(FactoredDenseOptimizer):
+class OrigGPUFriendlyOptimizer(FactoredDenseOptimizer):
     _gpumode = 3
 
     def setGPUMode(self, gpumode):

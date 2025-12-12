@@ -28,7 +28,7 @@ class FactoredOptimizer(object):
         self.ps = None
         super().__init__(*args, **kwargs)
 
-    def one_image_update(self, tr, max_size=0, **kwargs):
+    def one_image_update(self, tr, **kwargs):
         '''
         Called by all_image_updates, where "tr" has been modified to have only
         one image, this method returns its update direction and inverse-covariance.
@@ -142,13 +142,12 @@ class FactoredOptimizer(object):
                 for ci in cA:
                     cols_active[ci] = True
 
-        print('active columns:', cols_active)
         cols_active = np.flatnonzero(cols_active)
-        print('active columns:', cols_active)
         inv_cols_active = np.empty(Ncols, int)
         inv_cols_active[:] = -1
         inv_cols_active[cols_active] = np.arange(len(cols_active))
-        print('inv active columns:', inv_cols_active)
+        #print('active columns:', cols_active)
+        #print('inv active columns:', inv_cols_active)
 
         Nactive = len(cols_active)
         xicsum = np.zeros(Nactive, np.float32)
@@ -398,9 +397,32 @@ if __name__ == '__main__':
         print('Fractional difference (LSQR - SM):', difference(up, up1))
         print('Fractional difference (Fac - SM):', difference(up1, up2))
 
-        print('ic:', ic)
+        #print('ic:', ic)
         #cov = np.linalg.inv(ic)
         #print('covariance:', cov)
 
         chisq = (up - up2).T @ (ic @ (up - up2))
         print('chisq:', chisq)
+
+
+    from tractor.cupy import CupyImage
+    from tractor.gpu_optimizer import GPUOptimizer
+
+    cutim1 = CupyImage(data=tim1.data, inverr=tim1.inverr, psf=tim1.psf, sky=tim1.sky,
+                       wcs=tim1.wcs)
+    cutim2 = CupyImage(data=tim2.data, inverr=tim2.inverr, psf=tim2.psf, sky=tim2.sky,
+                       wcs=tim2.wcs)
+    cutr = Tractor([cutim1, cutim2], [gal])
+    cutr.freezeParam('images')
+
+    cutr.optimizer = GPUOptimizer()
+    cutr.setParams(p0)
+
+    up3 = cutr.optimizer.getLinearUpdateDirection(tr, **optargs)
+
+    print('GPU update:', up3)
+
+    print('Fractional difference in update directions (GPU - Fac):', difference(up3, up2))
+
+    chisq = (up3 - up2).T @ (ic @ (up3 - up2))
+    print('chisq:', chisq)
