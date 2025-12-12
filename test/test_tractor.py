@@ -54,10 +54,10 @@ class TractorTest(unittest.TestCase):
         W,H = 100,100
         psf_sig1 = 2.
         psf_sig2 = 3.
-        tim1 = Image(data=np.zeros((H,W)), invvar=np.ones((H,W)),
+        tim1 = Image(data=np.zeros((H,W)), inverr=np.ones((H,W)),
                      psf=NCircularGaussianPSF([psf_sig1], [1.]),
                      photocal=LinearPhotoCal(1.))
-        tim2 = Image(data=np.zeros((H,W)), invvar=np.ones((H,W)),
+        tim2 = Image(data=np.zeros((H,W)), inverr=np.ones((H,W)),
                      psf=NCircularGaussianPSF([psf_sig2], [1.]),
                      photocal=LinearPhotoCal(1.))
 
