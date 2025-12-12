@@ -332,13 +332,17 @@ class LsqrOptimizer(Optimizer):
             return dlogprob, X, alpha, var
         return dlogprob, X, alpha
 
-    def optimize_loop(self, tractor, dchisq=0., steps=50, **kwargs):
+    def optimize_loop(self, tractor, dchisq=0., steps=50, check_step=None, **kwargs):
         R = {}
         #print ("LSQR OPTIMIZE")
         #print (self.optimize)
         t = time.time()
         for step in range(steps):
             dlnp, X, alpha = self.optimize(tractor, **kwargs)
+            if check_step is not None:
+                r = check_step(self, tractor, dlnp, X, alpha)
+                if not r:
+                    break
             # print('Opt step: dlnp', dlnp,
             #      ', '.join([str(src) for src in tractor.getCatalog()]))
             if dlnp <= dchisq:

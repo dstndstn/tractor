@@ -15,7 +15,9 @@ class ConstrainedOptimizer(LsqrOptimizer):
         self.tiny_alpha = 1e-8
 
     def optimize_loop(self, tractor, dchisq=0., steps=50,
-                      dchisq_limited=1e-6, **kwargs):
+                      dchisq_limited=1e-6,
+                      check_step=None,
+                      **kwargs):
         # print()
         # print('Optimize_loop:')
         # for s in tractor.catalog:
@@ -26,8 +28,11 @@ class ConstrainedOptimizer(LsqrOptimizer):
         for step in range(steps):
             #print('Optimize_loop: step', step)
             self.stepLimited = False
-            dlnp,_,_ = self.optimize(tractor, **kwargs)
-
+            dlnp,X,alpha = self.optimize(tractor, **kwargs)
+            if check_step is not None:
+                r = check_step(self, tractor, dlnp, X, alpha)
+                if not r:
+                    break
             #print('Optimize_loop: step', step, 'dlnp', dlnp, 'hit limit:',
             #      self.hit_limit, 'step limit:', self.stepLimited)
             #for s in tractor.catalog:
