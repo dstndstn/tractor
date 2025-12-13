@@ -89,6 +89,8 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         img_pix = [tim.getGpuImage() for tim in tr.images]
         img_ie  = [tim.getGpuInvError() for tim in tr.images]
 
+        #print('img_pix:', img_pix)
+        
         # Assume galaxy
         src = tr.catalog[0]
         assert(isinstance(src, ProfileGalaxy))
@@ -121,11 +123,26 @@ class GPUOptimizer(GPUFriendlyOptimizer):
 
         img_bands = [bands.index(tim.getPhotoCal().band) for tim in tr.images]
 
-        img_params, cx,cy,pW,pH = self._getBatchImageParams(tr, masks, pxy)
+        #img_params, cx,cy,pW,pH = self._getBatchImageParams(tr, masks, pxy)
+        #def _getBatchImageParams(self, tr, masks, pxy):
+        extents = [mm.extent for mm in masks]
 
-        px, py = np.array(pxy).T
-        px = px.astype(np.float32)
-        py = py.astype(np.float32)
+        px, py = np.array(pxy, dtype=np.float32).T
+        psfH, psfW = np.array([psf.shape for psf in psfs]).T
+        x0, x1, y0, y1 = np.asarray(extents).T
+        gpu_halfsize = np.max(([(x1-x0)/2, (y1-y0)/2,
+                                1+px-x0, 1+x1-px, 1+py-y0, 1+y1-py,
+                                psfH//2, psfW//2]), axis=0)
+        # PSF Fourier transforms
+        batch_psf = BatchPixelizedPSF(psfs)
+        P, (cx, cy), (pH, pW), (v, w) = batch_psf.getFourierTransformBatchGPU(px, py, gpu_halfsize)
+        assert(pW % 2 == 0)
+        assert(pH % 2 == 0)
+        assert(P.shape == (Nimages,len(w),len(v)))
+
+        img_params = BatchImageParams(P, v, w, batch_psf.psf_mogs)
+        #return img_params, cx,cy, pH,pW
+
         amix_gpu = getShearedProfileGPU(src, tr.images, px, py)
         amixes_gpu = getDerivativeShearedProfilesGPU(src, tr.images, px, py)
         amixes_gpu = [('current', amix_gpu, 0.)] + amixes_gpu

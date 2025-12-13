@@ -35,6 +35,10 @@ def keystr(i):
 class FakeCupyArray(object):
     def __init__(self, key):
         self.key = key
+    def __str__(self):
+        return 'FakeCupyArray: %s' % self.key
+    def __repr__(self):
+        return 'FakeCupyArray("%s")' % self.key
 
 def asarray(x):
     n = np.asarray(x)
