@@ -70,6 +70,13 @@ class FakeCupyArray(object):
             value = value.get()
         x[key] = value
         return ovalue
+    def __add__(self, other):
+        x = self._get()
+        if isinstance(other, FakeCupyArray):
+            other = other.get()
+        x = x + other
+        return asarray(x)
+    __radd__ = __add__
     def __sub__(self, other):
         x = self._get()
         if isinstance(other, FakeCupyArray):
@@ -94,6 +101,16 @@ class FakeCupyArray(object):
             other = other.get()
         x = x ** other
         return asarray(x)
+    def dot(self, other):
+        x = self._get()
+        if isinstance(other, FakeCupyArray):
+            other = other.get()
+        r = np.dot(x, other)
+        return asarray(r)
+    def swapaxes(self, *args):
+        x = self._get()
+        x = x.swapaxes(*args)
+        return asarray(x)
 
 complex64 = np.complex64
 float32 = np.float32
@@ -110,6 +127,10 @@ def asarray(x):
 
 cuda.asarray = asarray
 
+def array(x):
+    n = np.array(x)
+    return asarray(n)
+
 def hypot(x,y):
     if isinstance(x, FakeCupyArray):
         x = x.get()
@@ -117,6 +138,26 @@ def hypot(x,y):
         y = y.get()
     h = np.hypot(x,y)
     return asarray(h)
+
+def _wrap_two_to_one(f):
+    def wrapped(x, y):
+        if isinstance(x, FakeCupyArray):
+            x = x.get()
+        if isinstance(y, FakeCupyArray):
+            y = y.get()
+        r = f(x, y)
+        return asarray(r)
+    return wrapped
+
+dot = _wrap_two_to_one(np.dot)
+
+def einsum(code, x, y):
+    if isinstance(x, FakeCupyArray):
+        x = x.get()
+    if isinstance(y, FakeCupyArray):
+        y = y.get()
+    r = np.einsum(code, x, y)
+    return asarray(r)
 
 def max(x):
     if isinstance(x, FakeCupyArray):
@@ -126,7 +167,7 @@ def max(x):
 
 fft = Duck()
 
-def _wrap_one(f):
+def _wrap_one_to_one(f):
     def wrapped(x):
         if isinstance(x, FakeCupyArray):
             x = x.get()
@@ -155,7 +196,7 @@ def rfftfreq(x):
 fft.rfft2 = rfft2
 fft.rfftfreq = rfftfreq
 
-fft.fftfreq = _wrap_one(np.fft.fftfreq)
+fft.fftfreq = _wrap_one_to_one(np.fft.fftfreq)
 
 def zeros(shape, dtype):
     x = np.zeros(shape, dtype)

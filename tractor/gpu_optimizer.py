@@ -117,6 +117,9 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         if any(m is None for m in masks):
             raise RuntimeError('One or more modelMasks is None in GPU code')
 
+        print('sky', img_sky)
+        assert(np.all([s == 0 for s in img_sky]))
+        
         assert(all([m is not None for m in masks]))
         assert(src.isParamThawed('pos'))
 
@@ -126,8 +129,9 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         px, py = np.array(pxy, dtype=np.float32).T
 
         # WCS inv(CD) matrix
-        img_cdi = [tim.getWcs().cdInverseAtPosition(src.getPosition(), src=src)
-                   for tim in tr.images]
+        #img_cdi = [tim.getWcs().cdInverseAtPosition(src.getPosition(), src=src)
+        #           for tim in tr.images]
+        img_cdi = [tim.getWcs().cdInverseAtPixel(x,y) for tim,x,y in zip(tr.images, px, py)]
         # Current counts
         img_counts = [tim.getPhotoCal().brightnessToCounts(src.brightness)
                       for tim in tr.images]
@@ -138,6 +142,8 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         #img_params, cx,cy,pW,pH = self._getBatchImageParams(tr, masks, pxy)
         #def _getBatchImageParams(self, tr, masks, pxy):
         extents = [mm.extent for mm in masks]
+        mh = [mm.h for mm in masks]
+        mw = [mm.w for mm in masks]
 
         psfH, psfW = np.array([psf.shape for psf in psfs]).T
         x0, x1, y0, y1 = np.asarray(extents).T
@@ -152,13 +158,56 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         assert(pH % 2 == 0)
         assert(P.shape == (Nimages,len(w),len(v)))
 
-        img_params = BatchImageParams(P, v, w, batch_psf.psf_mogs)
-        #return img_params, cx,cy, pH,pW
+        amixes = [[('current', src._getShearedProfile(tim,x,y), 0.)] +
+                  src.getDerivativeShearedProfiles(tim,x,y)
+                  for tim,x,y in zip(tr.images, px, py)]
 
+        print('amixes', amixes)
+
+        print('cx,cy', cx,cy)
+        print('pH,pW', pH,pW)
+        # ugh, pixel shifts
+        dx = px - cx
+        dy = py - cy
+        mux = dx - x0
+        muy = dy - y0
+        sx = mux.round().astype(np.int32)
+        sy = muy.round().astype(np.int32)
+        # the subpixel portion will be handled with a Lanczos interpolation
+        mux -= sx
+        muy -= sy
+        dxi = cp.asarray(x0+sx)
+        dyi = cp.asarray(y0+sy)
+        assert(np.abs(mux).max() <= 0.5)
+        assert(np.abs(muy).max() <= 0.5)
+        assert(np.all(sy <= 0))
+        assert(np.all(sx <= 0))
+        print('sx,sy', sx,sy)
+        
+        # Embed pix and ie in images the same size as pW,pH.
+        # FIXME -- should be able to cache this; rationalize pixel transfer to GPU.
+        padpix = cp.zeros((Nimages, pH,pW), cp.float32)
+        padie  = cp.zeros((Nimages, pH,pW), cp.float32)
+        for i, (pix,ie) in enumerate(zip(img_pix, img_ie)):
+            padpix[i, -sy[i]:-sy[i]+mh[i], -sx[i]:-sx[i]+mw[i]] = pix[y0[i]:y1[i], x0[i]:x1[i]]
+            padie [i, -sy[i]:-sy[i]+mh[i], -sx[i]:-sx[i]+mw[i]] =  ie[y0[i]:y1[i], x0[i]:x1[i]]
+
+        # nimages x nmixes x ncomponents
+
+        from tractor.batch_galaxy import getShearedProfileGPU, getDerivativeShearedProfilesGPU
         amix_gpu = getShearedProfileGPU(src, tr.images, px, py)
         amixes_gpu = getDerivativeShearedProfilesGPU(src, tr.images, px, py)
         amixes_gpu = [('current', amix_gpu, 0.)] + amixes_gpu
 
+        print('amixes_gpu', amixes_gpu)
+        mog = amixes_gpu[0][1]
+        print('mog shape', mog)
+        print('var', mog.var.get())
+        
+        img_params = BatchImageParams(P, v, w, batch_psf.psf_mogs)
+        #return img_params, cx,cy, pH,pW
+
+        
         img_derivs = self._getBatchGalaxyProfiles(amixes_gpu, masks, px, py, cx, cy, pW, pH,
                                                   img_counts, img_sky, img_pix, img_ie)
         img_params.addBatchGalaxyProfiles(img_derivs)
@@ -251,9 +300,14 @@ def get_vectorized_psfs(psfs, px, py, halfsize):
         pad[i, y0:y0 + sh, x0:x0 + sw] = img
     
     P = cp.fft.rfft2(pad)
-    print('P type', P.dtype)
+    #print('P type', P.dtype)
     v = cp.fft.rfftfreq(W)
     w = cp.fft.fftfreq(H)
+    #print('v,w', v.dtype, w.dtype)
+    # FIXME -- ??
+    v = v.astype(cp.float32)
+    w = w.astype(cp.float32)
+
     ## FIXME -- turn this into a function, rather than a class
     #batch_psf = BatchPixelizedPSF(psfs)
     ###sz = self.getFourierTransformSizeBatchGPU(radius)
