@@ -206,6 +206,7 @@ if __name__ == '__main__':
     from tractor.ellipses import EllipseE, EllipseESoft
     from tractor.basics import PixPos, Flux, ConstantSky
     from tractor.psfex import PixelizedPsfEx
+    from tractor.psfex import NormalizedPixelizedPsfEx
     from tractor.psf import HybridPixelizedPSF, NCircularGaussianPSF
     from tractor import Image, NullWCS, Tractor
     from tractor.utils import _GaussianPriors
@@ -231,12 +232,16 @@ if __name__ == '__main__':
     h,w = 100,100
     gal = ExpGalaxy(PixPos(h/2., w/2+.7), Flux(2000.), EllipseE(10., 0.1, 0.4))
 
-    psf = PixelizedPsfEx(os.path.join(os.path.dirname(os.path.dirname(__file__)),
-                                      'test',
-                                      'psfex-decam-00392360-S31.fits'))
+    #psf = PixelizedPsfEx(os.path.join(os.path.dirname(os.path.dirname(__file__)),
+    psf = NormalizedPixelizedPsfEx(os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                                        'test',
+                                        'psfex-decam-00392360-S31.fits'))
     psf = HybridPixelizedPSF(psf, #cx=w/2., cy=h/2.,
                              gauss=NCircularGaussianPSF([psf.fwhm / 2.35], [1.]))
     print('psf', psf)
+
+    psf = psf.constantPsfAt(w/2, h/2)
+    print('const psf', psf)
 
     sig1 = 1.0
     sig2 = 1.0
@@ -521,7 +526,7 @@ if __name__ == '__main__':
     #cutr.setModelMasks([{gal: ModelMask(25, 25, 50, 50)} for tim in cutr.images])
 
     cutr.setParams(p0)
-    cutr.printThawedParams()
+    #cutr.printThawedParams()
     cutr.optimizer = GPUOptimizer()
     up3 = cutr.optimizer.getLinearUpdateDirection(cutr, **optargs)
 

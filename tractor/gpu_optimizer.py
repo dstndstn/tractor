@@ -7,6 +7,15 @@ from cupy_wrapper import cp
 from tractor.factored_optimizer import FactoredDenseOptimizer
 from tractor import ProfileGalaxy, HybridPSF, ConstantSky
 
+'''
+TO-DO:
+-- check in oneblob.py - are we passing NormalizedPixelizedPsfEx (VARYING) PSF objects
+   in at some point?  They should all get turned into constant PSFs.
+-- check PSF sampling != 1.0
+
+'''
+
+
 class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
     def __init__(self, *args, **kwargs):
@@ -97,6 +106,7 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         psfs = [tim.getPsf() for tim in tr.images]
         # Assume hybrid PSF model
         assert(all([isinstance(psf, HybridPSF) for psf in psfs]))
+        #assert(all([isinstance(psf.pix, NormalizedPixelizedPsf) for psf in psfs]))
         # Assume ConstantSky models, grab constant sky levels
         # NOTE - instead of building this list and passing it around in ImageDerivs, etc,
         # we could perhaps just subtract it off img_pix at the start...
@@ -113,6 +123,8 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         # Pixel positions
         pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
                for tim in tr.images]
+        px, py = np.array(pxy, dtype=np.float32).T
+
         # WCS inv(CD) matrix
         img_cdi = [tim.getWcs().cdInverseAtPosition(src.getPosition(), src=src)
                    for tim in tr.images]
