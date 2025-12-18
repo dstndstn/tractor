@@ -15,7 +15,8 @@ from tractor.patch import Patch
 from tractor.utils import BaseParams, ParamList, MultiParams, MogParams
 from tractor import mixture_profiles as mp
 from tractor import ducks
-import cupy as cp
+
+from cupy_wrapper import cp
 
 if sys.version_info[0] == 2:
     # Py2
@@ -26,7 +27,6 @@ if sys.version_info[0] == 2:
 def lanczos_shift_image_batch_gpu(imgs, dxs, dys):
     """Translated from lanczos_shift_image python version to GPU using cupy
         and helper functions from tractor.miscutils"""
-    import cupy as cp
     from tractor.miscutils import gpu_lanczos_filter,batch_correlate1d_gpu
     do_reshape = False
     if len(imgs.shape) == 4:
@@ -269,7 +269,6 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
             if self.normalized:
                 return self.getFourierTransformExNormalizedBatchGPU(px, py, radius)
             return self.getFourierTransformExBatchGPU(px, py, radius)
-        import cupy as cp
         px = cp.asarray(px)
         py = cp.asarray(py)
         radius = cp.asarray(radius)
@@ -360,7 +359,6 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
         return fft, (cx,cy), shape, (v,w)
 
     def getFourierTransformExBatchGPU(self, px, py, radius):
-        import cupy as cp
         px = cp.asarray(px[self.ex_indices])
         py = cp.asarray(py[self.ex_indices])
         radius = cp.asarray(radius[self.ex_indices])
@@ -423,7 +421,6 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
                                                         modelMask=modelMask,
                                                         radius=radius, **kwargs)
             
-        import cupy as cp
         px = cp.asarray(px)
         py = cp.asarray(py)
         radius = cp.asarray(radius)

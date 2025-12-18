@@ -127,15 +127,15 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         #def _getBatchImageParams(self, tr, masks, pxy):
         extents = [mm.extent for mm in masks]
 
-        px, py = np.array(pxy, dtype=np.float32).T
         psfH, psfW = np.array([psf.shape for psf in psfs]).T
         x0, x1, y0, y1 = np.asarray(extents).T
         gpu_halfsize = np.max(([(x1-x0)/2, (y1-y0)/2,
                                 1+px-x0, 1+x1-px, 1+py-y0, 1+y1-py,
                                 psfH//2, psfW//2]), axis=0)
-        # PSF Fourier transforms
-        batch_psf = BatchPixelizedPSF(psfs)
-        P, (cx, cy), (pH, pW), (v, w) = batch_psf.getFourierTransformBatchGPU(px, py, gpu_halfsize)
+        print('gpu_halfsize:', gpu_halfsize)
+
+        # PSF: Fourier transforms & Mixtures-of-Gaussians
+        P, (cx, cy), (pH, pW), (v, w), psf_mogs = get_vectorized_psfs(psfs, px, py, gpu_halfsize)
         assert(pW % 2 == 0)
         assert(pH % 2 == 0)
         assert(P.shape == (Nimages,len(w),len(v)))
@@ -180,3 +180,35 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         print('gpu_one_galaxy_updates_2')
         raise RuntimeError('not implemented')
 
+def get_vectorized_psfs(psfs, px, py, halfsize):
+    from tractor.batch_mixture_profiles import BatchMixtureOfGaussians
+    from tractor.batch_psf import BatchPixelizedPSF
+
+    psfmogs = []
+    maxK = 0
+    for i,psf in enumerate(psfs):
+        assert(isinstance(psf, HybridPSF))
+        psfmog = psf.getMixtureOfGaussians()
+        psfmogs.append(psfmog)
+        maxK = max(maxK, psfmog.K)
+    N = len(psfs)
+    amps = np.zeros((N, maxK))
+    means = np.zeros((N, maxK, 2))
+    varrs = np.zeros((N, maxK, 2, 2))
+    for i,psfmog in enumerate(psfmogs):
+        amps[i, :psfmog.K] = psfmog.amp
+        means[i, :psfmog.K, :] = psfmog.mean
+        varrs[i, :psfmog.K, :, :] = psfmog.var
+    amps = cp.asarray(amps)
+    means = cp.asarray(means)
+    varrs = cp.asarray(varrs)
+    psf_mogs = BatchMixtureOfGaussians(amps, means, varrs, quick=True)
+
+    for psf in psfs:
+        print('PSF:', psf)
+    
+    ## FIXME -- turn this into a function, rather than a class
+    batch_psf = BatchPixelizedPSF(psfs)
+    P, (cx, cy), (pH, pW), (v, w) = batch_psf.getFourierTransformBatchGPU(px, py, halfsize)
+
+    return P, (cx, cy), (pH, pW), (v, w), psf_mogs
