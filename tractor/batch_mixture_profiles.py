@@ -577,7 +577,7 @@ class BatchMixtureOfGaussians(object):
             self.symmetrize()
 
     def __str__(self):
-        result = "BatchMixtureOfGaussians instance"
+        result = "BatchMixtureOfGaussians instance (ndims %i)" % self.ndims
         if self.ndims == 4:
             result += " with %d derivs %d components in %d dimensions:\n" % (self.Nd, self.K, self.D)
         else:

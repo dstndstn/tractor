@@ -189,10 +189,12 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         padpix = cp.zeros((Nimages, pH,pW), cp.float32)
         padie  = cp.zeros((Nimages, pH,pW), cp.float32)
         for i, (pix,ie) in enumerate(zip(img_pix, img_ie)):
-            padpix[i, -sy[i]:-sy[i]+mh[i], -sx[i]:-sx[i]+mw[i]] = pix[y0[i]:y1[i], x0[i]:x1[i]]
-            padie [i, -sy[i]:-sy[i]+mh[i], -sx[i]:-sx[i]+mw[i]] =  ie[y0[i]:y1[i], x0[i]:x1[i]]
+            p = cp.array(pix[y0[i]:y1[i], x0[i]:x1[i]])
+            padpix[i, -sy[i]:-sy[i]+mh[i], -sx[i]:-sx[i]+mw[i]] = p
+            p = cp.array( ie[y0[i]:y1[i], x0[i]:x1[i]])
+            padie [i, -sy[i]:-sy[i]+mh[i], -sx[i]:-sx[i]+mw[i]] = p
 
-        # nimages x nmixes x ncomponents
+        # nimages x nmixes(nderivs) x ncomponents x 2(xy)
 
         from tractor.batch_galaxy import getShearedProfileGPU, getDerivativeShearedProfilesGPU
         amix_gpu = getShearedProfileGPU(src, tr.images, px, py)
@@ -202,7 +204,7 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         print('amixes_gpu', amixes_gpu)
         mog = amixes_gpu[0][1]
         print('mog shape', mog)
-        print('var', mog.var.get())
+        print('var', mog.var.get().shape)
         
         img_params = BatchImageParams(P, v, w, batch_psf.psf_mogs)
         #return img_params, cx,cy, pH,pW
@@ -297,6 +299,7 @@ def get_vectorized_psfs(psfs, px, py, halfsize):
             img = img[:, :, cut:cut + W]
             cx = pw // 2 - cut
         sh, sw = img.shape
+        img = cp.array(img)
         pad[i, y0:y0 + sh, x0:x0 + sw] = img
     
     P = cp.fft.rfft2(pad)
