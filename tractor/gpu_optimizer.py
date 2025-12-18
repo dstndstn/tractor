@@ -194,7 +194,7 @@ class GPUOptimizer(GPUFriendlyOptimizer):
 
 def get_vectorized_psfs(psfs, px, py, halfsize):
     from tractor.batch_mixture_profiles import BatchMixtureOfGaussians
-    from tractor.batch_psf import BatchPixelizedPSF
+    #from tractor.batch_psf import BatchPixelizedPSF
 
     psfmogs = []
     maxK = 0
@@ -208,19 +208,62 @@ def get_vectorized_psfs(psfs, px, py, halfsize):
     means = np.zeros((N, maxK, 2))
     varrs = np.zeros((N, maxK, 2, 2))
     for i,psfmog in enumerate(psfmogs):
-        amps[i, :psfmog.K] = psfmog.amp
+        amps [i, :psfmog.K] = psfmog.amp
         means[i, :psfmog.K, :] = psfmog.mean
         varrs[i, :psfmog.K, :, :] = psfmog.var
-    amps = cp.asarray(amps)
+    amps  = cp.asarray(amps)
     means = cp.asarray(means)
     varrs = cp.asarray(varrs)
     psf_mogs = BatchMixtureOfGaussians(amps, means, varrs, quick=True)
 
+    imsize = psfs[0].img.shape
     for psf in psfs:
         print('PSF:', psf)
-    
-    ## FIXME -- turn this into a function, rather than a class
-    batch_psf = BatchPixelizedPSF(psfs)
-    P, (cx, cy), (pH, pW), (v, w) = batch_psf.getFourierTransformBatchGPU(px, py, halfsize)
+        print('sampling:', psf.sampling)
+        assert(psf.sampling == 1.)
+        print('pixelized size', psf.img.shape)
+        assert(psf.img.shape == imsize)
 
-    return P, (cx, cy), (pH, pW), (v, w), psf_mogs
+    sz = 2**int(np.ceil(np.log2(halfsize.max() * 2.)))
+    ###pad, cx, cy = self._padInImageBatchGPU(sz, sz)
+    W = H = sz
+    pad = cp.zeros((N, H, W), cp.float32)
+    for i,psf in enumerate(psfs):
+        img = psf.img
+        ph,pw = img.shape
+        if H >= ph:
+            y0 = (H - ph) // 2
+            cy = y0 + ph // 2
+        else:
+            y0 = 0
+            cut = (ph - H) // 2
+            img = img[:, cut:cut + H, :]
+            cy = ph // 2 - cut
+        if W >= pw:
+            x0 = (W - pw) // 2
+            cx = x0 + pw // 2
+        else:
+            x0 = 0
+            cut = (pw - W) // 2
+            img = img[:, :, cut:cut + W]
+            cx = pw // 2 - cut
+        sh, sw = img.shape
+        pad[i, y0:y0 + sh, x0:x0 + sw] = img
+    
+    P = cp.fft.rfft2(pad)
+    print('P type', P.dtype)
+    v = cp.fft.rfftfreq(W)
+    w = cp.fft.fftfreq(H)
+    ## FIXME -- turn this into a function, rather than a class
+    #batch_psf = BatchPixelizedPSF(psfs)
+    ###sz = self.getFourierTransformSizeBatchGPU(radius)
+    ###sz = 2**int(np.ceil(np.log2(radius.max() * 2.)))
+    #pad, cx, cy = self._padInImageBatchGPU(sz, sz)
+    #P = cp.fft.rfft2(pad)
+    #P = P.astype(cp.complex64)
+    #nimages, pH, pW = pad.shape
+    #v = cp.fft.rfftfreq(pW)
+    #w = cp.fft.fftfreq(pH)
+    #P, (cx, cy), (pH, pW), (v, w) = batch_psf.getFourierTransformBatchGPU(px, py, halfsize)
+
+    return P, (cx, cy), (H, W), (v, w), psf_mogs

@@ -211,7 +211,12 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
             cx = pw // 2 - cut
         N, sh, sw = subimg.shape
 
+        # print('Pad: N', N, 'W,H', W,H, 'x0,y0', x0,y0, 'sw,sh', sw,sh)
+        # print('subimg shape:', subimg.shape)
+        # print('y0, y0+sh:', y0, y0+sh)
+        # print('x0, x0+sw:', x0, x0+sw)
         pad = cp.zeros((N, H, W), img.dtype)
+        # print('pad shape', pad.shape)
         pad[:, y0:y0 + sh, x0:x0 + sw] = subimg
         return pad, cx, cy
 
