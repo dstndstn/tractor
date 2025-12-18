@@ -1006,3 +1006,30 @@ try:
     getCircularMog = functools.lru_cache(maxsize=16)(getCircularMog)
 except:
     pass
+
+# mixin class
+class NormalizedPsf(object):
+    def getFourierTransform(self, px, py, radius):
+        fft, (cx,cy), shape, (v,w) = super().getFourierTransform(px, py, radius)
+        n = np.abs(fft[0][0])
+        if n != 0:
+            fft /= n
+        return fft, (cx,cy), shape, (v,w)
+
+    def getImage(self, px, py):
+        img = super().getImage(px, py)
+        n = np.sum(img)
+        if n != 0:
+            img /= n
+        return img
+
+    def _sampleImage(self, img, dx, dy, **kwargs):
+        xl,yl,img = super()._sampleImage(img, dx, dy, **kwargs)
+        n = img.sum()
+        if n != 0:
+            img /= n
+        return xl,yl,img
+
+class NormalizedPixelizedPsf(NormalizedPsf, PixelizedPSF):
+    def __str__(self):
+        return 'NormalizedPixelizedPSF'

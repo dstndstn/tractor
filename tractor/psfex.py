@@ -1,7 +1,7 @@
 import numpy as np
 
 from tractor.utils import MultiParams, getClassName
-from tractor.psf import GaussianMixturePSF, PixelizedPSF
+from tractor.psf import GaussianMixturePSF, PixelizedPSF, NormalizedPsf, NormalizedPixelizedPsf
 from tractor import mixture_profiles as mp
 from tractor import ducks
 from tractor.utils import savetxt_cpu_append
@@ -737,6 +737,16 @@ class CachingPsfEx(PsfEx):
         self.cache.put(key, mog)
         return mog
 
+class NormalizedPixelizedPsfEx(NormalizedPsf, PixelizedPsfEx):
+    def __str__(self):
+        return 'NormalizedPixelizedPsfEx'
+
+    def constantPsfAt(self, x, y):
+        pix = self.psfex.at(x, y)
+        n = pix.sum()
+        if n != 0:
+            pix /= n
+        return NormalizedPixelizedPsf(pix, sampling=self.sampling)
 
 if __name__ == '__main__':
     import sys
