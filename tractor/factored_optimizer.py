@@ -513,7 +513,7 @@ if __name__ == '__main__':
 
     from tractor.cupy_tractor import CupyImage
     from tractor.gpu_optimizer import GPUOptimizer
-    
+
     cutim1 = CupyImage(data=tim1.data, inverr=tim1.inverr, psf=tim1.psf, sky=tim1.sky,
                        wcs=tim1.wcs, photocal=tim1.photocal)
     cutim2 = CupyImage(data=tim2.data, inverr=tim2.inverr, psf=tim2.psf, sky=tim2.sky,

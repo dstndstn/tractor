@@ -36,7 +36,7 @@ class FakeCupyArray(object):
     def __init__(self, key):
         self.key = key
     def __str__(self):
-        return 'FakeCupyArray: %s' % self.key
+        return 'FakeCupyArray(key "%s", shape %s)' % (self.key, self.shape)
     def __repr__(self):
         return 'FakeCupyArray("%s")' % self.key
     def _get(self):
@@ -89,6 +89,7 @@ class FakeCupyArray(object):
             other = other.get()
         x = x * other
         return asarray(x)
+    __rmul__ = __mul__
     def __truediv__(self, other):
         x = self._get()
         if isinstance(other, FakeCupyArray):
@@ -101,6 +102,18 @@ class FakeCupyArray(object):
             other = other.get()
         x = x ** other
         return asarray(x)
+    def __lt__(self, other):
+        x = self._get()
+        if isinstance(other, FakeCupyArray):
+            other = other.get()
+        r = x < other
+        return asarray(r)
+    def __gt__(self, other):
+        x = self._get()
+        if isinstance(other, FakeCupyArray):
+            other = other.get()
+        r = x > other
+        return asarray(r)
     def dot(self, other):
         x = self._get()
         if isinstance(other, FakeCupyArray):
@@ -197,10 +210,20 @@ fft.rfft2 = rfft2
 fft.rfftfreq = rfftfreq
 
 fft.fftfreq = _wrap_one_to_one(np.fft.fftfreq)
+fft.irfft2 = _wrap_one_to_one(np.fft.irfft2)
+
+exp = _wrap_one_to_one(np.exp)
 
 def zeros(shape, dtype):
     x = np.zeros(shape, dtype)
     return asarray(x)
+
+def ones(shape, dtype):
+    x = np.ones(shape, dtype)
+    return asarray(x)
+
+newaxis = np.newaxis
+pi = np.pi
 
 if __name__ == '__main__':
     print(keystr(0))

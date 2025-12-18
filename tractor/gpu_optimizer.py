@@ -78,6 +78,7 @@ class GPUOptimizer(GPUFriendlyOptimizer):
             import traceback
             print('Exception in GPU Vectorized code:')
             traceback.print_exc()
+            raise(ex)
 
         # Fallback to CPU version
         print('Falling back to CPU code...')
@@ -164,8 +165,31 @@ class GPUOptimizer(GPUFriendlyOptimizer):
 
         print('amixes', amixes)
 
+        # nimages x nmixes(nderivs) x ncomponents x 3 (a,b,d variance terms)
+
+        Nderivs = max([len(d) for d in amixes])
+        print('Nderivs:', Nderivs)
+        Kmax = 0
+        for amix_img in amixes:
+            for _,m,_ in amix_img:
+                #print('var shape', m.var.shape)
+                K,_,_ = m.var.shape
+                Kmax = max(K, Kmax)
+        amix_vars = np.zeros((Nimages, Nderivs, Kmax, 3), np.float32)
+        amix_amps = np.zeros((Nimages, Nderivs, Kmax), np.float32)
+        for i,amix_img in enumerate(amixes):
+            for j,(_,m,_) in enumerate(amix_img):
+                K,_,_ = m.var.shape
+                # called "a,b,d" elsewhere in the code
+                amix_vars[i, j, :K, 0] = m.var[:, 0, 0]
+                amix_vars[i, j, :K, 1] = m.var[:, 0, 1]
+                amix_vars[i, j, :K, 2] = m.var[:, 1, 1]
+                amix_amps[i, j, :K] = m.amp
+        #print('amix_vars:', amix_vars)
+
         print('cx,cy', cx,cy)
         print('pH,pW', pH,pW)
+        print('px,py', px,py)
         # ugh, pixel shifts
         dx = px - cx
         dy = py - cy
@@ -176,8 +200,8 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         # the subpixel portion will be handled with a Lanczos interpolation
         mux -= sx
         muy -= sy
-        dxi = cp.asarray(x0+sx)
-        dyi = cp.asarray(y0+sy)
+        dxi = np.asarray(x0+sx)
+        dyi = np.asarray(y0+sy)
         assert(np.abs(mux).max() <= 0.5)
         assert(np.abs(muy).max() <= 0.5)
         assert(np.all(sy <= 0))
@@ -189,12 +213,125 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         padpix = cp.zeros((Nimages, pH,pW), cp.float32)
         padie  = cp.zeros((Nimages, pH,pW), cp.float32)
         for i, (pix,ie) in enumerate(zip(img_pix, img_ie)):
-            p = cp.array(pix[y0[i]:y1[i], x0[i]:x1[i]])
+            #print('pix:')
+            #p = cp.array(pix[y0[i]:y1[i], x0[i]:x1[i]])
+            p = pix[y0[i]:y1[i], x0[i]:x1[i]]
+            #print('p:', p)
             padpix[i, -sy[i]:-sy[i]+mh[i], -sx[i]:-sx[i]+mw[i]] = p
-            p = cp.array( ie[y0[i]:y1[i], x0[i]:x1[i]])
+            #p = cp.array( ie[y0[i]:y1[i], x0[i]:x1[i]])
+            p = ie[y0[i]:y1[i], x0[i]:x1[i]]
             padie [i, -sy[i]:-sy[i]+mh[i], -sx[i]:-sx[i]+mw[i]] = p
 
-        # nimages x nmixes(nderivs) x ncomponents x 2(xy)
+        nsigma1 = 3.
+        nsigma2 = 4.
+
+        # Nimages x Nderivs x Kmax
+        vv = amix_vars[:,:,:,0] + amix_vars[:,:,:,2]
+        IM = ((pW/2)**2 < (nsigma2**2 * vv))
+        IF = ((pW/2)**2 > (nsigma1**2 * vv))
+
+        print('IM', IM.shape)
+        print(IM)
+
+        print('IF', IF.shape)
+        print(IF)
+
+        ramp = np.any((IM*IF))
+        print('Ramp?', ramp)
+
+        mogweights = np.ones(vv.shape, dtype=cp.float32)
+        fftweights = np.ones(vv.shape, dtype=cp.float32)
+        if ramp:
+            # ramp
+            ns = (pW/2) / np.maximum(1e-6, np.sqrt(vv))
+            mogweights = np.minimum(1., (nsigma2 - ns) / (nsigma2 - nsigma1))*IM
+            fftweights = np.minimum(1., (ns - nsigma1) / (nsigma2 - nsigma1))*IF
+            assert(np.all(mogweights[IM] > 0.))
+            assert(np.all(mogweights[IM] <= 1.))
+            assert(np.all(fftweights[IF] > 0.))
+            assert(np.all(fftweights[IF] <= 1.))
+
+        # Between the images and the derivatives, "IM" and "IF" should be largely the same;
+        # they mostly just depend on the K.  Set "nmog" and "nfft" to be scalars (0 to K).
+        Nmog = IM.sum(axis=2).max(axis=(0,1))
+        Nfft = IF.sum(axis=2).max(axis=(0,1))
+        print('Nmog', Nmog)
+        print('Nfft', Nfft)
+
+        # mog_mix_vars = np.zeros((Nimages, Nderivs, Nmog, 3), np.float32)
+        # mog_mix_amps = np.zeros((Nimages, Nderivs, Nmog), np.float32)
+        # fft_mix_vars = np.zeros((Nimages, Nderivs, Nfft, 3), np.float32)
+        # fft_mix_amps = np.zeros((Nimages, Nderivs, Nfft), np.float32)
+
+        # -> BatchGalaxyProfiles in batch_mixture_profiles.py
+        
+        print('mogweights:', mogweights.shape)
+
+        mog_mix_vars = amix_vars[:, :, -Nmog:, :]
+        mog_mix_amps = (amix_amps * mogweights)[:, :, -Nmog:]
+
+        fft_mix_vars = amix_vars[:, :, :Nfft:, :]
+        fft_mix_amps = (amix_amps * fftweights)[:, :, :Nfft]
+
+        # -> computeUpdateDirectionsVectorized in OLD_gpu_optimizer.py
+
+        # -> computeGalaxyModelsVectorized in OLD_gpu_optimizer.py
+
+        print('fft_mix_amps:', fft_mix_amps.shape)
+        # Nimages x Nderivs x Nfft(K)
+
+        ## FIXME -- chunk large arrays / memory efficient...
+
+        g_fft_mix_vars = cp.array(fft_mix_vars)
+        g_fft_mix_amps = cp.array(fft_mix_amps)
+        a = g_fft_mix_vars[:, :, :, 0]
+        b = g_fft_mix_vars[:, :, :, 1]
+        d = g_fft_mix_vars[:, :, :, 2]
+        gv = cp.array(v)
+        gw = cp.array(w)
+        Nv = len(v)
+        Nw = len(w)
+        print('v,w', Nv, Nw)
+        
+        Fsum = cp.zeros((Nimages, Nderivs, Nw, Nv), cp.float32)
+        nu = cp.newaxis
+        for k in range(Nfft):
+            Fsum += (g_fft_mix_amps[:, :, k, nu, nu] *
+                     cp.exp(-2. * cp.pi**2 *
+                            (a[:, :, k, nu, nu] * v[nu, nu, nu, :]**2 +
+                             d[:, :, k, nu, nu] * w[nu, nu, :, nu]**2 +
+                             b[:, :, k, nu, nu] * v[nu, nu, nu, :] * w[nu, nu, :, nu])))
+
+        print('P', P.shape, P.dtype)
+        print('Fsum', Fsum.shape, Fsum.dtype)
+
+        G = cp.fft.irfft2(Fsum * P[:, nu, :, :])
+        print('G', G.shape, G.dtype)
+        print('mu', mux, muy)
+
+        # import pylab as plt
+        # cG = G.get()
+        # plt.clf()
+        # k = 1
+        # for i in range(Nimages):
+        #     for j in range(Nderivs):
+        #         plt.subplot(Nimages, Nderivs, k)
+        #         k += 1
+        #         if j == 0:
+        #             plt.imshow(cG[i, j, :, :], interpolation='nearest', origin='lower')
+        #         else:
+        #             plt.imshow(cG[i, j, :, :] - cG[i, 0, :, :], interpolation='nearest', origin='lower')
+        # plt.savefig('gf.png')
+
+        
+        Fsum = img_params.ffts.getFourierTransform(v, w, zero_mean=True)
+        P = img_params.P[:,cp.newaxis,:,:]
+        G = cp.fft.irfft2(Fsum*P).astype(cp.float32)
+        G = lanczos_shift_image_batch_gpu(G, img_params.mux, img_params.muy)
+
+        # psf_mog.var + gal_mog.var
+        # psf_mag.amp * gal_mog.amp
+        # means (use lanczos instead)
 
         from tractor.batch_galaxy import getShearedProfileGPU, getDerivativeShearedProfilesGPU
         amix_gpu = getShearedProfileGPU(src, tr.images, px, py)
