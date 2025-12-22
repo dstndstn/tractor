@@ -2309,8 +2309,21 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         px, py = np.array(pxy).T
         px = px.astype(np.float32)
         py = py.astype(np.float32)
+        imgH, imgW = np.array([tim.shape for tim in tr.images]).T
         psfH, psfW = np.array([psf.shape for psf in psfs]).T
         x0, x1, y0, y1 = np.asarray(extents).T
+        if np.any(px < 0):
+            print (f"Warning: {px=} is outside of image")
+            px[px < 0] = 0
+        if np.any(py < 0):
+            print (f"Warning: {py=} is outside of image")
+            py[py < 0] = 0
+        if np.any(px > imgW):
+            print (f"Warning: {px=} is outside of image")
+            px[px > imgW] = imgW[px > imgW]
+        if np.any(py > imgH):
+            print (f"Warning: {py=} is outside of image")
+            py[py > imgH] = imgH[py > imgH]
         gpu_halfsize = np.max(([(x1-x0)/2, (y1-y0)/2,
                             1+px-x0, 1+x1-px, 1+py-y0, 1+y1-py,
                             psfH//2, psfW//2]), axis=0)

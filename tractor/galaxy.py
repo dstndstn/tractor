@@ -447,8 +447,8 @@ class ProfileGalaxy(object):
         #print(type(psf))
         #print (psf.getFourierTransform)
         #print('Tim shape:', img.shape)
-        if halfsize > 32768:
-            print (f"WARNING: Bad positionToPixel results {px=} {py=} {halfsize=}")
+        if halfsize > 2*max(img.shape):
+            print (f"WARNING: Bad positionToPixel results {px=} {py=} {halfsize=} {img.shape}")
             return None
         P, (cx, cy), (pH, pW), (v, w) = psf.getFourierTransform(px, py, halfsize)
 
