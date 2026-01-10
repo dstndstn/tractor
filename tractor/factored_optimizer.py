@@ -1243,17 +1243,34 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             #distsq = (iv0[:,:,:,n,n] * (xx[n,n,n,n,:] - means[:,n,n,n,0][:,:,:,n,:])**2 +
             #          iv1[:,:,:,n,n] * (xx[n,n,n,n,:] - means[:,n,n,n,0][:,:,:,n,:]) * (yy[n,n,n,:,n] - means[:,n,n,n,1][:,:,:,:,n]) +
             #          iv2[:,:,:,n,n] * (yy[n,n,n,:,n] - means[:,n,n,n,1][:,:,:,:,n])**2)
+
+            iv0 = iv0.astype(cp.float32)
+            iv1 = iv1.astype(cp.float32)
+            iv2 = iv2.astype(cp.float32)
+            xx = xx.astype(cp.float32)
+            yy = yy.astype(cp.float32)
+            means = means.astype(cp.float32)
+
             distsq = (iv0[:,:,:,n,n] * (xx[n,n,n,n,:] - means[:,:,:,n,0][:,:,:,n,:])**2 +
                       iv1[:,:,:,n,n] * (xx[n,n,n,n,:] - means[:,:,:,n,0][:,:,:,n,:]) * (yy[n,n,n,:,n] - means[:,:,:,n,1][:,:,:,:,n]) +
                       iv2[:,:,:,n,n] * (yy[n,n,n,:,n] - means[:,:,:,n,1][:,:,:,:,n])**2)
+
+            distsq *= -0.5
             # t1 = (iv0[:,:,:,n,n] * (xx[n,n,n,n,:] - means[:,n,n,n,0][:,:,:,n,:])**2)
             # print('t1', t1.shape)
             # t3 = (iv2[:,:,:,n,n] * (yy[n,n,n,:,n] - means[:,n,n,n,1][:,:,:,:,n])**2)
             # print('t3', t3.shape)
             # t2 = (iv1[:,:,:,n,n] * (xx[n,n,n,n,:] - means[:,n,n,n,0][:,:,:,n,:]) * (yy[n,n,n,:,n] - means[:,n,n,n,1][:,:,:,:,n]))
             # print('t2', t2.shape)
+
+            distsq = cp.exp(distsq)
+            scale = scale.astype(cp.float32)
+            distsq *= scale[:,:,:,cp.newaxis,cp.newaxis]
+            mog_g = cp.sum(distsq, axis=2)
             # Sum over the nmog
-            mog_g = cp.sum(scale[:,:,:,cp.newaxis,cp.newaxis] * cp.exp(-0.5*distsq), axis=2).astype(cp.float32)
+            #mog_g = cp.sum(scale[:,:,:,cp.newaxis,cp.newaxis] * cp.exp(distsq), axis=2).astype(cp.float32)
+
+            
             del means, distsq, varcopy
             #print ("MOGG", mog_g.shape, np.where(mog_g == mog_g.max()))
             #cp.savetxt('gmogpatch.txt',mog_g.ravel())
