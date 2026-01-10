@@ -721,7 +721,16 @@ class BatchMixtureOfGaussians(object):
             term2 = d_chunk[:,:,:,cp.newaxis,cp.newaxis] * w[cp.newaxis,cp.newaxis,cp.newaxis,:,cp.newaxis]**2
             term3 = 2 * b_chunk[:,:,:,cp.newaxis,cp.newaxis] * v[cp.newaxis,cp.newaxis,cp.newaxis,cp.newaxis,:] * w[cp.newaxis,cp.newaxis,cp.newaxis,:,cp.newaxis]
 
-            F_real_part = cp.exp(-2. * cp.pi**2 * (term1 + term2 + term3))
+            # Compute this, but minimizing memory use:
+            #F_real_part = cp.exp(-2. * cp.pi**2 * (term1 + term2 + term3))
+
+            # sizes: term1,2,3 float64 float64 float64 (43, 4, 1, 1, 1025) (43, 4, 1, 2048, 1) (43, 4, 1, 2048, 1025)
+            term3 += term1
+            term3 += term2
+            del term1, term2
+            term3 *= -2. * cp.pi**2
+            F_real_part = cp.exp(term3)
+            del term3
 
             # Calculate the second part of F (complex exponential conditional on z)
             # z_chunk will have shape (Ni, Nd, current_chunk_size_k)
@@ -744,11 +753,15 @@ class BatchMixtureOfGaussians(object):
             # Element-wise multiplication with amp_chunk and then sum along the K dimension (axis=2 of F_chunk)
             # (Ni, Nd, nw_len, nv_len) += (Ni, Nd, current_chunk_size_k, 1, 1) * (Ni, Nd, current_chunk_size_k, nw_len, nv_len)
             # then sum over the current_chunk_size_k axis (axis=2 of F_chunk).
-            Fsum += (amp_chunk[:,:,:,cp.newaxis,cp.newaxis] * F_chunk).sum(axis=2)
+            # Compute this, but with less memory
+            #Fsum += (amp_chunk[:,:,:,cp.newaxis,cp.newaxis] * F_chunk).sum(axis=2)
+            F_chunk *= amp_chunk[:,:,:,cp.newaxis,cp.newaxis]
+            F_chunk = F_chunk.sum(axis=2)
+            Fsum += F_chunk
 
             # Explicitly free memory for intermediate arrays within the loop
             del a_chunk, d_chunk, b_chunk, mu_chunk, amp_chunk
-            del term1, term2, term3, F_real_part
+            del F_real_part
             del z_chunk
             try: # These might not exist if z_chunk.any() was False
                 del mu_term_v, mu_term_w, mu_dot_vw_sum

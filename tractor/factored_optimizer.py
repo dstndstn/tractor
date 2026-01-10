@@ -1114,13 +1114,12 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #cp.savetxt('gfsum.txt', Fsum.ravel())
         #cp.savetxt('gp.txt', P.ravel())
         G = cp.fft.irfft2(Fsum*P).astype(cp.float32)
+        del Fsum, P
         #Do Lanczos shift
         G = lanczos_shift_image_batch_gpu(G, img_params.mux, img_params.muy)
         #cp.savetxt('gg.txt', G.ravel())
-        del Fsum, P
         #G should be (nimages, maxNd, nw, nv) and mux and muy should be 1d vectors
         assert (G.shape == (img_params.Nimages, img_params.maxNd, img_params.mh, img_params.mw))
-
 
         if img_params.mogs is not None:
             psfmog = img_params.psf_mogs
