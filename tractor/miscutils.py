@@ -54,13 +54,19 @@ def batch_correlate1d_cpu(a, b, axis=1, mode='constant'):
             padded_b = np.pad(b, [(0,0), (npad//2+1, npad//2)])
     else:
         padded_b = b
-    f_a = np.fft.fft(a, r, axis=axis)
-    f_b = np.fft.fft(padded_b, r, axis=1)
+
+    # REAL
+    f_a = np.fft.rfft(a, r, axis=axis)
+    f_b = np.fft.rfft(padded_b, r, axis=1)
+    del padded_b
     if axis == 1:
-        f_p = np.einsum("ijk,ij->ijk", f_a, np.conj(f_b))
+        f_p = np.einsum("ijk,ij->ijk", f_a, f_b)
     else:
-        f_p = np.einsum("ijk,ik->ijk", f_a, np.conj(f_b))
-    c = np.real(np.fft.fftshift(np.fft.ifft(f_p, axis=axis), axes=(axis)))
+        f_p = np.einsum("ijk,ik->ijk", f_a, f_b)
+    del f_a, f_b
+    c = np.fft.fftshift(np.fft.irfft(f_p, axis=axis), axes=(axis))
+    del f_p
+
     if mode == 'full':
         return c
     if axis == 1:
@@ -90,16 +96,19 @@ def batch_correlate1d_gpu(a, b, axis=1, mode='constant'):
             padded_b = cp.pad(b, [(0,0), (npad//2+1, npad//2)])
     else:
         padded_b = b
-    f_a = cp.fft.fft(a, r, axis=axis)
-    f_b = cp.fft.fft(padded_b, r, axis=1)
+
+    # REAL
+    f_a = cp.fft.rfft(a, r, axis=axis)
+    f_b = cp.fft.rfft(padded_b, r, axis=1)
     del padded_b
     if axis == 1:
-        f_p = cp.einsum("ijk,ij->ijk", f_a, cp.conj(f_b))
+        f_p = cp.einsum("ijk,ij->ijk", f_a, f_b)
     else:
-        f_p = cp.einsum("ijk,ik->ijk", f_a, cp.conj(f_b))
+        f_p = cp.einsum("ijk,ik->ijk", f_a, f_b)
     del f_a, f_b
-    c = cp.real(cp.fft.fftshift(cp.fft.ifft(f_p, axis=axis), axes=(axis)))
+    c = cp.fft.fftshift(cp.fft.irfft(f_p, axis=axis), axes=(axis))
     del f_p
+
     if c.size > 5.e+8/8:
         #Make sure memory is freed
         #gc.collect()
