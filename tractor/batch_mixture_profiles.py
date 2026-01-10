@@ -362,7 +362,7 @@ class BatchImageParams(object):
         self.ie = cp.zeros_like(self.pix)
         self.counts = cp.zeros(self.Nimages, dtype=cp.float32)
         self.cdi = np.zeros((self.Nimages, 2,2), dtype=np.float32)
-        self.roi = np.zeros((self.Nimages, 4), dtype=np.int)
+        self.roi = np.zeros((self.Nimages, 4), dtype=np.int32)
         self.sky = cp.zeros(self.Nimages, dtype=cp.float32)
         self.steps = np.zeros((self.Nimages, self.maxNd), dtype=np.float32)
 
@@ -371,7 +371,7 @@ class BatchImageParams(object):
             self.ie[i, :,:] = cp.pad(imderiv.mmie, ((0, self.mh - imderiv.mmie.shape[0]), (0, self.mw - imderiv.mmie.shape[1])), mode='constant',constant_values=(cp.float32(0.0),))
             self.counts[i] = imderiv.counts
             self.cdi[i] = imderiv.cdi
-            self.roi[i] = np.asarray(imderiv.roi, dtype = np.int)
+            self.roi[i] = np.asarray(imderiv.roi, dtype = np.int32)
             self.sky[i] = imderiv.sky
             self.steps[i] = imderiv.steps
         self.cdi = cp.asarray(self.cdi)
