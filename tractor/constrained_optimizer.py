@@ -67,7 +67,7 @@ class ConstrainedOptimizer(LsqrOptimizer):
             tractor.setParams(p)
 
             if check_step is not None:
-                r = check_step(optimizer=self, tractor=tractor, alpha=alpha)
+                r = check_step(optimizer=self, tractor=tractor, X=X, alpha=alpha)
                 if not r:
                     break
 

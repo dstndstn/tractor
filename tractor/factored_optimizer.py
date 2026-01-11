@@ -2046,7 +2046,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         use_roi = False
         return G
 
-    def tryUpdates(self, tractor, X, alphas=None):
+    def tryUpdates(self, tractor, X, alphas=None, check_step=None):
         """
         Attempts to find the optimal step size (alpha) along the update direction X
         to maximize the log probability. Leverages GPU for step calculation and
@@ -2087,7 +2087,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #used_bytes = mempool.used_bytes()
         #tot_bytes = mempool.total_bytes()
         #print (f'After free {used_bytes=} {tot_bytes=}')
-        return super().tryUpdates(tractor, X, alphas=alphas)
+        return super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
         print ("GPU FACTORED TRY UPDATES")
 
         # Dustin's FIXME improvement ideas
