@@ -279,12 +279,24 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             kmax = 9
             #Double size of 16 bit (complex 128) array x nimage x
             #n derivs x kmax x imsize.  5D array in batch_mixture_profiles.py
-            est_mem = nimages*imsize*nd*kmax*16
-
+            est_mem = nimages*imsize*nd*kmax*16 * 3.2
+            # 3.2 factor: NGC 3585 example
+            
             if free_mem < est_mem:
-                print (f"Warning: Estimated memory {est_mem} is greater than free memory {free_mem}; Running CPU mode instead!")
-                R_gpuv = super().getSingleImageUpdateDirections(tr, **kwargs)
-                return R_gpuv
+                try:
+                    print("Warning: Estimated memory %.1f GB is greater than free memory %.1f GB; Running less-memory GPU mode instead!" % (est_mem / 1e9, free_mem / 1e9))
+                    R_gpu = self.gpuSingleImageUpdateDirectionsVectorized_less_mem(tr, **kwargs)
+                    return R_gpu
+                except Exception as e:
+                    print('Fallback to less-memory GPU version failed:', e)
+                    import traceback
+                    traceback.print_exc()
+                    mempool = cp.get_default_memory_pool()
+                    mempool.free_all_blocks()
+                    
+                print('Running CPU version instead')
+                R_cpu = super().getSingleImageUpdateDirections(tr, **kwargs)
+                return R_cpu
             #else:
                 #print (f"Estimated memory {est_mem} is less than free memory {free_mem}")
 
@@ -793,6 +805,43 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #sXic = super().getSingleImageUpdateDirections(tr, **kwargs)
 
         return Xic
+
+
+    def gpuSingleImageUpdateDirectionsVectorized_less_mem(self, tr, **kwargs):
+        if not (tr.isParamFrozen('images') and
+                (len(tr.catalog) == 1) and
+                isinstance(tr.catalog[0], ProfileGalaxy)):
+            p = self.ps
+            self.ps = None
+            R = super().getSingleImageUpdateDirections(tr, **kwargs)
+            self.ps = p
+            return R
+        if len(tr.images) == 0:
+            print (f"WARNING: len images == 0, running CPU version")
+            xout = super().getSingleImageUpdateDirections(tr, **kwargs)
+            return xout
+
+        tims = tr.images
+        modelmasks = tr.modelMasks
+        try:
+            xx = []
+            for i,(tim,mm) in enumerate(zip(tims, modelmasks)):
+                tr.images = [tim]
+                tr.modelMasks = [mm]
+
+                src = tr.catalog[0]
+                sx,sy = tim.getWcs().positionToPixel(src.getPosition(), src)
+                h,w = tim.shape
+                try:
+                    x = self.gpuSingleImageUpdateDirectionsVectorized(tr, **kwargs)
+                except Exception as e:
+                    x = super().getSingleImageUpdateDirections(tr, **kwargs)
+
+                xx.extend(x)
+        finally:
+            tr.images = tims
+            tr.modelMasks = modelmasks
+        return xx
 
     def gpuSingleImageUpdateDirectionsVectorized(self, tr, **kwargs):
         if not (tr.isParamFrozen('images') and

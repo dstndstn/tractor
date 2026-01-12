@@ -707,7 +707,7 @@ class BatchMixtureOfGaussians(object):
             if current_chunk_size_k == 0:
                 continue
 
-            print(f"Processing chunk {i+1}/{num_k_chunks} (K indices: {start_idx}-{end_idx-1})")
+            #print(f"Processing chunk {i+1}/{num_k_chunks} (K indices: {start_idx}-{end_idx-1})")
             # Slice inputs for the current chunk along the K dimension (axis=2)
             a_chunk = a[:, :, start_idx:end_idx] # (Ni, Nd, current_chunk_size_k)
             d_chunk = d[:, :, start_idx:end_idx] # (Ni, Nd, current_chunk_size_k)
