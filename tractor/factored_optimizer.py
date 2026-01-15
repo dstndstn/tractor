@@ -280,9 +280,12 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             #Double size of 16 bit (complex 128) array x nimage x
             #n derivs x kmax x imsize.  5D array in batch_mixture_profiles.py
             est_mem = nimages*imsize*nd*kmax*16
+            import datetime
+            print (f"Running VECTORIZED GPU code...", datetime.datetime.now(), "src = ", tr.catalog[0])
 
             if free_mem < est_mem:
                 print (f"Warning: Estimated memory {est_mem} is greater than free memory {free_mem}; Running CPU mode instead!")
+                print (f"\t{nimages=} {imsize=} {nd=}")
                 R_gpuv = super().getSingleImageUpdateDirections(tr, **kwargs)
                 return R_gpuv
             #else:
