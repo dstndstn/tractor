@@ -1,7 +1,6 @@
 from tractor.constrained_optimizer import ConstrainedOptimizer
 import numpy as np
 from numpy.linalg import lstsq, LinAlgError
-from tractor.utils import savetxt_cpu_append
 
 class SmarterDenseOptimizer(ConstrainedOptimizer):
 
@@ -93,17 +92,20 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             cols_live[iparam] = True
             for deriv, img in derivs:
                 h,w = img.shape
-                # FIXME - use_gpu arg!
-                use_gpu = False
-                if not deriv.clipTo(w, h, use_gpu=use_gpu):
+                if not deriv.clipTo(w, h):
                     print('No overlap between derivative and image.')
                     print('deriv extents:', deriv.extent, 'image size %i x %i' % (w,h))
                     continue
                 dx0,dx1,dy0,dy1 = deriv.extent
-                assert(type(dx0) is int)
-                assert(type(dx1) is int)
-                assert(type(dy0) is int)
-                assert(type(dy1) is int)
+                # assert(type(dx0) is int)
+                # assert(type(dx1) is int)
+                # assert(type(dy0) is int)
+                # assert(type(dy1) is int)
+                # Can be np.int16, eg
+                dx0 = int(dx0)
+                dx1 = int(dx1)
+                dy0 = int(dy0)
+                dy1 = int(dy1)
                 if img in img_bounds:
                     x0,x1,y0,y1 = img_bounds[img]
                     img_bounds[img] = min(dx0, x0), max(dx1, x1), min(dy0, y0), max(dy1, y1)

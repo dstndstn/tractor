@@ -212,6 +212,17 @@ class Patch(object):
         return (self.x0 - margin, self.x0 + w + margin,
                 self.y0 - margin, self.y0 + h + margin)
 
+    @property
+    def extent(self):
+        (h, w) = self.shape
+        return (self.x0, self.x0 + w, self.y0, self.y0 + h)
+
+    @property
+    def shape(self):
+        if self.patch is None:
+            return 0,0
+        return self.patch.shape
+
     def getOrigin(self):
         return (self.x0, self.y0)
 
