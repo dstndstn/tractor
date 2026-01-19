@@ -36,7 +36,7 @@ class FakeCupyArray(object):
     def __init__(self, key):
         self.key = key
     def __str__(self):
-        return 'FakeCupyArray(key "%s", shape %s)' % (self.key, self.shape)
+        return 'FakeCupyArray(key "%s", shape %s, dtype %s)' % (self.key, self.shape, self.dtype)
     def __repr__(self):
         return 'FakeCupyArray("%s")' % self.key
     def _get(self):
@@ -220,6 +220,15 @@ def zeros(shape, dtype):
 
 def ones(shape, dtype):
     x = np.ones(shape, dtype)
+    return asarray(x)
+
+def empty_like(other):
+    x = np.empty_like(other)
+    return asarray(x)
+
+def sum(a, **kwargs):
+    a = a.get()
+    x = np.sum(a, **kwargs)
     return asarray(x)
 
 newaxis = np.newaxis

@@ -307,22 +307,23 @@ class GPUOptimizer(GPUFriendlyOptimizer):
 
         G = cp.fft.irfft2(Fsum * P[:, nu, :, :])
         print('G', G.shape, G.dtype)
-        print('mu', mux, muy)
+        print('mu x, y', mux, muy)
 
-        # import pylab as plt
-        # cG = G.get()
-        # plt.clf()
-        # k = 1
-        # for i in range(Nimages):
-        #     for j in range(Nderivs):
-        #         plt.subplot(Nimages, Nderivs, k)
-        #         k += 1
-        #         if j == 0:
-        #             plt.imshow(cG[i, j, :, :], interpolation='nearest', origin='lower')
-        #         else:
-        #             plt.imshow(cG[i, j, :, :] - cG[i, 0, :, :], interpolation='nearest', origin='lower')
-        # plt.savefig('gf.png')
+        import pylab as plt
+        cG = G.get()
+        plt.clf()
+        k = 1
+        for i in range(Nimages):
+            for j in range(Nderivs):
+                plt.subplot(Nimages, Nderivs, k)
+                k += 1
+                if j == 0:
+                    plt.imshow(cG[i, j, :, :], interpolation='nearest', origin='lower')
+                else:
+                    plt.imshow(cG[i, j, :, :] - cG[i, 0, :, :], interpolation='nearest', origin='lower')
+        plt.savefig('gf.png')
 
+        lanczos_shift_images_inplace_gpu(G, mux, muy)
         
         Fsum = img_params.ffts.getFourierTransform(v, w, zero_mean=True)
         P = img_params.P[:,cp.newaxis,:,:]
@@ -461,3 +462,111 @@ def get_vectorized_psfs(psfs, px, py, halfsize):
     #P, (cx, cy), (pH, pW), (v, w) = batch_psf.getFourierTransformBatchGPU(px, py, halfsize)
 
     return P, (cx, cy), (H, W), (v, w), psf_mogs
+
+def lanczos_shift_images_inplace_gpu(G, x, y, work=None):
+    '''
+    Only vectorized in the specific way we need:
+    G images:
+    (Nimages x Nmodels x H x W)
+    x, y:
+    each of length (Nimages,)
+    work:
+    same shape as G; pre-allocated work array.
+    '''
+    assert(len(G.shape) == 4)
+    if work is not None:
+        assert(work.shape == G.shape)
+    assert(len(x) == len(y))
+
+    Nim, Nmod, H, W = G.shape
+    assert(len(x) == Nim)
+
+    # Create Lanczos filter arrays, shape (Nim, 7)
+    fx = np.arange(-3, +4)[np.newaxis, :] + x[:, np.newaxis]
+    fy = np.arange(-3, +4)[np.newaxis, :] + y[:, np.newaxis]
+    fx = lanczos_filter(3, fx)
+    fy = lanczos_filter(3, fy)
+    #print('lanczos x', fx)
+    #print('lanczos y', fy)
+
+    correlate7_2d_inplace_gpu(G, fx, fy, work=work)
+    # correlate7f_inout(inimg, inimg_dim1, inimg_dim2,
+    #                   outimg, outimg_dim1, outimg_dim2,
+    #                   filtx, 7,
+    #                   filty, 7,
+    #                   work, work_dim1, work_dim2);
+
+    del work
+
+# eg, lanczos_filter(3, -0.3 + np.arange(-3, +4))
+def lanczos_filter(order, x):
+    x = np.atleast_1d(x)
+    nz = np.flatnonzero(np.logical_and(x != 0., np.logical_and(x < order, x > -order)))
+    out = np.zeros(x.shape, dtype=np.float32)
+    pinz = np.pi * x.flat[nz]
+    out.flat[nz] = order * np.sin(pinz) * np.sin(pinz / order) / (pinz**2)
+    out[x == 0] = 1.
+    out /= np.sum(out, axis=-1)[..., np.newaxis]
+    return out
+
+def correlate7_2d_inplace_gpu(G, fx, fy, work=None):
+    if work is None:
+        work = cp.empty_like(G)
+    else:
+        ## FIXME - only really need work array to be larger; use a view
+        assert(work.shape == G.shape)
+
+    fx = cp.array(fx)
+    fy = cp.array(fy)
+
+    assert(len(G.shape) == 4)
+    Nim,Nmod,H,W = G.shape
+    assert(len(fx.shape) == 2)
+    assert(fx.shape == fy.shape)
+    Nim2,K = fx.shape
+    assert(Nim2 == Nim)
+    assert(K == 7)
+    
+    # Apply X filter
+
+    na = cp.newaxis
+
+    # Special handling - left edge.
+    work[:, :, :, 0] = cp.sum(G[:, :, :, :4] * fx[:, na, na, 3:], axis=-1)
+    work[:, :, :, 1] = cp.sum(G[:, :, :, :5] * fx[:, na, na, 2:], axis=-1)
+    work[:, :, :, 2] = cp.sum(G[:, :, :, :6] * fx[:, na, na, 1:], axis=-1)
+
+    # Special handling - right edge.
+    work[:, :, :, -1] = cp.sum(G[:, :, :, -4:] * fx[:, na, na, :4], axis=-1)
+    work[:, :, :, -2] = cp.sum(G[:, :, :, -5:] * fx[:, na, na, :5], axis=-1)
+    work[:, :, :, -3] = cp.sum(G[:, :, :, -6:] * fx[:, na, na, :6], axis=-1)
+
+    # Middle
+    work[:, :, :, 3:-3]  = G[:, :, :,  :-6] * fx[:, na, na, na, 0]
+    work[:, :, :, 3:-3] += G[:, :, :, 1:-5] * fx[:, na, na, na, 1]
+    work[:, :, :, 3:-3] += G[:, :, :, 2:-4] * fx[:, na, na, na, 2]
+    work[:, :, :, 3:-3] += G[:, :, :, 3:-3] * fx[:, na, na, na, 3]
+    work[:, :, :, 3:-3] += G[:, :, :, 4:-2] * fx[:, na, na, na, 4]
+    work[:, :, :, 3:-3] += G[:, :, :, 5:-1] * fx[:, na, na, na, 5]
+    work[:, :, :, 3:-3] += G[:, :, :, 6:  ] * fx[:, na, na, na, 6]
+
+    # Apply Y filter
+
+    # Special handling - bottom edge.
+    G[:, :, 0, :] = cp.sum(work[:, :, :4, :] * fy[:, na, 3:, na], axis=-2)
+    G[:, :, 1, :] = cp.sum(work[:, :, :5, :] * fy[:, na, 2:, na], axis=-2)
+    G[:, :, 2, :] = cp.sum(work[:, :, :6, :] * fy[:, na, 1:, na], axis=-2)
+
+    # Special handling - top edge.
+    G[:, :, -1, :] = cp.sum(work[:, :, -4:, :] * fy[:, na, :4, na], axis=-2)
+    G[:, :, -2, :] = cp.sum(work[:, :, -5:, :] * fy[:, na, :5, na], axis=-2)
+    G[:, :, -3, :] = cp.sum(work[:, :, -6:, :] * fy[:, na, :6, na], axis=-2)
+
+    # Middle
+    G[:, :, 3:-3, :]  = work[:, :,  :-6, :] * fy[:, na, na, 0, na]
+    G[:, :, 3:-3, :] += work[:, :, 1:-5, :] * fy[:, na, na, 1, na]
+    G[:, :, 3:-3, :] += work[:, :, 2:-4, :] * fy[:, na, na, 2, na]
+    G[:, :, 3:-3, :] += work[:, :, 3:-3, :] * fy[:, na, na, 3, na]
+    G[:, :, 3:-3, :] += work[:, :, 4:-2, :] * fy[:, na, na, 4, na]
+    G[:, :, 3:-3, :] += work[:, :, 5:-1, :] * fy[:, na, na, 5, na]
+    G[:, :, 3:-3, :] += work[:, :, 6:  , :] * fy[:, na, na, 6, na]

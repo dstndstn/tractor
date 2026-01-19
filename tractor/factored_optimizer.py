@@ -205,6 +205,8 @@ if __name__ == '__main__':
     from tractor.galaxy import ExpGalaxy
     from tractor.ellipses import EllipseE, EllipseESoft
     from tractor.basics import PixPos, Flux, ConstantSky
+    from tractor.basics import RaDecPos
+    from tractor.wcs import ConstantFitsWcs
     from tractor.psfex import PixelizedPsfEx
     from tractor.psfex import NormalizedPixelizedPsfEx
     from tractor.psf import HybridPixelizedPSF, NCircularGaussianPSF
@@ -214,6 +216,7 @@ if __name__ == '__main__':
     from tractor.patch import ModelMask
     import os
     import pylab as plt
+    from astrometry.util.util import Tan
 
     def difference(x1, x2):
         #return np.abs(x1 - x2) / np.maximum(1e-16, (np.abs(x1) + np.abs(x2)) / 2.)
@@ -230,7 +233,12 @@ if __name__ == '__main__':
 
         
     h,w = 100,100
-    gal = ExpGalaxy(PixPos(h/2., w/2+.7), Flux(2000.), EllipseE(10., 0.1, 0.4))
+    arcsec = 1./3600.
+    ra_cen = 1.
+    dec_cen = 2.
+
+    #gal = ExpGalaxy(PixPos(h/2., w/2+.7), Flux(2000.), EllipseE(10., 0.1, 0.4))
+    gal = ExpGalaxy(RaDecPos(ra_cen, dec_cen), Flux(2000.), EllipseE(10., 0.1, 0.4))
 
     #psf = PixelizedPsfEx(os.path.join(os.path.dirname(os.path.dirname(__file__)),
     psf = NormalizedPixelizedPsfEx(os.path.join(os.path.dirname(os.path.dirname(__file__)),
@@ -243,12 +251,18 @@ if __name__ == '__main__':
     psf = psf.constantPsfAt(w/2, h/2)
     print('const psf', psf)
 
+    pixscale1 = 0.5*arcsec
+    
+    wcs1 = Tan(ra_cen + 0.4*arcsec, dec_cen - 0.3*arcsec, h/2+0.5, w/2+0.5,
+               -pixscale1, 0., 0., pixscale1, float(w), float(h))
     sig1 = 1.0
     sig2 = 1.0
     tim1 = Image(np.zeros((h,w), np.float32),
                  inverr=np.ones((h,w), np.float32) / sig1,
                  psf=psf, sky=ConstantSky(0.),
-                 wcs=NullWCS(),
+                 #wcs=NullWCS(),
+                 #wcs=wcs1,
+                 wcs = ConstantFitsWcs(wcs1),
                 )
 
     tr = Tractor([tim1], [gal])
@@ -259,10 +273,20 @@ if __name__ == '__main__':
     noisy2 = mod + np.random.normal(scale=sig2, size=(h,w))
 
     tim1.data = noisy1
+
+    pixscale2 = pixscale1
+    rot = np.deg2rad(5.)
+
+    wcs2 = Tan(ra_cen + 0.2*arcsec, dec_cen + 0.1*arcsec, h/2+0.5, w/2+0.5,
+               -pixscale2 * np.cos(rot), -pixscale2 * np.sin(rot),
+               -pixscale2 * np.sin(rot),  pixscale2 * np.cos(rot), float(w), float(h))
+
+    print('wcs2 pixscale:', wcs2.pixel_scale())
     tim2 = Image(noisy2,
                  inverr=np.ones((h,w), np.float32) / sig2,
                  psf=psf, sky=ConstantSky(0.),
-                 wcs=NullWCS(),
+                 #wcs=NullWCS(),
+                 wcs = ConstantFitsWcs(wcs2),
                 )
 
     tr = Tractor([tim1, tim2], [gal])
