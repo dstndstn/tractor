@@ -218,6 +218,33 @@ if __name__ == '__main__':
     import pylab as plt
     from astrometry.util.util import Tan
 
+    # from gpu_optimizer import lanczos_shift_images_inplace_gpu
+    # from cupy_wrapper import cp
+    # H, W = 16, 16
+    # x = np.array([0., 0.2])
+    # y = np.array([-0.4, 0.])
+    # Nims = len(x)
+    # Nmod = 1
+    # G = np.zeros((Nims, Nmod, H, W), np.float32)
+    # i = np.arange(H)
+    # G[:, 0, i, i] = 1
+    # Gorig = G.copy()
+    # G = cp.array(G)
+    # lanczos_shift_images_inplace_gpu(G, x, y)
+    # G = G.get()
+    # plt.clf()
+    # ima = dict(interpolation='nearest', origin='lower')
+    # plt.subplot(2,2,1)
+    # plt.imshow(Gorig[0, 0, :, :], **ima)
+    # plt.subplot(2,2,2)
+    # plt.imshow(Gorig[1, 0, :, :], **ima)
+    # plt.subplot(2,2,3)
+    # plt.imshow(G[0, 0, :, :], **ima)
+    # plt.subplot(2,2,4)
+    # plt.imshow(G[1, 0, :, :], **ima)
+    # plt.savefig('lanczos.png')
+    # sys.exit(0)
+
     def difference(x1, x2):
         #return np.abs(x1 - x2) / np.maximum(1e-16, (np.abs(x1) + np.abs(x2)) / 2.)
         return np.sum(np.abs(x1 - x2) / np.maximum(1e-16, (np.abs(x1) + np.abs(x2)) / 2.))

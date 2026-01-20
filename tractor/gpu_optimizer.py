@@ -323,12 +323,90 @@ class GPUOptimizer(GPUFriendlyOptimizer):
                     plt.imshow(cG[i, j, :, :] - cG[i, 0, :, :], interpolation='nearest', origin='lower')
         plt.savefig('gf.png')
 
+        print('mog_mix_amps:', mog_mix_amps.shape)
+        print('mog_mix_vars:', mog_mix_vars.shape)
+
+        assert(G.shape == (Nimages,Nderivs,pH,pW))
+        assert(mog_mix_amps.shape == (Nimages, Nderivs, Nmog))
+        assert(mog_mix_vars.shape == (Nimages, Nderivs, Nmog, 3))
+        # variance terms: (00, 01, 11) covariance matrix elements
+
+        det = (mog_mix_vars[:,:,:,0] * mog_mix_vars[:,:,:,2] - mog_mix_vars[:,:,:,1]**2)
+        iv0 = mog_mix_vars[:,:,:,2] / det
+        iv1 = -2. * mog_mix_vars[:,:,:,1] / det
+        iv2 = mog_mix_vars[:,:,:,0] / det
+        scale = mog_mix_amps / (2. * np.pi * np.sqrt(det))
+
+        print('dx', dx.shape, dx.dtype)
+        print('dy', dy.shape, dy.dtype)
+
+        print('dx', dx)
+        print('dy', dy)
+        #means[:,:,:,0] -= img_params.dx[:,None,None]
+        #means[:,:,:,1] -= img_params.dy[:,None,None]
+
+        print('iv0:', iv0.shape)
+        assert(iv0.shape == (Nimages, Nderivs, Nmog))
+        #print('iv1:', iv1.shape)
+        #print('iv2:', iv2.shape)
+
+        print('dxi', dxi)
+        print('dyi', dyi)
+
+        meanx = cp.array(-dx, dtype=cp.float32)
+        meany = cp.array(-dy, dtype=cp.float32)
+        iv0 = cp.array(iv0, dtype=cp.float32)
+        iv1 = cp.array(iv1, dtype=cp.float32)
+        iv2 = cp.array(iv2, dtype=cp.float32)
+        xx = cp.arange(pW, dtype=cp.float32)
+        yy = cp.arange(pH, dtype=cp.float32)
+        # The distsq array is going to be nimages x nderivs x nmog x ny x nx
+        na = cp.newaxis
+        distsq = (iv0[:,:,:,na,na] * (xx[na,na,na,na,:] - meanx[:,na,na,na,na])**2 +
+                  iv1[:,:,:,na,na] * (xx[na,na,na,na,:] - meanx[:,na,na,na,na]) *
+                                     (yy[na,na,na,:,na] - meany[:,na,na,na,na]) +
+                  iv2[:,:,:,na,na] * (yy[na,na,na,:,na] - meany[:,na,na,na,na])**2)
+        distsq *= -0.5
+        distsq = cp.exp(distsq)
+        assert(distsq.shape == (Nimages, Nderivs, Nmog, pH, pW))
+        assert(scale.shape == (Nimages, Nderivs, Nmog))
+        G_mog = cp.sum(distsq * scale[..., na, na], axis=2)
+        print('G_mog', G_mog)
+        assert(G_mog.shape == G.shape)
+        #mog_g = cp.sum(scale[:,:,:,cp.newaxis,cp.newaxis] * cp.exp(-0.5*distsq), axis=2).astype(cp.float32)
+        #del means, distsq, varcopy
+
+        import pylab as plt
+        cG = G_mog.get()
+        plt.clf()
+        k = 1
+        for i in range(Nimages):
+            for j in range(Nderivs):
+                plt.subplot(Nimages, Nderivs, k)
+                k += 1
+                if j == 0:
+                    plt.imshow(cG[i, j, :, :], interpolation='nearest', origin='lower')
+                else:
+                    plt.imshow(cG[i, j, :, :] - cG[i, 0, :, :], interpolation='nearest', origin='lower')
+        plt.savefig('gm.png')
+
+        # FIXME -- check that this all remains float32 through the computations
         lanczos_shift_images_inplace_gpu(G, mux, muy)
-        
-        Fsum = img_params.ffts.getFourierTransform(v, w, zero_mean=True)
-        P = img_params.P[:,cp.newaxis,:,:]
-        G = cp.fft.irfft2(Fsum*P).astype(cp.float32)
-        G = lanczos_shift_image_batch_gpu(G, img_params.mux, img_params.muy)
+
+        import pylab as plt
+        cG = G.get()
+        plt.clf()
+        k = 1
+        for i in range(Nimages):
+            for j in range(Nderivs):
+                plt.subplot(Nimages, Nderivs, k)
+                k += 1
+                if j == 0:
+                    plt.imshow(cG[i, j, :, :], interpolation='nearest', origin='lower')
+                else:
+                    plt.imshow(cG[i, j, :, :] - cG[i, 0, :, :], interpolation='nearest', origin='lower')
+        plt.savefig('gf2.png')
+
 
         # psf_mog.var + gal_mog.var
         # psf_mag.amp * gal_mog.amp

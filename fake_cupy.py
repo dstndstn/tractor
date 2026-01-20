@@ -140,8 +140,8 @@ def asarray(x):
 
 cuda.asarray = asarray
 
-def array(x):
-    n = np.array(x)
+def array(x, dtype=None):
+    n = np.array(x, dtype=dtype)
     return asarray(n)
 
 def hypot(x,y):
@@ -229,6 +229,10 @@ def empty_like(other):
 def sum(a, **kwargs):
     a = a.get()
     x = np.sum(a, **kwargs)
+    return asarray(x)
+
+def arange(*args, **kwargs):
+    x = np.arange(*args, **kwargs)
     return asarray(x)
 
 newaxis = np.newaxis
