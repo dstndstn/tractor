@@ -47,7 +47,7 @@ class ConstrainedOptimizer(LsqrOptimizer):
                  ever_hit_limit=self.hit_limit)
         return R
 
-    def tryUpdates(self, tractor, X, alphas=None):
+    def tryUpdates(self, tractor, X, alphas=None, check_step=None):
         p_best = tractor.getParams()
         logprob_before = tractor.getLogProb()
         logprob_best = logprob_before
@@ -65,6 +65,12 @@ class ConstrainedOptimizer(LsqrOptimizer):
                 self.hit_limit = True
 
             tractor.setParams(p)
+
+            if check_step is not None:
+                r = check_step(optimizer=self, tractor=tractor, X=X, alpha=alpha)
+                if not r:
+                    break
+
             logprob = tractor.getLogProb()
             #print (f'{alpha=} {p=} {step_limit=} {hit_limit=} {logprob=}')
 

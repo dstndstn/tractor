@@ -295,6 +295,7 @@ class LsqrOptimizer(Optimizer):
     def optimize(self, tractor, alphas=None, damp=0, priors=True,
                  scale_columns=True,
                  shared_params=True, variance=False, just_variance=False,
+                 check_step=None,
                  **nil):
         kwa = dict(damp=damp, priors=priors,
                    scale_columns=scale_columns, shared_params=shared_params)
@@ -318,7 +319,7 @@ class LsqrOptimizer(Optimizer):
         logverb('Finding optimal step size...')
         #t0 = Time()
         lct[0] += 1
-        (dlogprob, alpha) = self.tryUpdates(tractor, X, alphas=alphas)
+        (dlogprob, alpha) = self.tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
         #print (f"LSQR TryUpdates Results: {dlogprob=}, {alpha=}")
         lt[1] += time.time()-t
         #tstep = Time() - t0
@@ -338,7 +339,7 @@ class LsqrOptimizer(Optimizer):
         #print (self.optimize)
         t = time.time()
         for step in range(steps):
-            dlnp, X, alpha = self.optimize(tractor, **kwargs)
+            dlnp, X, alpha = self.optimize(tractor, check_step=check_step, **kwargs)
             if check_step is not None:
                 r = check_step(optimizer=self, tractor=tractor, dlnp=dlnp, X=X, alpha=alpha)
                 if not r:

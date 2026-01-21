@@ -422,7 +422,7 @@ class Optimizer(object):
                 mm[slc] = 0.
         return IV
 
-    def tryUpdates(self, tractor, X, alphas=None):
+    def tryUpdates(self, tractor, X, alphas=None, check_step=None):
         #print ("ORIG UPDATES")
         if alphas is None:
             # 1/1024 to 1 in factors of 2, + sqrt(2.) + 2.
@@ -437,6 +437,12 @@ class Optimizer(object):
             logverb('  Stepping with alpha =', alpha)
             pa = [p + alpha * d for p, d in zip(p0, X)]
             tractor.setParams(pa)
+
+            if check_step is not None:
+                r = check_step(optimizer=self, tractor=tractor, X=X, alpha=alpha)
+                if not r:
+                    break
+
             pAfter = tractor.getLogProb()
             logverb('  Log-prob after:', pAfter)
             logverb('  delta log-prob:', pAfter - pBefore)

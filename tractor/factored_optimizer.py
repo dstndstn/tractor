@@ -279,11 +279,34 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             kmax = 9
             #Double size of 16 bit (complex 128) array x nimage x
             #n derivs x kmax x imsize.  5D array in batch_mixture_profiles.py
+            """
+            Dustin less_mem version
+            est_mem = nimages*imsize*nd*kmax*16 * 3.2
+            # 3.2 factor: NGC 3585 example
+            
+            if free_mem < est_mem:
+                try:
+                    print("Warning: Estimated memory %.1f GB is greater than free memory %.1f GB; Running less-memory GPU mode instead!" % (est_mem / 1e9, free_mem / 1e9))
+                    R_gpu = self.gpuSingleImageUpdateDirectionsVectorized_less_mem(tr, **kwargs)
+                    return R_gpu
+                except Exception as e:
+                    print('Fallback to less-memory GPU version failed:', e)
+                    import traceback
+                    traceback.print_exc()
+                    mempool = cp.get_default_memory_pool()
+                    mempool.free_all_blocks()
+                    
+                print('Running CPU version instead')
+                R_cpu = super().getSingleImageUpdateDirections(tr, **kwargs)
+                return R_cpu
+            """
+
             est_mem = nimages*imsize*nd*kmax*16
             import datetime
-            print (f"Running VECTORIZED GPU code...", datetime.datetime.now(), "src = ", tr.catalog[0])
+            print (f"Running VECTORIZED GPU code...", datetime.datetime.now(), "src = ", tr.catalog[0], f'Estimated mem {est_mem=}')
 
-            if free_mem < est_mem:
+            #if free_mem < est_mem:
+            if False:
                 print (f"Warning: Estimated memory {est_mem} is greater than free memory {free_mem}; Running CPU mode instead!")
                 print (f"\t{nimages=} {imsize=} {nd=}")
                 R_gpuv = super().getSingleImageUpdateDirections(tr, **kwargs)
@@ -328,7 +351,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                     return R_gpuv
             except Exception as ex:
                 import traceback
-                print('Exception in GPU Vectorized code:')
+                print('Exception in GPU Vectorized code: ', ex)
                 traceback.print_exc()
 
                 src = tr.catalog[0]
@@ -797,6 +820,41 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         return Xic
 
+    def gpuSingleImageUpdateDirectionsVectorized_less_mem(self, tr, **kwargs):
+        if not (tr.isParamFrozen('images') and
+                (len(tr.catalog) == 1) and
+                isinstance(tr.catalog[0], ProfileGalaxy)):
+            p = self.ps
+            self.ps = None
+            R = super().getSingleImageUpdateDirections(tr, **kwargs)
+            self.ps = p
+            return R
+        if len(tr.images) == 0:
+            print (f"WARNING: len images == 0, running CPU version")
+            xout = super().getSingleImageUpdateDirections(tr, **kwargs)
+            return xout
+        tims = tr.images
+        modelmasks = tr.modelMasks
+        try:
+            xx = []
+            for i,(tim,mm) in enumerate(zip(tims, modelmasks)):
+                tr.images = [tim]
+                tr.modelMasks = [mm]
+-
+                src = tr.catalog[0]
+                sx,sy = tim.getWcs().positionToPixel(src.getPosition(), src)
+                h,w = tim.shape
+                try:
+                    x = self.gpuSingleImageUpdateDirectionsVectorized(tr, **kwargs)
+                except Exception as e:
+                    x = super().getSingleImageUpdateDirections(tr, **kwargs)
+                xx.extend(x)
+        finally:
+            tr.images = tims
+            tr.modelMasks = modelmasks
+        return xx
+
+
     def gpuSingleImageUpdateDirectionsVectorized(self, tr, **kwargs):
         if not (tr.isParamFrozen('images') and
                 (len(tr.catalog) == 1) and
@@ -1117,10 +1175,10 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #cp.savetxt('gfsum.txt', Fsum.ravel())
         #cp.savetxt('gp.txt', P.ravel())
         G = cp.fft.irfft2(Fsum*P).astype(cp.float32)
+        del Fsum, P
         #Do Lanczos shift
         G = lanczos_shift_image_batch_gpu(G, img_params.mux, img_params.muy)
         #cp.savetxt('gg.txt', G.ravel())
-        del Fsum, P
         #G should be (nimages, maxNd, nw, nv) and mux and muy should be 1d vectors
         assert (G.shape == (img_params.Nimages, img_params.maxNd, img_params.mh, img_params.mw))
 
@@ -1247,17 +1305,30 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             #distsq = (iv0[:,:,:,n,n] * (xx[n,n,n,n,:] - means[:,n,n,n,0][:,:,:,n,:])**2 +
             #          iv1[:,:,:,n,n] * (xx[n,n,n,n,:] - means[:,n,n,n,0][:,:,:,n,:]) * (yy[n,n,n,:,n] - means[:,n,n,n,1][:,:,:,:,n]) +
             #          iv2[:,:,:,n,n] * (yy[n,n,n,:,n] - means[:,n,n,n,1][:,:,:,:,n])**2)
+
+            iv0 = iv0.astype(cp.float32)
+            iv1 = iv1.astype(cp.float32)
+            iv2 = iv2.astype(cp.float32)
+            xx = xx.astype(cp.float32)
+            yy = yy.astype(cp.float32)
+            means = means.astype(cp.float32)
+
             distsq = (iv0[:,:,:,n,n] * (xx[n,n,n,n,:] - means[:,:,:,n,0][:,:,:,n,:])**2 +
                       iv1[:,:,:,n,n] * (xx[n,n,n,n,:] - means[:,:,:,n,0][:,:,:,n,:]) * (yy[n,n,n,:,n] - means[:,:,:,n,1][:,:,:,:,n]) +
                       iv2[:,:,:,n,n] * (yy[n,n,n,:,n] - means[:,:,:,n,1][:,:,:,:,n])**2)
+            distsq *= -0.5
             # t1 = (iv0[:,:,:,n,n] * (xx[n,n,n,n,:] - means[:,n,n,n,0][:,:,:,n,:])**2)
             # print('t1', t1.shape)
             # t3 = (iv2[:,:,:,n,n] * (yy[n,n,n,:,n] - means[:,n,n,n,1][:,:,:,:,n])**2)
             # print('t3', t3.shape)
             # t2 = (iv1[:,:,:,n,n] * (xx[n,n,n,n,:] - means[:,n,n,n,0][:,:,:,n,:]) * (yy[n,n,n,:,n] - means[:,n,n,n,1][:,:,:,:,n]))
             # print('t2', t2.shape)
+            distsq = cp.exp(distsq)
+            scale = scale.astype(cp.float32)
+            distsq *= scale[:,:,:,cp.newaxis,cp.newaxis]
+            mog_g = cp.sum(distsq, axis=2)
             # Sum over the nmog
-            mog_g = cp.sum(scale[:,:,:,cp.newaxis,cp.newaxis] * cp.exp(-0.5*distsq), axis=2).astype(cp.float32)
+            #mog_g = cp.sum(scale[:,:,:,cp.newaxis,cp.newaxis] * cp.exp(distsq), axis=2).astype(cp.float32)
             del means, distsq, varcopy
             #print ("MOGG", mog_g.shape, np.where(mog_g == mog_g.max()))
             #cp.savetxt('gmogpatch.txt',mog_g.ravel())
@@ -2033,7 +2104,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         use_roi = False
         return G
 
-    def tryUpdates(self, tractor, X, alphas=None):
+    def tryUpdates(self, tractor, X, alphas=None, check_step=None):
         """
         Attempts to find the optimal step size (alpha) along the update direction X
         to maximize the log probability. Leverages GPU for step calculation and
@@ -2074,7 +2145,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #used_bytes = mempool.used_bytes()
         #tot_bytes = mempool.total_bytes()
         #print (f'After free {used_bytes=} {tot_bytes=}')
-        return super().tryUpdates(tractor, X, alphas=alphas)
+        return super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
         print ("GPU FACTORED TRY UPDATES")
 
         # Dustin's FIXME improvement ideas
@@ -2315,6 +2386,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         imgH, imgW = np.array([tim.shape for tim in tr.images]).T
         psfH, psfW = np.array([psf.shape for psf in psfs]).T
         x0, x1, y0, y1 = np.asarray(extents).T
+        """
         if np.any(px < 0):
             print (f"Warning: {px=} is outside of image")
             px[px < 0] = 0
@@ -2327,6 +2399,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         if np.any(py > imgH):
             print (f"Warning: {py=} is outside of image")
             py[py > imgH] = imgH[py > imgH]
+        """
         gpu_halfsize = np.max(([(x1-x0)/2, (y1-y0)/2,
                             1+px-x0, 1+x1-px, 1+py-y0, 1+y1-py,
                             psfH//2, psfW//2]), axis=0)
