@@ -148,13 +148,17 @@ class GPUOptimizer(GPUFriendlyOptimizer):
 
         psfH, psfW = np.array([psf.shape for psf in psfs]).T
         x0, x1, y0, y1 = np.asarray(extents).T
+        print('extents:', extents)
+        print('pixel positions:', pxy)
+        print('gpu_halfsize terms: mm', (x1-x0)/2, (y1-y0)/2, 'source pos',
+              1+px-x0, 1+x1-px, 1+py-y0, 1+y1-py, 'PSF size', psfH//2, psfW//2)
         gpu_halfsize = np.max(([(x1-x0)/2, (y1-y0)/2,
                                 1+px-x0, 1+x1-px, 1+py-y0, 1+y1-py,
                                 psfH//2, psfW//2]), axis=0)
         print('gpu_halfsize:', gpu_halfsize)
 
         # PSF: Fourier transforms & Mixtures-of-Gaussians
-        P, (cx, cy), (pH, pW), (v, w), psf_mogs = get_vectorized_psfs(psfs, px, py, gpu_halfsize)
+        P, (cx, cy), (pH, pW), (v, w), psf_mogs = get_vectorized_psfs(psfs, gpu_halfsize)
         assert(pW % 2 == 0)
         assert(pH % 2 == 0)
         assert(P.shape == (Nimages,len(w),len(v)))
@@ -163,7 +167,7 @@ class GPUOptimizer(GPUFriendlyOptimizer):
                   src.getDerivativeShearedProfiles(tim,x,y)
                   for tim,x,y in zip(tr.images, px, py)]
 
-        print('amixes', amixes)
+        #print('amixes', amixes)
 
         # nimages x nmixes(nderivs) x ncomponents x 3 (a,b,d variance terms)
 
@@ -186,27 +190,38 @@ class GPUOptimizer(GPUFriendlyOptimizer):
                 amix_vars[i, j, :K, 2] = m.var[:, 1, 1]
                 amix_amps[i, j, :K] = m.amp
         #print('amix_vars:', amix_vars)
-
+        cx = np.array(cx, np.int32)
+        cy = np.array(cy, np.int32)
+        print('px,py', px,py)
         print('cx,cy', cx,cy)
         print('pH,pW', pH,pW)
-        print('px,py', px,py)
+
+        # Round source pixel position to nearest integer
+        ipx = px.round().astype(np.int32)
+        ipy = py.round().astype(np.int32)
+        # subpixel portion: shifted via Lanczos interpolation
+        mux = px - ipx
+        muy = py - ipy
+        print('mu x,y', mux, muy)
+
         # ugh, pixel shifts
-        dx = px - cx
-        dy = py - cy
-        mux = dx - x0
-        muy = dy - y0
-        sx = mux.round().astype(np.int32)
-        sy = muy.round().astype(np.int32)
-        # the subpixel portion will be handled with a Lanczos interpolation
-        mux -= sx
-        muy -= sy
-        dxi = np.asarray(x0+sx)
-        dyi = np.asarray(y0+sy)
+        # dx = px - cx
+        # dy = py - cy
+        # mux = dx - x0
+        # muy = dy - y0
+        # sx = mux.round().astype(np.int32)
+        # sy = muy.round().astype(np.int32)
+        # # the subpixel portion will be handled with a Lanczos interpolation
+        # mux -= sx
+        # muy -= sy
+        # print('mu x,y', mux, muy)
+        # dxi = np.asarray(x0+sx)
+        # dyi = np.asarray(y0+sy)
         assert(np.abs(mux).max() <= 0.5)
         assert(np.abs(muy).max() <= 0.5)
-        assert(np.all(sy <= 0))
-        assert(np.all(sx <= 0))
-        print('sx,sy', sx,sy)
+        # assert(np.all(sy <= 0))
+        # assert(np.all(sx <= 0))
+        # print('sx,sy', sx,sy)
         
         # Embed pix and ie in images the same size as pW,pH.
         # FIXME -- should be able to cache this; rationalize pixel transfer to GPU.
@@ -217,10 +232,16 @@ class GPUOptimizer(GPUFriendlyOptimizer):
             #p = cp.array(pix[y0[i]:y1[i], x0[i]:x1[i]])
             p = pix[y0[i]:y1[i], x0[i]:x1[i]]
             #print('p:', p)
-            padpix[i, -sy[i]:-sy[i]+mh[i], -sx[i]:-sx[i]+mw[i]] = p
+
+            subx = x0[i] - (ipx[i] - cx[i])
+            suby = y0[i] - (ipy[i] - cy[i])
+
+            #padpix[i, -sy[i]:-sy[i]+mh[i], -sx[i]:-sx[i]+mw[i]] = p
+            padpix[i, suby:suby+mh[i], subx:subx+mw[i]] = p
             #p = cp.array( ie[y0[i]:y1[i], x0[i]:x1[i]])
             p = ie[y0[i]:y1[i], x0[i]:x1[i]]
-            padie [i, -sy[i]:-sy[i]+mh[i], -sx[i]:-sx[i]+mw[i]] = p
+            #padie [i, -sy[i]:-sy[i]+mh[i], -sx[i]:-sx[i]+mw[i]] = p
+            padie[i, suby:suby+mh[i], subx:subx+mw[i]] = p
 
         nsigma1 = 3.
         nsigma2 = 4.
@@ -323,72 +344,83 @@ class GPUOptimizer(GPUFriendlyOptimizer):
                     plt.imshow(cG[i, j, :, :] - cG[i, 0, :, :], interpolation='nearest', origin='lower')
         plt.savefig('gf.png')
 
-        print('mog_mix_amps:', mog_mix_amps.shape)
-        print('mog_mix_vars:', mog_mix_vars.shape)
+        if Nmog > 0:
+            ## FIXME -- trim these arrays to just non-zero weighted elements???
 
-        assert(G.shape == (Nimages,Nderivs,pH,pW))
-        assert(mog_mix_amps.shape == (Nimages, Nderivs, Nmog))
-        assert(mog_mix_vars.shape == (Nimages, Nderivs, Nmog, 3))
-        # variance terms: (00, 01, 11) covariance matrix elements
+            print('mog_mix_amps:', mog_mix_amps.shape)
+            print('mog_mix_vars:', mog_mix_vars.shape)
+            assert(G.shape == (Nimages,Nderivs,pH,pW))
+            assert(mog_mix_amps.shape == (Nimages, Nderivs, Nmog))
+            assert(mog_mix_vars.shape == (Nimages, Nderivs, Nmog, 3))
+            # variance terms: (00, 01, 11) covariance matrix elements
+            det = (mog_mix_vars[:,:,:,0] * mog_mix_vars[:,:,:,2] - mog_mix_vars[:,:,:,1]**2)
+            iv0 = mog_mix_vars[:,:,:,2] / det
+            iv1 = -2. * mog_mix_vars[:,:,:,1] / det
+            iv2 = mog_mix_vars[:,:,:,0] / det
+            scale = mog_mix_amps / (2. * np.pi * np.sqrt(det))
+    
+            # print('dx', dx.shape, dx.dtype)
+            # print('dy', dy.shape, dy.dtype)
+            # print('dx', dx)
+            # print('dy', dy)
+            #means[:,:,:,0] -= img_params.dx[:,None,None]
+            #means[:,:,:,1] -= img_params.dy[:,None,None]
+    
+            #print('iv0:', iv0.shape)
+            assert(iv0.shape == (Nimages, Nderivs, Nmog))
+            #print('iv1:', iv1.shape)
+            #print('iv2:', iv2.shape)
+    
+             #print('dxi', dxi)
+             #print('dyi', dyi)
+    
+            iv0 = cp.array(iv0, dtype=cp.float32)
+            iv1 = cp.array(iv1, dtype=cp.float32)
+            iv2 = cp.array(iv2, dtype=cp.float32)
 
-        det = (mog_mix_vars[:,:,:,0] * mog_mix_vars[:,:,:,2] - mog_mix_vars[:,:,:,1]**2)
-        iv0 = mog_mix_vars[:,:,:,2] / det
-        iv1 = -2. * mog_mix_vars[:,:,:,1] / det
-        iv2 = mog_mix_vars[:,:,:,0] / det
-        scale = mog_mix_amps / (2. * np.pi * np.sqrt(det))
+            # We're going to do the sub-pixel shift with Lanczos, so the
+            # x position and mean are both integers.
+            ## FIXME -- int type???
+            #meanx = cp.array(-dx, dtype=cp.float32)
+            #meany = cp.array(-dy, dtype=cp.float32)
+            t = cp.int32
+            meanx = cp.array(cx, t)
+            meany = cp.array(cy, t)
+            xx = cp.arange(pW, dtype=t)
+            yy = cp.arange(pH, dtype=t)
+            del t
 
-        print('dx', dx.shape, dx.dtype)
-        print('dy', dy.shape, dy.dtype)
+            # The distsq array is going to be nimages x nderivs x nmog x ny x nx
+            na = cp.newaxis
+            distsq = (iv0[:,:,:,na,na] * (xx[na,na,na,na,:] - meanx[:,na,na,na,na])**2 +
+                      iv1[:,:,:,na,na] * (xx[na,na,na,na,:] - meanx[:,na,na,na,na]) *
+                                         (yy[na,na,na,:,na] - meany[:,na,na,na,na]) +
+                      iv2[:,:,:,na,na] * (yy[na,na,na,:,na] - meany[:,na,na,na,na])**2)
+            distsq *= -0.5
+            distsq = cp.exp(distsq)
+            assert(distsq.shape == (Nimages, Nderivs, Nmog, pH, pW))
+            assert(scale.shape == (Nimages, Nderivs, Nmog))
+            G_mog = cp.sum(distsq * scale[..., na, na], axis=2)
+            print('G_mog', G_mog)
+            assert(G_mog.shape == G.shape)
+            #mog_g = cp.sum(scale[:,:,:,cp.newaxis,cp.newaxis] * cp.exp(-0.5*distsq), axis=2).astype(cp.float32)
+            #del means, distsq, varcopy
 
-        print('dx', dx)
-        print('dy', dy)
-        #means[:,:,:,0] -= img_params.dx[:,None,None]
-        #means[:,:,:,1] -= img_params.dy[:,None,None]
+            import pylab as plt
+            cG = G_mog.get()
+            plt.clf()
+            k = 1
+            for i in range(Nimages):
+                for j in range(Nderivs):
+                    plt.subplot(Nimages, Nderivs, k)
+                    k += 1
+                    if j == 0:
+                        plt.imshow(cG[i, j, :, :], interpolation='nearest', origin='lower')
+                    else:
+                        plt.imshow(cG[i, j, :, :] - cG[i, 0, :, :], interpolation='nearest', origin='lower')
+            plt.savefig('gm.png')
 
-        print('iv0:', iv0.shape)
-        assert(iv0.shape == (Nimages, Nderivs, Nmog))
-        #print('iv1:', iv1.shape)
-        #print('iv2:', iv2.shape)
-
-        print('dxi', dxi)
-        print('dyi', dyi)
-
-        meanx = cp.array(-dx, dtype=cp.float32)
-        meany = cp.array(-dy, dtype=cp.float32)
-        iv0 = cp.array(iv0, dtype=cp.float32)
-        iv1 = cp.array(iv1, dtype=cp.float32)
-        iv2 = cp.array(iv2, dtype=cp.float32)
-        xx = cp.arange(pW, dtype=cp.float32)
-        yy = cp.arange(pH, dtype=cp.float32)
-        # The distsq array is going to be nimages x nderivs x nmog x ny x nx
-        na = cp.newaxis
-        distsq = (iv0[:,:,:,na,na] * (xx[na,na,na,na,:] - meanx[:,na,na,na,na])**2 +
-                  iv1[:,:,:,na,na] * (xx[na,na,na,na,:] - meanx[:,na,na,na,na]) *
-                                     (yy[na,na,na,:,na] - meany[:,na,na,na,na]) +
-                  iv2[:,:,:,na,na] * (yy[na,na,na,:,na] - meany[:,na,na,na,na])**2)
-        distsq *= -0.5
-        distsq = cp.exp(distsq)
-        assert(distsq.shape == (Nimages, Nderivs, Nmog, pH, pW))
-        assert(scale.shape == (Nimages, Nderivs, Nmog))
-        G_mog = cp.sum(distsq * scale[..., na, na], axis=2)
-        print('G_mog', G_mog)
-        assert(G_mog.shape == G.shape)
-        #mog_g = cp.sum(scale[:,:,:,cp.newaxis,cp.newaxis] * cp.exp(-0.5*distsq), axis=2).astype(cp.float32)
-        #del means, distsq, varcopy
-
-        import pylab as plt
-        cG = G_mog.get()
-        plt.clf()
-        k = 1
-        for i in range(Nimages):
-            for j in range(Nderivs):
-                plt.subplot(Nimages, Nderivs, k)
-                k += 1
-                if j == 0:
-                    plt.imshow(cG[i, j, :, :], interpolation='nearest', origin='lower')
-                else:
-                    plt.imshow(cG[i, j, :, :] - cG[i, 0, :, :], interpolation='nearest', origin='lower')
-        plt.savefig('gm.png')
+            G += G_mog
 
         # FIXME -- check that this all remains float32 through the computations
         lanczos_shift_images_inplace_gpu(G, mux, muy)
@@ -459,7 +491,7 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         print('gpu_one_galaxy_updates_2')
         raise RuntimeError('not implemented')
 
-def get_vectorized_psfs(psfs, px, py, halfsize):
+def get_vectorized_psfs(psfs, halfsize):
     from tractor.batch_mixture_profiles import BatchMixtureOfGaussians
     #from tractor.batch_psf import BatchPixelizedPSF
 
@@ -495,16 +527,19 @@ def get_vectorized_psfs(psfs, px, py, halfsize):
     ###pad, cx, cy = self._padInImageBatchGPU(sz, sz)
     W = H = sz
     pad = cp.zeros((N, H, W), cp.float32)
+    CX = []
+    CY = []
     for i,psf in enumerate(psfs):
-        img = psf.img
-        ph,pw = img.shape
+        psfimg = psf.img
+        print('psf img shape:', psfimg.shape)
+        ph,pw = psfimg.shape
         if H >= ph:
             y0 = (H - ph) // 2
             cy = y0 + ph // 2
         else:
             y0 = 0
             cut = (ph - H) // 2
-            img = img[:, cut:cut + H, :]
+            psfimg = psfimg[cut:cut + H, :]
             cy = ph // 2 - cut
         if W >= pw:
             x0 = (W - pw) // 2
@@ -512,12 +547,13 @@ def get_vectorized_psfs(psfs, px, py, halfsize):
         else:
             x0 = 0
             cut = (pw - W) // 2
-            img = img[:, :, cut:cut + W]
+            psfimg = psfimg[:, cut:cut + W]
             cx = pw // 2 - cut
-        sh, sw = img.shape
-        img = cp.array(img)
-        pad[i, y0:y0 + sh, x0:x0 + sw] = img
-    
+        sh, sw = psfimg.shape
+        pad[i, y0:y0 + sh, x0:x0 + sw] = cp.array(psfimg)
+        CX.append(cx)
+        CY.append(cy)
+
     P = cp.fft.rfft2(pad)
     #print('P type', P.dtype)
     v = cp.fft.rfftfreq(W)
@@ -539,7 +575,7 @@ def get_vectorized_psfs(psfs, px, py, halfsize):
     #w = cp.fft.fftfreq(pH)
     #P, (cx, cy), (pH, pW), (v, w) = batch_psf.getFourierTransformBatchGPU(px, py, halfsize)
 
-    return P, (cx, cy), (H, W), (v, w), psf_mogs
+    return P, (CX,CY), (H, W), (v, w), psf_mogs
 
 def lanczos_shift_images_inplace_gpu(G, x, y, work=None):
     '''

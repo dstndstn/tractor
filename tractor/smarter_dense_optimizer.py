@@ -275,7 +275,8 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             return None
 
         if get_A:
-            return A, B, X, colscales
+            extents = [img_bounds[tim] for tim in tractor.getImages()]
+            return A, B, X, colscales, extents
 
         if get_cov:
             ic = np.matmul(A.T, A)

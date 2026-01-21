@@ -127,6 +127,7 @@ class FakeCupyArray(object):
 
 complex64 = np.complex64
 float32 = np.float32
+int32 = np.int32
 
 def asarray(x):
     n = np.asarray(x)

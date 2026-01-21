@@ -258,14 +258,14 @@ if __name__ == '__main__':
         chisq = (vec1 - vec2).T @ (icov @ (vec1 - vec2))
         print('Chi difference: %.4g' % np.sqrt(chisq))
 
-        
-    h,w = 100,100
+    h,w = 100,200
     arcsec = 1./3600.
     ra_cen = 1.
     dec_cen = 2.
 
     #gal = ExpGalaxy(PixPos(h/2., w/2+.7), Flux(2000.), EllipseE(10., 0.1, 0.4))
-    gal = ExpGalaxy(RaDecPos(ra_cen, dec_cen), Flux(2000.), EllipseE(10., 0.1, 0.4))
+    #gal = ExpGalaxy(RaDecPos(ra_cen - 25.*arcsec, dec_cen), Flux(2000.), EllipseE(10., 0.1, 0.4))
+    gal = ExpGalaxy(RaDecPos(ra_cen - 25.*arcsec, dec_cen), Flux(2000.), EllipseE(5., 0.1, 0.4))
 
     #psf = PixelizedPsfEx(os.path.join(os.path.dirname(os.path.dirname(__file__)),
     psf = NormalizedPixelizedPsfEx(os.path.join(os.path.dirname(os.path.dirname(__file__)),
@@ -279,8 +279,8 @@ if __name__ == '__main__':
     print('const psf', psf)
 
     pixscale1 = 0.5*arcsec
-    
-    wcs1 = Tan(ra_cen + 0.4*arcsec, dec_cen - 0.3*arcsec, h/2+0.5, w/2+0.5,
+
+    wcs1 = Tan(ra_cen + 0.4*arcsec, dec_cen - 0.3*arcsec, w/2+0.5, h/2+0.5,
                -pixscale1, 0., 0., pixscale1, float(w), float(h))
     sig1 = 1.0
     sig2 = 1.0
@@ -297,20 +297,20 @@ if __name__ == '__main__':
     mod = tr.getModelImage(0)
 
     noisy1 = mod + np.random.normal(scale=sig1, size=(h,w))
-    noisy2 = mod + np.random.normal(scale=sig2, size=(h,w))
-
     tim1.data = noisy1
 
     pixscale2 = pixscale1
-    rot = np.deg2rad(5.)
+    rot = np.deg2rad(10.)
 
-    wcs2 = Tan(ra_cen + 0.2*arcsec, dec_cen + 0.1*arcsec, h/2+0.5, w/2+0.5,
+    wcs2 = Tan(ra_cen + 0.2*arcsec, dec_cen + 0.1*arcsec, w/2+0.5, h/2+0.5,
                -pixscale2 * np.cos(rot), -pixscale2 * np.sin(rot),
                -pixscale2 * np.sin(rot),  pixscale2 * np.cos(rot), float(w), float(h))
 
+    h2,w2 = 105, 205
+
     print('wcs2 pixscale:', wcs2.pixel_scale())
-    tim2 = Image(noisy2,
-                 inverr=np.ones((h,w), np.float32) / sig2,
+    tim2 = Image(np.zeros((h2,w2), np.float32),
+                 inverr=np.ones((h2,w2), np.float32) / sig2,
                  psf=psf, sky=ConstantSky(0.),
                  #wcs=NullWCS(),
                  wcs = ConstantFitsWcs(wcs2),
@@ -319,22 +319,36 @@ if __name__ == '__main__':
     tr = Tractor([tim1, tim2], [gal])
     tr.freezeParam('images')
 
+    mod2 = tr.getModelImage(tim2)
+    noisy2 = mod2 + np.random.normal(scale=sig2, size=(h2,w2))
+    tim2.data = noisy2
+
     true_params = np.array(tr.getParams())
 
     g = gal.shape.getParams()
-    g[0] = 15
+    #g[0] = 15
+    g[0] = 5
     g[2] = 0.
     gal.shape.setParams(g)
     print('Galaxy shape:', gal.shape)
 
     plt.clf()
+    mn,mx = noisy1.min(), noisy1.max()
+    ima = dict(interpolation='nearest', origin='lower', vmin=mn, vmax=mx)
     plt.subplot(2,2,1)
-    plt.imshow(noisy1)
+    plt.imshow(noisy1, **ima)
+    plt.title('image 1')
     plt.subplot(2,2,2)
-    plt.imshow(noisy2)
+    plt.imshow(noisy2, **ima)
+    plt.title('image 2')
     plt.subplot(2,2,3)
     mod = tr.getModelImage(0)
-    plt.imshow(mod)
+    plt.imshow(mod, **ima)
+    plt.title('model 1')
+    plt.subplot(2,2,4)
+    chi = tr.getChiImage(0)
+    plt.title('chi 1')
+    plt.imshow(chi, interpolation='nearest', origin='lower', vmin=-5, vmax=+5)
     plt.savefig('mod.png')
 
     p0 = tr.getParams()
@@ -471,69 +485,109 @@ if __name__ == '__main__':
         chisq = (up - up2).T @ (ic @ (up - up2))
         print('chisq:', chisq)
 
+    print()
+    print('Testing one_image_update...')
+    print()
+
     from tractor import Images
     orig_images = tr.images
     tr.images = Images(tim1)
     oa = dict(shared_params=False)
-    A,B,X,colscales = fac_opt.one_image_update(tr, priors=False, get_A=True, **oa)
+    A,B,X,colscales,extents = fac_opt.one_image_update(tr, priors=False, get_A=True, **oa)
     print('A', A.shape)
     print('B', B.shape)
     print('X', X.shape)
     print('colscales', colscales)
+    print('image extents:', extents)
 
-    tr.setModelMasks([{gal: ModelMask(10, 10, 80, 80)}])
-    mA,mB,mX,mcolscales = fac_opt.one_image_update(tr, priors=False, get_A=True, **oa)
+    #tr.setModelMasks([{gal: ModelMask(10, 10, 80, 80)}])
+    tr.setModelMasks([{gal: ModelMask(110, 10, 80, 80)}])
+    mA,mB,mX,mcolscales,mextents = fac_opt.one_image_update(tr, priors=False, get_A=True, **oa)
     tr.images = orig_images
     print('mA', mA.shape)
     print('mB', mB.shape)
     print('mX', mX.shape)
     print('mcolscales', mcolscales)
+    print('mextents:', mextents)
 
     print()
-    print('Testing with modelMasks...')
-    tr.setModelMasks([{gal: ModelMask(10, 10, 80, 80)} for tim in tr.images])
+    print('Testing LSQR optimizer with modelMasks...')
+    tr.setModelMasks([{gal: ModelMask(110, 10, 80, 80)} for tim in tr.images])
+    modslc = slice(10,90), slice(110, 190)
+    #tr.setModelMasks([{gal: ModelMask(10, 10, 80, 80)} for tim in tr.images])
     #tr.setModelMasks([{gal: ModelMask(5, 5, 90, 90)} for tim in tr.images])
 
     tr.setParams(p0)
+    print('Fitting:')
+    tr.printThawedParams()
     tr.optimizer = orig_opt
+    print('LSQR + modelMasks: start optimize()')
     mup = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+    print('LSQR + modelMasks: done optimize()')
 
     compare('LSQR', 'LSQR w/ModelMasks', up, mup, ic)
     print()
 
     plt.figure(figsize=(12,7))
     plt.clf()
-    slc = slice(10,90),slice(10,90)
+    #slc = slice(10,90),slice(10,90)
+
+    xa,xb,ya,yb = extents[0]
+    eh,ew = yb-ya,xb-xa
+    mxa,mxb,mya,myb = mextents[0]
+    mh,mw = myb-mya, mxb-mxa
+    #slc = slice(10,90),slice(10,90)
+    slc = slice(mya-ya, mya-ya+mh), slice(mxa-xa, mxa-xa+mw)
     for col in range(6):
         ima = dict(interpolation='nearest', origin='lower',
                    vmin=-0.06, vmax=0.06)
-        plt.subplot(3, 6, 1 + col)
-        plt.imshow(A[:,col].reshape((100,100))[slc], **ima)
+        plt.subplot(4, 6, 1 + col)
+        # Full deriv
+        plt.imshow(A[:,col].reshape((eh, ew)), **ima)
+        #plt.imshow(A[:,col].reshape((eh, ew))[slc], **ima)
 
-        plt.subplot(3, 6, 6 + 1 + col)
-        plt.imshow(mA[:,col].reshape((80,80)), **ima)
+        # Full deriv cut to model-mask area
+        plt.subplot(4, 6, 6 + 1 + col)
+        #plt.imshow(A[:,col].reshape((eh, ew))[mya-ya:, mxa-xa:][:mh,:mw], **ima)
+        plt.imshow(A[:,col].reshape((eh, ew))[slc], **ima)
+
+        # Model-mask deriv
+        plt.subplot(4, 6, 12 + 1 + col)
+        plt.imshow(mA[:,col].reshape((mh,mw)), **ima)
 
     ima = dict(interpolation='nearest', origin='lower')
-    plt.subplot(3, 6, 12 + 1)
-    plt.imshow(B.reshape((100,100))[slc], **ima)
+    plt.subplot(4, 6, 18 + 1)
+    plt.imshow(B.reshape((eh,ew))[slc], **ima)
     #plt.colorbar()
-    plt.subplot(3, 6, 12 + 2)
-    plt.imshow(mB.reshape((80,80)), **ima)
+    plt.subplot(4, 6, 18 + 2)
+    plt.imshow(mB.reshape((mh,mw)), **ima)
     #plt.colorbar()
 
     tr.setParams(p0)
     mod = tr.getModelImage(0)
-    plt.subplot(3, 6, 12 + 3)
+    plt.subplot(4, 6, 18 + 3)
     plt.imshow(mod, **ima)
 
-    tr.setParams(p0 + 0.5 * up)
+    plt.subplot(4, 6, 18 + 4)
+    plt.imshow(mod[modslc], **ima)
+
+    print('Original galaxy params:')
+    print(gal)
+    f = 0.001
+    tr.setParams(p0 + f * up)
+    print('Stepping fraction of "up":')
+    print(gal)
+
     mod = tr.getModelImage(0)
-    plt.subplot(3, 6, 12 + 4)
+    plt.subplot(4, 6, 18 + 5)
     plt.imshow(mod, **ima)
 
-    tr.setParams(p0 + 0.5 * mup)
+    tr.setParams(p0 + f * mup)
+    print('Stepping fraction of "mup":')
+    print(gal)
+
     mod = tr.getModelImage(0)
-    plt.subplot(3, 6, 12 + 5)
+    plt.subplot(4, 6, 18 + 6)
     plt.imshow(mod, **ima)
 
     plt.savefig('derivs.png')
@@ -572,14 +626,17 @@ if __name__ == '__main__':
     cutr = Tractor([cutim1, cutim2], [gal])
     cutr.freezeParam('images')
 
+    cutr.setModelMasks(tr.modelMasks)
+    #cutr.setModelMasks([{gal: ModelMask(10, 10, 80, 80)} for tim in cutr.images])
     #cutr.setModelMasks([{gal: ModelMask(0, 0, w, h)} for tim in cutr.images])
-    cutr.setModelMasks([{gal: ModelMask(10, 10, 80, 80)} for tim in cutr.images])
     #cutr.setModelMasks([{gal: ModelMask(25, 25, 50, 50)} for tim in cutr.images])
 
     cutr.setParams(p0)
     #cutr.printThawedParams()
     cutr.optimizer = GPUOptimizer()
+    print('Starting GPU optimizer getLinearUpdateDirection...')
     up3 = cutr.optimizer.getLinearUpdateDirection(cutr, **optargs)
+    print('Done GPU optimizer getLinearUpdateDirection...')
 
     print('GPU update:', up3)
 
