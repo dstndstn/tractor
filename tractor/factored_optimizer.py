@@ -840,7 +840,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             for i,(tim,mm) in enumerate(zip(tims, modelmasks)):
                 tr.images = [tim]
                 tr.modelMasks = [mm]
--
                 src = tr.catalog[0]
                 sx,sy = tim.getWcs().positionToPixel(src.getPosition(), src)
                 h,w = tim.shape
