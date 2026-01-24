@@ -60,9 +60,9 @@ def batch_correlate1d_cpu(a, b, axis=1, mode='constant'):
     f_b = np.fft.rfft(padded_b, r, axis=1)
     del padded_b
     if axis == 1:
-        f_p = np.einsum("ijk,ij->ijk", f_a, f_b)
+        f_p = np.einsum("ijk,ij->ijk", f_a, np.conj(f_b))
     else:
-        f_p = np.einsum("ijk,ik->ijk", f_a, f_b)
+        f_p = np.einsum("ijk,ik->ijk", f_a, np.conj(f_b))
     del f_a, f_b
     c = np.fft.fftshift(np.fft.irfft(f_p, axis=axis), axes=(axis))
     del f_p
@@ -102,9 +102,9 @@ def batch_correlate1d_gpu(a, b, axis=1, mode='constant'):
     f_b = cp.fft.rfft(padded_b, r, axis=1)
     del padded_b
     if axis == 1:
-        f_p = cp.einsum("ijk,ij->ijk", f_a, f_b)
+        f_p = cp.einsum("ijk,ij->ijk", f_a, cp.conj(f_b))
     else:
-        f_p = cp.einsum("ijk,ik->ijk", f_a, f_b)
+        f_p = cp.einsum("ijk,ik->ijk", f_a, cp.conj(f_b))
     del f_a, f_b
     c = cp.fft.fftshift(cp.fft.irfft(f_p, axis=axis), axes=(axis))
     del f_p
