@@ -23,9 +23,10 @@ if sys.version_info[0] == 2:
         import __builtin__
         return int(__builtin__.round(float(x)))
 
-def lanczos_shift_image_batch_gpu(imgs, dxs, dys):
-    """Translated from lanczos_shift_image python version to GPU using cupy
-        and helper functions from tractor.miscutils"""
+#def lanczos_shift_image_batch_gpu(imgs, dxs, dys):
+#    """Translated from lanczos_shift_image python version to GPU using cupy
+#        and helper functions from tractor.miscutils"""
+"""
     import cupy as cp
     from tractor.miscutils import gpu_lanczos_filter,batch_correlate1d_gpu
     do_reshape = False
@@ -35,6 +36,7 @@ def lanczos_shift_image_batch_gpu(imgs, dxs, dys):
         imgs = imgs.reshape((oldshape[0]*oldshape[1], oldshape[2], oldshape[3]))
     L = 3
     nimg = dxs.size 
+    print (f'{nimg=}')
     lr = cp.tile(cp.arange(-L, L+1), (nimg, 1))
     Lx = gpu_lanczos_filter(L, lr+dxs.reshape((nimg,1)))
     Ly = gpu_lanczos_filter(L, lr+dys.reshape((nimg,1)))
@@ -50,6 +52,64 @@ def lanczos_shift_image_batch_gpu(imgs, dxs, dys):
     if (do_reshape):
         outimg = outimg.reshape(oldshape)
     return outimg
+"""
+
+def lanczos_shift_image_batch_gpu(imgs, dxs, dys, chunk_size=None):
+    import cupy as cp
+    from tractor.miscutils import gpu_lanczos_filter, batch_correlate1d_gpu
+
+    # Handle 4D (N, Nd, H, W) -> 3D (Z, H, W)
+    do_reshape = False
+    if len(imgs.shape) == 4:
+        do_reshape = True
+        oldshape = imgs.shape
+        imgs = imgs.reshape((-1, oldshape[2], oldshape[3]))
+        dxs = dxs.ravel()
+        dys = dys.ravel()
+
+    nimg = dxs.size
+
+    # Smart chunking: If chunk_size isn't provided,
+    # let's assume a safe default like 50 images for A100.
+    if chunk_size is None:
+        chunk_size = 50
+
+    outimg = cp.empty_like(imgs)
+    L = 3
+
+    for i in range(0, nimg, chunk_size):
+        print (f'Using chunk {i=} of size {chunk_size=}')
+        end = min(i + chunk_size, nimg)
+
+        # Slicing doesn't copy data, it's a view
+        img_chunk = imgs[i:end]
+
+        # Generate filters for this chunk
+        lr = cp.tile(cp.arange(-L, L+1), (end-i, 1))
+        Lx = gpu_lanczos_filter(L, lr + dxs[i:end, cp.newaxis])
+        Ly = gpu_lanczos_filter(L, lr + dys[i:end, cp.newaxis])
+        del lr
+
+        # Normalize
+        Lx /= Lx.sum(1)[:, cp.newaxis]
+        Ly /= Ly.sum(1)[:, cp.newaxis]
+
+        # First correlation (Horizontal)
+        sx = batch_correlate1d_gpu(img_chunk, Lx, axis=2, mode='constant')
+        del Lx
+
+        # Second correlation (Vertical)
+        outimg[i:end] = batch_correlate1d_gpu(sx, Ly, axis=1, mode='constant')
+
+        del Ly, sx
+        # Forces the mempool to release blocks back to the GPU
+        cp.get_default_memory_pool().free_all_blocks()
+
+    if do_reshape:
+        outimg = outimg.reshape(oldshape)
+
+    return outimg
+
 
 class BatchHybridPSF(object):
     pass
@@ -248,6 +308,8 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
 
         pad = np.zeros((N, Nb, H, W), img.dtype)
         pad[:, :, y0:y0 + sh, x0:x0 + sw] = subimg
+        #print (f'{N=} {Nb=} {H=} {W=}, img.dtype')
+        #print ("PAD shape", pad.shape, pad.size)
         pad = cp.asarray(pad)
         return pad, cx, cy
 

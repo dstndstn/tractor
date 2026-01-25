@@ -2,6 +2,8 @@ from tractor.constrained_optimizer import ConstrainedOptimizer
 import numpy as np
 from numpy.linalg import lstsq, LinAlgError
 from tractor.utils import savetxt_cpu_append
+import time
+ts = np.zeros(2)
 
 class SmarterDenseOptimizer(ConstrainedOptimizer):
 
@@ -56,6 +58,8 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                            variance=False,
                            shared_params=True,
                            get_A_matrix=False, max_size=0):
+        t = time.time()
+        #print ("Smarter dense")
         if shared_params or scales_only or damp>0 or variance:
             raise RuntimeError('Not implemented')
         assert(shared_params == False)
@@ -418,6 +422,8 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             X_full[c] = X[i]
         X = X_full
         #print('-> SMARTER X', X)
+        ts[0] += time.time()-t
+        #print(f'{ts=}')
 
         if get_A_matrix:
             if scale_columns:

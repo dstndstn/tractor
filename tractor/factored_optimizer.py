@@ -171,6 +171,7 @@ class FactoredOptimizer(object):
                 print (f"WARNING: Prior shape mismatch {icsum.shape=} {xicsum.shape=} {priors_ATA.shape=} {priors_ATB.shape=}; using CPU mode instead.")
                 return super().getLinearUpdateDirection(tr, **kwargs)
         x,_,_,_ = np.linalg.lstsq(icsum, xicsum, rcond=None)
+        #print (f'{tt=}')
         if x_imgs is not None:
             x = np.append(x_imgs, x)
         #print (f'{icsum=} {xicsum=}')
@@ -206,7 +207,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
     def getSingleImageUpdateDirections(self, tr, **kwargs):
         #import traceback
         #traceback.print_stack()
-        #print ("GPU getSingleImageUpdateDirections")
+        print ("GPU getSingleImageUpdateDirections")
         #print ("profile galaxy", isinstance(tr.catalog[0], ProfileGalaxy))
         R_gpu = None
         R_cpu = None
@@ -217,7 +218,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             if self._gpumode >= 10:
                 print ("Skipping non-profile galaxy")
                 return []
-            #print ("Running CPU version, frozen = ", tr.isParamFrozen('images'), "len = ", len(tr.catalog), " profile = ", isinstance(tr.catalog[0], ProfileGalaxy))
+            print ("Running CPU version, frozen = ", tr.isParamFrozen('images'), "len = ", len(tr.catalog), " profile = ", isinstance(tr.catalog[0], ProfileGalaxy))
             #p = self.ps
             #self.ps = None
             t = time.time()
@@ -237,7 +238,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         if self._gpumode == 1 or self._gpumode == 3 or self._gpumode == 11 or self._gpumode == 13:
             try:
-                #print('Running GPU code...')
+                print('Running GPU code...')
                 if not (tr.isParamFrozen('images') and (len(tr.catalog) == 1) and isinstance(tr.catalog[0], ProfileGalaxy)):
                     print ("Running GPU version, frozen = ", tr.isParamFrozen('images'), "len = ", len(tr.catalog), " profile = ", isinstance(tr.catalog[0], ProfileGalaxy))
                     tct[0] += 1
@@ -276,17 +277,19 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             nimages = len(tr.images)
             imsize = tr.images[0].data.size
             nd = tr.numberOfParams()+2
-            kmax = 9
+            kmax = 3 #Use kmax 3 because many algorithms are now able to chunk memory 
             #Double size of 16 bit (complex 128) array x nimage x
             #n derivs x kmax x imsize.  5D array in batch_mixture_profiles.py
-            """
-            Dustin less_mem version
-            est_mem = nimages*imsize*nd*kmax*16 * 3.2
+            #Dustin less_mem version
+            est_mem = nimages*imsize*nd*kmax*16 * 3.2 / 1.e+9
+            free_mem /= 1.e+9
             # 3.2 factor: NGC 3585 example
             
             if free_mem < est_mem:
                 try:
-                    print("Warning: Estimated memory %.1f GB is greater than free memory %.1f GB; Running less-memory GPU mode instead!" % (est_mem / 1e9, free_mem / 1e9))
+                    import datetime
+                    print(f"Warning: Estimated memory {est_mem} GB is greater than free memory {free_mem} GB; Running less-memory GPU mode instead!", datetime.datetime.now(), "src = ", tr.catalog[0])
+                    #print("Warning: Estimated memory %.1f GB is greater than free memory %.1f GB; Running less-memory GPU mode instead!" % (est_mem / 1e9, free_mem / 1e9))
                     R_gpu = self.gpuSingleImageUpdateDirectionsVectorized_less_mem(tr, **kwargs)
                     return R_gpu
                 except Exception as e:
@@ -299,18 +302,16 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 print('Running CPU version instead')
                 R_cpu = super().getSingleImageUpdateDirections(tr, **kwargs)
                 return R_cpu
-            """
 
-            est_mem = nimages*imsize*nd*kmax*16
-            import datetime
-            print (f"Running VECTORIZED GPU code...", datetime.datetime.now(), "src = ", tr.catalog[0], f'Estimated mem {est_mem=}')
+            #est_mem = nimages*imsize*nd*kmax*16
+            #import datetime
+            #print (f"Running VECTORIZED GPU code...", datetime.datetime.now(), "src = ", tr.catalog[0], f'Estimated mem {est_mem=} {free_mem=}')
 
             #if free_mem < est_mem:
-            if False:
-                print (f"Warning: Estimated memory {est_mem} is greater than free memory {free_mem}; Running CPU mode instead!")
-                print (f"\t{nimages=} {imsize=} {nd=}")
-                R_gpuv = super().getSingleImageUpdateDirections(tr, **kwargs)
-                return R_gpuv
+            #    print (f"Warning: Estimated memory {est_mem} is greater than free memory {free_mem}; Running CPU mode instead!")
+            #    print (f"\t{nimages=} {imsize=} {nd=}")
+            #    R_gpuv = super().getSingleImageUpdateDirections(tr, **kwargs)
+            #    return R_gpuv
             #else:
                 #print (f"Estimated memory {est_mem} is less than free memory {free_mem}")
 
@@ -324,7 +325,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 #print ("Finished VECTORIZED code")
                 tt[2] += time.time()-t
                 tct[2] += 1
-                #print ("GPU Vectorized time:", time.time()-t)
+                print ("GPU Vectorized time:", time.time()-t)
                 if self._gpumode == 2 or self._gpumode == 12:
                     return R_gpuv
             except AssertionError:
@@ -337,11 +338,13 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 if self._gpumode == 2 or self._gpumode == 12:
                     return R_gpuv
             except cp.cuda.memory.OutOfMemoryError:
+                import traceback
                 free_mem, total_mem = cp.cuda.runtime.memGetInfo()
                 mempool = cp.get_default_memory_pool()
                 used_bytes = mempool.used_bytes()
                 tot_bytes = mempool.total_bytes()
                 print (f"Out of Memory for source "+str(tr.catalog[0]))
+                traceback.print_exc()
                 print (f'OOM Device {free_mem=} {total_mem=}; This mempool {used_bytes=} {tot_bytes=}')
                 print ("Running CPU version instead...")
                 mempool.free_all_blocks()
@@ -365,7 +368,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         if self._gpumode == 0 or self._gpumode == 3 or self._gpumode == 10 or self._gpumode == 13:
             try:
-               # print('Running CPU code for comparison...')
+                print('Running CPU code for comparison...')
                 if not (tr.isParamFrozen('images') and (len(tr.catalog) == 1) and isinstance(tr.catalog[0], ProfileGalaxy)):
                     print ("Running CPU version, frozen = ", tr.isParamFrozen('images'), "len = ", len(tr.catalog), " profile = ", isinstance(tr.catalog[0], ProfileGalaxy))
                     tct[0] += 1
@@ -1958,6 +1961,49 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         del A, B, X
         return Xic
 
+    def evaluate_mog_gpu(self, conv_mog, xx, yy, img_params, G):
+        import cupy as cp
+        from tractor.miscutils import get_mog_eval_kernel
+        
+        N, Nd, K = conv_mog.amp.shape
+        H, W = yy.size, xx.size
+        
+        # Heuristic for A100 40GB:
+        # 208 images * 10 derivs * 6 components * 64 * 64 is small,
+        # but we chunk anyway for scalability.
+        from tractor.miscutils import get_safe_chunk_size
+        chunk_size = get_safe_chunk_size(N, H, W, vram_gb=40)
+        
+        kernel = get_mog_eval_kernel()
+        
+        # Pre-calculate inversion terms
+        det = conv_mog.var[:,:,:,0,0] * conv_mog.var[:,:,:,1,1] - \
+              conv_mog.var[:,:,:,0,1] * conv_mog.var[:,:,:,1,0]
+        
+        # Broadcastable components
+        iv0 = (conv_mog.var[:,:,:,1,1] / det).astype(cp.float32)[:,:,:,None,None]
+        iv1 = (-(conv_mog.var[:,:,:,0,1] + conv_mog.var[:,:,:,1,0]) / det).astype(cp.float32)[:,:,:,None,None]
+        iv2 = (conv_mog.var[:,:,:,0,0] / det).astype(cp.float32)[:,:,:,None,None]
+        scale = (conv_mog.amp / (2.*cp.pi*cp.sqrt(det))).astype(cp.float32)[:,:,:,None,None]
+        
+        mx = (conv_mog.mean[:,:,:,0] - img_params.dx[:,None,None]).astype(cp.float32)[:,:,:,None,None]
+        my = (conv_mog.mean[:,:,:,1] - img_params.dy[:,None,None]).astype(cp.float32)[:,:,:,None,None]
+
+        # Grid (1, 1, 1, H, W)
+        XX = xx[None, None, None, None, :]
+        YY = yy[None, None, None, :, None]
+
+        for i in range(0, N, chunk_size):
+            e = min(i + chunk_size, N)
+            # kernel computes (chunk, Nd, K, H, W)
+            # we sum over K (axis 2) immediately to keep it 4D (chunk, Nd, H, W)
+            res = kernel(iv0[i:e], iv1[i:e], iv2[i:e], scale[i:e], mx[i:e], my[i:e], XX.astype(cp.float32), YY.astype(cp.float32))
+            G[i:e] += cp.sum(res, axis=2)
+            
+            del res
+            cp.get_default_memory_pool().free_all_blocks()
+        return G
+
     def computeGalaxyModelsVectorized(self, img_params):
         # Note, this does *not* scale by *counts*, it produces unit-flux models
         t1 = time.time()
@@ -2026,6 +2072,10 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             use_roi = True
             xx = cp.arange(img_params.mw)
             yy = cp.arange(img_params.mh)
+
+            G = self.evaluate_mog_gpu(conv_mog, xx, yy, img_params, G)
+
+            """
             det = conv_mog.var[:,:,:,0,0] * conv_mog.var[:,:,:,1,1] - conv_mog.var[:,:,:,0,1] * conv_mog.var[:,:,:,1,0]
             iv0 = conv_mog.var[:,:,:,1,1] / det
             iv1 = -(conv_mog.var[:,:,:,0,1] + conv_mog.var[:,:,:,1,0]) / det
@@ -2098,6 +2148,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             del means, distsq, varcopy
             #cp.savetxt('vgmogpatch.txt',mog_g.ravel())
             G += mog_g
+            """
 
         #Do no use roi since images are padded to be (mh, mw)
         use_roi = False

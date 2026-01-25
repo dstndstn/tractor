@@ -896,7 +896,7 @@ class BatchMixtureOfGaussians(object):
                 s_k, e_k = i_k * chunk_size_k, min((i_k + 1) * chunk_size_k, K)
 
                 # 1. Calculate Real Gaussian Envelope
-                F_chunk = fused_real_F(
+                F_c = fused_real_F(
                     a[s_ni:e_ni, :, s_k:e_k, cp.newaxis, cp.newaxis],
                     d[s_ni:e_ni, :, s_k:e_k, cp.newaxis, cp.newaxis],
                     b[s_ni:e_ni, :, s_k:e_k, cp.newaxis, cp.newaxis],
