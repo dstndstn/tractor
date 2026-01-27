@@ -141,6 +141,7 @@ class FactoredOptimizer(object):
         #Store original value of priors
         orig_priors = kwargs['priors']
         img_opts = self.getSingleImageUpdateDirections(tr, **kwargs)
+        tt[5] += time.time()-t
         if len(img_opts) == 0:
             if x_imgs is not None:
                 return x_imgs
@@ -273,24 +274,29 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                     return R_gpu
 
         if self._gpumode == 2 or self._gpumode == 3 or self._gpumode == 12 or self._gpumode == 13:
+            mempool = cp.get_default_memory_pool()
+            mempool.free_all_blocks()
             free_mem, total_mem = cp.cuda.runtime.memGetInfo()
             nimages = len(tr.images)
             imsize = tr.images[0].data.size
             nd = tr.numberOfParams()+2
-            kmax = 3 #Use kmax 3 because many algorithms are now able to chunk memory 
+            kmax = 4 #Use kmax 4 because many algorithms are now able to chunk memory
             #Double size of 16 bit (complex 128) array x nimage x
             #n derivs x kmax x imsize.  5D array in batch_mixture_profiles.py
             #Dustin less_mem version
-            est_mem = nimages*imsize*nd*kmax*16 * 3.2 / 1.e+9
+            est_mem = nimages*imsize*nd*kmax*8 / 1.e+9
             free_mem /= 1.e+9
             # 3.2 factor: NGC 3585 example
+            print (f'Estimated memory {est_mem} GB free memory {free_mem}')
             
             if free_mem < est_mem:
                 try:
                     import datetime
                     print(f"Warning: Estimated memory {est_mem} GB is greater than free memory {free_mem} GB; Running less-memory GPU mode instead!", datetime.datetime.now(), "src = ", tr.catalog[0])
                     #print("Warning: Estimated memory %.1f GB is greater than free memory %.1f GB; Running less-memory GPU mode instead!" % (est_mem / 1e9, free_mem / 1e9))
+                    t = time.time()
                     R_gpu = self.gpuSingleImageUpdateDirectionsVectorized_less_mem(tr, **kwargs)
+                    tt[4] += time.time()-t
                     return R_gpu
                 except Exception as e:
                     print('Fallback to less-memory GPU version failed:', e)
@@ -2195,7 +2201,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #used_bytes = mempool.used_bytes()
         #tot_bytes = mempool.total_bytes()
         #print (f'After free {used_bytes=} {tot_bytes=}')
-        return super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
+        #return super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
         print ("GPU FACTORED TRY UPDATES")
 
         # Dustin's FIXME improvement ideas
@@ -2347,6 +2353,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             if steps[i][2]:
                 self.hit_limit = True #set if any hits limit
         
+        tt[6] += time.time()-t
         if max_idx == len(logprob)-1:
             print ("Best is previous")
             return (0., 0.)

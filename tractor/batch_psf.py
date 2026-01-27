@@ -348,6 +348,7 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
         # cx,cy: coordinate of the PSF center in *pad*
         P = cp.fft.rfft2(pad)
         P = P.astype(cp.complex64)
+        del pad
         nimages, pH, pW = pad.shape
         v = cp.fft.rfftfreq(pW)
         w = cp.fft.fftfreq(pH)
