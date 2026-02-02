@@ -701,7 +701,7 @@ class BatchMixtureOfGaussians(object):
         # Estimate footprint: Ni * Nd * K * nw * nv * 8 bytes (complex64)
         # We use a 1.2 safety factor for intermediate overhead
         sz_gb = (v.size * w.size * a.shape[0] * a.shape[1] * a.shape[2] * 8 / 1e9)
-        print(f"Fourier Transform: Estimated 5D footprint is {sz_gb:.2f} GB")
+        #print(f"Fourier Transform: Estimated 5D footprint is {sz_gb:.2f} GB")
         if sz_gb > 5:
             # Largest cases: Nested Image + Component chunking
             # Adjust chunk_size_ni smaller if still OOMing
@@ -782,7 +782,7 @@ class BatchMixtureOfGaussians(object):
             if current_chunk_size_k == 0:
                 continue
 
-            print(f"Processing chunk {i+1}/{num_k_chunks} (K indices: {start_idx}-{end_idx-1})")
+            #print(f"Processing chunk {i+1}/{num_k_chunks} (K indices: {start_idx}-{end_idx-1})")
             # Slice inputs for the current chunk along the K dimension (axis=2)
             a_chunk = a[:, :, start_idx:end_idx] # (Ni, Nd, current_chunk_size_k)
             d_chunk = d[:, :, start_idx:end_idx] # (Ni, Nd, current_chunk_size_k)
@@ -883,7 +883,7 @@ class BatchMixtureOfGaussians(object):
             # We divide by 2 to account for the Fsum_batch accumulator
             chunk_size_ni = max(1, int(available_gb / (one_ni_k_chunk_gb * 2)))
             chunk_size_ni = min(chunk_size_ni, Ni)
-            print(f"Dynamic memory check: Using Ni chunk size of {chunk_size_ni}")
+            #print(f"Dynamic memory check: Using Ni chunk size of {chunk_size_ni}")
 
         num_ni_chunks = math.ceil(Ni / chunk_size_ni)
         num_k_chunks = math.ceil(K / chunk_size_k)
