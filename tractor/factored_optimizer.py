@@ -2027,7 +2027,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # resulting in P already being a CuPy array
         #P shape (Nimages, nw, nv)
         P = img_params.P[:,cp.newaxis,:,:]
-        #print ("FSUM", Fsum.shape, "P", P.shape)
         G = cp.fft.irfft2(Fsum*P).astype(cp.float32)
         del Fsum, P
         #Do Lanczos shift
@@ -2201,7 +2200,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #used_bytes = mempool.used_bytes()
         #tot_bytes = mempool.total_bytes()
         #print (f'After free {used_bytes=} {tot_bytes=}')
-        #return super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
+        return super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
         print ("GPU FACTORED TRY UPDATES")
 
         # Dustin's FIXME improvement ideas
