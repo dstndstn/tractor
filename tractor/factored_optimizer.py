@@ -208,7 +208,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
     def getSingleImageUpdateDirections(self, tr, **kwargs):
         #import traceback
         #traceback.print_stack()
-        print ("GPU getSingleImageUpdateDirections")
+        #print ("GPU getSingleImageUpdateDirections")
         #print ("profile galaxy", isinstance(tr.catalog[0], ProfileGalaxy))
         R_gpu = None
         R_cpu = None
@@ -331,7 +331,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 #print ("Finished VECTORIZED code")
                 tt[2] += time.time()-t
                 tct[2] += 1
-                print ("GPU Vectorized time:", time.time()-t)
+                #print ("GPU Vectorized time:", time.time()-t)
                 if self._gpumode == 2 or self._gpumode == 12:
                     return R_gpuv
             except AssertionError:
@@ -2211,7 +2211,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 isinstance(tractor.catalog[0], ProfileGalaxy) and
                 tractor.isParamFrozen('images')):
             print('Calling superclass tryUpdates')
-            return super().tryUpdates(tractor, X, alphas=alphas)
+            return super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
 
         print('number of images:', len(tractor.images))
         Nimages = len(tractor.images)
@@ -2290,6 +2290,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         gals = self._getBatchGalaxyProfiles(profiles, masks, px, py, cx, cy, pW, pH,
                                             fluxes[0], img_sky, img_pix, img_ie)
         img_params.addBatchGalaxyProfiles(gals)
+        if img_params.ffts is None:
+            print ("Warning> img_params.ffts is None!  Calling superclass tryUpdates (on CPU)")
+            return super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
         G = self.computeGalaxyModelsVectorized(img_params)
         t = time.time()
         assert(G.shape == (Nimages, len(steps), pH, pW))
