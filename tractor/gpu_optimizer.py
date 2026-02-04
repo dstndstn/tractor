@@ -190,8 +190,6 @@ class GPUOptimizer(GPUFriendlyOptimizer):
                 amix_vars[i, j, :K, 2] = m.var[:, 1, 1]
                 amix_amps[i, j, :K] = m.amp
         #print('amix_vars:', amix_vars)
-        cx = np.array(cx, np.int32)
-        cy = np.array(cy, np.int32)
         print('px,py', px,py)
         print('cx,cy', cx,cy)
         print('pH,pW', pH,pW)
@@ -203,6 +201,8 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         mux = px - ipx
         muy = py - ipy
         print('mu x,y', mux, muy)
+        assert(np.abs(mux).max() <= 0.5)
+        assert(np.abs(muy).max() <= 0.5)
 
         # ugh, pixel shifts
         # dx = px - cx
@@ -217,8 +217,6 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         # print('mu x,y', mux, muy)
         # dxi = np.asarray(x0+sx)
         # dyi = np.asarray(y0+sy)
-        assert(np.abs(mux).max() <= 0.5)
-        assert(np.abs(muy).max() <= 0.5)
         # assert(np.all(sy <= 0))
         # assert(np.all(sx <= 0))
         # print('sx,sy', sx,sy)
@@ -233,8 +231,8 @@ class GPUOptimizer(GPUFriendlyOptimizer):
             p = pix[y0[i]:y1[i], x0[i]:x1[i]]
             #print('p:', p)
 
-            subx = x0[i] - (ipx[i] - cx[i])
-            suby = y0[i] - (ipy[i] - cy[i])
+            subx = x0[i] - (ipx[i] - cx)
+            suby = y0[i] - (ipy[i] - cy)
 
             #padpix[i, -sy[i]:-sy[i]+mh[i], -sx[i]:-sx[i]+mw[i]] = p
             padpix[i, suby:suby+mh[i], subx:subx+mw[i]] = p
@@ -384,27 +382,23 @@ class GPUOptimizer(GPUFriendlyOptimizer):
             #meanx = cp.array(-dx, dtype=cp.float32)
             #meany = cp.array(-dy, dtype=cp.float32)
             t = cp.int32
-            meanx = cp.array(cx, t)
-            meany = cp.array(cy, t)
-            xx = cp.arange(pW, dtype=t)
-            yy = cp.arange(pH, dtype=t)
+            xx = cp.arange(0-cx, pW-cx, dtype=t)
+            yy = cp.arange(0-cy, pH-cy, dtype=t)
             del t
 
             # The distsq array is going to be nimages x nderivs x nmog x ny x nx
-            na = cp.newaxis
-            distsq = (iv0[:,:,:,na,na] * (xx[na,na,na,na,:] - meanx[:,na,na,na,na])**2 +
-                      iv1[:,:,:,na,na] * (xx[na,na,na,na,:] - meanx[:,na,na,na,na]) *
-                                         (yy[na,na,na,:,na] - meany[:,na,na,na,na]) +
-                      iv2[:,:,:,na,na] * (yy[na,na,na,:,na] - meany[:,na,na,na,na])**2)
-            distsq *= -0.5
+            nu = cp.newaxis
+            distsq = -0.5 * (iv0[:,:,:,nu,nu] *  xx[nu,nu,nu,nu,:]**2 +
+                             iv1[:,:,:,nu,nu] * (xx[nu,nu,nu,nu,:] *
+                                                 yy[nu,nu,nu,:,nu]) +
+                             iv2[:,:,:,nu,nu] *  yy[nu,nu,nu,:,nu]**2)
+            del xx, yy, iv0, iv1, iv2
             distsq = cp.exp(distsq)
             assert(distsq.shape == (Nimages, Nderivs, Nmog, pH, pW))
             assert(scale.shape == (Nimages, Nderivs, Nmog))
             G_mog = cp.sum(distsq * scale[..., na, na], axis=2)
             print('G_mog', G_mog)
             assert(G_mog.shape == G.shape)
-            #mog_g = cp.sum(scale[:,:,:,cp.newaxis,cp.newaxis] * cp.exp(-0.5*distsq), axis=2).astype(cp.float32)
-            #del means, distsq, varcopy
 
             import pylab as plt
             cG = G_mog.get()
@@ -421,6 +415,7 @@ class GPUOptimizer(GPUFriendlyOptimizer):
             plt.savefig('gm.png')
 
             G += G_mog
+            del G_mog
 
         # FIXME -- check that this all remains float32 through the computations
         lanczos_shift_images_inplace_gpu(G, mux, muy)
@@ -439,24 +434,18 @@ class GPUOptimizer(GPUFriendlyOptimizer):
                     plt.imshow(cG[i, j, :, :] - cG[i, 0, :, :], interpolation='nearest', origin='lower')
         plt.savefig('gf2.png')
 
-
-        # psf_mog.var + gal_mog.var
-        # psf_mag.amp * gal_mog.amp
-        # means (use lanczos instead)
-
         from tractor.batch_galaxy import getShearedProfileGPU, getDerivativeShearedProfilesGPU
         amix_gpu = getShearedProfileGPU(src, tr.images, px, py)
         amixes_gpu = getDerivativeShearedProfilesGPU(src, tr.images, px, py)
         amixes_gpu = [('current', amix_gpu, 0.)] + amixes_gpu
 
-        print('amixes_gpu', amixes_gpu)
+        #print('amixes_gpu', amixes_gpu)
         mog = amixes_gpu[0][1]
-        print('mog shape', mog)
-        print('var', mog.var.get().shape)
+        #print('mog shape', mog)
+        #print('var', mog.var.get().shape)
         
         img_params = BatchImageParams(P, v, w, batch_psf.psf_mogs)
         #return img_params, cx,cy, pH,pW
-
         
         img_derivs = self._getBatchGalaxyProfiles(amixes_gpu, masks, px, py, cx, cy, pW, pH,
                                                   img_counts, img_sky, img_pix, img_ie)
@@ -503,17 +492,18 @@ def get_vectorized_psfs(psfs, halfsize):
         psfmogs.append(psfmog)
         maxK = max(maxK, psfmog.K)
     N = len(psfs)
+    # We're going to assert zero mean here, and flatten the variance
     amps = np.zeros((N, maxK))
-    means = np.zeros((N, maxK, 2))
-    varrs = np.zeros((N, maxK, 2, 2))
+    #means = np.zeros((N, maxK, 2))
+    varrs = np.zeros((N, maxK, 3))
     for i,psfmog in enumerate(psfmogs):
         amps [i, :psfmog.K] = psfmog.amp
-        means[i, :psfmog.K, :] = psfmog.mean
-        varrs[i, :psfmog.K, :, :] = psfmog.var
-    amps  = cp.asarray(amps)
-    means = cp.asarray(means)
-    varrs = cp.asarray(varrs)
-    psf_mogs = BatchMixtureOfGaussians(amps, means, varrs, quick=True)
+        assert(np.all(psfmog.mean == 0))
+        #means[i, :psfmog.K, :] = psfmog.mean
+        varrs[i, :psfmog.K, 0] = psfmog.var[:, 0, 0]
+        varrs[i, :psfmog.K, 1] = psfmog.var[:, 0, 1]
+        varrs[i, :psfmog.K, 2] = psfmog.var[:, 1, 1]
+    psf_mogs = amps,varrs
 
     imsize = psfs[0].img.shape
     for psf in psfs:
@@ -521,38 +511,41 @@ def get_vectorized_psfs(psfs, halfsize):
         print('sampling:', psf.sampling)
         assert(psf.sampling == 1.)
         print('pixelized size', psf.img.shape)
-        assert(psf.img.shape == imsize)
 
     sz = 2**int(np.ceil(np.log2(halfsize.max() * 2.)))
     ###pad, cx, cy = self._padInImageBatchGPU(sz, sz)
     W = H = sz
     pad = cp.zeros((N, H, W), cp.float32)
-    CX = []
-    CY = []
+    cx = W//2
+    cy = H//2
     for i,psf in enumerate(psfs):
         psfimg = psf.img
-        print('psf img shape:', psfimg.shape)
         ph,pw = psfimg.shape
-        if H >= ph:
-            y0 = (H - ph) // 2
-            cy = y0 + ph // 2
+        # We assume the center of the PSF image is at:
+        pcy,pcx = ph//2, pw//2
+        # And it must end up at cx,cy in the padded image.
+        if pcx >= cx:
+            # Trimming the PSF image
+            out_x0 = 0
+            in_x0 = pcx - cx
         else:
-            y0 = 0
-            cut = (ph - H) // 2
-            psfimg = psfimg[cut:cut + H, :]
-            cy = ph // 2 - cut
-        if W >= pw:
-            x0 = (W - pw) // 2
-            cx = x0 + pw // 2
+            # Padding the PSF image
+            in_x0 = 0
+            out_x0 = cx - pcx
+        nx = min(pw, W)
+
+        if pcy >= cy:
+            # Trimming the PSF image
+            out_y0 = 0
+            in_y0 = pcy - cy
         else:
-            x0 = 0
-            cut = (pw - W) // 2
-            psfimg = psfimg[:, cut:cut + W]
-            cx = pw // 2 - cut
-        sh, sw = psfimg.shape
-        pad[i, y0:y0 + sh, x0:x0 + sw] = cp.array(psfimg)
-        CX.append(cx)
-        CY.append(cy)
+            # Padding the PSF image
+            in_y0 = 0
+            out_y0 = cy - pcy
+        ny = min(ph, H)
+
+        pad[i, out_y0 : out_y0 + ny, out_x0 : out_x0 + nx] = cp.array(
+            psfimg[in_y0 : in_y0 + ny, in_x0 : in_x0 + nx])
 
     P = cp.fft.rfft2(pad)
     #print('P type', P.dtype)
@@ -575,7 +568,7 @@ def get_vectorized_psfs(psfs, halfsize):
     #w = cp.fft.fftfreq(pH)
     #P, (cx, cy), (pH, pW), (v, w) = batch_psf.getFourierTransformBatchGPU(px, py, halfsize)
 
-    return P, (CX,CY), (H, W), (v, w), psf_mogs
+    return P, (cx, cy), (H, W), (v, w), psf_mogs
 
 def lanczos_shift_images_inplace_gpu(G, x, y, work=None):
     '''
@@ -684,3 +677,41 @@ def correlate7_2d_inplace_gpu(G, fx, fy, work=None):
     G[:, :, 3:-3, :] += work[:, :, 4:-2, :] * fy[:, na, na, 4, na]
     G[:, :, 3:-3, :] += work[:, :, 5:-1, :] * fy[:, na, na, 5, na]
     G[:, :, 3:-3, :] += work[:, :, 6:  , :] * fy[:, na, na, 6, na]
+
+
+
+
+if __name__ == '__main__':
+    # test PSF padding logic
+    W = 64
+    cx = W//2
+    pad = np.zeros(W, np.float32)
+    bigpsf = np.zeros(2*W, np.float32)
+    bigcx = 64
+    bigpsf[bigcx] = 1.
+    for psfW in [32, 33, 63, 64, 65, 127]:
+        pad = np.zeros(W, np.float32)
+        print()
+        offset = bigcx - psfW//2
+        psf = bigpsf[offset : offset + psfW]
+        print('PSF size:', psf.shape, 'vs', psfW)
+        print('nz pix:', np.flatnonzero(psf))
+        pw = psfW
+        psfimg = psf
+        # We assume the center of the PSF image is at:
+        pcx = pw//2
+        assert(pcx == np.flatnonzero(psf)[0])
+        # And it must end up at cx,cy in the padded image.
+        if pcx >= cx:
+            # Trimming the PSF image
+            out_x0 = 0
+            in_x0 = pcx - cx
+        else:
+            # Padding the PSF image
+            in_x0 = 0
+            out_x0 = cx - pcx
+        n = min(psfW, W)
+        pad[out_x0: out_x0 + n] = psfimg[in_x0: in_x0 + n]
+        print('Padded size:', pad.shape)
+        print('nz pix:', np.flatnonzero(pad))
+        print('cx:', cx)
