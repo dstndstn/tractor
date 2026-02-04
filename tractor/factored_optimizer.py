@@ -302,11 +302,17 @@ if __name__ == '__main__':
     pixscale2 = pixscale1
     rot = np.deg2rad(10.)
 
-    wcs2 = Tan(ra_cen + 0.2*arcsec, dec_cen + 0.1*arcsec, w/2+0.5, h/2+0.5,
+    wcs2 = Tan(ra_cen + 1.2*arcsec, dec_cen + 0.1*arcsec, w/2+0.5, h/2+0.5,
                -pixscale2 * np.cos(rot), -pixscale2 * np.sin(rot),
                -pixscale2 * np.sin(rot),  pixscale2 * np.cos(rot), float(w), float(h))
 
     h2,w2 = 105, 205
+    psf = NormalizedPixelizedPsfEx(os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                                        'test',
+                                        'c4d_140717_065122_ooi_i_ls11-S2-se.psf'))
+    psf = HybridPixelizedPSF(psf,
+                             gauss=NCircularGaussianPSF([psf.fwhm / 2.35, psf.fwhm / 2.35 / 2], [0.9, 0.1]))
+    psf = psf.constantPsfAt(w/2, h/2)
 
     print('wcs2 pixscale:', wcs2.pixel_scale())
     tim2 = Image(np.zeros((h2,w2), np.float32),
@@ -328,7 +334,7 @@ if __name__ == '__main__':
     g = gal.shape.getParams()
     #g[0] = 15
     g[0] = 5
-    g[2] = 0.
+    g[2] = 0.5
     gal.shape.setParams(g)
     print('Galaxy shape:', gal.shape)
 
