@@ -244,7 +244,7 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         nsigma1 = 3.
         nsigma2 = 4.
 
-        # Nimages x Nderivs x Kmax
+        # Nimages x Nderivs x Nmog
         vv = amix_vars[:,:,:,0] + amix_vars[:,:,:,2]
         IM = ((pW/2)**2 < (nsigma2**2 * vv))
         IF = ((pW/2)**2 > (nsigma1**2 * vv))
@@ -304,7 +304,7 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         g_fft_mix_vars = cp.array(fft_mix_vars)
         g_fft_mix_amps = cp.array(fft_mix_amps)
         a = g_fft_mix_vars[:, :, :, 0]
-        b = g_fft_mix_vars[:, :, :, 1]
+        b = 2. * g_fft_mix_vars[:, :, :, 1]
         d = g_fft_mix_vars[:, :, :, 2]
         gv = cp.array(v)
         gw = cp.array(w)
@@ -317,10 +317,10 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         for k in range(Nfft):
             Fsum += (g_fft_mix_amps[:, :, k, nu, nu] *
                      cp.exp(-2. * cp.pi**2 *
-                            (a[:, :, k, nu, nu] * v[nu, nu, nu, :]**2 +
-                             d[:, :, k, nu, nu] * w[nu, nu, :, nu]**2 +
-                             b[:, :, k, nu, nu] * v[nu, nu, nu, :] * w[nu, nu, :, nu])))
-
+                            (a[:, :, k, nu, nu] *  v[nu, nu, nu, :]**2 +
+                             d[:, :, k, nu, nu] *  w[nu, nu, :, nu]**2 +
+                             b[:, :, k, nu, nu] * (v[nu, nu, nu, :] *
+                                                   w[nu, nu, :, nu]))))
         print('P', P.shape, P.dtype)
         print('Fsum', Fsum.shape, Fsum.dtype)
 
@@ -347,16 +347,33 @@ class GPUOptimizer(GPUFriendlyOptimizer):
 
             print('mog_mix_amps:', mog_mix_amps.shape)
             print('mog_mix_vars:', mog_mix_vars.shape)
+
+            psf_amps, psf_vars = psf_mogs
+            #print('PSF amp')
+            #print(psf_amps)
+            #print('PSF var')
+            #print(psf_vars)
+            _,Npsfmog = psf_amps.shape
+
             assert(G.shape == (Nimages,Nderivs,pH,pW))
             assert(mog_mix_amps.shape == (Nimages, Nderivs, Nmog))
             assert(mog_mix_vars.shape == (Nimages, Nderivs, Nmog, 3))
+            assert(psf_amps.shape == (Nimages, Npsfmog))
+            assert(psf_vars.shape == (Nimages, Npsfmog, 3))
+
+            # Convolve!
+            Ncmog = Nmog * Npsfmog
+            nu = np.newaxis
+            conv_amps = (mog_mix_amps[:, :, :, nu]    * psf_amps[:, nu, nu, :]).reshape((Nimages, Nderivs, Ncmog))
+            conv_vars = (mog_mix_vars[:, :, :, nu, :] + psf_vars[:, nu, nu, :, :]).reshape((Nimages, Nderivs, Ncmog, 3))
+
             # variance terms: (00, 01, 11) covariance matrix elements
-            det = (mog_mix_vars[:,:,:,0] * mog_mix_vars[:,:,:,2] - mog_mix_vars[:,:,:,1]**2)
-            iv0 = mog_mix_vars[:,:,:,2] / det
-            iv1 = -2. * mog_mix_vars[:,:,:,1] / det
-            iv2 = mog_mix_vars[:,:,:,0] / det
-            scale = mog_mix_amps / (2. * np.pi * np.sqrt(det))
-    
+            det = (conv_vars[:,:,:,0] * conv_vars[:,:,:,2] - conv_vars[:,:,:,1]**2)
+            iv0 = conv_vars[:,:,:,2] / det
+            iv1 = -2. * conv_vars[:,:,:,1] / det
+            iv2 = conv_vars[:,:,:,0] / det
+            scale = conv_amps / (2. * np.pi * np.sqrt(det))
+
             # print('dx', dx.shape, dx.dtype)
             # print('dy', dy.shape, dy.dtype)
             # print('dx', dx)
@@ -365,7 +382,7 @@ class GPUOptimizer(GPUFriendlyOptimizer):
             #means[:,:,:,1] -= img_params.dy[:,None,None]
     
             #print('iv0:', iv0.shape)
-            assert(iv0.shape == (Nimages, Nderivs, Nmog))
+            assert(iv0.shape == (Nimages, Nderivs, Ncmog))
             #print('iv1:', iv1.shape)
             #print('iv2:', iv2.shape)
     
@@ -375,6 +392,7 @@ class GPUOptimizer(GPUFriendlyOptimizer):
             iv0 = cp.array(iv0, dtype=cp.float32)
             iv1 = cp.array(iv1, dtype=cp.float32)
             iv2 = cp.array(iv2, dtype=cp.float32)
+            scale = cp.array(scale, dtype=cp.float32)
 
             # We're going to do the sub-pixel shift with Lanczos, so the
             # x position and mean are both integers.
@@ -394,9 +412,11 @@ class GPUOptimizer(GPUFriendlyOptimizer):
                              iv2[:,:,:,nu,nu] *  yy[nu,nu,nu,:,nu]**2)
             del xx, yy, iv0, iv1, iv2
             distsq = cp.exp(distsq)
-            assert(distsq.shape == (Nimages, Nderivs, Nmog, pH, pW))
-            assert(scale.shape == (Nimages, Nderivs, Nmog))
-            G_mog = cp.sum(distsq * scale[..., na, na], axis=2)
+            assert(distsq.shape == (Nimages, Nderivs, Ncmog, pH, pW))
+            assert(scale.shape == (Nimages, Nderivs, Ncmog))
+            # Sum over the MoG components
+            G_mog = cp.sum(distsq * scale[..., nu, nu], axis=2)
+            del distsq
             print('G_mog', G_mog)
             assert(G_mog.shape == G.shape)
 
