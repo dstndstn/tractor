@@ -95,6 +95,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                 h,w = img.shape
                 # FIXME - use_gpu arg!
                 use_gpu = False
+                #print('clipping deriv to size', w, h)
                 if not deriv.clipTo(w, h, use_gpu=use_gpu):
                     print('No overlap between derivative and image.')
                     print('deriv extents:', deriv.extent, 'image size %i x %i' % (w,h))
@@ -201,9 +202,9 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                 else:
                     # There are multiple modelMasks for this image
                     # (eg from multiple sources), so need to pad it out
-                    print('multiple modelMasks (sources) for this image?')
                     print('\tderiv extent', dx0,dx1, dy0,dy1)
                     print('\timage bounds', x0,x1,y0,y1, img)
+                    raise RuntimeError('smarter_dense_optimizer: multiple modelMasks (sources) for this image?')
                     return None
 
             if scale_columns:

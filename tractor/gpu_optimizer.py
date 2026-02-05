@@ -5,7 +5,7 @@ from cupy_wrapper import cp
 #import cupy as cp
 
 from tractor.factored_optimizer import FactoredDenseOptimizer
-from tractor import ProfileGalaxy, HybridPSF, ConstantSky
+from tractor import ProfileGalaxy, HybridPSF, ConstantSky, PointSource
 from tractor.brightness import LinearPhotoCal
 
 '''
@@ -29,11 +29,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
     def getLinearUpdateDirection(self, tr, priors=True, get_icov=False, **kwargs):
         if not (tr.isParamFrozen('images') and
             (len(tr.catalog) == 1) and
-            isinstance(tr.catalog[0], ProfileGalaxy)):
+            isinstance(tr.catalog[0], (ProfileGalaxy, PointSource))):
             return super().getLinearUpdateDirection(tr, priors=priors, get_icov=get_icov,
                                                     **kwargs)
         assert(get_icov == False)
-        return self.one_galaxy_update(tr, priors=priors, **kwargs)
+        return self.one_source_update(tr, priors=priors, **kwargs)
 
     # def per_image_updates(self, tr, **kwargs):
     #     if not (tr.isParamFrozen('images') and
@@ -47,13 +47,13 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
     #         return R
     #     return self.one_galaxy_update(tr, **kwargs)
 
-    def one_galaxy_update(self, tr, **kwargs):
+    def one_source_update(self, tr, **kwargs):
         #return super().all_image_updates(tr, **kwargs)
         return super().getLinearUpdateDirection(tr, **kwargs)
 
 class GPUOptimizer(GPUFriendlyOptimizer):
     # This is the Vectorized version. (gpumode = 2)
-    def one_galaxy_update(self, tr, **kwargs):
+    def one_source_update(self, tr, **kwargs):
         free_mem, total_mem = cp.cuda.runtime.memGetInfo()
         # predict memory required
         totalpix = sum([np.prod(tim.shape) for tim in tr.images])
@@ -70,7 +70,7 @@ class GPUOptimizer(GPUFriendlyOptimizer):
 
         try:
             t0 = time.time()
-            R_gpuv = self.gpu_one_galaxy_update(tr, **kwargs)
+            R_gpuv = self.gpu_one_source_update(tr, **kwargs)
             #mempool = cp.get_default_memory_pool()
             #mempool.free_all_blocks()
             dt = time.time() - t0
@@ -96,19 +96,22 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         # Fallback to CPU version
         print('Falling back to CPU code...')
         t0 = time.time()
-        R = super().one_galaxy_update(tr, **kwargs)
+        R = super().one_source_update(tr, **kwargs)
         dt = time.time() - t0
         return R
 
-    def gpu_one_galaxy_update(self, tr, priors=True, get_A=False, **kwargs):
+    #def gpu_one_galaxy_update(self, tr, priors=True, get_A=False, **kwargs):
+    def gpu_one_source_update(self, tr, priors=True, get_A=False, **kwargs):
         t0 = time.time()
         # Assume single source
         assert(len(tr.catalog) == 1)
         Nimages = len(tr.images)
 
-        # Assume galaxy
+        # Assume galaxy or point source
         src = tr.catalog[0]
-        assert(isinstance(src, ProfileGalaxy))
+        is_galaxy = isinstance(src, ProfileGalaxy)
+        is_psf = isinstance(src, PointSource)
+        assert(isinstance(src, (ProfileGalaxy, PointSource)))
 
         # Assume model masks are set (ie, pixel ROIs of interest are defined)
         masks = [tr._getModelMaskByIdx(i, src) for i in range(len(tr.images))]
@@ -143,12 +146,13 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         # Pre-process image: PSF, padded pix, etc
         img_params = self.gpu_setup_image_params(tr.images, halfsize, extents, ipx, ipy)
 
-        # Get galaxy profiles for shape derivatives.
-        amixes = [[('current', src._getShearedProfile(tim,x,y), 0.)] +
-                  src.getDerivativeShearedProfiles(tim,x,y)
-                  for tim,x,y in zip(tr.images, px, py)]
-        Nprofiles = max([len(d) for d in amixes])
-        mogs = [[m for _,m,_ in amix_img] for amix_img in amixes]
+        if is_galaxy:
+            # Get galaxy profiles for shape derivatives.
+            amixes = [[('current', src._getShearedProfile(tim,x,y), 0.)] +
+                    src.getDerivativeShearedProfiles(tim,x,y)
+                    for tim,x,y in zip(tr.images, px, py)]
+            Nprofiles = max([len(d) for d in amixes])
+            mogs = [[m for _,m,_ in amix_img] for amix_img in amixes]
 
         # subpixel portion: shifted via Lanczos interpolation
         mux = px - ipx
@@ -156,9 +160,11 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         assert(np.abs(mux).max() <= 0.5)
         assert(np.abs(muy).max() <= 0.5)
 
-        # Render galaxy profiles for shape derivatives
-        G = self.gpu_get_unitflux_galaxy_profiles(mogs, img_params, mux, muy)
-
+        if is_galaxy:
+            # Render galaxy profiles for shape derivatives
+            G = self.gpu_get_unitflux_galaxy_profiles(mogs, img_params, mux, muy)
+        else:
+            G = self.gpu_get_unitflux_psf(img_params, mux, muy)
         # import pylab as plt
         # cG = G.get()
         # plt.clf()
@@ -202,8 +208,11 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         #print('Unique set of tim bands:', tim_ubands)
         Nbands = len(tim_ubands)
 
-        # Nprofiles - 1: profile 0 is the current galaxy shape, the rest are shape/sersic derivs.
-        Nshapes = (Nprofiles - 1)
+        if is_galaxy:
+            # Nprofiles - 1: profile 0 is the current galaxy shape, the rest are shape/sersic derivs.
+            Nshapes = (Nprofiles - 1)
+        else:
+            Nshapes = 0
         Nderivs = Nshapes + Npos + Nbands
 
         # We'll need both directions of the mapping between
@@ -306,21 +315,22 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         # We *could* form the *col* into an array and do this as a
         # one-liner; not sure that would be faster.
 
-        # Shape derivatives.
-        # This gets the axis ordering wrong in the reshape -- need a swapaxes or something...
-        #A[:Npix_total, Npos + Nbands:] = ((G[:, 1:, :, :] - G[:, 0, :, :][:, nu, :, :]) *
-        #   padie[:, nu, :, :]).reshape((-1, Nshapes))
-        stepsizes = np.empty((Nimages, Nshapes), np.float32)
-        for i_img, amix_img in enumerate(amixes):
-            for i_shape,(_,_,step) in enumerate(amix_img[1:]):
-                stepsizes[i_img, i_shape] = step
-        steps = cp.array(stepsizes)
-        del stepsizes
-        for i in range(Nshapes):
-            A[:Npix_total, Npos + Nbands + i] = (fluxes[:, nu, nu] *
-                                                 (G[:, i+1, :, :] - G[:, 0, :, :]) /
-                                                 steps[:, i, nu, nu] *
-                                                 padie).flat
+        if is_galaxy:
+            # Shape derivatives.
+            # This gets the axis ordering wrong in the reshape -- need a swapaxes or something...
+            #A[:Npix_total, Npos + Nbands:] = ((G[:, 1:, :, :] - G[:, 0, :, :][:, nu, :, :]) *
+            #   padie[:, nu, :, :]).reshape((-1, Nshapes))
+            stepsizes = np.empty((Nimages, Nshapes), np.float32)
+            for i_img, amix_img in enumerate(amixes):
+                for i_shape,(_,_,step) in enumerate(amix_img[1:]):
+                    stepsizes[i_img, i_shape] = step
+            steps = cp.array(stepsizes)
+            del stepsizes
+            for i in range(Nshapes):
+                A[:Npix_total, Npos + Nbands + i] = (fluxes[:, nu, nu] *
+                                                     (G[:, i+1, :, :] - G[:, 0, :, :]) /
+                                                     steps[:, i, nu, nu] *
+                                                     padie).flat
 
         B[:Npix_total] = ((padpix - fluxes[:, nu, nu] * G[:, 0, :, :]) * padie).flat
 
@@ -396,7 +406,7 @@ class GPUOptimizer(GPUFriendlyOptimizer):
 
         img_params = Duck()
         psfH, psfW = np.array([psf.shape for psf in psfs]).T
-        P, (cx, cy), (pH, pW), (v, w), psf_mogs = get_vectorized_psfs(psfs, halfsize)
+        P, (cx, cy), (pH, pW), (v, w), psf_mogs, psf_pad = get_vectorized_psfs(psfs, halfsize)
         assert(pW % 2 == 0)
         assert(pH % 2 == 0)
         Nimages = len(tims)
@@ -419,6 +429,7 @@ class GPUOptimizer(GPUFriendlyOptimizer):
             padie [i, y0+dy : y1+dy, x0+dx : x1+dx] = p
 
         # GPU arrays:
+        img_params.psf_pad = psf_pad
         img_params.P = P
         img_params.v = v
         img_params.w = w
@@ -432,6 +443,16 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         img_params.cx = cx
         img_params.cy = cy
         return img_params
+
+    def gpu_get_unitflux_psf(self, img_params, mux, muy):
+        ## FIXME -- could create a new lanczos method rather than first copying
+        # and then running the in-place.
+        padpsf = img_params.psf_pad
+        nimg,h,w = padpsf.shape
+        G = cp.empty((nimg, 1, h, w), cp.float32)
+        G[:, 0, :, :] = padpsf
+        lanczos_shift_images_inplace_gpu(G, mux, muy)
+        return G
 
     def gpu_get_unitflux_galaxy_profiles(self, mogs, img_params, mux, muy):
         # mogs[image][profile] = mog
@@ -607,7 +628,6 @@ def get_vectorized_psfs(psfs, halfsize):
         #print('pixelized size', psf.img.shape)
 
     sz = 2**int(np.ceil(np.log2(halfsize * 2.)))
-    ###pad, cx, cy = self._padInImageBatchGPU(sz, sz)
     W = H = sz
     pad = cp.zeros((N, H, W), cp.float32)
     cx = W//2
@@ -662,7 +682,7 @@ def get_vectorized_psfs(psfs, halfsize):
     #w = cp.fft.fftfreq(pH)
     #P, (cx, cy), (pH, pW), (v, w) = batch_psf.getFourierTransformBatchGPU(px, py, halfsize)
 
-    return P, (cx, cy), (H, W), (v, w), psf_mogs
+    return P, (cx, cy), (H, W), (v, w), psf_mogs, pad
 
 def lanczos_shift_images_inplace_gpu(G, x, y, work=None):
     '''

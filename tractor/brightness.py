@@ -15,12 +15,13 @@ class Flux(ScalarParam):
     '''
     A `Brightness` implementation that stores raw counts.
     '''
-
     def __mul__(self, factor):
         new = self.copy()
         new.val *= factor
         return new
     __rmul__ = __mul__
+    def getFlux(self, band):
+        return self.getValue()
 
 
 class MultiBandBrightness(ParamList, ducks.Brightness):

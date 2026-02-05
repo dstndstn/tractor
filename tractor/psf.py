@@ -199,7 +199,7 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         return self.img
 
     def getPointSourcePatch(self, px, py, minval=0., modelMask=None,
-                            radius=None, **kwargs):
+                            radius=None, derivs=False, **kwargs):
         #print ("getPointSourcePatch1", self)
         if self.sampling != 1.:
             return self._getOversampledPointSourcePatch(px, py, minval=minval,
@@ -234,40 +234,52 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         if modelMask is None:
             #print ("NO MM")
             outimg = lanczos_shift_image(img, dx, dy)
-            return Patch(x0, y0, outimg)
+            patch = Patch(x0, y0, outimg)
+        else:
+            mh, mw = modelMask.shape
+            mx0, my0 = modelMask.x0, modelMask.y0
+            #print ("MM", mh, mw, mx0, my0, modelMask)
 
-        mh, mw = modelMask.shape
-        mx0, my0 = modelMask.x0, modelMask.y0
-        #print ("MM", mh, mw, mx0, my0, modelMask)
+            # print 'PixelizedPSF + modelMask'
+            # print 'mx0,my0', mx0,my0, '+ mw,mh', mw,mh
+            # print 'PSF image x0,y0', x0,y0, '+ W,H', W,H
 
-        # print 'PixelizedPSF + modelMask'
-        # print 'mx0,my0', mx0,my0, '+ mw,mh', mw,mh
-        # print 'PSF image x0,y0', x0,y0, '+ W,H', W,H
+            if ((mx0 >= x0 + W) or (mx0 + mw <= x0) or
+                (my0 >= y0 + H) or (my0 + mh <= y0)):
+                #print ("NO OVERLAP")
+                # No overlap
+                return None
+            # Otherwise, we'll just produce the Lanczos-shifted PSF
+            # image as usual, and then copy it into the modelMask
+            # space.
+            #print ("OVERLAP")
+            L = 3
+            padding = L
+            # Create a modelMask + padding sized stamp and insert PSF image into it
+            mm = np.zeros((mh+2*padding, mw+2*padding), np.float32)
+            #print ("OVERLAPY", my0-y0-padding,my0-y0+mh-1+padding, 0, H-1)
+            yi,yo = get_overlapping_region(my0-y0-padding, my0-y0+mh-1+padding, 0, H-1)
+            #print ("YI", yi, "YO", yo)
+            xi,xo = get_overlapping_region(mx0-x0-padding, mx0-x0+mw-1+padding, 0, W-1)
+            mm[yo,xo] = img[yi,xi]
+            #print (mm[yo,xo].shape, img[yi,xi].shape)
+            mm = lanczos_shift_image(mm, dx, dy)
+            mm = mm[padding:-padding, padding:-padding]
+            assert(np.all(np.isfinite(mm)))
+            patch = Patch(mx0, my0, mm)
 
-        if ((mx0 >= x0 + W) or (mx0 + mw <= x0) or
-            (my0 >= y0 + H) or (my0 + mh <= y0)):
-            #print ("NO OVERLAP")
-            # No overlap
-            return None
-        # Otherwise, we'll just produce the Lanczos-shifted PSF
-        # image as usual, and then copy it into the modelMask
-        # space.
-        #print ("OVERLAP")
-        L = 3
-        padding = L
-        # Create a modelMask + padding sized stamp and insert PSF image into it
-        mm = np.zeros((mh+2*padding, mw+2*padding), np.float32)
-        #print ("OVERLAPY", my0-y0-padding,my0-y0+mh-1+padding, 0, H-1)
-        yi,yo = get_overlapping_region(my0-y0-padding, my0-y0+mh-1+padding, 0, H-1)
-        #print ("YI", yi, "YO", yo)
-        xi,xo = get_overlapping_region(mx0-x0-padding, mx0-x0+mw-1+padding, 0, W-1)
-        mm[yo,xo] = img[yi,xi]
-        #print (mm[yo,xo].shape, img[yi,xi].shape)
-        mm = lanczos_shift_image(mm, dx, dy)
-        mm = mm[padding:-padding, padding:-padding]
-        assert(np.all(np.isfinite(mm)))
-
-        return Patch(mx0, my0, mm)
+        if not derivs:
+            return patch
+        # Return a tuple of original, dx, dy patches.
+        # We leave a 1-pixel margin of zeros around the outside, matched in both
+        # directions - it's kind of nice for the dx and dy to have the same footprint?
+        dx = np.zeros_like(patch.patch)
+        dx[1:-1, 1:-1] = -(patch.patch[1:-1, 2:] - patch.patch[1:-1, :-2]) / 2.
+        dy = np.zeros_like(patch.patch)
+        dy[1:-1, 1:-1] = -(patch.patch[2:, 1:-1] - patch.patch[:-2, 1:-1]) / 2.
+        patch_dx = Patch(patch.x0, patch.y0, dx)
+        patch_dy = Patch(patch.x0, patch.y0, dy)
+        return patch, patch_dx, patch_dy
 
     def getFourierTransformSize(self, radius):
         # Next power-of-two size

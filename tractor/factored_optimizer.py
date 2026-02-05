@@ -170,6 +170,12 @@ class FactoredOptimizer(object):
         # cheap preconditioning to reduce the condition number from column scaling
         # just estimate the scale from the sqrt(diagonal)
         scale = np.sqrt(np.diag(icsum))
+        nz = (scale > 0)
+        if not np.all(nz):
+            cols_active = cols_active[nz]
+            scale = scale[nz]
+            icsum = icsum[nz,:][:,nz]
+            xicsum = xicsum[nz]
         icsum /= (scale[:,np.newaxis] * scale[np.newaxis,:])
         xicsum /= scale
 
@@ -204,7 +210,7 @@ class FactoredDenseOptimizer(FactoredOptimizer, SmarterDenseOptimizer):
 if __name__ == '__main__':
     from tractor.galaxy import ExpGalaxy
     from tractor.ellipses import EllipseE, EllipseESoft
-    from tractor.basics import PixPos, Flux, ConstantSky
+    from tractor.basics import PixPos, Flux, ConstantSky, PointSource
     from tractor.basics import RaDecPos
     from tractor.wcs import ConstantFitsWcs
     from tractor.psfex import PixelizedPsfEx
@@ -263,9 +269,8 @@ if __name__ == '__main__':
     ra_cen = 1.
     dec_cen = 2.
 
-    #gal = ExpGalaxy(PixPos(h/2., w/2+.7), Flux(2000.), EllipseE(10., 0.1, 0.4))
-    #gal = ExpGalaxy(RaDecPos(ra_cen - 25.*arcsec, dec_cen), Flux(2000.), EllipseE(10., 0.1, 0.4))
     gal = ExpGalaxy(RaDecPos(ra_cen - 25.*arcsec, dec_cen), Flux(2000.), EllipseE(5., 0.1, 0.4))
+    ptsrc = PointSource(RaDecPos(ra_cen - 25.*arcsec, dec_cen), Flux(2000.))
 
     #psf = PixelizedPsfEx(os.path.join(os.path.dirname(os.path.dirname(__file__)),
     psf = NormalizedPixelizedPsfEx(os.path.join(os.path.dirname(os.path.dirname(__file__)),
@@ -292,7 +297,8 @@ if __name__ == '__main__':
                  wcs = ConstantFitsWcs(wcs1),
                 )
 
-    tr = Tractor([tim1], [gal])
+    #tr = Tractor([tim1], [gal])
+    tr = Tractor([tim1], [ptsrc])
 
     mod = tr.getModelImage(0)
 
@@ -322,7 +328,8 @@ if __name__ == '__main__':
                  wcs = ConstantFitsWcs(wcs2),
                 )
 
-    tr = Tractor([tim1, tim2], [gal])
+    #tr = Tractor([tim1, tim2], [gal])
+    tr = Tractor([tim1, tim2], [ptsrc])
     tr.freezeParam('images')
 
     mod2 = tr.getModelImage(tim2)
@@ -372,8 +379,11 @@ if __name__ == '__main__':
 
     sm_opt = SmarterDenseOptimizer()
     tr.optimizer = sm_opt
-    up1 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
-    print('Smarter Update:', up1)
+    try:
+        up1 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+        print('Smarter Update:', up1)
+    except:
+        print('Smarter failed')
 
     tr.setParams(p0)
 
@@ -450,6 +460,7 @@ if __name__ == '__main__':
 
     # --> ok
     gal.brightness = NanoMaggies(g=1900., r=2800., z=1.)
+    ptsrc.brightness = NanoMaggies(g=1900., r=2800., z=1.)
 
     print('Galaxy:', gal)
 
@@ -507,7 +518,8 @@ if __name__ == '__main__':
     print('image extents:', extents)
 
     #tr.setModelMasks([{gal: ModelMask(10, 10, 80, 80)}])
-    tr.setModelMasks([{gal: ModelMask(110, 10, 80, 80)}])
+    tr.setModelMasks([{gal:   ModelMask(110, 10, 80, 80),
+                       ptsrc: ModelMask(110, 10, 80, 80)}])
     mA,mB,mX,mcolscales,mextents = fac_opt.one_image_update(tr, priors=False, get_A=True, **oa)
     tr.images = orig_images
     print('mA', mA.shape)
@@ -518,7 +530,9 @@ if __name__ == '__main__':
 
     print()
     print('Testing LSQR optimizer with modelMasks...')
-    tr.setModelMasks([{gal: ModelMask(110, 10, 80, 80)} for tim in tr.images])
+    tr.setModelMasks([{gal: ModelMask(110, 10, 80, 80),
+                       ptsrc: ModelMask(110, 10, 80, 80)}
+                      for tim in tr.images])
     modslc = slice(10,90), slice(110, 190)
     #tr.setModelMasks([{gal: ModelMask(10, 10, 80, 80)} for tim in tr.images])
     #tr.setModelMasks([{gal: ModelMask(5, 5, 90, 90)} for tim in tr.images])
@@ -544,37 +558,40 @@ if __name__ == '__main__':
     mh,mw = myb-mya, mxb-mxa
     #slc = slice(10,90),slice(10,90)
     slc = slice(mya-ya, mya-ya+mh), slice(mxa-xa, mxa-xa+mw)
-    for col in range(6):
+
+    nparams = len(p0)
+    C = 6
+    for col in range(nparams):
         ima = dict(interpolation='nearest', origin='lower',
                    vmin=-0.06, vmax=0.06)
-        plt.subplot(4, 6, 1 + col)
+        plt.subplot(4, C, 1 + col)
         # Full deriv
         plt.imshow(A[:,col].reshape((eh, ew)), **ima)
         #plt.imshow(A[:,col].reshape((eh, ew))[slc], **ima)
 
         # Full deriv cut to model-mask area
-        plt.subplot(4, 6, 6 + 1 + col)
+        plt.subplot(4, C, C + 1 + col)
         #plt.imshow(A[:,col].reshape((eh, ew))[mya-ya:, mxa-xa:][:mh,:mw], **ima)
         plt.imshow(A[:,col].reshape((eh, ew))[slc], **ima)
 
         # Model-mask deriv
-        plt.subplot(4, 6, 12 + 1 + col)
+        plt.subplot(4, C, 2*C + 1 + col)
         plt.imshow(mA[:,col].reshape((mh,mw)), **ima)
 
     ima = dict(interpolation='nearest', origin='lower')
-    plt.subplot(4, 6, 18 + 1)
+    plt.subplot(4, C, 3*C + 1)
     plt.imshow(B.reshape((eh,ew))[slc], **ima)
     #plt.colorbar()
-    plt.subplot(4, 6, 18 + 2)
+    plt.subplot(4, C, 3*C + 2)
     plt.imshow(mB.reshape((mh,mw)), **ima)
     #plt.colorbar()
 
     tr.setParams(p0)
     mod = tr.getModelImage(0)
-    plt.subplot(4, 6, 18 + 3)
+    plt.subplot(4, C, 3*C + 3)
     plt.imshow(mod, **ima)
 
-    plt.subplot(4, 6, 18 + 4)
+    plt.subplot(4, C, 3*C + 4)
     plt.imshow(mod[modslc], **ima)
 
     print('Original galaxy params:')
@@ -585,7 +602,7 @@ if __name__ == '__main__':
     print(gal)
 
     mod = tr.getModelImage(0)
-    plt.subplot(4, 6, 18 + 5)
+    plt.subplot(4, C, 3*C + 5)
     plt.imshow(mod, **ima)
 
     tr.setParams(p0 + f * mup)
@@ -593,7 +610,7 @@ if __name__ == '__main__':
     print(gal)
 
     mod = tr.getModelImage(0)
-    plt.subplot(4, 6, 18 + 6)
+    plt.subplot(4, C, 3*C + 6)
     plt.imshow(mod, **ima)
 
     plt.savefig('derivs.png')
@@ -637,7 +654,8 @@ if __name__ == '__main__':
                        wcs=tim1.wcs, photocal=tim1.photocal)
     cutim2 = CupyImage(data=tim2.data, inverr=tim2.inverr, psf=tim2.psf, sky=tim2.sky,
                        wcs=tim2.wcs, photocal=tim2.photocal)
-    cutr = Tractor([cutim1, cutim2], [gal])
+    #cutr = Tractor([cutim1, cutim2], [gal])
+    cutr = Tractor([cutim1, cutim2], [ptsrc])
     cutr.freezeParam('images')
 
     cutr.setModelMasks(tr.modelMasks)

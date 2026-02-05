@@ -186,28 +186,22 @@ class PointSource(MultiParams, SingleProfileSource):
         #traceback.print_stack()
 
         if derivs:
-            #print("A1")
             patches = self.getUnitFluxModelPatch(img, minval=minval,
                                                  derivs=True,
                                                  modelMask=modelMask,
                                                  **kwargs)
             if patches is None:
-                #print("A2")
                 return [None] * self.numberOfParams()
             if not isinstance(patches, tuple):
-                #print("A3")
                 patch0 = patches
             else:
-                #print("A4")
                 patch0, patchdx, patchdy = patches
         else:
-            #print("A5")
             patch0 = self.getUnitFluxModelPatch(img, minval=minval,
                                                 modelMask=modelMask,
                                                 **kwargs)
 
         if patch0 is None:
-            #print("A6")
             return [None] * self.numberOfParams()
         # check for intersection of patch0 with img
         H, W = img.shape

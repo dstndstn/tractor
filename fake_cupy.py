@@ -141,6 +141,10 @@ class FakeCupyArray(object):
         x = self._get()
         x = x.sum(*args, **kwargs)
         return asarray(x)
+    def copy(self, **kwargs):
+        x = self._get()
+        x = x.copy(**kwargs)
+        return asarray(x)
 
 complex64 = np.complex64
 float32 = np.float32
