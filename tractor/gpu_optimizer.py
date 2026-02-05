@@ -98,7 +98,7 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         dt = time.time() - t0
         return R
 
-    def gpu_one_galaxy_update(self, tr, priors=True, **kwargs):
+    def gpu_one_galaxy_update(self, tr, priors=True, get_A=False, **kwargs):
         # Assume no (varying) sky background levels
         assert(all([isinstance(tim.sky, ConstantSky) for tim in tr.images]))
         # Assume single source
@@ -677,6 +677,12 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         print('Source parameter indices:', I)
         sX = np.zeros(src.numberOfParams(), np.float32)
         sX[I] = X
+
+        if get_A:
+            sA = np.zeros((Nrows, src.numberOfParams()), np.float32)
+            sA[:,I] = A.get()
+            return sA, B.get(), sX, colscales.get(), pH,pW
+
         return sX
         # HACK -- we should override getLinearUpdateDirection
         #return [(X, 1., I)]

@@ -605,6 +605,14 @@ if __name__ == '__main__':
 
     compare('LSQR', 'Factored', mup, mup2, ic)
 
+    tr.optimizer = sm_opt
+    tr.setParams(p0)
+    mup3 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+    compare('LSQR', 'Smarter', mup, mup3, ic)
+
+    allderivs = tr.getDerivs()
+    sm_A,sm_B,_,sm_colscales,sm_extents = tr.optimizer.getUpdateDirection(tr, allderivs, get_A=True, **optargs)
+
     # print('LSQR Update    :', mup)
     # print('Factored Update:', mup2)
     # print('Fractional difference in update directions (LSQR - Fac):', difference(mup, mup2))
@@ -650,8 +658,32 @@ if __name__ == '__main__':
 
     print('Fractional difference in update directions (GPU - Fac):', difference(up3, mup2))
     print('Fractional difference in update directions (GPU - LSQR):', difference(up3, mup))
+    print('Fractional difference in update directions (GPU - SM):', difference(up3, mup3))
 
     chisq = (up3 - mup2).T @ (ic @ (up3 - mup2))
     print('chisq (GPU - Fac):', chisq)
     chisq = (up3 - mup).T @ (ic @ (up3 - mup))
     print('chisq (GPU - LSQR):', chisq)
+    chisq = (up3 - mup3).T @ (ic @ (up3 - mup3))
+    print('chisq (GPU - SM):', chisq)
+
+    A,B,X,colscales,pH,pW = cutr.optimizer.getLinearUpdateDirection(cutr, get_A=True, **optargs)
+
+    print('sm_extents:', sm_extents)
+    print('sm_A:', sm_A.shape)
+
+    plt.clf()
+    R,C = sm_A.shape
+    Nims = len(sm_extents)
+    off = 0
+    for i,(x0,x1,y0,y1) in enumerate(sm_extents):
+        w = x1-x0
+        h = y1-y0
+        for j in range(C):
+            sm_deriv = sm_A[off: off+w*h, j].reshape((h,w))
+            plt.subplot(Nims, C, i*C + j + 1)
+            mx = np.abs(sm_deriv).max()
+            plt.imshow(sm_deriv, interpolation='nearest', origin='lower', vmin=-mx, vmax=mx)
+        off += w*h
+    plt.savefig('sm-derivs.png')
+    print('leftover rows in A:', R-off)
