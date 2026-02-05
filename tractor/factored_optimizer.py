@@ -30,7 +30,7 @@ class FactoredOptimizer(object):
 
     def one_image_update(self, tr, **kwargs):
         '''
-        Called by all_image_updates, where "tr" has been modified to have only
+        Called by per_image_updates, where "tr" has been modified to have only
         one image, this method returns its update direction and inverse-covariance.
         '''
         allderivs = tr.getDerivs()
@@ -75,7 +75,7 @@ class FactoredOptimizer(object):
         #             plt.title('dflux')
         #     self.ps.savefig()
 
-    def all_image_updates(self, tr, priors=False, **kwargs):
+    def per_image_updates(self, tr, priors=False, **kwargs):
         from tractor import Images
         img_opts = []
         imgs = tr.images
@@ -124,7 +124,7 @@ class FactoredOptimizer(object):
                 return x_imgs
             return None
 
-        img_opts = self.all_image_updates(tr, priors=priors, **kwargs)
+        img_opts = self.per_image_updates(tr, priors=priors, **kwargs)
         if len(img_opts) == 0:
             if x_imgs is not None:
                 return x_imgs
@@ -333,7 +333,7 @@ if __name__ == '__main__':
 
     g = gal.shape.getParams()
     #g[0] = 15
-    g[0] = 5
+    g[0] = 6
     g[2] = 0.5
     gal.shape.setParams(g)
     print('Galaxy shape:', gal.shape)
@@ -449,7 +449,7 @@ if __name__ == '__main__':
     #gal.brightness = NanoMaggies(g=1., r=1.)
 
     # --> ok
-    gal.brightness = NanoMaggies(g=1., r=1., z=1.)
+    gal.brightness = NanoMaggies(g=1900., r=2800., z=1.)
 
     print('Galaxy:', gal)
 
@@ -645,8 +645,13 @@ if __name__ == '__main__':
     print('Done GPU optimizer getLinearUpdateDirection...')
 
     print('GPU update:', up3)
+    print('Factored update:', mup2)
+    print('LSQR update:', mup)
 
-    print('Fractional difference in update directions (GPU - Fac):', difference(up3, up2))
+    print('Fractional difference in update directions (GPU - Fac):', difference(up3, mup2))
+    print('Fractional difference in update directions (GPU - LSQR):', difference(up3, mup))
 
-    chisq = (up3 - up2).T @ (ic @ (up3 - up2))
-    print('chisq:', chisq)
+    chisq = (up3 - mup2).T @ (ic @ (up3 - mup2))
+    print('chisq (GPU - Fac):', chisq)
+    chisq = (up3 - mup).T @ (ic @ (up3 - mup))
+    print('chisq (GPU - LSQR):', chisq)

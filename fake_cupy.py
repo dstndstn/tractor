@@ -4,6 +4,7 @@ class Duck(object):
     pass
 
 cuda = Duck()
+# Submodules:
 cuda.runtime = Duck()
 
 def memgetinfo():
@@ -55,6 +56,11 @@ class FakeCupyArray(object):
     def astype(self, dt):
         x = self._get()
         x = x.astype(dt)
+        return asarray(x)
+    @property
+    def flat(self):
+        x = self._get()
+        x = x.flat
         return asarray(x)
     def __len__(self):
         x = self._get()
@@ -114,6 +120,9 @@ class FakeCupyArray(object):
             other = other.get()
         r = x > other
         return asarray(r)
+    def __neg__(self):
+        x = self._get()
+        return asarray(-x)
     def dot(self, other):
         x = self._get()
         if isinstance(other, FakeCupyArray):
@@ -123,6 +132,14 @@ class FakeCupyArray(object):
     def swapaxes(self, *args):
         x = self._get()
         x = x.swapaxes(*args)
+        return asarray(x)
+    def reshape(self, *args):
+        x = self._get()
+        x = x.reshape(*args)
+        return asarray(x)
+    def sum(self, *args, **kwargs):
+        x = self._get()
+        x = x.sum(*args, **kwargs)
         return asarray(x)
 
 complex64 = np.complex64
@@ -189,6 +206,8 @@ def _wrap_one_to_one(f):
         return asarray(r)
     return wrapped
 
+sqrt = _wrap_one_to_one(np.sqrt)
+
 def rfft2(x):
     if isinstance(x, FakeCupyArray):
         x = x.get()
@@ -223,6 +242,10 @@ def ones(shape, dtype):
     x = np.ones(shape, dtype)
     return asarray(x)
 
+def empty(shape, dtype):
+    x = np.empty(shape, dtype)
+    return asarray(x)
+
 def empty_like(other):
     x = np.empty_like(other)
     return asarray(x)
@@ -238,6 +261,20 @@ def arange(*args, **kwargs):
 
 newaxis = np.newaxis
 pi = np.pi
+
+def _solve(a, b):
+    a = a.get()
+    b = b.get()
+    x = np.linalg.solve(a, b)
+    return asarray(x)
+def _lstsq(a, b, **kwargs):
+    a = a.get()
+    b = b.get()
+    x,r,rank,s = np.linalg.lstsq(a, b, **kwargs)
+    return asarray(x), asarray(r), rank, asarray(s)
+linalg = Duck()
+linalg.solve = _solve
+linalg.lstsq = _lstsq
 
 if __name__ == '__main__':
     print(keystr(0))
