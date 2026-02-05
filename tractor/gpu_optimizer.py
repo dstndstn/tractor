@@ -497,7 +497,7 @@ class GPUOptimizer(GPUFriendlyOptimizer):
 
         # The unique set of bands in all tims.  This is the number of flux parameters we
         # will fit for in the A matrix, in this order.
-        tim_ubands = list(set(tim_bands))
+        tim_ubands = list(np.unique(tim_bands))
         print('Unique set of tim bands:', tim_ubands)
         # List of the index into tim_ubands for each tim
         # This is what we'll use to build the A matrix

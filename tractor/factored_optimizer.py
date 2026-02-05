@@ -687,3 +687,38 @@ if __name__ == '__main__':
         off += w*h
     plt.savefig('sm-derivs.png')
     print('leftover rows in A:', R-off)
+
+    print('sm colscales:', sm_colscales)
+    print('gpu colscales:', colscales)
+
+    cutr.setParams(p0)
+
+    mod1 = cutr.getModelImage(0)
+    mod2 = cutr.getModelImage(1)
+    plt.clf()
+    plt.subplot(2,2,1)
+    mn,mx = np.percentile(cutim1.getImage().ravel(), [5,95])
+    ima = dict(interpolation='nearest', origin='lower', vmin=mn, vmax=mx)
+    plt.imshow(mod1, **ima)
+    plt.subplot(2,2,2)
+    plt.imshow(mod2, **ima)
+    plt.subplot(2,2,3)
+    plt.imshow(cutim1.getImage(), **ima)
+    plt.subplot(2,2,4)
+    plt.imshow(cutim2.getImage(), **ima)
+    plt.savefig('before.png')
+
+    cutr.optimize_loop(**optargs)
+
+    mod1 = cutr.getModelImage(0)
+    mod2 = cutr.getModelImage(1)
+    plt.clf()
+    plt.subplot(2,2,1)
+    plt.imshow(mod1, **ima)
+    plt.subplot(2,2,2)
+    plt.imshow(mod2, **ima)
+    plt.subplot(2,2,3)
+    plt.imshow(cutim1.getImage(), **ima)
+    plt.subplot(2,2,4)
+    plt.imshow(cutim2.getImage(), **ima)
+    plt.savefig('after.png')
