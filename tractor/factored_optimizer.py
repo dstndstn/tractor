@@ -661,11 +661,11 @@ if __name__ == '__main__':
     print('Fractional difference in update directions (GPU - SM):', difference(up3, mup3))
 
     chisq = (up3 - mup2).T @ (ic @ (up3 - mup2))
-    print('chisq (GPU - Fac):', chisq)
+    print('chisq (GPU - Fac ):', chisq)
     chisq = (up3 - mup).T @ (ic @ (up3 - mup))
     print('chisq (GPU - LSQR):', chisq)
     chisq = (up3 - mup3).T @ (ic @ (up3 - mup3))
-    print('chisq (GPU - SM):', chisq)
+    print('chisq (GPU - SM  ):', chisq)
 
     A,B,X,colscales,pH,pW = cutr.optimizer.getLinearUpdateDirection(cutr, get_A=True, **optargs)
 
