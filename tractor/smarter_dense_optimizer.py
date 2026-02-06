@@ -93,6 +93,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             cols_live[iparam] = True
             for deriv, img in derivs:
                 h,w = img.shape
+
                 # FIXME - use_gpu arg!
                 use_gpu = False
                 #print('clipping deriv to size', w, h)
@@ -101,10 +102,12 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                     print('deriv extents:', deriv.extent, 'image size %i x %i' % (w,h))
                     continue
                 dx0,dx1,dy0,dy1 = deriv.extent
-                assert(type(dx0) is int)
-                assert(type(dx1) is int)
-                assert(type(dy0) is int)
-                assert(type(dy1) is int)
+                # Can be np.int16, eg
+                dx0 = int(dx0)
+                dx1 = int(dx1)
+                dy0 = int(dy0)
+                dy1 = int(dy1)
+
                 if img in img_bounds:
                     x0,x1,y0,y1 = img_bounds[img]
                     img_bounds[img] = min(dx0, x0), max(dx1, x1), min(dy0, y0), max(dy1, y1)
@@ -202,6 +205,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                 else:
                     # There are multiple modelMasks for this image
                     # (eg from multiple sources), so need to pad it out
+
                     print('\tderiv extent', dx0,dx1, dy0,dy1)
                     print('\timage bounds', x0,x1,y0,y1, img)
                     raise RuntimeError('smarter_dense_optimizer: multiple modelMasks (sources) for this image?')
