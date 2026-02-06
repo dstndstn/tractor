@@ -88,9 +88,9 @@ class GalaxyTest(unittest.TestCase):
         print('patch sum:', p1.patch.sum())
 
         # Very specific tests...
-        self.assertEqual(p1.x0, 16)
-        self.assertEqual(p1.y0, 17)
-        self.assertEqual(p1.shape, (68,69))
+        self.assertEqual(p1.x0, 24)
+        self.assertEqual(p1.y0, 25)
+        self.assertEqual(p1.shape, (52,53))
         self.assertTrue(np.abs(p1.patch.sum() - 100.) < 1e-3)
 
         p1.addTo(mod)
@@ -224,9 +224,9 @@ class GalaxyTest(unittest.TestCase):
             show_model(mod4, mod, 'mod4')
 
         # These assertions are fairly arbitrary...
-        self.assertEqual(p4.x0, 6)
-        self.assertEqual(p4.y0, 7)
-        self.assertEqual(p4.shape, (88,89))
+        self.assertEqual(p4.x0, 14)
+        self.assertEqual(p4.y0, 15)
+        self.assertEqual(p4.shape, (72,73))
         print('patch sum:', p4.patch.sum())
         print('Mod sum:', mod4.sum())
         self.assertTrue(np.abs(mod4.sum() - 100.) < 1e-3)

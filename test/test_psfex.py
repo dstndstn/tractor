@@ -25,7 +25,7 @@ class PsfExTest(unittest.TestCase):
     def test_tiny_image(self):
         from tractor.patch import ModelMask
         H,W = 1,1
-        tim = Image(data=np.zeros((H,W)), invvar=np.ones((H,W)),
+        tim = Image(data=np.zeros((H,W)), inverr=np.ones((H,W)),
                     psf=self.psf)
         src = PointSource(PixPos(2.3,2.4), Flux(100.))
         tr = Tractor([tim],[src])
@@ -130,7 +130,7 @@ class PsfExTest(unittest.TestCase):
         pp = np.array([0.8, 0.2, 0.1, -0.0, 1.2, 0.2, 7.6, 6.0, -1.0, 51.6, 49.1, -1.3])
         self.assertTrue(np.all(np.abs(np.array(gpsf.getParams()) - pp) < 0.1))
         
-        tim = Image(data=np.zeros((H,W)), invvar=np.ones((H,W)),
+        tim = Image(data=np.zeros((H,W)), inverr=np.ones((H,W)),
                     psf=self.psf)
     
         xx,yy = np.meshgrid(np.arange(W), np.arange(H))

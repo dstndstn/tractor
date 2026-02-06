@@ -128,7 +128,8 @@ class ForcedPhotTest(unittest.TestCase):
 
         sumiv = 0.
         sumval = 0.
-        iv = tim.getInvvar()
+        ie = tim.getInvError()
+        iv = ie**2
         sumiv += np.sum(iv)
         sumval += np.sum(iv * val)
         iv = 1./fluxSigma**2

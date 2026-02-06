@@ -643,7 +643,7 @@ def scale_sdss_image(tim, S):
     # We're assuming ConstantSky here
     sky = tim.getSky().copy()
     photocal = ScaledPhotoCal(tim.getPhotoCal(), (1. / S)**2)
-    return Image(data=data, invvar=invvar, psf=psf, wcs=wcs,
+    return Image(data=data, inverr=np.sqrt(invvar), psf=psf, wcs=wcs,
                  sky=sky, photocal=photocal, name='Scaled(%i) ' % S + tim.name,
                  zr=tim.zr)
 
@@ -887,7 +887,7 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
         mypsf = SdssBrightPSF(mypsf, a1, s1, a2, s2, a3, sigmap, beta)
         print('PSF:', mypsf)
 
-    timg = Image(data=image, invvar=invvar, psf=mypsf, wcs=wcs,
+    timg = Image(data=image, inverr=np.sqrt(invvar), psf=mypsf, wcs=wcs,
                  sky=skyobj, photocal=photocal,
                  name=('SDSS (r/c/f/b=%i/%i/%i/%s)' %
                        (run, camcol, field, bandname)),
