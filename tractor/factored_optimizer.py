@@ -297,8 +297,9 @@ if __name__ == '__main__':
                  wcs = ConstantFitsWcs(wcs1),
                 )
 
-    #tr = Tractor([tim1], [gal])
-    tr = Tractor([tim1], [ptsrc])
+    cat = [gal]
+    #cat = [ptsrc]
+    tr = Tractor([tim1], cat)
 
     mod = tr.getModelImage(0)
 
@@ -328,8 +329,7 @@ if __name__ == '__main__':
                  wcs = ConstantFitsWcs(wcs2),
                 )
 
-    #tr = Tractor([tim1, tim2], [gal])
-    tr = Tractor([tim1, tim2], [ptsrc])
+    tr = Tractor([tim1, tim2], cat)
     tr.freezeParam('images')
 
     mod2 = tr.getModelImage(tim2)
@@ -559,7 +559,9 @@ if __name__ == '__main__':
     #slc = slice(10,90),slice(10,90)
     slc = slice(mya-ya, mya-ya+mh), slice(mxa-xa, mxa-xa+mw)
 
-    nparams = len(p0)
+    #nparams = len(p0)
+    # params being fit (constrained by images)
+    _,nparams = A.shape
     C = 6
     for col in range(nparams):
         ima = dict(interpolation='nearest', origin='lower',
@@ -654,8 +656,7 @@ if __name__ == '__main__':
                        wcs=tim1.wcs, photocal=tim1.photocal)
     cutim2 = CupyImage(data=tim2.data, inverr=tim2.inverr, psf=tim2.psf, sky=tim2.sky,
                        wcs=tim2.wcs, photocal=tim2.photocal)
-    #cutr = Tractor([cutim1, cutim2], [gal])
-    cutr = Tractor([cutim1, cutim2], [ptsrc])
+    cutr = Tractor([cutim1, cutim2], cat)
     cutr.freezeParam('images')
 
     cutr.setModelMasks(tr.modelMasks)
@@ -710,33 +711,50 @@ if __name__ == '__main__':
     print('gpu colscales:', colscales)
 
     cutr.setParams(p0)
+    print('p0:', cutr.catalog[0])
+    
+    dp = np.random.normal(size=len(colscales)) * 20. * 1./colscales
+
+    cutr.setParams(p0 + dp)
+    print('p0+dp:', cutr.catalog[0])
 
     mod1 = cutr.getModelImage(0)
     mod2 = cutr.getModelImage(1)
-    plt.clf()
-    plt.subplot(2,2,1)
-    mn,mx = np.percentile(cutim1.getImage().ravel(), [5,95])
+    mn,mx = np.percentile(cutim1.getImage().ravel(), [2,98])
     ima = dict(interpolation='nearest', origin='lower', vmin=mn, vmax=mx)
+    chima = dict(interpolation='nearest', origin='lower', vmin=-5, vmax=+5)
+    plt.clf()
+    plt.subplot(2,3,1)
     plt.imshow(mod1, **ima)
-    plt.subplot(2,2,2)
+    plt.subplot(2,3,4)
     plt.imshow(mod2, **ima)
-    plt.subplot(2,2,3)
+    plt.subplot(2,3,2)
     plt.imshow(cutim1.getImage(), **ima)
-    plt.subplot(2,2,4)
+    plt.subplot(2,3,5)
     plt.imshow(cutim2.getImage(), **ima)
+    plt.subplot(2,3,3)
+    plt.imshow((cutim1.getImage() - mod1) * cutim1.getInvError(), **chima)
+    plt.subplot(2,3,6)
+    plt.imshow((cutim2.getImage() - mod2) * cutim2.getInvError(), **chima)
     plt.savefig('before.png')
 
     cutr.optimize_loop(**optargs)
 
+    print('After optimization:', cutr.catalog[0])
+    
     mod1 = cutr.getModelImage(0)
     mod2 = cutr.getModelImage(1)
     plt.clf()
-    plt.subplot(2,2,1)
+    plt.subplot(2,3,1)
     plt.imshow(mod1, **ima)
-    plt.subplot(2,2,2)
+    plt.subplot(2,3,4)
     plt.imshow(mod2, **ima)
-    plt.subplot(2,2,3)
+    plt.subplot(2,3,2)
     plt.imshow(cutim1.getImage(), **ima)
-    plt.subplot(2,2,4)
+    plt.subplot(2,3,5)
     plt.imshow(cutim2.getImage(), **ima)
+    plt.subplot(2,3,3)
+    plt.imshow((cutim1.getImage() - mod1) * cutim1.getInvError(), **chima)
+    plt.subplot(2,3,6)
+    plt.imshow((cutim2.getImage() - mod2) * cutim2.getInvError(), **chima)
     plt.savefig('after.png')

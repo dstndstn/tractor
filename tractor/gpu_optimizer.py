@@ -383,7 +383,9 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         if get_A:
             sA = np.zeros((Nrows, src.numberOfParams()), np.float32)
             sA[:,I] = A.get()
-            return sA, B.get(), sX, colscales.get(), pH,pW
+            s_scales = np.zeros(src.numberOfParams(), np.float32)
+            s_scales[I] = colscales.get()
+            return sA, B.get(), sX, s_scales, pH,pW
 
         return sX
 
