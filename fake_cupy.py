@@ -1,0 +1,291 @@
+import numpy as np
+
+class Duck(object):
+    pass
+
+cuda = Duck()
+# Submodules:
+cuda.runtime = Duck()
+
+def memgetinfo():
+    # free, tot
+    mem = 50 * 1024**3
+    return mem, mem
+cuda.runtime.memGetInfo = memgetinfo
+
+cuda.memory = Duck()
+
+class OutOfMemoryError(RuntimeError):
+    pass
+
+cuda.memory.OutOfMemoryError = OutOfMemoryError
+
+_arrays = {}
+_array_key = 0
+
+def keystr(i):
+    s = ''
+    c0 = ord('a')
+    while i >= 26:
+        digit = i % 26
+        i //= 26
+        s = chr(c0 + digit) + s
+    s = chr(c0 + i) + s
+    return s
+
+class FakeCupyArray(object):
+    def __init__(self, key):
+        self.key = key
+    def __str__(self):
+        return 'FakeCupyArray(key "%s", shape %s, dtype %s)' % (self.key, self.shape, self.dtype)
+    def __repr__(self):
+        return 'FakeCupyArray("%s")' % self.key
+    def _get(self):
+        return _arrays[self.key]
+    def get(self):
+        return self._get()
+    @property
+    def shape(self):
+        return self._get().shape
+    @property
+    def dtype(self):
+        return self._get().dtype
+    def max(self):
+        x = self._get()
+        return x.max()
+    def astype(self, dt):
+        x = self._get()
+        x = x.astype(dt)
+        return asarray(x)
+    @property
+    def flat(self):
+        x = self._get()
+        x = x.flat
+        return asarray(x)
+    def __len__(self):
+        x = self._get()
+        return len(x)
+    def __getitem__(self, key):
+        x = self._get()
+        x = x[key]
+        return asarray(x)
+    def __setitem__(self, key, value):
+        x = self._get()
+        ovalue = value
+        if isinstance(value, FakeCupyArray):
+            value = value.get()
+        x[key] = value
+        return ovalue
+    def __add__(self, other):
+        x = self._get()
+        if isinstance(other, FakeCupyArray):
+            other = other.get()
+        x = x + other
+        return asarray(x)
+    __radd__ = __add__
+    def __sub__(self, other):
+        x = self._get()
+        if isinstance(other, FakeCupyArray):
+            other = other.get()
+        x = x - other
+        return asarray(x)
+    def __mul__(self, other):
+        x = self._get()
+        if isinstance(other, FakeCupyArray):
+            other = other.get()
+        x = x * other
+        return asarray(x)
+    __rmul__ = __mul__
+    def __truediv__(self, other):
+        x = self._get()
+        if isinstance(other, FakeCupyArray):
+            other = other.get()
+        x = x / other
+        return asarray(x)
+    def __pow__(self, other):
+        x = self._get()
+        if isinstance(other, FakeCupyArray):
+            other = other.get()
+        x = x ** other
+        return asarray(x)
+    def __lt__(self, other):
+        x = self._get()
+        if isinstance(other, FakeCupyArray):
+            other = other.get()
+        r = x < other
+        return asarray(r)
+    def __gt__(self, other):
+        x = self._get()
+        if isinstance(other, FakeCupyArray):
+            other = other.get()
+        r = x > other
+        return asarray(r)
+    def __neg__(self):
+        x = self._get()
+        return asarray(-x)
+    def dot(self, other):
+        x = self._get()
+        if isinstance(other, FakeCupyArray):
+            other = other.get()
+        r = np.dot(x, other)
+        return asarray(r)
+    def swapaxes(self, *args):
+        x = self._get()
+        x = x.swapaxes(*args)
+        return asarray(x)
+    def reshape(self, *args):
+        x = self._get()
+        x = x.reshape(*args)
+        return asarray(x)
+    def sum(self, *args, **kwargs):
+        x = self._get()
+        x = x.sum(*args, **kwargs)
+        return asarray(x)
+    def copy(self, **kwargs):
+        x = self._get()
+        x = x.copy(**kwargs)
+        return asarray(x)
+
+complex64 = np.complex64
+float32 = np.float32
+int32 = np.int32
+
+def asarray(x):
+    n = np.asarray(x)
+    global _array_key
+    global _arrays
+    key = keystr(_array_key)
+    a = FakeCupyArray(key)
+    _array_key += 1
+    _arrays[key] = n
+    return a
+
+cuda.asarray = asarray
+
+def array(x, dtype=None):
+    n = np.array(x, dtype=dtype)
+    return asarray(n)
+
+def hypot(x,y):
+    if isinstance(x, FakeCupyArray):
+        x = x.get()
+    if isinstance(y, FakeCupyArray):
+        y = y.get()
+    h = np.hypot(x,y)
+    return asarray(h)
+
+def _wrap_two_to_one(f):
+    def wrapped(x, y):
+        if isinstance(x, FakeCupyArray):
+            x = x.get()
+        if isinstance(y, FakeCupyArray):
+            y = y.get()
+        r = f(x, y)
+        return asarray(r)
+    return wrapped
+
+dot = _wrap_two_to_one(np.dot)
+
+def einsum(code, x, y):
+    if isinstance(x, FakeCupyArray):
+        x = x.get()
+    if isinstance(y, FakeCupyArray):
+        y = y.get()
+    r = np.einsum(code, x, y)
+    return asarray(r)
+
+def max(x):
+    if isinstance(x, FakeCupyArray):
+        x = x.get()
+    m = np.max(x)
+    return asarray(m)
+
+fft = Duck()
+
+def _wrap_one_to_one(f):
+    def wrapped(x):
+        if isinstance(x, FakeCupyArray):
+            x = x.get()
+        r = f(x)
+        return asarray(r)
+    return wrapped
+
+sqrt = _wrap_one_to_one(np.sqrt)
+
+def rfft2(x):
+    if isinstance(x, FakeCupyArray):
+        x = x.get()
+    r = np.fft.rfft2(x)
+    return asarray(r)
+
+def rfftfreq(x):
+    if isinstance(x, FakeCupyArray):
+        x = x.get()
+    r = np.fft.rfftfreq(x)
+    return asarray(r)
+
+#def rfftfreq(x):
+#    if isinstance(x, FakeCupyArray):
+#        x = x.get()
+#    r = np.fft.rfftfreq(x)
+#    return asarray(r)
+
+fft.rfft2 = rfft2
+fft.rfftfreq = rfftfreq
+
+fft.fftfreq = _wrap_one_to_one(np.fft.fftfreq)
+fft.irfft2 = _wrap_one_to_one(np.fft.irfft2)
+
+exp = _wrap_one_to_one(np.exp)
+
+def zeros(shape, dtype):
+    x = np.zeros(shape, dtype)
+    return asarray(x)
+
+def ones(shape, dtype):
+    x = np.ones(shape, dtype)
+    return asarray(x)
+
+def empty(shape, dtype):
+    x = np.empty(shape, dtype)
+    return asarray(x)
+
+def empty_like(other):
+    x = np.empty_like(other)
+    return asarray(x)
+
+def sum(a, **kwargs):
+    a = a.get()
+    x = np.sum(a, **kwargs)
+    return asarray(x)
+
+def arange(*args, **kwargs):
+    x = np.arange(*args, **kwargs)
+    return asarray(x)
+
+newaxis = np.newaxis
+pi = np.pi
+
+def _solve(a, b):
+    a = a.get()
+    b = b.get()
+    x = np.linalg.solve(a, b)
+    return asarray(x)
+def _lstsq(a, b, **kwargs):
+    a = a.get()
+    b = b.get()
+    x,r,rank,s = np.linalg.lstsq(a, b, **kwargs)
+    return asarray(x), asarray(r), rank, asarray(s)
+linalg = Duck()
+linalg.solve = _solve
+linalg.lstsq = _lstsq
+
+if __name__ == '__main__':
+    print(keystr(0))
+    print(keystr(1))
+    print(keystr(25))
+    print(keystr(26))
+    print(keystr(27))
+    print(keystr(26*26))
+    print(keystr(26*26+1))
+    
