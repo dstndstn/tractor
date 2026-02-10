@@ -812,6 +812,7 @@ if __name__ == '__main__':
     from tractor.utils import _GaussianPriors
     from tractor import NanoMaggies, LinearPhotoCal
     from tractor.patch import ModelMask
+    from tractor import ParamList
     import os
     import pylab as plt
     from astrometry.util.util import Tan
@@ -853,12 +854,71 @@ if __name__ == '__main__':
         def getName(cls):
             return "EllipseWithPriors(%g)" % cls.ellipticityStd
 
+    # From legacypipe, a Position class with no parameters.
+    # Gaia measures positions better than we will, we assume, so the
+    # GaiaPosition class pretends that it does not have any parameters
+    # that can be optimized; therefore they stay fixed.
+    class GaiaPosition(ParamList):
+        def __init__(self, ra, dec, ref_epoch, pmra, pmdec, parallax):
+            '''
+            Units:
+            - matches Gaia DR1
+            - pmra,pmdec are in mas/yr.  pmra is in angular speed (ie, has a cos(dec) factor)
+            - parallax is in mas.
+            - ref_epoch: year (eg 2015.5)
+            '''
+            self.ra = ra
+            self.dec = dec
+            self.ref_epoch = float(ref_epoch)
+            self.pmra = pmra
+            self.pmdec = pmdec
+            self.parallax = parallax
+            super(GaiaPosition, self).__init__()
+            self.cached_positions = {}
+        def copy(self):
+            return GaiaPosition(self.ra, self.dec, self.ref_epoch, self.pmra, self.pmdec,
+                                self.parallax)
+        def getPositionAtTime(self, mjd):
+            from tractor import RaDecPos
+            try:
+                return self.cached_positions[mjd]
+            except KeyError:
+                # not cached
+                pass
+            if self.pmra == 0. and self.pmdec == 0. and self.parallax == 0.:
+                pos = RaDecPos(self.ra, self.dec)
+                self.cached_positions[mjd] = pos
+                return pos
+            ra,dec = radec_at_mjd(self.ra, self.dec, self.ref_epoch,
+                                  self.pmra, self.pmdec, self.parallax, mjd)
+            pos = RaDecPos(ra, dec)
+            self.cached_positions[mjd] = pos
+            return pos
+        @staticmethod
+        def getName():
+            return 'GaiaPosition'
+        def __str__(self):
+            return ('%s: RA, Dec = (%.5f, %.5f), pm (%.1f, %.1f), parallax %.3f' %
+                    (self.getName(), self.ra, self.dec, self.pmra, self.pmdec, self.parallax))
+        def __getstate__(self):
+            '''
+            For pickling: omit cached positions
+            '''
+            d = self.__dict__.copy()
+            d['cached_positions'] = dict()
+            return d
+
     brightness = NanoMaggies(g=1000., r=2000., z=500.)
+
     shape = EllipseWithPriors(np.log(5.), 0.1, 0.4)
-    gal = ExpGalaxy(RaDecPos(ra_cen - 25.*arcsec, dec_cen), brightness, shape)
-    ptsrc = PointSource(RaDecPos(ra_cen - 25.*arcsec, dec_cen), brightness)
+    #pos = RaDecPos(ra_cen - 25.*arcsec, dec_cen)
+    gpos = GaiaPosition(ra_cen - 25.*arcsec, dec_cen, 2016.0, 0., 0., 0.)
+    #gal = ExpGalaxy(pos, brightness, shape)
+    #param_scales = [1./3600, 1./3600., 100., 100., 100., 1., 0.1, 0.1]
+    #ptsrc = PointSource(RaDecPos(ra_cen - 25.*arcsec, dec_cen), brightness)
+    gal = ExpGalaxy(gpos, brightness, shape)
     cat = [gal]
-    param_scales = [1./3600, 1./3600., 100., 100., 100., 1., 0.1, 0.1]
+    param_scales = [100., 100., 100., 1., 0.1, 0.1]
 
     psf = NormalizedPixelizedPsfEx(os.path.join(os.path.dirname(os.path.dirname(__file__)),
                                         'test',

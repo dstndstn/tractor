@@ -157,7 +157,7 @@ class Galaxy(MultiParams, SingleProfileSource):
 
         derivs = []
         # derivatives wrt position
-        if not self.isParamFrozen('pos'):
+        if self.isParamThawed('pos') and (self.pos.numberOfParams() > 0):
             if counts == 0:
                 derivs.extend([None] * len(pos0.getParams()))
             else:
@@ -169,8 +169,9 @@ class Galaxy(MultiParams, SingleProfileSource):
                 patchdx = Patch(patch0.x0, patch0.y0, dx)
                 patchdy = Patch(patch0.x0, patch0.y0, dy)
                 del dx, dy
-                derivs.extend(wcs.pixelDerivsToPositionDerivs(pos0, self, counts,
-                                                              patch0, patchdx, patchdy))
+                dradec = wcs.pixelDerivsToPositionDerivs(pos0, self, counts,
+                                                         patch0, patchdx, patchdy)
+                derivs.extend(dradec)
                 del patchdx, patchdy
 
         # derivatives wrt brightness
