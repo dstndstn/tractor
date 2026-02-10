@@ -135,7 +135,7 @@ class PointSource(MultiParams, SingleProfileSource):
         # Short-cut the case where we're only fitting fluxes, and the
         # band of the image is not being fit.
 
-        pos_frozen = self.isParamFrozen('pos')
+        pos_frozen = self.isParamFrozen('pos') or (self.pos.numberOfParams() == 0)
         bright_frozen = self.isParamFrozen('brightness')
 
         counts0 = img.getPhotoCal().brightnessToCounts(self.brightness)
@@ -187,7 +187,6 @@ class PointSource(MultiParams, SingleProfileSource):
         H, W = img.shape
         if not patch0.overlapsBbox((0, W, 0, H)):
             return [None] * self.numberOfParams()
-
         derivs = []
 
         # Position

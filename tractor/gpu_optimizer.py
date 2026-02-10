@@ -911,14 +911,16 @@ if __name__ == '__main__':
     brightness = NanoMaggies(g=1000., r=2000., z=500.)
 
     shape = EllipseWithPriors(np.log(5.), 0.1, 0.4)
-    #pos = RaDecPos(ra_cen - 25.*arcsec, dec_cen)
+    pos = RaDecPos(ra_cen - 25.*arcsec, dec_cen)
     gpos = GaiaPosition(ra_cen - 25.*arcsec, dec_cen, 2016.0, 0., 0., 0.)
     #gal = ExpGalaxy(pos, brightness, shape)
     #param_scales = [1./3600, 1./3600., 100., 100., 100., 1., 0.1, 0.1]
-    #ptsrc = PointSource(RaDecPos(ra_cen - 25.*arcsec, dec_cen), brightness)
-    gal = ExpGalaxy(gpos, brightness, shape)
-    cat = [gal]
-    param_scales = [100., 100., 100., 1., 0.1, 0.1]
+    ptsrc = PointSource(pos, brightness)
+    param_scales = [1./3600, 1./3600, 100., 100., 100]
+    #gal = ExpGalaxy(gpos, brightness, shape)
+    #param_scales = [100., 100., 100., 1., 0.1, 0.1]
+    #cat = [gal]
+    cat = [ptsrc]
 
     psf = NormalizedPixelizedPsfEx(os.path.join(os.path.dirname(os.path.dirname(__file__)),
                                         'test',
