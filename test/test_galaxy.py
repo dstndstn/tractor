@@ -60,8 +60,12 @@ class GalaxyTest(unittest.TestCase):
         self.assertEqual(len(derivs), 7)
         self.assertEqual(len(derivs), gal1.numberOfParams())
         self.assertEqual(len(derivs), len(gal1.getParams()))
-        for d in derivs:
-            self.assertIsNotNone(d)
+        for i,d in enumerate(derivs):
+            # "tim" is r band; galaxy has g,r bands.
+            if i == 2:
+                self.assertIsNone(d)
+            else:
+                self.assertIsNotNone(d)
 
         # Set one of the fluxes to zero.
         gal1.brightness.r = 0.
@@ -70,11 +74,11 @@ class GalaxyTest(unittest.TestCase):
         print('Derivs:', derivs)
         self.assertEqual(len(derivs), 7)
         for i,d in enumerate(derivs):
-            # flux derivatives still non-None
-            if i in [2,3]:
+            # flux derivatives for r still non-None
+            if i in [3]:
                 self.assertIsNotNone(derivs[i])
             else:
-                # other derivatives should be None
+                #  other derivatives should be None
                 self.assertIsNone(derivs[i])
 
         gal1.brightness.r = 100.
@@ -86,9 +90,9 @@ class GalaxyTest(unittest.TestCase):
         print('patch sum:', p1.patch.sum())
 
         # Very specific tests...
-        self.assertEqual(p1.x0, 16)
-        self.assertEqual(p1.y0, 17)
-        self.assertEqual(p1.shape, (68,69))
+        self.assertEqual(p1.x0, 24)
+        self.assertEqual(p1.y0, 25)
+        self.assertEqual(p1.shape, (52,53))
         self.assertTrue(np.abs(p1.patch.sum() - 100.) < 1e-3)
 
         p1.addTo(mod)
@@ -222,9 +226,9 @@ class GalaxyTest(unittest.TestCase):
             show_model(mod4, mod, 'mod4')
 
         # These assertions are fairly arbitrary...
-        self.assertEqual(p4.x0, 6)
-        self.assertEqual(p4.y0, 7)
-        self.assertEqual(p4.shape, (88,89))
+        self.assertEqual(p4.x0, 14)
+        self.assertEqual(p4.y0, 15)
+        self.assertEqual(p4.shape, (72,73))
         print('patch sum:', p4.patch.sum())
         print('Mod sum:', mod4.sum())
         self.assertTrue(np.abs(mod4.sum() - 100.) < 1e-3)
@@ -334,6 +338,8 @@ class GalaxyTest(unittest.TestCase):
         self.assertIsNone(p6)
 
         # Slightly outside the ModelMask
+        # (hybrid PSF)
+        tim.psf = HybridPixelizedPSF(pixpsf, gauss=psf0)
         gal1.pos = PixPos(20., 25.)
         p7 = gal1.getModelPatch(tim, modelMask=mm)
         mod7 = np.zeros((H,W), np.float32)

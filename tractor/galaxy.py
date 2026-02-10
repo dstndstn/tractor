@@ -346,6 +346,20 @@ class ProfileGalaxy(object):
             sourceOut = (px < x0 or px > x1 - 1 or py < y0 or py > y1 - 1)
 
             if sourceOut:
+                # What is the closest point in the modelMask?
+                neardx, neardy = 0., 0.
+                if px < x0:
+                    neardx = x0 - px
+                if px > x1:
+                    neardx = px - x1
+                if py < y0:
+                    neardy = y0 - py
+                if py > y1:
+                    neardy = py - y1
+                nearest = np.hypot(neardx, neardy)
+                if nearest > self.getRadius():
+                    return None
+
                 if hybrid:
                     return run_mog(mm=modelMask)
                 else:
