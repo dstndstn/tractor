@@ -940,33 +940,24 @@ if __name__ == '__main__':
 
     sm_opt = SmarterDenseOptimizer()
     tr.optimizer = sm_opt
-    try:
-        allderivs = tr.getDerivs()
-        up1,ic,colmap = tr.optimizer.getUpdateDirection(tr, allderivs, get_cov=True, **optargs)
-        print('colmap', colmap)
-        up1 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
-        print('Smarter update:', up1)
-        n = len(up1)
-        ic1 = np.zeros((n,n,), np.float32)
-        for j,i in enumerate(colmap):
-            ic1[i,colmap] = ic[j,:]
-        ic = ic1
-    except Exception as e:
-        print('Smarter failed')
-        import traceback
-        traceback.print_exc()
+
+    allderivs = tr.getDerivs()
+    up1,ic,colmap = tr.optimizer.getUpdateDirection(tr, allderivs, get_cov=True, **optargs)
+    print('colmap', colmap)
+    up1 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+    print('Smarter update:', up1)
+    n = len(up1)
+    ic1 = np.zeros((n,n,), np.float32)
+    for j,i in enumerate(colmap):
+        ic1[i,colmap] = ic[j,:]
+    ic = ic1
 
     tr.setParams(p0)
 
     gpu_opt = GpuOptimizer()
     tr.optimizer = gpu_opt
-    try:
-        up2 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
-        print('GPU Update:', up2)
-    except:
-        print('GPU failed')
-        import traceback
-        traceback.print_exc()
+    up2 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+    print('GPU Update:', up2)
 
     tr.setParams(p0)
 
@@ -978,3 +969,46 @@ if __name__ == '__main__':
 
     compare('LSQR', 'GPU', up0, up2, ic)
     compare('SM',   'GPU', up1, up2, ic)
+
+    tr.setParams(p0)
+
+    mod1 = tr.getModelImage(0)
+    mod2 = tr.getModelImage(1)
+    mn,mx = np.percentile(tim1.getImage().ravel(), [2,98])
+    ima = dict(interpolation='nearest', origin='lower', vmin=mn, vmax=mx)
+    chima = dict(interpolation='nearest', origin='lower', vmin=-5, vmax=+5)
+    plt.clf()
+    plt.subplot(2,3,1)
+    plt.imshow(mod1, **ima)
+    plt.subplot(2,3,4)
+    plt.imshow(mod2, **ima)
+    plt.subplot(2,3,2)
+    plt.imshow(tim1.getImage(), **ima)
+    plt.subplot(2,3,5)
+    plt.imshow(tim2.getImage(), **ima)
+    plt.subplot(2,3,3)
+    plt.imshow((tim1.getImage() - mod1) * tim1.getInvError(), **chima)
+    plt.subplot(2,3,6)
+    plt.imshow((tim2.getImage() - mod2) * tim2.getInvError(), **chima)
+    plt.savefig('before.png')
+
+    tr.optimize_loop(**optargs)
+
+    print('After optimization:', tr.catalog[0])
+
+    mod1 = tr.getModelImage(0)
+    mod2 = tr.getModelImage(1)
+    plt.clf()
+    plt.subplot(2,3,1)
+    plt.imshow(mod1, **ima)
+    plt.subplot(2,3,4)
+    plt.imshow(mod2, **ima)
+    plt.subplot(2,3,2)
+    plt.imshow(tim1.getImage(), **ima)
+    plt.subplot(2,3,5)
+    plt.imshow(tim2.getImage(), **ima)
+    plt.subplot(2,3,3)
+    plt.imshow((tim1.getImage() - mod1) * tim1.getInvError(), **chima)
+    plt.subplot(2,3,6)
+    plt.imshow((tim2.getImage() - mod2) * tim2.getInvError(), **chima)
+    plt.savefig('after.png')

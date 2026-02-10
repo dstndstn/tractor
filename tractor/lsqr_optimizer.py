@@ -283,7 +283,6 @@ class LsqrOptimizer(Optimizer):
         kwa = dict(damp=damp, priors=priors,
                    scale_columns=scale_columns, shared_params=shared_params,
                    variance=variance)
-        t = time.time()
         X = self.getLinearUpdateDirection(tractor, **kwa)
         if X is None:
             # Failure
