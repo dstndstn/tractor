@@ -19,7 +19,7 @@ TO-DO:
 class Duck(object):
     pass
 
-class GPUFriendlyOptimizer(SmarterDenseOptimizer):
+class GpuFriendlyOptimizer(SmarterDenseOptimizer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -51,7 +51,7 @@ class GPUFriendlyOptimizer(SmarterDenseOptimizer):
         #return super().all_image_updates(tr, **kwargs)
         return super().getLinearUpdateDirection(tr, **kwargs)
 
-class GPUOptimizer(GPUFriendlyOptimizer):
+class GpuOptimizer(GpuFriendlyOptimizer):
     def one_source_update(self, tr, **kwargs):
         return self.gpu_one_source_update(tr, **kwargs)
 
@@ -114,8 +114,8 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         assert(isinstance(src, (ProfileGalaxy, PointSource)))
 
         # Assume model masks are set (ie, pixel ROIs of interest are defined)
-        masks = [tr._getModelMaskByIdx(i, src) for i in range(len(tr.images))]
-        #masks = [tr._getModelMaskFor(tim, src) for tim in tr.images]
+        #masks = [tr._getModelMaskByIdx(i, src) for i in range(len(tr.images))]
+        masks = [tr._getModelMaskFor(tim, src) for tim in tr.images]
         if any(m is None for m in masks):
             raise RuntimeError('One or more modelMasks is None in GPU code')
         assert(all([m is not None for m in masks]))
@@ -420,15 +420,17 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         padie  = cp.zeros((Nimages, pH,pW), cp.float32)
         for i,(tim,(x0,x1,y0,y1)) in enumerate(zip(tims, extents)):
             # FIXME -- put the whole images on the GPU??
-            pix = tim.getGpuImage()
-            ie  = tim.getGpuInvError()
+            #pix = tim.getGpuImage()
+            #ie  = tim.getGpuInvError()
+            pix = tim.getImage()
+            ie = tim.getInvError()
 
             dx = cx - ipx[i]
             dy = cy - ipy[i]
             p = pix[y0:y1, x0:x1]
-            padpix[i, y0+dy : y1+dy, x0+dx : x1+dx] = p
+            padpix[i, y0+dy : y1+dy, x0+dx : x1+dx] = p #cp.array(p)
             p =  ie[y0:y1, x0:x1]
-            padie [i, y0+dy : y1+dy, x0+dx : x1+dx] = p
+            padie [i, y0+dy : y1+dy, x0+dx : x1+dx] = p # cp.array(p)
 
         # GPU arrays:
         img_params.psf_pad = psf_pad
@@ -598,7 +600,7 @@ class GPUOptimizer(GPUFriendlyOptimizer):
         return G
 
 def get_vectorized_psfs(psfs, halfsize):
-    from tractor.batch_mixture_profiles import BatchMixtureOfGaussians
+    #from tractor.batch_mixture_profiles import BatchMixtureOfGaussians
     #from tractor.batch_psf import BatchPixelizedPSF
 
     psfmogs = []
@@ -749,7 +751,7 @@ def correlate7_2d_inplace_gpu(G, fx, fy, work=None):
     Nim2,K = fx.shape
     assert(Nim2 == Nim)
     assert(K == 7)
-    
+
     # Apply X filter
 
     na = cp.newaxis
@@ -798,36 +800,181 @@ def correlate7_2d_inplace_gpu(G, fx, fy, work=None):
 
 
 if __name__ == '__main__':
-    # test PSF padding logic
-    W = 64
-    cx = W//2
-    pad = np.zeros(W, np.float32)
-    bigpsf = np.zeros(2*W, np.float32)
-    bigcx = 64
-    bigpsf[bigcx] = 1.
-    for psfW in [32, 33, 63, 64, 65, 127]:
-        pad = np.zeros(W, np.float32)
-        print()
-        offset = bigcx - psfW//2
-        psf = bigpsf[offset : offset + psfW]
-        print('PSF size:', psf.shape, 'vs', psfW)
-        print('nz pix:', np.flatnonzero(psf))
-        pw = psfW
-        psfimg = psf
-        # We assume the center of the PSF image is at:
-        pcx = pw//2
-        assert(pcx == np.flatnonzero(psf)[0])
-        # And it must end up at cx,cy in the padded image.
-        if pcx >= cx:
-            # Trimming the PSF image
-            out_x0 = 0
-            in_x0 = pcx - cx
-        else:
-            # Padding the PSF image
-            in_x0 = 0
-            out_x0 = cx - pcx
-        n = min(psfW, W)
-        pad[out_x0: out_x0 + n] = psfimg[in_x0: in_x0 + n]
-        print('Padded size:', pad.shape)
-        print('nz pix:', np.flatnonzero(pad))
-        print('cx:', cx)
+    from tractor.galaxy import ExpGalaxy
+    from tractor.ellipses import EllipseE, EllipseESoft
+    from tractor.basics import PixPos, Flux, ConstantSky, PointSource
+    from tractor.basics import RaDecPos
+    from tractor.wcs import ConstantFitsWcs
+    from tractor.psfex import PixelizedPsfEx
+    from tractor.psfex import NormalizedPixelizedPsfEx
+    from tractor.psf import HybridPixelizedPSF, NCircularGaussianPSF
+    from tractor import Image, NullWCS, Tractor
+    from tractor.utils import _GaussianPriors
+    from tractor import NanoMaggies, LinearPhotoCal
+    from tractor.patch import ModelMask
+    import os
+    import pylab as plt
+    from astrometry.util.util import Tan
+
+    from cupy_wrapper import cp
+
+    def difference(x1, x2):
+        return np.sum(np.abs(x1 - x2) / np.maximum(1e-16, (np.abs(x1) + np.abs(x2)) / 2.))
+
+    def compare(meth1, meth2, vec1, vec2, icov):
+        m = max(len(meth1), len(meth2))
+        for meth,vec in [(meth1,vec1), (meth2,vec2)]:
+            print(meth + ' '*(m-len(meth)) + ': [' +
+                  ', '.join(['%12.5f' % v for v in vec]) + ' ]')
+        print('Fractional difference (%s - %s): %.4g' % (meth1,meth2, difference(vec1, vec2)))
+        chisq = (vec1 - vec2).T @ (icov @ (vec1 - vec2))
+        print('Chi difference: %.4g' % np.sqrt(chisq))
+
+    h,w = 100,200
+    arcsec = 1./3600.
+    ra_cen = 1.
+    dec_cen = 2.
+
+    # From legacypipe, a simplified EllipseESoft object with priors on the ellipticities.
+    class EllipseWithPriors(EllipseESoft):
+        ellipticityStd = 0.25
+        ellipsePriors = None
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            if self.ellipsePriors is None:
+                ellipsePriors = _GaussianPriors(None)
+                ellipsePriors.add('ee1', 0., self.ellipticityStd,
+                                param=EllipseESoft(1.,0.,0.))
+                ellipsePriors.add('ee2', 0., self.ellipticityStd,
+                                param=EllipseESoft(1.,0.,0.))
+                self.__class__.ellipsePriors = ellipsePriors
+            self.gpriors = self.ellipsePriors
+        @classmethod
+        def getName(cls):
+            return "EllipseWithPriors(%g)" % cls.ellipticityStd
+
+    brightness = NanoMaggies(g=1000., r=2000., z=500.)
+    shape = EllipseWithPriors(np.log(5.), 0.1, 0.4)
+    gal = ExpGalaxy(RaDecPos(ra_cen - 25.*arcsec, dec_cen), brightness, shape)
+    ptsrc = PointSource(RaDecPos(ra_cen - 25.*arcsec, dec_cen), brightness)
+    cat = [gal]
+    param_scales = [1./3600, 1./3600., 100., 100., 100., 1., 0.1, 0.1]
+
+    psf = NormalizedPixelizedPsfEx(os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                                        'test',
+                                        'psfex-decam-00392360-S31.fits'))
+    psf = HybridPixelizedPSF(psf,
+                             gauss=NCircularGaussianPSF([psf.fwhm / 2.35], [1.]))
+    psf = psf.constantPsfAt(w/2, h/2)
+    print('const psf', psf)
+
+    pixscale1 = 0.5*arcsec
+
+    wcs1 = Tan(ra_cen + 0.4*arcsec, dec_cen - 0.3*arcsec, w/2+0.5, h/2+0.5,
+               -pixscale1, 0., 0., pixscale1, float(w), float(h))
+    sig1 = 1.0
+    sig2 = 1.0
+    tim1 = Image(np.zeros((h,w), np.float32),
+                 inverr=np.ones((h,w), np.float32) / sig1,
+                 psf=psf, sky=ConstantSky(0.),
+                 wcs=ConstantFitsWcs(wcs1),
+                 photocal=LinearPhotoCal(1.0, band='g'),
+                )
+    tr = Tractor([tim1], cat)
+    mod = tr.getModelImage(0)
+    noisy1 = mod + np.random.normal(scale=sig1, size=(h,w))
+    tim1.data = noisy1
+
+    pixscale2 = pixscale1
+    rot = np.deg2rad(10.)
+    wcs2 = Tan(ra_cen + 1.2*arcsec, dec_cen + 0.1*arcsec, w/2+0.5, h/2+0.5,
+               -pixscale2 * np.cos(rot), -pixscale2 * np.sin(rot),
+               -pixscale2 * np.sin(rot),  pixscale2 * np.cos(rot), float(w), float(h))
+
+    h2,w2 = 105, 205
+    psf = NormalizedPixelizedPsfEx(os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                                        'test',
+                                        'c4d_140717_065122_ooi_i_ls11-S2-se.psf'))
+    psf = HybridPixelizedPSF(psf,
+                             gauss=NCircularGaussianPSF([psf.fwhm / 2.35, psf.fwhm / 2.35 / 2],
+                                                        [0.9, 0.1]))
+    psf = psf.constantPsfAt(w/2, h/2)
+    tim2 = Image(np.zeros((h2,w2), np.float32),
+                 inverr=np.ones((h2,w2), np.float32) / sig2,
+                 psf=psf, sky=ConstantSky(0.),
+                 wcs=ConstantFitsWcs(wcs2),
+                 photocal=LinearPhotoCal(1.0, band='r'),
+                )
+    tr = Tractor([tim1, tim2], cat)
+    tr.freezeParam('images')
+
+    mod2 = tr.getModelImage(tim2)
+    noisy2 = mod2 + np.random.normal(scale=sig2, size=(h2,w2))
+    tim2.data = noisy2
+
+    true_params = np.array(tr.getParams())
+
+    ## FIXME -- move initial params away from truth!
+
+    p0 = tr.getParams() + np.random.normal(size=len(param_scales)) * np.array(param_scales)
+    tr.setParams(p0)
+
+    print('Opt', tr.optimizer)
+
+    optargs = dict(shared_params=False, priors=True)
+
+    orig_opt = tr.optimizer
+
+    up0 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+    print('LSQR Update:', up0)
+
+    tr.setParams(p0)
+
+    src = cat[0]
+    tr.setModelMasks([{src: ModelMask(110, 10, 80, 80),}
+                      for tim in tr.images])
+
+    up0m = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+    print('LSQR Update w/ modelMasks:', up0m)
+    up0 = up0m
+
+    sm_opt = SmarterDenseOptimizer()
+    tr.optimizer = sm_opt
+    try:
+        allderivs = tr.getDerivs()
+        up1,ic,colmap = tr.optimizer.getUpdateDirection(tr, allderivs, get_cov=True, **optargs)
+        print('colmap', colmap)
+        up1 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+        print('Smarter update:', up1)
+        n = len(up1)
+        ic1 = np.zeros((n,n,), np.float32)
+        for j,i in enumerate(colmap):
+            ic1[i,colmap] = ic[j,:]
+        ic = ic1
+    except Exception as e:
+        print('Smarter failed')
+        import traceback
+        traceback.print_exc()
+
+    tr.setParams(p0)
+
+    gpu_opt = GpuOptimizer()
+    tr.optimizer = gpu_opt
+    try:
+        up2 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+        print('GPU Update:', up2)
+    except:
+        print('GPU failed')
+        import traceback
+        traceback.print_exc()
+
+    tr.setParams(p0)
+
+    print('Fractional difference (LSQR-SM):', difference(up0, up1))
+    compare('LSQR', 'SM',  up0, up1, ic)
+
+    print('Fractional difference (LSQR-GPU):', difference(up0, up2))
+    print('Fractional difference (SM-GPU):', difference(up1, up2))
+
+    compare('LSQR', 'GPU', up0, up2, ic)
+    compare('SM',   'GPU', up1, up2, ic)
