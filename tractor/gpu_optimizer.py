@@ -300,18 +300,18 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             # in both axes, because we're going to turn these dx,dy
             # derivatives into RA,Dec derivatives, and having one of
             # the terms artificially zero is confusing.
-            dx[:, 1:-1, 1:-1] = (G[:, 0, 1:-1, 2:  ] - G[:, 0, 1:-1,  :-2]) / 2.
-            dy[:, 1:-1, 1:-1] = (G[:, 0, 2:  , 1:-1] - G[:, 0,  :-2, 1:-1]) / 2.
+            dx[:, 1:-1, 1:-1] = (G[:, 0, 1:-1,  :-2] - G[:, 0, 1:-1, 2:  ]) / 2.
+            dy[:, 1:-1, 1:-1] = (G[:, 0,  :-2, 1:-1] - G[:, 0, 2:,   1:-1]) / 2.
 
             cdi = cp.array(img_cdi)
             assert(cdi.shape == (Nimages,2,2))
 
-            A[:Npix_total, 0] = -(fluxes[:, nu, nu] *
-                                  (dx * cdi[:, 0, 0][:, nu, nu] +
-                                   dy * cdi[:, 1, 0][:, nu, nu]) * padie).flat
-            A[:Npix_total, 1] = -(fluxes[:, nu, nu] *
-                                  (dx * cdi[:, 0, 1][:, nu, nu] +
-                                   dy * cdi[:, 1, 1][:, nu, nu]) * padie).flat
+            A[:Npix_total, 0] = (fluxes[:, nu, nu] *
+                                 (dx * cdi[:, 0, 0][:, nu, nu] +
+                                  dy * cdi[:, 1, 0][:, nu, nu]) * padie).flat
+            A[:Npix_total, 1] = (fluxes[:, nu, nu] *
+                                 (dx * cdi[:, 0, 1][:, nu, nu] +
+                                  dy * cdi[:, 1, 1][:, nu, nu]) * padie).flat
 
         # Flux derivatives.
         for i in range(Nimages):
@@ -381,7 +381,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         #print('X:', X.get())
 
         # Parameter indices in src of our vector X:
-        X = X.get()
+        X = cp.get(X)
         I = np.array([fit_to_src_param[i] for i in range(len(X))])
         #print('Source parameter indices:', I)
         sX = np.zeros(src.numberOfParams(), np.float32)
@@ -389,10 +389,11 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
         if get_A:
             sA = np.zeros((Nrows, src.numberOfParams()), np.float32)
-            sA[:,I] = A.get()
+            sA[:,I] = cp.get(A)
             s_scales = np.zeros(src.numberOfParams(), np.float32)
-            s_scales[I] = colscales.get()
-            return sA, B.get(), sX, s_scales, pH,pW
+            s_scales[I] = cp.get(colscales)
+            B = cp.get(B)
+            return sA, B, sX, s_scales, pH,pW
 
         return sX
 
@@ -798,8 +799,6 @@ if __name__ == '__main__':
     import pylab as plt
     from astrometry.util.util import Tan
 
-    from cupy_wrapper import cp
-
     def difference(x1, x2):
         return np.sum(np.abs(x1 - x2) / np.maximum(1e-16, (np.abs(x1) + np.abs(x2)) / 2.))
 
@@ -998,11 +997,20 @@ if __name__ == '__main__':
     tr.setParams(p0)
 
     from cupy_wrapper import cp
+    cp.get = lambda x: x.get()
 
     gpu_opt = GpuOptimizer(cp)
+
+    np.get = lambda x: x
+    np_gpu_opt = GpuOptimizer(np)
+
     tr.optimizer = gpu_opt
     up2 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
     print('GPU Update:', up2)
+
+    tr.optimizer = np_gpu_opt
+    up3 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+    print('GPU Update (w/numpy):', up3)
 
     tr.setParams(p0)
 
