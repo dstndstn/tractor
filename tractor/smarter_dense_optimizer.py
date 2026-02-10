@@ -206,7 +206,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                     print('multiple modelMasks (sources) for this image?')
                     print('\tderiv extent', dx0,dx1, dy0,dy1)
                     print('\timage bounds', x0,x1,y0,y1, img)
-                    return None
+                    raise RuntimeError('SmarterDenseOptimizer failure')
 
             if scale_columns:
                 colscales[col] = scale
