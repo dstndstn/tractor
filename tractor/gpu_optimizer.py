@@ -799,6 +799,8 @@ if __name__ == '__main__':
     import pylab as plt
     from astrometry.util.util import Tan
 
+    from cupy_wrapper import cp
+
     def difference(x1, x2):
         return np.sum(np.abs(x1 - x2) / np.maximum(1e-16, (np.abs(x1) + np.abs(x2)) / 2.))
 
@@ -996,9 +998,7 @@ if __name__ == '__main__':
 
     tr.setParams(p0)
 
-    from cupy_wrapper import cp
     cp.get = lambda x: x.get()
-
     gpu_opt = GpuOptimizer(cp)
 
     np.get = lambda x: x
