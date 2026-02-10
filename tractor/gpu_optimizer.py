@@ -1,7 +1,7 @@
 import time
 
 import numpy as np
-from cupy_wrapper import cp
+#from cupy_wrapper import cp
 #import cupy as cp
 
 from tractor.smarter_dense_optimizer import SmarterDenseOptimizer
@@ -52,6 +52,11 @@ class GpuFriendlyOptimizer(SmarterDenseOptimizer):
         return super().getLinearUpdateDirection(tr, **kwargs)
 
 class GpuOptimizer(GpuFriendlyOptimizer):
+
+    def __init__(self, cp, *args, **kwargs):
+        self.cp = cp
+        super().__init__(*args, **kwargs)
+
     def one_source_update(self, tr, **kwargs):
         return self.gpu_one_source_update(tr, **kwargs)
 
@@ -102,6 +107,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         # return R
 
     def gpu_one_source_update(self, tr, priors=True, get_A=False, **kwargs):
+        cp = self.cp
+
         t0 = time.time()
         # Assume single source
         assert(len(tr.catalog) == 1)
@@ -390,6 +397,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         return sX
 
     def gpu_setup_image_params(self, tims, halfsize, extents, ipx, ipy):
+        cp = self.cp
         # Assume no (varying) sky background levels
         assert(all([isinstance(tim.sky, ConstantSky) for tim in tims]))
         # Assume sky levels are zero.
@@ -408,7 +416,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
         img_params = Duck()
         psfH, psfW = np.array([psf.shape for psf in psfs]).T
-        P, (cx, cy), (pH, pW), (v, w), psf_mogs, psf_pad = get_vectorized_psfs(psfs, halfsize)
+        P, (cx, cy), (pH, pW), (v, w), psf_mogs, psf_pad = self.get_vectorized_psfs(psfs, halfsize)
         assert(pW % 2 == 0)
         assert(pH % 2 == 0)
         Nimages = len(tims)
@@ -449,16 +457,18 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         return img_params
 
     def gpu_get_unitflux_psf(self, img_params, mux, muy):
+        cp = self.cp
         ## FIXME -- could create a new lanczos method rather than first copying
         # and then running the in-place.
         padpsf = img_params.psf_pad
         nimg,h,w = padpsf.shape
         G = cp.empty((nimg, 1, h, w), cp.float32)
         G[:, 0, :, :] = padpsf
-        lanczos_shift_images_inplace_gpu(G, mux, muy)
+        self.lanczos_shift_images_inplace_gpu(G, mux, muy)
         return G
 
     def gpu_get_unitflux_galaxy_profiles(self, mogs, img_params, mux, muy):
+        cp = self.cp
         # mogs[image][profile] = mog
         Nimages = len(mogs)
         Nprofiles = max([len(d) for d in mogs])
@@ -595,133 +605,169 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         assert(G.shape == (Nimages,Nprofiles,pH,pW))
 
         # FIXME -- check that this all remains float32 through the computations
-        lanczos_shift_images_inplace_gpu(G, mux, muy)
+        self.lanczos_shift_images_inplace_gpu(G, mux, muy)
 
         return G
 
-def get_vectorized_psfs(psfs, halfsize):
-    #from tractor.batch_mixture_profiles import BatchMixtureOfGaussians
-    #from tractor.batch_psf import BatchPixelizedPSF
+    def get_vectorized_psfs(self, psfs, halfsize):
+        cp = self.cp
 
-    psfmogs = []
-    maxK = 0
-    for i,psf in enumerate(psfs):
-        assert(isinstance(psf, HybridPSF))
-        psfmog = psf.getMixtureOfGaussians()
-        psfmogs.append(psfmog)
-        maxK = max(maxK, psfmog.K)
-    N = len(psfs)
-    # We're going to assert zero mean here, and flatten the variance
-    amps = np.zeros((N, maxK))
-    #means = np.zeros((N, maxK, 2))
-    varrs = np.zeros((N, maxK, 3))
-    for i,psfmog in enumerate(psfmogs):
-        amps [i, :psfmog.K] = psfmog.amp
-        assert(np.all(psfmog.mean == 0))
-        #means[i, :psfmog.K, :] = psfmog.mean
-        varrs[i, :psfmog.K, 0] = psfmog.var[:, 0, 0]
-        varrs[i, :psfmog.K, 1] = psfmog.var[:, 0, 1]
-        varrs[i, :psfmog.K, 2] = psfmog.var[:, 1, 1]
-    psf_mogs = amps,varrs
+        psfmogs = []
+        maxK = 0
+        for i,psf in enumerate(psfs):
+            assert(isinstance(psf, HybridPSF))
+            psfmog = psf.getMixtureOfGaussians()
+            psfmogs.append(psfmog)
+            maxK = max(maxK, psfmog.K)
+        N = len(psfs)
+        # We're going to assert zero mean here, and flatten the variance
+        amps = np.zeros((N, maxK))
+        #means = np.zeros((N, maxK, 2))
+        varrs = np.zeros((N, maxK, 3))
+        for i,psfmog in enumerate(psfmogs):
+            amps [i, :psfmog.K] = psfmog.amp
+            assert(np.all(psfmog.mean == 0))
+            #means[i, :psfmog.K, :] = psfmog.mean
+            varrs[i, :psfmog.K, 0] = psfmog.var[:, 0, 0]
+            varrs[i, :psfmog.K, 1] = psfmog.var[:, 0, 1]
+            varrs[i, :psfmog.K, 2] = psfmog.var[:, 1, 1]
+        psf_mogs = amps,varrs
 
-    imsize = psfs[0].img.shape
-    for psf in psfs:
-        #print('PSF:', psf)
-        #print('sampling:', psf.sampling)
-        assert(psf.sampling == 1.)
-        #print('pixelized size', psf.img.shape)
+        imsize = psfs[0].img.shape
+        for psf in psfs:
+            #print('PSF:', psf)
+            #print('sampling:', psf.sampling)
+            assert(psf.sampling == 1.)
+            #print('pixelized size', psf.img.shape)
 
-    sz = 2**int(np.ceil(np.log2(halfsize * 2.)))
-    W = H = sz
-    pad = cp.zeros((N, H, W), cp.float32)
-    cx = W//2
-    cy = H//2
-    for i,psf in enumerate(psfs):
-        psfimg = psf.img
-        ph,pw = psfimg.shape
-        # We assume the center of the PSF image is at:
-        pcy,pcx = ph//2, pw//2
-        # And it must end up at cx,cy in the padded image.
-        if pcx >= cx:
-            # Trimming the PSF image
-            out_x0 = 0
-            in_x0 = pcx - cx
+        sz = 2**int(np.ceil(np.log2(halfsize * 2.)))
+        W = H = sz
+        pad = cp.zeros((N, H, W), cp.float32)
+        cx = W//2
+        cy = H//2
+        for i,psf in enumerate(psfs):
+            psfimg = psf.img
+            ph,pw = psfimg.shape
+            # We assume the center of the PSF image is at:
+            pcy,pcx = ph//2, pw//2
+            # And it must end up at cx,cy in the padded image.
+            if pcx >= cx:
+                # Trimming the PSF image
+                out_x0 = 0
+                in_x0 = pcx - cx
+            else:
+                # Padding the PSF image
+                in_x0 = 0
+                out_x0 = cx - pcx
+            nx = min(pw, W)
+
+            if pcy >= cy:
+                # Trimming the PSF image
+                out_y0 = 0
+                in_y0 = pcy - cy
+            else:
+                # Padding the PSF image
+                in_y0 = 0
+                out_y0 = cy - pcy
+            ny = min(ph, H)
+
+            pad[i, out_y0 : out_y0 + ny, out_x0 : out_x0 + nx] = cp.array(
+                psfimg[in_y0 : in_y0 + ny, in_x0 : in_x0 + nx])
+        P = cp.fft.rfft2(pad)
+        v = cp.fft.rfftfreq(W)
+        w = cp.fft.fftfreq(H)
+        # FIXME -- ??
+        v = v.astype(cp.float32)
+        w = w.astype(cp.float32)
+        return P, (cx, cy), (H, W), (v, w), psf_mogs, pad
+
+    def lanczos_shift_images_inplace_gpu(self, G, x, y, work=None):
+        cp = self.cp
+        '''
+        Only vectorized in the specific way we need:
+        G images:
+        (Nimages x Nmodels x H x W)
+        x, y:
+        each of length (Nimages,)
+        work:
+        same shape as G; pre-allocated work array.
+        '''
+        assert(len(G.shape) == 4)
+        if work is not None:
+            assert(work.shape == G.shape)
+        assert(len(x) == len(y))
+        Nim, Nmod, H, W = G.shape
+        assert(len(x) == Nim)
+        # Create Lanczos filter arrays, shape (Nim, 7)
+        fx = np.arange(-3, +4)[np.newaxis, :] + x[:, np.newaxis]
+        fy = np.arange(-3, +4)[np.newaxis, :] + y[:, np.newaxis]
+        fx = lanczos_filter(3, fx)
+        fy = lanczos_filter(3, fy)
+        self.correlate7_2d_inplace_gpu(G, fx, fy, work=work)
+        del work
+
+    def correlate7_2d_inplace_gpu(self, G, fx, fy, work=None):
+        cp = self.cp
+        if work is None:
+            work = cp.empty_like(G)
         else:
-            # Padding the PSF image
-            in_x0 = 0
-            out_x0 = cx - pcx
-        nx = min(pw, W)
+            ## FIXME - only really need work array to be larger; use a view
+            assert(work.shape == G.shape)
 
-        if pcy >= cy:
-            # Trimming the PSF image
-            out_y0 = 0
-            in_y0 = pcy - cy
-        else:
-            # Padding the PSF image
-            in_y0 = 0
-            out_y0 = cy - pcy
-        ny = min(ph, H)
+        fx = cp.array(fx)
+        fy = cp.array(fy)
 
-        pad[i, out_y0 : out_y0 + ny, out_x0 : out_x0 + nx] = cp.array(
-            psfimg[in_y0 : in_y0 + ny, in_x0 : in_x0 + nx])
+        assert(len(G.shape) == 4)
+        Nim,Nmod,H,W = G.shape
+        assert(len(fx.shape) == 2)
+        assert(fx.shape == fy.shape)
+        Nim2,K = fx.shape
+        assert(Nim2 == Nim)
+        assert(K == 7)
 
-    P = cp.fft.rfft2(pad)
-    #print('P type', P.dtype)
-    v = cp.fft.rfftfreq(W)
-    w = cp.fft.fftfreq(H)
-    #print('v,w', v.dtype, w.dtype)
-    # FIXME -- ??
-    v = v.astype(cp.float32)
-    w = w.astype(cp.float32)
+        # Apply X filter
 
-    ## FIXME -- turn this into a function, rather than a class
-    #batch_psf = BatchPixelizedPSF(psfs)
-    ###sz = self.getFourierTransformSizeBatchGPU(radius)
-    ###sz = 2**int(np.ceil(np.log2(radius.max() * 2.)))
-    #pad, cx, cy = self._padInImageBatchGPU(sz, sz)
-    #P = cp.fft.rfft2(pad)
-    #P = P.astype(cp.complex64)
-    #nimages, pH, pW = pad.shape
-    #v = cp.fft.rfftfreq(pW)
-    #w = cp.fft.fftfreq(pH)
-    #P, (cx, cy), (pH, pW), (v, w) = batch_psf.getFourierTransformBatchGPU(px, py, halfsize)
+        na = cp.newaxis
 
-    return P, (cx, cy), (H, W), (v, w), psf_mogs, pad
+        # Special handling - left edge.
+        work[:, :, :, 0] = cp.sum(G[:, :, :, :4] * fx[:, na, na, 3:], axis=-1)
+        work[:, :, :, 1] = cp.sum(G[:, :, :, :5] * fx[:, na, na, 2:], axis=-1)
+        work[:, :, :, 2] = cp.sum(G[:, :, :, :6] * fx[:, na, na, 1:], axis=-1)
 
-def lanczos_shift_images_inplace_gpu(G, x, y, work=None):
-    '''
-    Only vectorized in the specific way we need:
-    G images:
-    (Nimages x Nmodels x H x W)
-    x, y:
-    each of length (Nimages,)
-    work:
-    same shape as G; pre-allocated work array.
-    '''
-    assert(len(G.shape) == 4)
-    if work is not None:
-        assert(work.shape == G.shape)
-    assert(len(x) == len(y))
+        # Special handling - right edge.
+        work[:, :, :, -1] = cp.sum(G[:, :, :, -4:] * fx[:, na, na, :4], axis=-1)
+        work[:, :, :, -2] = cp.sum(G[:, :, :, -5:] * fx[:, na, na, :5], axis=-1)
+        work[:, :, :, -3] = cp.sum(G[:, :, :, -6:] * fx[:, na, na, :6], axis=-1)
 
-    Nim, Nmod, H, W = G.shape
-    assert(len(x) == Nim)
+        # Middle
+        work[:, :, :, 3:-3]  = G[:, :, :,  :-6] * fx[:, na, na, na, 0]
+        work[:, :, :, 3:-3] += G[:, :, :, 1:-5] * fx[:, na, na, na, 1]
+        work[:, :, :, 3:-3] += G[:, :, :, 2:-4] * fx[:, na, na, na, 2]
+        work[:, :, :, 3:-3] += G[:, :, :, 3:-3] * fx[:, na, na, na, 3]
+        work[:, :, :, 3:-3] += G[:, :, :, 4:-2] * fx[:, na, na, na, 4]
+        work[:, :, :, 3:-3] += G[:, :, :, 5:-1] * fx[:, na, na, na, 5]
+        work[:, :, :, 3:-3] += G[:, :, :, 6:  ] * fx[:, na, na, na, 6]
 
-    # Create Lanczos filter arrays, shape (Nim, 7)
-    fx = np.arange(-3, +4)[np.newaxis, :] + x[:, np.newaxis]
-    fy = np.arange(-3, +4)[np.newaxis, :] + y[:, np.newaxis]
-    fx = lanczos_filter(3, fx)
-    fy = lanczos_filter(3, fy)
-    #print('lanczos x', fx)
-    #print('lanczos y', fy)
+        # Apply Y filter
 
-    correlate7_2d_inplace_gpu(G, fx, fy, work=work)
-    # correlate7f_inout(inimg, inimg_dim1, inimg_dim2,
-    #                   outimg, outimg_dim1, outimg_dim2,
-    #                   filtx, 7,
-    #                   filty, 7,
-    #                   work, work_dim1, work_dim2);
+        # Special handling - bottom edge.
+        G[:, :, 0, :] = cp.sum(work[:, :, :4, :] * fy[:, na, 3:, na], axis=-2)
+        G[:, :, 1, :] = cp.sum(work[:, :, :5, :] * fy[:, na, 2:, na], axis=-2)
+        G[:, :, 2, :] = cp.sum(work[:, :, :6, :] * fy[:, na, 1:, na], axis=-2)
 
-    del work
+        # Special handling - top edge.
+        G[:, :, -1, :] = cp.sum(work[:, :, -4:, :] * fy[:, na, :4, na], axis=-2)
+        G[:, :, -2, :] = cp.sum(work[:, :, -5:, :] * fy[:, na, :5, na], axis=-2)
+        G[:, :, -3, :] = cp.sum(work[:, :, -6:, :] * fy[:, na, :6, na], axis=-2)
+
+        # Middle
+        G[:, :, 3:-3, :]  = work[:, :,  :-6, :] * fy[:, na, na, 0, na]
+        G[:, :, 3:-3, :] += work[:, :, 1:-5, :] * fy[:, na, na, 1, na]
+        G[:, :, 3:-3, :] += work[:, :, 2:-4, :] * fy[:, na, na, 2, na]
+        G[:, :, 3:-3, :] += work[:, :, 3:-3, :] * fy[:, na, na, 3, na]
+        G[:, :, 3:-3, :] += work[:, :, 4:-2, :] * fy[:, na, na, 4, na]
+        G[:, :, 3:-3, :] += work[:, :, 5:-1, :] * fy[:, na, na, 5, na]
+        G[:, :, 3:-3, :] += work[:, :, 6:  , :] * fy[:, na, na, 6, na]
 
 # eg, lanczos_filter(3, -0.3 + np.arange(-3, +4))
 def lanczos_filter(order, x):
@@ -733,71 +779,6 @@ def lanczos_filter(order, x):
     out[x == 0] = 1.
     out /= np.sum(out, axis=-1)[..., np.newaxis]
     return out
-
-def correlate7_2d_inplace_gpu(G, fx, fy, work=None):
-    if work is None:
-        work = cp.empty_like(G)
-    else:
-        ## FIXME - only really need work array to be larger; use a view
-        assert(work.shape == G.shape)
-
-    fx = cp.array(fx)
-    fy = cp.array(fy)
-
-    assert(len(G.shape) == 4)
-    Nim,Nmod,H,W = G.shape
-    assert(len(fx.shape) == 2)
-    assert(fx.shape == fy.shape)
-    Nim2,K = fx.shape
-    assert(Nim2 == Nim)
-    assert(K == 7)
-
-    # Apply X filter
-
-    na = cp.newaxis
-
-    # Special handling - left edge.
-    work[:, :, :, 0] = cp.sum(G[:, :, :, :4] * fx[:, na, na, 3:], axis=-1)
-    work[:, :, :, 1] = cp.sum(G[:, :, :, :5] * fx[:, na, na, 2:], axis=-1)
-    work[:, :, :, 2] = cp.sum(G[:, :, :, :6] * fx[:, na, na, 1:], axis=-1)
-
-    # Special handling - right edge.
-    work[:, :, :, -1] = cp.sum(G[:, :, :, -4:] * fx[:, na, na, :4], axis=-1)
-    work[:, :, :, -2] = cp.sum(G[:, :, :, -5:] * fx[:, na, na, :5], axis=-1)
-    work[:, :, :, -3] = cp.sum(G[:, :, :, -6:] * fx[:, na, na, :6], axis=-1)
-
-    # Middle
-    work[:, :, :, 3:-3]  = G[:, :, :,  :-6] * fx[:, na, na, na, 0]
-    work[:, :, :, 3:-3] += G[:, :, :, 1:-5] * fx[:, na, na, na, 1]
-    work[:, :, :, 3:-3] += G[:, :, :, 2:-4] * fx[:, na, na, na, 2]
-    work[:, :, :, 3:-3] += G[:, :, :, 3:-3] * fx[:, na, na, na, 3]
-    work[:, :, :, 3:-3] += G[:, :, :, 4:-2] * fx[:, na, na, na, 4]
-    work[:, :, :, 3:-3] += G[:, :, :, 5:-1] * fx[:, na, na, na, 5]
-    work[:, :, :, 3:-3] += G[:, :, :, 6:  ] * fx[:, na, na, na, 6]
-
-    # Apply Y filter
-
-    # Special handling - bottom edge.
-    G[:, :, 0, :] = cp.sum(work[:, :, :4, :] * fy[:, na, 3:, na], axis=-2)
-    G[:, :, 1, :] = cp.sum(work[:, :, :5, :] * fy[:, na, 2:, na], axis=-2)
-    G[:, :, 2, :] = cp.sum(work[:, :, :6, :] * fy[:, na, 1:, na], axis=-2)
-
-    # Special handling - top edge.
-    G[:, :, -1, :] = cp.sum(work[:, :, -4:, :] * fy[:, na, :4, na], axis=-2)
-    G[:, :, -2, :] = cp.sum(work[:, :, -5:, :] * fy[:, na, :5, na], axis=-2)
-    G[:, :, -3, :] = cp.sum(work[:, :, -6:, :] * fy[:, na, :6, na], axis=-2)
-
-    # Middle
-    G[:, :, 3:-3, :]  = work[:, :,  :-6, :] * fy[:, na, na, 0, na]
-    G[:, :, 3:-3, :] += work[:, :, 1:-5, :] * fy[:, na, na, 1, na]
-    G[:, :, 3:-3, :] += work[:, :, 2:-4, :] * fy[:, na, na, 2, na]
-    G[:, :, 3:-3, :] += work[:, :, 3:-3, :] * fy[:, na, na, 3, na]
-    G[:, :, 3:-3, :] += work[:, :, 4:-2, :] * fy[:, na, na, 4, na]
-    G[:, :, 3:-3, :] += work[:, :, 5:-1, :] * fy[:, na, na, 5, na]
-    G[:, :, 3:-3, :] += work[:, :, 6:  , :] * fy[:, na, na, 6, na]
-
-
-
 
 if __name__ == '__main__':
     from tractor.galaxy import ExpGalaxy
@@ -1016,7 +997,9 @@ if __name__ == '__main__':
 
     tr.setParams(p0)
 
-    gpu_opt = GpuOptimizer()
+    from cupy_wrapper import cp
+
+    gpu_opt = GpuOptimizer(cp)
     tr.optimizer = gpu_opt
     up2 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
     print('GPU Update:', up2)
