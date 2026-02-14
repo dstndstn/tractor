@@ -391,8 +391,30 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
         # Precondition A: column scales
         colscales = cp.sqrt((A**2).sum(axis=0))
+
+        # Remove any columns with zero colscale (ie, no actual derivatives)
+        if cp.any(colscales == 0):
+            debug('colscales:', colscales)
+            colscales = cp.get(colscales)
+            I = np.flatnonzero(colscales)
+            debug('non-zero indices:', I)
+            debug('src_to_fit_param:', src_to_fit_param)
+            debug('fit_to_src_param:', fit_to_src_param)
+            new_fit_to_src_param = {}
+            new_src_to_fit_param = {}
+            for i_new,i_old in enumerate(I):
+                s = fit_to_src_param[i_old]
+                new_fit_to_src_param[i_new] = s
+                new_src_to_fit_param[s] = i_new
+            fit_to_src_param = new_fit_to_src_param
+            src_to_fit_param = new_src_to_fit_param
+            debug('new src_to_fit_param:', src_to_fit_param)
+            debug('new fit_to_src_param:', fit_to_src_param)
+            A = A[:, I]
+            colscales = colscales[I]
+            colscales = cp.array(colscales)
+
         A /= colscales[nu, :]
-        #print('Colscales:', colscales.get())
 
         # plt.clf()
         # cA = A.get()
