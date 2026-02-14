@@ -122,7 +122,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         t0 = time.time()
         # Assume single source
         assert(len(tr.catalog) == 1)
-        Nimages = len(tr.images)
+        tims = tr.images
 
         # Assume galaxy or point source
         src = tr.catalog[0]
@@ -132,25 +132,41 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
         # Assume model masks are set (ie, pixel ROIs of interest are defined)
         #masks = [tr._getModelMaskByIdx(i, src) for i in range(len(tr.images))]
-        masks = [tr._getModelMaskFor(tim, src) for tim in tr.images]
+        masks = [tr._getModelMaskFor(tim, src) for tim in tims]
         if any(m is None for m in masks):
-            raise RuntimeError('One or more modelMasks is None in GPU code')
+            debug('One or more modelMasks is None in GPU code -- cutting images')
+            goodtims = []
+            goodmasks = []
+            for tim,mask in zip(tims,masks):
+                if mask is None:
+                    continue
+                goodtims.append(tim)
+                goodmasks.append(mask)
+            if len(goodtims) == 0:
+                info('After removing None modelMasks, no images remain!')
+                return None
+            debug('Cut from %i to %i images with good modelMasks' % (len(tr.images), len(goodtims)))
+            tims = goodtims
+            masks = goodmasks
+            del goodtims,goodmasks
         assert(all([m is not None for m in masks]))
+
+        Nimages = len(tims)
         extents = [mm.extent for mm in masks]
 
         # Pixel positions
         pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
-               for tim in tr.images]
+               for tim in tims]
         px, py = np.array(pxy, dtype=np.float32).T
         # Round source pixel position to nearest integer
         ipx = px.round().astype(np.int32)
         ipy = py.round().astype(np.int32)
 
         # WCS inv(CD) matrix
-        img_cdi = [tim.getWcs().cdInverseAtPixel(x,y) for tim,x,y in zip(tr.images, px, py)]
+        img_cdi = [tim.getWcs().cdInverseAtPixel(x,y) for tim,x,y in zip(tims, px, py)]
         # Current counts
         img_counts = [tim.getPhotoCal().brightnessToCounts(src.brightness)
-                      for tim in tr.images]
+                      for tim in tims]
         src_bands = src.getBrightness().getParamNames()
 
         ## FIXME -- this should be based on *SOURCE* properties as well, no?
@@ -161,13 +177,13 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         #psfH//2, psfW//2]))
 
         # Pre-process image: PSF, padded pix, etc
-        img_params = self.gpu_setup_image_params(tr.images, halfsize, extents, ipx, ipy)
+        img_params = self.gpu_setup_image_params(tims, halfsize, extents, ipx, ipy)
 
         if is_galaxy:
             # Get galaxy profiles for shape derivatives.
             amixes = [[('current', src._getShearedProfile(tim,x,y), 0.)] +
                     src.getDerivativeShearedProfiles(tim,x,y)
-                    for tim,x,y in zip(tr.images, px, py)]
+                    for tim,x,y in zip(tims, px, py)]
             Nprofiles = max([len(d) for d in amixes])
             mogs = [[m for _,m,_ in amix_img] for amix_img in amixes]
 
@@ -213,7 +229,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         assert(Npos in [0, 2])
 
         # List of the band for each tim
-        tim_bands = [tim.getPhotoCal().band for tim in tr.images]
+        tim_bands = [tim.getPhotoCal().band for tim in tims]
         # The unique set of bands in all tims.  This is the number of flux parameters we
         # will fit for in the A matrix, in this order.
         tim_ubands = list(np.unique(tim_bands))
@@ -251,7 +267,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
         # We can produce the residual map from the nominal galaxy profile model
         # (scaled by flux) and the image pix.
-        assert(all([isinstance(tim.getPhotoCal(), LinearPhotoCal) for tim in tr.images]))
+        assert(all([isinstance(tim.getPhotoCal(), LinearPhotoCal) for tim in tims]))
         fluxes = cp.array(img_counts)
         padie = img_params.padie
         padpix = img_params.padpix
