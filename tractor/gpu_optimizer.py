@@ -15,6 +15,16 @@ TO-DO:
 -- check PSF sampling != 1.0
 
 '''
+import logging
+logger = logging.getLogger('tractor.gpu_optimizer')
+def logverb(*args):
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(' '.join(map(str, args)))
+debug = logverb
+def logmsg(*args):
+    logger.info(' '.join(map(str, args)))
+def isverbose():
+    return logger.isEnabledFor(logging.DEBUG)
 
 class Duck(object):
     pass
