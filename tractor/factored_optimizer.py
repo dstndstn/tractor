@@ -205,6 +205,25 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
     def printTiming(self):
         print ("Times:",tt,tct)
 
+    def printMemory(self, tag=""):
+        import cupy as cp
+        import datetime
+        free_mem, total_mem = cp.cuda.runtime.memGetInfo()
+        mempool = cp.get_default_memory_pool()
+        used_bytes = mempool.used_bytes()
+        tot_bytes = mempool.total_bytes()
+        print (f'{tag=} {free_mem=} {total_mem=}; This mempool {used_bytes=} {tot_bytes=} at ',datetime.datetime.now())
+        if free_mem/1.e+9 < 20:
+            import gc
+            print ("Freeing memory")
+            gc.collect()
+            print (f'{tag=} {free_mem=} {total_mem=}; This mempool {used_bytes=} {tot_bytes=} at ',datetime.datetime.now())
+            print ("GPU free all blocks")
+            mpool = cp.get_default_memory_pool()
+            mpool.free_all_blocks()
+            print (f'{tag=} {free_mem=} {total_mem=}; This mempool {used_bytes=} {tot_bytes=} at ',datetime.datetime.now())
+        sys.stdout.flush()
+
     def getSingleImageUpdateDirections(self, tr, **kwargs):
         #import traceback
         #traceback.print_stack()
@@ -274,20 +293,27 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                     return R_gpu
 
         if self._gpumode == 2 or self._gpumode == 3 or self._gpumode == 12 or self._gpumode == 13:
+            import cupy as cp
+            import datetime
+            #Get free memory
             mempool = cp.get_default_memory_pool()
             mempool.free_all_blocks()
             free_mem, total_mem = cp.cuda.runtime.memGetInfo()
+            #Estimate memory needed with new helper method based on padded image sizes and nd
             nimages = len(tr.images)
             imsize = tr.images[0].data.size
             nd = tr.numberOfParams()+2
-            kmax = 4 #Use kmax 4 because many algorithms are now able to chunk memory
-            #Double size of 16 bit (complex 128) array x nimage x
-            #n derivs x kmax x imsize.  5D array in batch_mixture_profiles.py
-            #Dustin less_mem version
-            est_mem = nimages*imsize*nd*kmax*8 / 1.e+9
+            src = tr.catalog[0]
+            masks = [tr._getModelMaskFor(tim, src) for tim in tr.images]
+            assert(all([m is not None for m in masks]))
+            # Pixel positions
+            pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
+                   for tim in tr.images]
+            #New helper method predicts memory needed
+            est_mem = self.predict_fft_memory(tr, masks, pxy, nd)
             free_mem /= 1.e+9
             # 3.2 factor: NGC 3585 example
-            print (f'Estimated memory {est_mem} GB free memory {free_mem}')
+            #print (f'Estimated memory {est_mem} GB free memory {free_mem} for {nimages=} {imsize=} {nd=} {kmax=} at ', datetime.datetime.now(), "src = ", tr.catalog[0])
             
             if free_mem < est_mem:
                 try:
@@ -296,6 +322,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                     #print("Warning: Estimated memory %.1f GB is greater than free memory %.1f GB; Running less-memory GPU mode instead!" % (est_mem / 1e9, free_mem / 1e9))
                     t = time.time()
                     R_gpu = self.gpuSingleImageUpdateDirectionsVectorized_less_mem(tr, **kwargs)
+                    mempool = cp.get_default_memory_pool()
+                    mempool.free_all_blocks()
                     tt[4] += time.time()-t
                     return R_gpu
                 except Exception as e:
@@ -308,18 +336,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 print('Running CPU version instead')
                 R_cpu = super().getSingleImageUpdateDirections(tr, **kwargs)
                 return R_cpu
-
-            #est_mem = nimages*imsize*nd*kmax*16
-            #import datetime
-            #print (f"Running VECTORIZED GPU code...", datetime.datetime.now(), "src = ", tr.catalog[0], f'Estimated mem {est_mem=} {free_mem=}')
-
-            #if free_mem < est_mem:
-            #    print (f"Warning: Estimated memory {est_mem} is greater than free memory {free_mem}; Running CPU mode instead!")
-            #    print (f"\t{nimages=} {imsize=} {nd=}")
-            #    R_gpuv = super().getSingleImageUpdateDirections(tr, **kwargs)
-            #    return R_gpuv
-            #else:
-                #print (f"Estimated memory {est_mem} is less than free memory {free_mem}")
 
             try:
                 #import datetime
@@ -334,39 +350,43 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 #print ("GPU Vectorized time:", time.time()-t)
                 if self._gpumode == 2 or self._gpumode == 12:
                     return R_gpuv
-            except AssertionError:
-                import traceback
-                print ("AssertionError in VECTORIZED GPU code:")
-                traceback.print_exc()
-                print ("Running CPU version instead...")
-                t = time.time()
-                R_gpuv = super().getSingleImageUpdateDirections(tr, **kwargs)
-                if self._gpumode == 2 or self._gpumode == 12:
-                    return R_gpuv
-            except cp.cuda.memory.OutOfMemoryError:
-                import traceback
-                free_mem, total_mem = cp.cuda.runtime.memGetInfo()
-                mempool = cp.get_default_memory_pool()
-                used_bytes = mempool.used_bytes()
-                tot_bytes = mempool.total_bytes()
-                print (f"Out of Memory for source "+str(tr.catalog[0]))
-                traceback.print_exc()
-                print (f'OOM Device {free_mem=} {total_mem=}; This mempool {used_bytes=} {tot_bytes=}')
-                print ("Running CPU version instead...")
-                mempool.free_all_blocks()
-                t = time.time()
-                R_gpuv = super().getSingleImageUpdateDirections(tr, **kwargs)
-                if self._gpumode == 2 or self._gpumode == 12:
-                    return R_gpuv
-            except Exception as ex:
-                import traceback
-                print('Exception in GPU Vectorized code: ', ex)
-                traceback.print_exc()
+            except Exception as e:
+                #New consolidated except
+                import cupy as cp
+                # 1. Capture the error string
+                err_msg = str(e).lower()
+                is_oom = "outofmemory" in err_msg or "out of memory" in err_msg
 
-                src = tr.catalog[0]
-                print('Source:', src)
-                print(repr(src))
-                print ("Running CPU version instead...")
+                # 2. Print immediately to stderr (bypasses buffering)
+                import sys
+                sys.stderr.write(f"\nCaught Exception in GPU code: {type(e).__name__}\n")
+                if is_oom:
+                    free_mem, total_mem = cp.cuda.runtime.memGetInfo()
+                    mempool = cp.get_default_memory_pool()
+                    used_bytes = mempool.used_bytes()
+                    tot_bytes = mempool.total_bytes()
+                    sys.stderr.write(f"Confirmed OOM for source: {tr.catalog[0]}\n")
+                    print (f'OOM Device {free_mem=} {total_mem=}; This mempool {used_bytes=} {tot_bytes=}')
+
+                sys.stderr.write(f"\n----Traceback below----\n")
+                import traceback
+                traceback.print_exc()
+                sys.stderr.flush()
+
+                # 3. Emergency Memory Release
+                try:
+                    import cupy as cp
+                    # Force drop image caches if they exist
+                    for tim in tr.images:
+                        if hasattr(tim, 'data_gpu'): tim.data_gpu = None
+                        if hasattr(tim, 'inverr_gpu'): tim.inverr_gpu = None
+                    cp.get_default_memory_pool().free_all_blocks()
+                except:
+                    pass
+
+                # 4. Final Fallback
+                print("Running CPU version instead... for source: "+str(tr.catalog[0]))
+                sys.stdout.flush()
                 t = time.time()
                 R_gpuv = super().getSingleImageUpdateDirections(tr, **kwargs)
                 if self._gpumode == 2 or self._gpumode == 12:
@@ -992,7 +1012,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         del amixes_gpu
         mpool.free_all_blocks()
         #print (f'{nbands=}')
-
         if nbands >= 1:
             full_xic = []
             fullN = tr.numberOfParams()
@@ -1182,8 +1201,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #print ("FSUM", Fsum.shape, "P", P.shape, P.max())
         #cp.savetxt('gfsum.txt', Fsum.ravel())
         #cp.savetxt('gp.txt', P.ravel())
-        G = cp.fft.irfft2(Fsum*P).astype(cp.float32)
-        del Fsum, P
+        # Multiply P into Fsum in-place to save one massive array allocation
+        Fsum *= P
+        del P # Free P immediately
+        G = cp.fft.irfft2(Fsum).astype(cp.float32)
+        del Fsum
         #Do Lanczos shift
         G = lanczos_shift_image_batch_gpu(G, img_params.mux, img_params.muy)
         #cp.savetxt('gg.txt', G.ravel())
@@ -1810,6 +1832,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             Npriors = max(Npriors, max([1+max(r) for r in rA]))
 
         G = self.computeGalaxyModelsVectorized(img_params)
+        #self.printMemory(tag="post-G2")
 
         t1 = time.time()
         Npix = img_params.mh*img_params.mw
@@ -1856,6 +1879,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         mod0 *= roimask
         #Need to reshape for G
         G *= roimask[:,None,:,:]
+        #self.printMemory(tag="post-dxy")
 
         # divide by 2 because we did +- 1 pixel
         # negative because we shifted the *image*, which is opposite
@@ -1864,6 +1888,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         A[:,:Npix, 1] = cp.reshape(-((dx * cdi[:,0, 1][:,cp.newaxis, cp.newaxis] + dy * cdi[:,1, 1][:,cp.newaxis, cp.newaxis]) * img_params.counts[:,cp.newaxis, cp.newaxis] / 2), (img_params.Nimages, -1))
         del dx,dy
         A[:,:Npix,2] = cp.reshape(mod0,(img_params.Nimages, -1))
+        #self.printMemory(tag="A2")
 
         #A[:Npix, i + 2] = counts / stepsizes[i] * (Gi[i,:,:] - mod0).ravel()
         stepsizes = img_params.steps
@@ -1873,6 +1898,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         #A[:Npix,:] *= ie.ravel()[:, cp.newaxis]
         A[:,:Npix,:] *= img_params.ie.reshape((img_params.Nimages, Npix))[:,:,cp.newaxis]
+        #self.printMemory(tag="postA")
         del G
 
         B = cp.zeros((img_params.Nimages, Npix + Npriors), cp.float32)
@@ -1998,6 +2024,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # Grid (1, 1, 1, H, W)
         XX = xx[None, None, None, None, :]
         YY = yy[None, None, None, :, None]
+        #self.printMemory(tag="eval_mog")
 
         for i in range(0, N, chunk_size):
             e = min(i + chunk_size, N)
@@ -2009,6 +2036,38 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             del res
             cp.get_default_memory_pool().free_all_blocks()
         return G
+
+    def predict_fft_memory(self, tr, masks, pxy, max_nd):
+        # 1. Replicate the gpu_halfsize logic
+        # (Simplified version of your _getBatchImageParams logic)
+        px, py = np.array(pxy).T
+        extents = [mm.extent for mm in masks]
+        x0, x1, y0, y1 = np.asarray(extents).T
+
+        # This is the "radius" that determines pH/pW
+        gpu_halfsize = np.max(([(x1-x0)/2, (y1-y0)/2,
+                                1+px-x0, 1+x1-px, 1+py-y0, 1+y1-py]), axis=0)
+
+        # 2. Calculate the Power-of-Two padding
+        radius_max = gpu_halfsize.max()
+        sz = 2**int(np.ceil(np.log2(radius_max * 2.)))
+
+        pH, pW = sz, sz
+        n_images = len(tr.images)
+
+        # 3. Calculate Actual Bytes
+        # Complex64 = 8 bytes, Float32 = 4 bytes
+        # Assume 8 arrays of complex64
+        # Assume 3 x arrays needed
+        est_mem = n_images * max_nd * pH * pW * 8 * 3 / (1024**3)
+        #fsum_bytes = n_images * max_nd * pH * (pW // 2 + 1) * 8
+        #p_bytes = n_images * 1 * pH * (pW // 2 + 1) * 8
+        #g_bytes = n_images * max_nd * pH * pW * 4
+
+        # Total predicted for the FFT block (including a safety factor for IRFFT workspace)
+        #total_predicted_gb = (fsum_bytes + p_bytes + g_bytes * 2) / (1024**3)
+        #return total_predicted_gb, pH, pW
+        return est_mem
 
     def computeGalaxyModelsVectorized(self, img_params):
         # Note, this does *not* scale by *counts*, it produces unit-flux models
@@ -2027,10 +2086,19 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # resulting in P already being a CuPy array
         #P shape (Nimages, nw, nv)
         P = img_params.P[:,cp.newaxis,:,:]
-        G = cp.fft.irfft2(Fsum*P).astype(cp.float32)
-        del Fsum, P
+        #print ("P", P.shape)
+        #self.printMemory(tag="pre-G")
+        # Multiply P into Fsum in-place to save one massive array allocation
+        Fsum *= P
+        del P # Free P immediately
+        # Perform IRFFT on the modified Fsum
+        G = cp.fft.irfft2(Fsum).astype(cp.float32)
+        del Fsum
+        #self.printMemory(tag="post-G")
+        #print ("G", G.shape)
         #Do Lanczos shift
         G = lanczos_shift_image_batch_gpu(G, img_params.mux, img_params.muy)
+        #self.printMemory(tag="lanczos")
         #cp.savetxt('vgg.txt', G.ravel())
         #G should be (nimages, maxNd, nw, nv) and mux and muy should be 1d vectors
         #print ("G shape", G.shape, img_params.Nimages,img_params.maxNd,img_params.mh,img_params.mw)
@@ -2079,6 +2147,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             yy = cp.arange(img_params.mh)
 
             G = self.evaluate_mog_gpu(conv_mog, xx, yy, img_params, G)
+            #self.printMemory(tag="conv_mog")
 
             """
             det = conv_mog.var[:,:,:,0,0] * conv_mog.var[:,:,:,1,1] - conv_mog.var[:,:,:,0,1] * conv_mog.var[:,:,:,1,0]
@@ -2462,6 +2531,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         gpu_halfsize = np.max(([(x1-x0)/2, (y1-y0)/2,
                             1+px-x0, 1+x1-px, 1+py-y0, 1+y1-py,
                             psfH//2, psfW//2]), axis=0)
+        #print ("HALF", gpu_halfsize)
 
         # PSF Fourier transforms
         batch_psf = BatchPixelizedPSF(psfs)
@@ -2523,7 +2593,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             #print ("IE",ie.max(), padie[i].max())
         roi = cp.asarray([-sx, -sy, mw, mh]).T
         mmpix = cp.asarray(padpix)
+        del padpix
         mmie = cp.asarray(padie)
+        del padie
         sky = cp.asarray(img_sky, dtype=cp.float32)
 
         # Split "amix" into terms that we will evaluate using MoG vs FFT.

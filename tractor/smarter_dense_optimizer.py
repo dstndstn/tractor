@@ -411,7 +411,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
         #if max_size > 1+max(live_params):
         #    print ("Using max_size", max_size)
         if nd > 1+max(live_params):
-            print ("Re-sizing X array for n derivs = ", nd)
+            #print ("Re-sizing X array for n derivs = ", nd)
             max_size = nd
         else:
             max_size = 1+max(live_params)

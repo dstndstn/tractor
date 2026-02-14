@@ -78,7 +78,7 @@ def lanczos_shift_image_batch_gpu(imgs, dxs, dys, chunk_size=None):
     L = 3
 
     for i in range(0, nimg, chunk_size):
-        print (f'Using chunk {i=} of size {chunk_size=}')
+        #print (f'Using chunk {i=} of size {chunk_size=}')
         end = min(i + chunk_size, nimg)
 
         # Slicing doesn't copy data, it's a view
