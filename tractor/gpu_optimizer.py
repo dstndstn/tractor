@@ -334,17 +334,17 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
             A[:Npix_total, 0] = (fluxes[:, nu, nu] *
                                  (dx * cdi[:, 0, 0][:, nu, nu] +
-                                  dy * cdi[:, 1, 0][:, nu, nu]) * padie).flat
+                                  dy * cdi[:, 1, 0][:, nu, nu]) * padie).ravel()
             A[:Npix_total, 1] = (fluxes[:, nu, nu] *
                                  (dx * cdi[:, 0, 1][:, nu, nu] +
-                                  dy * cdi[:, 1, 1][:, nu, nu]) * padie).flat
+                                  dy * cdi[:, 1, 1][:, nu, nu]) * padie).ravel()
 
         # Flux derivatives.
         for i in range(Nimages):
             # Image i fills in the column corresponding to its flux
             # and a block of rows corresponding to its pixels.
             col = tim_band_index[i] + Npos
-            A[i * pH*pW: (i+1) * pH*pW, col] = (G[i, 0, :, :] * padie[i, :, :]).flat
+            A[i * pH*pW: (i+1) * pH*pW, col] = (G[i, 0, :, :] * padie[i, :, :]).ravel()
         # We *could* form the *col* into an array and do this as a
         # one-liner; not sure that would be faster.
 
@@ -363,9 +363,9 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 A[:Npix_total, Npos + Nbands + i] = (fluxes[:, nu, nu] *
                                                      (G[:, i+1, :, :] - G[:, 0, :, :]) /
                                                      steps[:, i, nu, nu] *
-                                                     padie).flat
+                                                     padie).ravel()
 
-        B[:Npix_total] = ((padpix - fluxes[:, nu, nu] * G[:, 0, :, :]) * padie).flat
+        B[:Npix_total] = ((padpix - fluxes[:, nu, nu] * G[:, 0, :, :]) * padie).ravel()
 
         if Npriors > 0:
             rA, cA, vA, pb, mub = priorVals
@@ -485,9 +485,9 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             dx = cx - ipx[i]
             dy = cy - ipy[i]
             p = pix[y0:y1, x0:x1]
-            padpix[i, y0+dy : y1+dy, x0+dx : x1+dx] = p #cp.array(p)
+            padpix[i, y0+dy : y1+dy, x0+dx : x1+dx] = cp.array(p)
             p =  ie[y0:y1, x0:x1]
-            padie [i, y0+dy : y1+dy, x0+dx : x1+dx] = p # cp.array(p)
+            padie [i, y0+dy : y1+dy, x0+dx : x1+dx] = cp.array(p)
 
         # GPU arrays:
         img_params.psf_pad = psf_pad
