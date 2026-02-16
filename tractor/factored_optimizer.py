@@ -2269,7 +2269,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #used_bytes = mempool.used_bytes()
         #tot_bytes = mempool.total_bytes()
         #print (f'After free {used_bytes=} {tot_bytes=}')
-        return super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
+        return super().tryUpdates(tractor, X, alphas=alphas)
         print ("GPU FACTORED TRY UPDATES")
 
         # Dustin's FIXME improvement ideas
@@ -2280,7 +2280,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 isinstance(tractor.catalog[0], ProfileGalaxy) and
                 tractor.isParamFrozen('images')):
             print('Calling superclass tryUpdates')
-            return super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
+            return super().tryUpdates(tractor, X, alphas=alphas)
 
         print('number of images:', len(tractor.images))
         Nimages = len(tractor.images)
@@ -2361,7 +2361,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         img_params.addBatchGalaxyProfiles(gals)
         if img_params.ffts is None:
             print ("Warning> img_params.ffts is None!  Calling superclass tryUpdates (on CPU)")
-            return super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
+            return super().tryUpdates(tractor, X, alphas=alphas)
         G = self.computeGalaxyModelsVectorized(img_params)
         t = time.time()
         assert(G.shape == (Nimages, len(steps), pH, pW))
