@@ -45,27 +45,27 @@ class GpuFriendlyOptimizer(SmarterDenseOptimizer):
         assert(get_icov == False)
         return self.one_source_update(tr, priors=priors, **kwargs)
 
-    # def per_image_updates(self, tr, **kwargs):
-    #     if not (tr.isParamFrozen('images') and
-    #         (len(tr.catalog) == 1) and
-    #         isinstance(tr.catalog[0], ProfileGalaxy)):
-    #         t0 = time.time()
-    #         R = super().per_image_updates(tr, **kwargs)
-    #         dt = time.time() - t0
-    #         self.t_super += dt
-    #         self.n_super += 1
-    #         return R
-    #     return self.one_galaxy_update(tr, **kwargs)
+    def tryUpdates(self, tr, X, **kwargs):
+        if not (tr.isParamFrozen('images') and
+            (len(tr.catalog) == 1) and
+            isinstance(tr.catalog[0], (ProfileGalaxy, PointSource))):
+            return super().tryUpdates(tr, X, **kwargs)
+        return self.one_source_try_updates(tr, X, **kwargs)
 
     def one_source_update(self, tr, **kwargs):
-        #return super().all_image_updates(tr, **kwargs)
         return super().getLinearUpdateDirection(tr, **kwargs)
+
+    def one_source_try_updates(self, tr, X, **kwargs):
+        return super().tryUpdates(tr, X, **kwargs)
 
 class GpuOptimizer(GpuFriendlyOptimizer):
 
     def __init__(self, cp, *args, **kwargs):
         self.cp = cp
         super().__init__(*args, **kwargs)
+
+    def one_source_try_updates(self, tr, X, **kwargs):
+        return self.gpu_one_source_try_updates(tr, X, **kwargs)
 
     def one_source_update(self, tr, **kwargs):
         return self.gpu_one_source_update(tr, **kwargs)
@@ -116,10 +116,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         # dt = time.time() - t0
         # return R
 
-    def gpu_one_source_update(self, tr, priors=True, get_A=False, **kwargs):
-        cp = self.cp
-
-        t0 = time.time()
+    def _gpu_checks(self, tr):
         # Assume single source
         assert(len(tr.catalog) == 1)
         tims = tr.images
@@ -144,12 +141,80 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 goodmasks.append(mask)
             if len(goodtims) == 0:
                 info('After removing None modelMasks, no images remain!')
-                return None
+                return None,None
             debug('Cut from %i to %i images with good modelMasks' % (len(tr.images), len(goodtims)))
             tims = goodtims
             masks = goodmasks
             del goodtims,goodmasks
         assert(all([m is not None for m in masks]))
+        return tims, masks
+
+    def gpu_one_source_try_updates(self, tr, X, alphas=None, **kwargs):
+        cp = self.cp
+        tims,masks = self._gpu_checks(tr)
+        if tims is None:
+            return None
+        src = tr.catalog[0]
+        is_galaxy = isinstance(src, ProfileGalaxy)
+        is_psf = isinstance(src, PointSource)
+
+        p0 = tr.getParams()
+
+        # Get lists of alpha values and parameters to try
+        steps = self.getParameterSteps(tr, X, alphas)
+        if len(steps) == 0:
+            self.last_step_hit_limit = True
+            self.hit_limit = True
+            return 0., 0.
+
+        extents = [mm.extent for mm in masks]
+
+        # Pixel positions (at initial params)
+        pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
+               for tim in tims]
+        px, py = np.array(pxy, dtype=np.float32).T
+        ipx = px.round().astype(np.int32)
+        ipy = py.round().astype(np.int32)
+
+        ## FIXME -- this should be based on *SOURCE* properties as well, no?
+        ## FIXME -- used to have PSF size included in this mix...
+        x0, x1, y0, y1 = np.asarray(extents).T
+        halfsize = np.max(([(x1-x0)/2, (y1-y0)/2,
+                            1+px-x0, 1+x1-px, 1+py-y0, 1+y1-py]))
+
+        # Pre-process image: PSF, padded pix, etc
+        img_params = self.gpu_setup_image_params(tims, halfsize, extents, ipx, ipy)
+
+        idx_grid = np.zeros((len(steps), len(tims)), np.int32)
+        idy_grid = np.zeros((len(steps), len(tims)), np.int32)
+        for istep, (_, p, _, _) in enumerate(steps):
+            tr.setParams(p)
+
+            # Pixel positions
+            pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
+                   for tim in tims]
+            px, py = np.array(pxy, dtype=np.float32).T
+            # Round source pixel position to nearest integer
+            ix = px.round().astype(np.int32)
+            iy = py.round().astype(np.int32)
+            idx_grid[istep,:] = ix - ipx
+            idy_grid[istep,:] = iy - ipy
+
+
+        tr.setParams(p0)
+        return super(SmarterDenseOptimizer, self).tryUpdates(tr, X, **kwargs)
+        
+
+    def gpu_one_source_update(self, tr, priors=True, get_A=False, **kwargs):
+        cp = self.cp
+        t0 = time.time()
+
+        tims,masks = self._gpu_checks(tr)
+        if tims is None:
+            return None
+        src = tr.catalog[0]
+        is_galaxy = isinstance(src, ProfileGalaxy)
+        is_psf = isinstance(src, PointSource)
 
         Nimages = len(tims)
         extents = [mm.extent for mm in masks]
@@ -517,6 +582,11 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         return G
 
     def gpu_get_unitflux_galaxy_profiles(self, mogs, img_params, mux, muy):
+        '''
+        Computes galaxy profiles for a grid of Nimages x Nprofiles.
+        "img_params" contains (padded) image pixels and processed PSFs; Nimages in size.
+        "mogs" gives the galaxy (mixture-of-Gaussian) profiles, for the grid of Nimages x Nprofiles.
+        '''
         cp = self.cp
         # mogs[image][profile] = mog
         Nimages = len(mogs)
@@ -943,14 +1013,14 @@ if __name__ == '__main__':
     shape = EllipseWithPriors(np.log(5.), 0.1, 0.4)
     pos = RaDecPos(ra_cen - 25.*arcsec, dec_cen)
     gpos = GaiaPosition(ra_cen - 25.*arcsec, dec_cen, 2016.0, 0., 0., 0.)
-    #gal = ExpGalaxy(pos, brightness, shape)
-    #param_scales = [1./3600, 1./3600., 100., 100., 100., 1., 0.1, 0.1]
-    ptsrc = PointSource(pos, brightness)
-    param_scales = [1./3600, 1./3600, 100., 100., 100]
+    gal = ExpGalaxy(pos, brightness, shape)
+    param_scales = [1./3600, 1./3600., 100., 100., 100., 1., 0.1, 0.1]
+    #ptsrc = PointSource(pos, brightness)
+    #param_scales = [1./3600, 1./3600, 100., 100., 100]
     #gal = ExpGalaxy(gpos, brightness, shape)
     #param_scales = [100., 100., 100., 1., 0.1, 0.1]
-    #cat = [gal]
-    cat = [ptsrc]
+    cat = [gal]
+    #cat = [ptsrc]
 
     psf = NormalizedPixelizedPsfEx(os.path.join(os.path.dirname(os.path.dirname(__file__)),
                                         'test',
@@ -1013,7 +1083,8 @@ if __name__ == '__main__':
 
     print('Opt', tr.optimizer)
 
-    optargs = dict(shared_params=False, priors=True)
+    alphas = [0.1, 0.3, 1.0]
+    optargs = dict(shared_params=False, priors=True, alphas=alphas)
 
     orig_opt = tr.optimizer
 
