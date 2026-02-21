@@ -61,8 +61,35 @@ class GpuFriendlyOptimizer(SmarterDenseOptimizer):
 class GpuOptimizer(GpuFriendlyOptimizer):
 
     def __init__(self, cp, *args, **kwargs):
-        self.cp = cp
         super().__init__(*args, **kwargs)
+        self.set_cp(cp)
+
+    def __getstate__(self):
+        d = self.__dict__.copy()
+        # Can't pickle a module
+        del d['cp']
+        return d
+
+    def __setstate__(self, d):
+        self.__dict__ = d
+        self.set_cp(self.cp_orig)
+
+    def set_cp(self, cp):
+        if cp == 'cupy':
+            self.cp_orig = cp
+            import cupy as cp
+            cp.get = lambda x: x.get()
+        elif cp == 'numpy':
+            self.cp_orig = cp
+            import numpy as np
+            np.get = lambda x: x
+            cp = np
+        else:
+            self.cp_orig = None
+        self.cp = cp
+
+    def __repr__(self):
+        return 'GpuOptimizer(' + (self.cp_orig or str(self.cp)) + ')'
 
     def one_source_try_updates(self, tr, X, **kwargs):
         return self.gpu_one_source_try_updates(tr, X, **kwargs)
@@ -1010,8 +1037,25 @@ if __name__ == '__main__':
     import pylab as plt
     from astrometry.util.util import Tan
 
-    from cupy_wrapper import cp
+    #from cupy_wrapper import cp
+    import pickle
 
+    opt = GpuOptimizer('cupy')
+    s = pickle.dumps(opt)
+    opt2 = pickle.loads(s)
+
+    print('Opt:', opt, opt.cp)
+    print('Opt2:', opt2, opt2.cp)
+
+    opt = GpuOptimizer('numpy')
+    s = pickle.dumps(opt)
+    opt2 = pickle.loads(s)
+    
+    print('Opt:', opt, opt.cp)
+    print('Opt2:', opt2, opt2.cp)
+
+    sys.exit(0)
+    
     def difference(x1, x2):
         return np.sum(np.abs(x1 - x2) / np.maximum(1e-16, (np.abs(x1) + np.abs(x2)) / 2.))
 

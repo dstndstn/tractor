@@ -255,7 +255,8 @@ class LsqrOptimizer(Optimizer):
                                  priors=True,
                                  scale_columns=True,
                                  shared_params=True,
-                                 variance=False):
+                                 variance=False,
+                                 **kwargs):
         #logverb(tractor.getName() + ': Finding derivs...')
         #t0 = Time()
         allderivs = tractor.getDerivs()
