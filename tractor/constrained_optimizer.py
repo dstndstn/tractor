@@ -1,12 +1,5 @@
-from __future__ import print_function
 from tractor.lsqr_optimizer import LsqrOptimizer
 import numpy as np
-import time
-
-logverb = print
-logmsg  = print
-
-tc =np.zeros(2)
 
 class ConstrainedOptimizer(LsqrOptimizer):
 
@@ -20,28 +13,16 @@ class ConstrainedOptimizer(LsqrOptimizer):
                       dchisq_limited=1e-6,
                       check_step=None,
                       **kwargs):
-        # print()
-        # print('Optimize_loop:')
-        #print ("Constrained Optimize")
-        t = time.time()
-        # for s in tractor.catalog:
-        #     print(s)
         R = {}
         self.hit_limit = False
         self.last_step_hit_limit = False
         for step in range(steps):
-            #print('Optimize_loop: step', step)
             self.stepLimited = False
             dlnp,X,alpha = self.optimize(tractor, **kwargs)
             if check_step is not None:
                 r = check_step(optimizer=self, tractor=tractor, dlnp=dlnp, X=X, alpha=alpha)
                 if not r:
                     break
-            #print('Optimize_loop: step', step, 'dlnp', dlnp, 'hit limit:',
-            #      self.hit_limit, 'step limit:', self.stepLimited)
-            #for s in tractor.catalog:
-            #    print(s)
-
             if not self.stepLimited and dlnp <= dchisq:
                 break
             if self.stepLimited and dlnp <= dchisq_limited:
@@ -49,8 +30,6 @@ class ConstrainedOptimizer(LsqrOptimizer):
         R.update(steps=step)
         R.update(hit_limit=self.last_step_hit_limit,
                  ever_hit_limit=self.hit_limit)
-        tc[0] += time.time()-t
-        #print (f'{tc=}')
         return R
 
     def tryUpdates(self, tractor, X, alphas=None, check_step=None):
@@ -78,16 +57,15 @@ class ConstrainedOptimizer(LsqrOptimizer):
                     break
 
             logprob = tractor.getLogProb()
-            #print (f'{alpha=} {p=} {step_limit=} {hit_limit=} {logprob=}')
 
             if not np.isfinite(logprob):
-                logmsg('  Got bad log-prob', logprob)
+                print('ConstrainedOptimizer: log-prob %s.  Prior %s, Likelihood %s.  Sources:\n  %s' %
+                      (logprob, tractor.getLogPrior(), tractor.getLogLikelihood(),
+                       '\n  '.join([str(s) for s in tractor.catalog])))
                 break
-
             if logprob < (logprob_best - 1.):
                 # We're getting significantly worse -- quit line search
                 break
-
             if logprob > logprob_best:
                 # Best we've found so far -- accept this step!
                 self.last_step_hit_limit = hit_limit
@@ -96,9 +74,6 @@ class ConstrainedOptimizer(LsqrOptimizer):
                 p_best = p
 
         tractor.setParams(p_best)
-        #print ("Pbest", p_best)
-        #print ("LOGPROB", logprob_best, logprob_before)
-        #print ("ALPHA", alpha_best, self.hit_limit, self.last_step_hit_limit)
         if alpha_best is None:
             return 0., 0.
 

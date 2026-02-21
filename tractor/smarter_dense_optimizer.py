@@ -41,7 +41,8 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                            variance=False,
                            shared_params=True,
                            get_cov=False,
-                           get_A=False):
+                           get_A=False,
+                           **kwargs):
         if shared_params or scales_only or damp>0 or variance:
             raise RuntimeError('Not implemented')
         assert(shared_params == False)
