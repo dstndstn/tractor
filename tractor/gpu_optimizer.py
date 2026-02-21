@@ -185,8 +185,17 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         # Pre-process image: PSF, padded pix, etc
         img_params = self.gpu_setup_image_params(tims, halfsize, extents, ipx, ipy)
 
+        counts_grid = np.zeros((len(steps), len(tims)), np.float32)
+
+        # We need to transpose the mogs: need Nimages x Nprofiles(aka Nsteps)
+        mogs = [[] for tim in tims]
+
         idx_grid = np.zeros((len(steps), len(tims)), np.int32)
         idy_grid = np.zeros((len(steps), len(tims)), np.int32)
+
+        mux_grid = np.zeros((len(tims), len(steps)), np.float32)
+        muy_grid = np.zeros((len(tims), len(steps)), np.float32)
+
         for istep, (_, p, _, _) in enumerate(steps):
             tr.setParams(p)
 
@@ -200,10 +209,30 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             idx_grid[istep,:] = ix - ipx
             idy_grid[istep,:] = iy - ipy
 
+            # subpixel portion: shifted via Lanczos interpolation
+            mux = px - ix
+            muy = py - iy
+            assert(np.abs(mux).max() <= 0.5)
+            assert(np.abs(muy).max() <= 0.5)
+            mux_grid[:, istep] = mux
+            muy_grid[:, istep] = muy
+
+            counts_grid[istep, :] = np.array(
+                [tim.getPhotoCal().brightnessToCounts(src.brightness)
+                 for tim in tims])
+
+            if is_galaxy:
+                for itim,(tim,x,y) in enumerate(zip(tims, px, py)):
+                    mogs[itim].append(src._getShearedProfile(tim,x,y))
 
         tr.setParams(p0)
+
+        if is_galaxy:
+            mods = self.gpu_get_unitflux_galaxy_profiles(mogs, img_params,
+                                                         mux_grid, muy_grid)
+            print('try_updates: mods is shape', mods.shape)
+
         return super(SmarterDenseOptimizer, self).tryUpdates(tr, X, **kwargs)
-        
 
     def gpu_one_source_update(self, tr, priors=True, get_A=False, **kwargs):
         cp = self.cp
@@ -804,22 +833,35 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         cp = self.cp
         '''
         Only vectorized in the specific way we need:
+
         G images:
         (Nimages x Nmodels x H x W)
+
         x, y:
         each of length (Nimages,)
+        OR
+        of size (Nimage x Nmodels)
+
         work:
         same shape as G; pre-allocated work array.
         '''
         assert(len(G.shape) == 4)
         if work is not None:
             assert(work.shape == G.shape)
-        assert(len(x) == len(y))
         Nim, Nmod, H, W = G.shape
-        assert(len(x) == Nim)
-        # Create Lanczos filter arrays, shape (Nim, 7)
-        fx = np.arange(-3, +4)[np.newaxis, :] + x[:, np.newaxis]
-        fy = np.arange(-3, +4)[np.newaxis, :] + y[:, np.newaxis]
+        assert(x.shape == y.shape)
+
+        if len(x.shape) == 1:
+            assert(len(x) == Nim)
+            # Create Lanczos filter arrays, shape (Nim, 7)
+            fx = np.arange(-3, +4)[np.newaxis, :] + x[:, np.newaxis]
+            fy = np.arange(-3, +4)[np.newaxis, :] + y[:, np.newaxis]
+        else:
+            assert(x.shape == (Nim, Nmod))
+            # Create Lanczos filter arrays, shape (Nim, Nmod, 7)
+            fx = np.arange(-3, +4)[np.newaxis, np.newaxis, :] + x[..., np.newaxis]
+            fy = np.arange(-3, +4)[np.newaxis, np.newaxis, :] + y[..., np.newaxis]
+
         fx = lanczos_filter(3, fx)
         fy = lanczos_filter(3, fy)
         self.correlate7_2d_inplace_gpu(G, fx, fy, work=work)
@@ -827,6 +869,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
     def correlate7_2d_inplace_gpu(self, G, fx, fy, work=None):
         cp = self.cp
+        na = cp.newaxis
         if work is None:
             work = cp.empty_like(G)
         else:
@@ -838,55 +881,105 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
         assert(len(G.shape) == 4)
         Nim,Nmod,H,W = G.shape
-        assert(len(fx.shape) == 2)
-        assert(fx.shape == fy.shape)
-        Nim2,K = fx.shape
-        assert(Nim2 == Nim)
-        assert(K == 7)
 
-        # Apply X filter
+        if len(fx.shape) == 2:
+            assert(len(fx.shape) == 2)
+            assert(fx.shape == fy.shape)
+            Nim2,K = fx.shape
+            assert(Nim2 == Nim)
+            assert(K == 7)
 
-        na = cp.newaxis
+            # Apply X filter
 
-        # Special handling - left edge.
-        work[:, :, :, 0] = cp.sum(G[:, :, :, :4] * fx[:, na, na, 3:], axis=-1)
-        work[:, :, :, 1] = cp.sum(G[:, :, :, :5] * fx[:, na, na, 2:], axis=-1)
-        work[:, :, :, 2] = cp.sum(G[:, :, :, :6] * fx[:, na, na, 1:], axis=-1)
+            # Special handling - left edge.
+            work[:, :, :, 0] = cp.sum(G[:, :, :, :4] * fx[:, na, na, 3:], axis=-1)
+            work[:, :, :, 1] = cp.sum(G[:, :, :, :5] * fx[:, na, na, 2:], axis=-1)
+            work[:, :, :, 2] = cp.sum(G[:, :, :, :6] * fx[:, na, na, 1:], axis=-1)
 
-        # Special handling - right edge.
-        work[:, :, :, -1] = cp.sum(G[:, :, :, -4:] * fx[:, na, na, :4], axis=-1)
-        work[:, :, :, -2] = cp.sum(G[:, :, :, -5:] * fx[:, na, na, :5], axis=-1)
-        work[:, :, :, -3] = cp.sum(G[:, :, :, -6:] * fx[:, na, na, :6], axis=-1)
+            # Special handling - right edge.
+            work[:, :, :, -1] = cp.sum(G[:, :, :, -4:] * fx[:, na, na, :4], axis=-1)
+            work[:, :, :, -2] = cp.sum(G[:, :, :, -5:] * fx[:, na, na, :5], axis=-1)
+            work[:, :, :, -3] = cp.sum(G[:, :, :, -6:] * fx[:, na, na, :6], axis=-1)
 
-        # Middle
-        work[:, :, :, 3:-3]  = G[:, :, :,  :-6] * fx[:, na, na, na, 0]
-        work[:, :, :, 3:-3] += G[:, :, :, 1:-5] * fx[:, na, na, na, 1]
-        work[:, :, :, 3:-3] += G[:, :, :, 2:-4] * fx[:, na, na, na, 2]
-        work[:, :, :, 3:-3] += G[:, :, :, 3:-3] * fx[:, na, na, na, 3]
-        work[:, :, :, 3:-3] += G[:, :, :, 4:-2] * fx[:, na, na, na, 4]
-        work[:, :, :, 3:-3] += G[:, :, :, 5:-1] * fx[:, na, na, na, 5]
-        work[:, :, :, 3:-3] += G[:, :, :, 6:  ] * fx[:, na, na, na, 6]
+            # Middle
+            work[:, :, :, 3:-3]  = G[:, :, :,  :-6] * fx[:, na, na, na, 0]
+            work[:, :, :, 3:-3] += G[:, :, :, 1:-5] * fx[:, na, na, na, 1]
+            work[:, :, :, 3:-3] += G[:, :, :, 2:-4] * fx[:, na, na, na, 2]
+            work[:, :, :, 3:-3] += G[:, :, :, 3:-3] * fx[:, na, na, na, 3]
+            work[:, :, :, 3:-3] += G[:, :, :, 4:-2] * fx[:, na, na, na, 4]
+            work[:, :, :, 3:-3] += G[:, :, :, 5:-1] * fx[:, na, na, na, 5]
+            work[:, :, :, 3:-3] += G[:, :, :, 6:  ] * fx[:, na, na, na, 6]
 
-        # Apply Y filter
+            # Apply Y filter
 
-        # Special handling - bottom edge.
-        G[:, :, 0, :] = cp.sum(work[:, :, :4, :] * fy[:, na, 3:, na], axis=-2)
-        G[:, :, 1, :] = cp.sum(work[:, :, :5, :] * fy[:, na, 2:, na], axis=-2)
-        G[:, :, 2, :] = cp.sum(work[:, :, :6, :] * fy[:, na, 1:, na], axis=-2)
+            # Special handling - bottom edge.
+            G[:, :, 0, :] = cp.sum(work[:, :, :4, :] * fy[:, na, 3:, na], axis=-2)
+            G[:, :, 1, :] = cp.sum(work[:, :, :5, :] * fy[:, na, 2:, na], axis=-2)
+            G[:, :, 2, :] = cp.sum(work[:, :, :6, :] * fy[:, na, 1:, na], axis=-2)
 
-        # Special handling - top edge.
-        G[:, :, -1, :] = cp.sum(work[:, :, -4:, :] * fy[:, na, :4, na], axis=-2)
-        G[:, :, -2, :] = cp.sum(work[:, :, -5:, :] * fy[:, na, :5, na], axis=-2)
-        G[:, :, -3, :] = cp.sum(work[:, :, -6:, :] * fy[:, na, :6, na], axis=-2)
+            # Special handling - top edge.
+            G[:, :, -1, :] = cp.sum(work[:, :, -4:, :] * fy[:, na, :4, na], axis=-2)
+            G[:, :, -2, :] = cp.sum(work[:, :, -5:, :] * fy[:, na, :5, na], axis=-2)
+            G[:, :, -3, :] = cp.sum(work[:, :, -6:, :] * fy[:, na, :6, na], axis=-2)
 
-        # Middle
-        G[:, :, 3:-3, :]  = work[:, :,  :-6, :] * fy[:, na, na, 0, na]
-        G[:, :, 3:-3, :] += work[:, :, 1:-5, :] * fy[:, na, na, 1, na]
-        G[:, :, 3:-3, :] += work[:, :, 2:-4, :] * fy[:, na, na, 2, na]
-        G[:, :, 3:-3, :] += work[:, :, 3:-3, :] * fy[:, na, na, 3, na]
-        G[:, :, 3:-3, :] += work[:, :, 4:-2, :] * fy[:, na, na, 4, na]
-        G[:, :, 3:-3, :] += work[:, :, 5:-1, :] * fy[:, na, na, 5, na]
-        G[:, :, 3:-3, :] += work[:, :, 6:  , :] * fy[:, na, na, 6, na]
+            # Middle
+            G[:, :, 3:-3, :]  = work[:, :,  :-6, :] * fy[:, na, na, 0, na]
+            G[:, :, 3:-3, :] += work[:, :, 1:-5, :] * fy[:, na, na, 1, na]
+            G[:, :, 3:-3, :] += work[:, :, 2:-4, :] * fy[:, na, na, 2, na]
+            G[:, :, 3:-3, :] += work[:, :, 3:-3, :] * fy[:, na, na, 3, na]
+            G[:, :, 3:-3, :] += work[:, :, 4:-2, :] * fy[:, na, na, 4, na]
+            G[:, :, 3:-3, :] += work[:, :, 5:-1, :] * fy[:, na, na, 5, na]
+            G[:, :, 3:-3, :] += work[:, :, 6:  , :] * fy[:, na, na, 6, na]
+
+        else:
+            assert(len(fx.shape) == 3)
+            assert(fx.shape == fy.shape)
+            Nim2,Nmod2,K = fx.shape
+            assert(Nim2 == Nim)
+            assert(Nmod2 == Nmod)
+            assert(K == 7)
+
+            # Apply X filter
+
+            # Special handling - left edge.
+            work[..., :, 0] = cp.sum(G[..., :, :4] * fx[..., na, 3:], axis=-1)
+            work[..., :, 1] = cp.sum(G[..., :, :5] * fx[..., na, 2:], axis=-1)
+            work[..., :, 2] = cp.sum(G[..., :, :6] * fx[..., na, 1:], axis=-1)
+
+            # Special handling - right edge.
+            work[..., :, -1] = cp.sum(G[..., :, -4:] * fx[..., na, :4], axis=-1)
+            work[..., :, -2] = cp.sum(G[..., :, -5:] * fx[..., na, :5], axis=-1)
+            work[..., :, -3] = cp.sum(G[..., :, -6:] * fx[..., na, :6], axis=-1)
+
+            # Middle
+            work[..., :, 3:-3]  = G[..., :,  :-6] * fx[..., na, na, 0]
+            work[..., :, 3:-3] += G[..., :, 1:-5] * fx[..., na, na, 1]
+            work[..., :, 3:-3] += G[..., :, 2:-4] * fx[..., na, na, 2]
+            work[..., :, 3:-3] += G[..., :, 3:-3] * fx[..., na, na, 3]
+            work[..., :, 3:-3] += G[..., :, 4:-2] * fx[..., na, na, 4]
+            work[..., :, 3:-3] += G[..., :, 5:-1] * fx[..., na, na, 5]
+            work[..., :, 3:-3] += G[..., :, 6:  ] * fx[..., na, na, 6]
+
+            # Apply Y filter
+
+            # Special handling - bottom edge.
+            G[..., 0, :] = cp.sum(work[..., :4, :] * fy[..., 3:, na], axis=-2)
+            G[..., 1, :] = cp.sum(work[..., :5, :] * fy[..., 2:, na], axis=-2)
+            G[..., 2, :] = cp.sum(work[..., :6, :] * fy[..., 1:, na], axis=-2)
+
+            # Special handling - top edge.
+            G[..., -1, :] = cp.sum(work[..., -4:, :] * fy[..., :4, na], axis=-2)
+            G[..., -2, :] = cp.sum(work[..., -5:, :] * fy[..., :5, na], axis=-2)
+            G[..., -3, :] = cp.sum(work[..., -6:, :] * fy[..., :6, na], axis=-2)
+
+            # Middle
+            G[..., 3:-3, :]  = work[...,  :-6, :] * fy[..., na, 0, na]
+            G[..., 3:-3, :] += work[..., 1:-5, :] * fy[..., na, 1, na]
+            G[..., 3:-3, :] += work[..., 2:-4, :] * fy[..., na, 2, na]
+            G[..., 3:-3, :] += work[..., 3:-3, :] * fy[..., na, 3, na]
+            G[..., 3:-3, :] += work[..., 4:-2, :] * fy[..., na, 4, na]
+            G[..., 3:-3, :] += work[..., 5:-1, :] * fy[..., na, 5, na]
+            G[..., 3:-3, :] += work[..., 6:  , :] * fy[..., na, 6, na]
 
 # eg, lanczos_filter(3, -0.3 + np.arange(-3, +4))
 def lanczos_filter(order, x):
