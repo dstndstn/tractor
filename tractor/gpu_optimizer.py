@@ -178,22 +178,13 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
     def gpu_one_source_try_updates(self, tr, X, alphas=None, **kwargs):
         cp = self.cp
+        na = cp.newaxis
         tims,masks = self._gpu_checks(tr)
         if tims is None:
             return None
         src = tr.catalog[0]
         is_galaxy = isinstance(src, ProfileGalaxy)
         is_psf = isinstance(src, PointSource)
-
-        p0 = tr.getParams()
-
-        # Get lists of alpha values and parameters to try
-        steps = self.getParameterSteps(tr, X, alphas)
-        if len(steps) == 0:
-            self.last_step_hit_limit = True
-            self.hit_limit = True
-            return 0., 0.
-
         extents = [mm.extent for mm in masks]
 
         # Pixel positions (at initial params)
@@ -212,17 +203,26 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         # Pre-process image: PSF, padded pix, etc
         img_params = self.gpu_setup_image_params(tims, halfsize, extents, ipx, ipy)
 
-        counts_grid = np.zeros((len(steps), len(tims)), np.float32)
+        p0 = tr.getParams()
+        # Get lists of alpha values and parameters to try
+        steps = [(0., p0, False, False)] + self.getParameterSteps(tr, X, alphas)
+        if len(steps) == 0:
+            self.last_step_hit_limit = True
+            self.hit_limit = True
+            return 0., 0.
+
+        counts_grid = np.zeros((len(tims), len(steps)), np.float32)
 
         # We need to transpose the mogs: need Nimages x Nprofiles(aka Nsteps)
         mogs = [[] for tim in tims]
 
-        idx_grid = np.zeros((len(steps), len(tims)), np.int32)
-        idy_grid = np.zeros((len(steps), len(tims)), np.int32)
+        idx_grid = np.zeros((len(tims), len(steps)), np.int32)
+        idy_grid = np.zeros((len(tims), len(steps)), np.int32)
 
         mux_grid = np.zeros((len(tims), len(steps)), np.float32)
         muy_grid = np.zeros((len(tims), len(steps)), np.float32)
 
+        Nmods = len(steps)
         for istep, (_, p, _, _) in enumerate(steps):
             tr.setParams(p)
 
@@ -233,8 +233,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             # Round source pixel position to nearest integer
             ix = px.round().astype(np.int32)
             iy = py.round().astype(np.int32)
-            idx_grid[istep,:] = ix - ipx
-            idy_grid[istep,:] = iy - ipy
+            idx_grid[:, istep] = ix - ipx
+            idy_grid[:, istep] = iy - ipy
 
             # subpixel portion: shifted via Lanczos interpolation
             mux = px - ix
@@ -244,7 +244,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             mux_grid[:, istep] = mux
             muy_grid[:, istep] = muy
 
-            counts_grid[istep, :] = np.array(
+            counts_grid[:, istep] = np.array(
                 [tim.getPhotoCal().brightnessToCounts(src.brightness)
                  for tim in tims])
 
@@ -252,13 +252,72 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 for itim,(tim,x,y) in enumerate(zip(tims, px, py)):
                     mogs[itim].append(src._getShearedProfile(tim,x,y))
 
+            print('model', istep, ': log-prob', tr.getLogLikelihood())
         tr.setParams(p0)
 
         if is_galaxy:
             mods = self.gpu_get_unitflux_galaxy_profiles(mogs, img_params,
                                                          mux_grid, muy_grid)
+            mods *= counts_grid[..., na, na]
+            # mods shape: Nimages x Nmod x pH x pW
             print('try_updates: mods is shape', mods.shape)
+            pH, pW = img_params.pH, img_params.pW
+            Nimages = len(tims)
+            assert(img_params.padpix.shape == (Nimages, pH, pW))
+            assert(img_params.padie.shape  == (Nimages, pH, pW))
 
+            #print('idx', idx_grid)
+            #print('idy', idy_grid)
+
+            assert(mods.shape == (Nimages,Nmods,pH,pW))
+            chisqs = np.zeros(Nmods, np.float32)
+
+            plt.clf()
+
+            chia = dict(interpolation='nearest', origin='lower', vmin=-3, vmax=+3)
+            for imod in range(Nmods):
+                for itim in range(Nimages):
+                    dx = idx_grid[itim, imod]
+                    dy = idy_grid[itim, imod]
+
+                    plt.subplot(Nmods, Nimages, imod*Nimages + itim + 1)
+                    plt.title('dx,dy = %i,%i' % (dx, dy))
+
+                    if dx == 0 and dy == 0:
+                        # DEBUG
+                        chi = (img_params.padpix[itim, ...] - mods[itim, imod, ...]) * img_params.padie[itim, ...]
+                        chisqs[imod] += cp.sum(((img_params.padpix[itim, ...] - mods[itim, imod, ...]) * img_params.padie[itim, ...])**2)
+                        plt.imshow(chi, **chia)
+                        continue
+                    pix = img_params.padpix[itim, ...]
+                    ie  = img_params.padie [itim, ...]
+                    mod = mods[itim, imod, ...]
+                    if dx > 0:
+                        pix = pix[..., dx:]
+                        ie  = ie [..., dx:]
+                        mod = mod[..., :-dx]
+                    elif dx < 0:
+                        pix = pix[..., :dx]
+                        ie  = ie [..., :dx]
+                        mod = mod[..., -dx:]
+                    if dy > 0:
+                        pix = pix[..., dy:, :]
+                        ie  = ie [..., dy:, :]
+                        mod = mod[..., :-dy, :]
+                    elif dy < 0:
+                        pix = pix[..., :dy, :]
+                        ie  = ie [..., :dy, :]
+                        mod = mod[..., -dy:, :]
+                    chi = (pix - mod) * ie
+                    chisqs[imod] += cp.sum(((pix - mod) * ie)**2)
+                    plt.imshow(chi, **chia)
+            ps.savefig()
+                    
+            print('chisqs:', chisqs)
+            print('logprobs:', -0.5 * chisqs)
+
+        # PRIORS
+            
         return super(SmarterDenseOptimizer, self).tryUpdates(tr, X, **kwargs)
 
     def gpu_one_source_update(self, tr, priors=True, get_A=False, **kwargs):
@@ -1037,24 +1096,26 @@ if __name__ == '__main__':
     import pylab as plt
     from astrometry.util.util import Tan
 
-    #from cupy_wrapper import cp
+    from cupy_wrapper import cp
     import pickle
 
-    opt = GpuOptimizer('cupy')
-    s = pickle.dumps(opt)
-    opt2 = pickle.loads(s)
-
-    print('Opt:', opt, opt.cp)
-    print('Opt2:', opt2, opt2.cp)
-
-    opt = GpuOptimizer('numpy')
-    s = pickle.dumps(opt)
-    opt2 = pickle.loads(s)
+    from astrometry.util.plotutils import PlotSequence
+    ps = PlotSequence('chi')
     
-    print('Opt:', opt, opt.cp)
-    print('Opt2:', opt2, opt2.cp)
-
-    sys.exit(0)
+    # opt = GpuOptimizer('cupy')
+    # s = pickle.dumps(opt)
+    # opt2 = pickle.loads(s)
+    # 
+    # print('Opt:', opt, opt.cp)
+    # print('Opt2:', opt2, opt2.cp)
+    # 
+    # opt = GpuOptimizer('numpy')
+    # s = pickle.dumps(opt)
+    # opt2 = pickle.loads(s)
+    # 
+    # print('Opt:', opt, opt.cp)
+    # print('Opt2:', opt2, opt2.cp)
+    # sys.exit(0)
     
     def difference(x1, x2):
         return np.sum(np.abs(x1 - x2) / np.maximum(1e-16, (np.abs(x1) + np.abs(x2)) / 2.))
