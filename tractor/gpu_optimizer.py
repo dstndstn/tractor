@@ -23,6 +23,7 @@ def logverb(*args):
 debug = logverb
 def logmsg(*args):
     logger.info(' '.join(map(str, args)))
+info = logmsg
 def isverbose():
     return logger.isEnabledFor(logging.DEBUG)
 
