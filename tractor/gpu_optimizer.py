@@ -204,6 +204,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         img_params = self.gpu_setup_image_params(tims, halfsize, extents, ipx, ipy)
 
         p0 = tr.getParams()
+
+        # FIXME -- check_step??
         # Get lists of alpha values and parameters to try
         steps = [(0., p0, False, False)] + self.getParameterSteps(tr, X, alphas)
         if len(steps) == 0:
@@ -260,7 +262,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 lnl0 = lnl
             else:
                 print('model', istep, ': delta-lnl', lnl-lnl0)
-        tr.setParams(p0)
+        #tr.setParams(p0)
 
         if is_psf:
             mods = self.gpu_get_unitflux_psf(img_params, mux_grid, muy_grid)
@@ -341,7 +343,44 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         print('loglikes:', -0.5 * chisqs)
         print('delta-lnls:', -0.5 * (chisqs[1:] - chisqs[0]))
 
-        return super(SmarterDenseOptimizer, self).tryUpdates(tr, X, **kwargs)
+        logprobs = logpriors - 0.5 * chisqs
+
+        logprob_best = logprobs[0]
+        alpha_best = None
+        p_best = p0
+        for istep, ((alpha, p, step_limit, hit_limit), logprob) in enumerate(
+            zip(steps, logprobs)):
+            if istep == 0:
+                continue
+            if hit_limit:
+                self.hit_limit = True
+            if not np.isfinite(logprob):
+                tr.setParams(p)
+                print('GPUOptimizer: log-prob %s.  Prior %s, Likelihood %s. Source: %s' %
+                      (logprob, logpriors[istep], -0.5*chisqs[istep], str(src)))
+                break
+            if logprob < (logprob_best - 1.):
+                # We're getting significantly worse -- quit line search
+                break
+            if logprob > logprob_best:
+                # Best we've found so far -- accept this step!
+                self.last_step_hit_limit = hit_limit
+                alpha_best = alpha
+                logprob_best = logprob
+                p_best = p
+        tr.setParams(p_best)
+        if alpha_best is None:
+            return 0., 0.
+
+        tr.setParams(p0)
+        OLD = super(SmarterDenseOptimizer, self).tryUpdates(tr, X, **kwargs)
+        tr.setParams(p_best)
+        
+        NEW = logprob_best - logprobs[0], alpha_best
+        print('OLD return val:', OLD)
+        print('NEW return val:', NEW)
+
+        return logprob_best - logprobs[0], alpha_best
 
     def gpu_one_source_update(self, tr, priors=True, get_A=False, **kwargs):
         cp = self.cp
@@ -1260,12 +1299,12 @@ if __name__ == '__main__':
     gpos = GaiaPosition(ra_cen - 25.*arcsec, dec_cen, 2016.0, 0., 0., 0.)
     gal = ExpGalaxy(pos, brightness, shape)
     param_scales = [1./3600, 1./3600., 100., 100., 100., 1., 0.1, 0.1]
-    ptsrc = PointSource(pos, brightness)
-    param_scales = [1./3600, 1./3600, 100., 100., 100]
+    #ptsrc = PointSource(pos, brightness)
+    #param_scales = [1./3600, 1./3600, 100., 100., 100]
     #gal = ExpGalaxy(gpos, brightness, shape)
     #param_scales = [100., 100., 100., 1., 0.1, 0.1]
-    #cat = [gal]
-    cat = [ptsrc]
+    cat = [gal]
+    #cat = [ptsrc]
 
     psf = NormalizedPixelizedPsfEx(os.path.join(os.path.dirname(os.path.dirname(__file__)),
                                         'test',
