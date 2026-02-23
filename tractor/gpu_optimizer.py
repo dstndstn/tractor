@@ -257,23 +257,19 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                     mogs[itim].append(src._getShearedProfile(tim,x,y))
 
             #print('model', istep, ': log-prob', tr.getLogLikelihood())
-            lnl = tr.getLogLikelihood()
-            if istep == 0:
-                lnl0 = lnl
-            else:
-                print('model', istep, ': delta-lnl', lnl-lnl0)
+            # lnl = tr.getLogLikelihood()
+            # if istep == 0:
+            #     lnl0 = lnl
+            # else:
+            #     print('model', istep, ': delta-lnl', lnl-lnl0)
         #tr.setParams(p0)
 
         if is_psf:
             mods = self.gpu_get_unitflux_psf(img_params, mux_grid, muy_grid)
-            mods *= counts_grid[..., na, na]
-            print('try_updates: PSF mods is shape', mods.shape)
-
-        elif is_galaxy:
+        else:
             mods = self.gpu_get_unitflux_galaxy_profiles(mogs, img_params,
                                                          mux_grid, muy_grid)
-            mods *= counts_grid[..., na, na]
-            print('try_updates: galaxy mods is shape', mods.shape)
+        mods *= counts_grid[..., na, na]
 
         # mods shape: Nimages x Nmod x pH x pW
         pH, pW = img_params.pH, img_params.pW
@@ -281,31 +277,28 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         assert(img_params.padpix.shape == (Nimages, pH, pW))
         assert(img_params.padie.shape  == (Nimages, pH, pW))
 
-        #print('idx', idx_grid)
-        #print('idy', idy_grid)
-
         assert(mods.shape == (Nimages,Nmods,pH,pW))
         chisqs = np.zeros(Nmods, np.float32)
 
-        plt.clf()
-
-        chia = dict(interpolation='nearest', origin='lower', vmin=-3, vmax=+3)
+        #plt.clf()
+        #chia = dict(interpolation='nearest', origin='lower', vmin=-3, vmax=+3)
+        # FIXME -- quick path if all idx,idy == 0, or if all for one model == 0 ?
         chi_work = cp.empty((pH, pW), np.float32)
         for imod in range(Nmods):
             for itim in range(Nimages):
                 dx = idx_grid[itim, imod]
                 dy = idy_grid[itim, imod]
 
-                plt.subplot(Nmods, Nimages, imod*Nimages + itim + 1)
-                plt.title('dx,dy = %i,%i' % (dx, dy))
+                #plt.subplot(Nmods, Nimages, imod*Nimages + itim + 1)
+                #plt.title('dx,dy = %i,%i' % (dx, dy))
 
                 if dx == 0 and dy == 0:
                     chisqs[imod] += cp.sum(((img_params.padpix[itim, ...] -
                                              mods[itim, imod, ...]) *
                                             img_params.padie[itim, ...])**2)
                     # DEBUG
-                    chi = (img_params.padpix[itim, ...] - mods[itim, imod, ...]) * img_params.padie[itim, ...]
-                    plt.imshow(chi, **chia)
+                    #chi = (img_params.padpix[itim, ...] - mods[itim, imod, ...]) * img_params.padie[itim, ...]
+                    #plt.imshow(chi, **chia)
                     continue
                 pix = img_params.padpix[itim, ...]
                 ie  = img_params.padie [itim, ...]
@@ -337,11 +330,11 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 #chi = (pix - mod) * ie
                 #chisqs[imod] += cp.sum(((pix - mod) * ie).astype(cp.float64)**2)
                 plt.imshow(chi_work, **chia)
-        ps.savefig()
+        #ps.savefig()
 
         #print('chisqs:', chisqs)
-        print('loglikes:', -0.5 * chisqs)
-        print('delta-lnls:', -0.5 * (chisqs[1:] - chisqs[0]))
+        #print('loglikes:', -0.5 * chisqs)
+        #print('delta-lnls:', -0.5 * (chisqs[1:] - chisqs[0]))
 
         logprobs = logpriors - 0.5 * chisqs
 
@@ -372,13 +365,12 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         if alpha_best is None:
             return 0., 0.
 
-        tr.setParams(p0)
-        OLD = super(SmarterDenseOptimizer, self).tryUpdates(tr, X, **kwargs)
-        tr.setParams(p_best)
-        
-        NEW = logprob_best - logprobs[0], alpha_best
-        print('OLD return val:', OLD)
-        print('NEW return val:', NEW)
+        #tr.setParams(p0)
+        #OLD = super(SmarterDenseOptimizer, self).tryUpdates(tr, X, **kwargs)
+        #tr.setParams(p_best)
+        #NEW = logprob_best - logprobs[0], alpha_best
+        #print('OLD return val:', OLD)
+        #print('NEW return val:', NEW)
 
         return logprob_best - logprobs[0], alpha_best
 
