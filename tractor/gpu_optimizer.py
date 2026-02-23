@@ -262,81 +262,85 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 print('model', istep, ': delta-lnl', lnl-lnl0)
         tr.setParams(p0)
 
-        if is_galaxy:
+        if is_psf:
+            mods = self.gpu_get_unitflux_psf(img_params, mux_grid, muy_grid)
+            mods *= counts_grid[..., na, na]
+            print('try_updates: PSF mods is shape', mods.shape)
+
+        elif is_galaxy:
             mods = self.gpu_get_unitflux_galaxy_profiles(mogs, img_params,
                                                          mux_grid, muy_grid)
             mods *= counts_grid[..., na, na]
-            # mods shape: Nimages x Nmod x pH x pW
-            print('try_updates: mods is shape', mods.shape)
-            pH, pW = img_params.pH, img_params.pW
-            Nimages = len(tims)
-            assert(img_params.padpix.shape == (Nimages, pH, pW))
-            assert(img_params.padie.shape  == (Nimages, pH, pW))
+            print('try_updates: galaxy mods is shape', mods.shape)
 
-            #print('idx', idx_grid)
-            #print('idy', idy_grid)
+        # mods shape: Nimages x Nmod x pH x pW
+        pH, pW = img_params.pH, img_params.pW
+        Nimages = len(tims)
+        assert(img_params.padpix.shape == (Nimages, pH, pW))
+        assert(img_params.padie.shape  == (Nimages, pH, pW))
 
-            assert(mods.shape == (Nimages,Nmods,pH,pW))
-            chisqs = np.zeros(Nmods, np.float32)
+        #print('idx', idx_grid)
+        #print('idy', idy_grid)
 
-            plt.clf()
+        assert(mods.shape == (Nimages,Nmods,pH,pW))
+        chisqs = np.zeros(Nmods, np.float32)
 
-            chia = dict(interpolation='nearest', origin='lower', vmin=-3, vmax=+3)
-            chi_work = cp.empty((pH, pW), np.float32)
-            for imod in range(Nmods):
-                for itim in range(Nimages):
-                    dx = idx_grid[itim, imod]
-                    dy = idy_grid[itim, imod]
+        plt.clf()
 
-                    plt.subplot(Nmods, Nimages, imod*Nimages + itim + 1)
-                    plt.title('dx,dy = %i,%i' % (dx, dy))
+        chia = dict(interpolation='nearest', origin='lower', vmin=-3, vmax=+3)
+        chi_work = cp.empty((pH, pW), np.float32)
+        for imod in range(Nmods):
+            for itim in range(Nimages):
+                dx = idx_grid[itim, imod]
+                dy = idy_grid[itim, imod]
 
-                    if dx == 0 and dy == 0:
-                        chisqs[imod] += cp.sum(((img_params.padpix[itim, ...] -
-                                                 mods[itim, imod, ...]) *
-                                                img_params.padie[itim, ...])**2)
-                        # DEBUG
-                        chi = (img_params.padpix[itim, ...] - mods[itim, imod, ...]) * img_params.padie[itim, ...]
-                        plt.imshow(chi, **chia)
-                        continue
-                    pix = img_params.padpix[itim, ...]
-                    ie  = img_params.padie [itim, ...]
-                    mod = mods[itim, imod, ...]
+                plt.subplot(Nmods, Nimages, imod*Nimages + itim + 1)
+                plt.title('dx,dy = %i,%i' % (dx, dy))
 
-                    if dx > 0:
-                        x_pix_slice = slice(dx, None)
-                        x_mod_slice = slice(-dx)
-                    elif dx == 0:
-                        x_pix_slice = slice(None)
-                        x_mod_slice = slice(None)
-                    else:
-                        x_pix_slice = slice(dx)
-                        x_mod_slice = slice(-dx, None)
+                if dx == 0 and dy == 0:
+                    chisqs[imod] += cp.sum(((img_params.padpix[itim, ...] -
+                                             mods[itim, imod, ...]) *
+                                            img_params.padie[itim, ...])**2)
+                    # DEBUG
+                    chi = (img_params.padpix[itim, ...] - mods[itim, imod, ...]) * img_params.padie[itim, ...]
+                    plt.imshow(chi, **chia)
+                    continue
+                pix = img_params.padpix[itim, ...]
+                ie  = img_params.padie [itim, ...]
+                mod = mods[itim, imod, ...]
 
-                    if dy > 0:
-                        y_pix_slice = slice(dy, None)
-                        y_mod_slice = slice(-dy)
-                    elif dy == 0:
-                        y_pix_slice = slice(None)
-                        y_mod_slice = slice(None)
-                    else:
-                        y_pix_slice = slice(dy)
-                        y_mod_slice = slice(-dy, None)
+                if dx > 0:
+                    x_pix_slice = slice(dx, None)
+                    x_mod_slice = slice(-dx)
+                elif dx == 0:
+                    x_pix_slice = slice(None)
+                    x_mod_slice = slice(None)
+                else:
+                    x_pix_slice = slice(dx)
+                    x_mod_slice = slice(-dx, None)
 
-                    chi_work[:,:] = pix
-                    chi_work[y_pix_slice, x_pix_slice] -= mod[y_mod_slice, x_mod_slice]
-                    chisqs[imod] += cp.sum((chi_work * ie)**2)
-                    #chi = (pix - mod) * ie
-                    #chisqs[imod] += cp.sum(((pix - mod) * ie).astype(cp.float64)**2)
-                    plt.imshow(chi_work, **chia)
-            ps.savefig()
+                if dy > 0:
+                    y_pix_slice = slice(dy, None)
+                    y_mod_slice = slice(-dy)
+                elif dy == 0:
+                    y_pix_slice = slice(None)
+                    y_mod_slice = slice(None)
+                else:
+                    y_pix_slice = slice(dy)
+                    y_mod_slice = slice(-dy, None)
 
-            #print('chisqs:', chisqs)
-            print('loglikes:', -0.5 * chisqs)
-            print('delta-lnls:', -0.5 * (chisqs[1:] - chisqs[0]))
+                chi_work[:,:] = pix
+                chi_work[y_pix_slice, x_pix_slice] -= mod[y_mod_slice, x_mod_slice]
+                chisqs[imod] += cp.sum((chi_work * ie)**2)
+                #chi = (pix - mod) * ie
+                #chisqs[imod] += cp.sum(((pix - mod) * ie).astype(cp.float64)**2)
+                plt.imshow(chi_work, **chia)
+        ps.savefig()
 
-        # PRIORS
-            
+        #print('chisqs:', chisqs)
+        print('loglikes:', -0.5 * chisqs)
+        print('delta-lnls:', -0.5 * (chisqs[1:] - chisqs[0]))
+
         return super(SmarterDenseOptimizer, self).tryUpdates(tr, X, **kwargs)
 
     def gpu_one_source_update(self, tr, priors=True, get_A=False, **kwargs):
@@ -710,10 +714,22 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         # and then running the in-place.
         padpsf = img_params.psf_pad
         nimg,h,w = padpsf.shape
-        G = cp.empty((nimg, 1, h, w), cp.float32)
-        G[:, 0, :, :] = padpsf
-        self.lanczos_shift_images_inplace_gpu(G, mux, muy)
-        return G
+
+        assert(mux.shape == muy.shape)
+        if len(mux.shape) == 1:
+            assert(len(mux) == nimg)
+            npro = 1
+            in_img = padpsf.reshape((nimg, npro, h, w))
+        else:
+            assert(len(mux.shape) == 2)
+            assert(mux.shape[0] == nimg)
+            _,npro = mux.shape
+            # hmmm, unnecessary copy...
+            #in_img = padpsf[:, cp.newaxis, :, :].reshape((nimg, npro, h, w))
+            in_img = padpsf[:, cp.newaxis, :, :].repeat(npro, axis=1)
+        out_img = cp.empty((nimg, npro, h, w), cp.float32)
+        self.lanczos_shift_images_gpu(in_img, out_img, mux, muy)
+        return out_img
 
     def gpu_get_unitflux_galaxy_profiles(self, mogs, img_params, mux, muy):
         '''
@@ -866,7 +882,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         assert(G.shape == (Nimages,Nprofiles,pH,pW))
 
         # FIXME -- check that this all remains float32 through the computations
-        self.lanczos_shift_images_inplace_gpu(G, mux, muy)
+        self.lanczos_shift_images_gpu(G, G, mux, muy)
 
         return G
 
@@ -942,12 +958,12 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         w = w.astype(cp.float32)
         return P, (cx, cy), (H, W), (v, w), psf_mogs, pad
 
-    def lanczos_shift_images_inplace_gpu(self, G, x, y, work=None):
+    def lanczos_shift_images_gpu(self, in_img, out_img, x, y, work=None):
         cp = self.cp
         '''
         Only vectorized in the specific way we need:
 
-        G images:
+        in_img images:
         (Nimages x Nmodels x H x W)
 
         x, y:
@@ -957,11 +973,14 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
         work:
         same shape as G; pre-allocated work array.
+
+        out_img can be = in_img for in-place shifting.
         '''
-        assert(len(G.shape) == 4)
+        assert(len(in_img.shape) == 4)
         if work is not None:
-            assert(work.shape == G.shape)
-        Nim, Nmod, H, W = G.shape
+            assert(work.shape == in_img.shape)
+        Nim, Nmod, H, W = in_img.shape
+        assert(out_img.shape == in_img.shape)
         assert(x.shape == y.shape)
 
         if len(x.shape) == 1:
@@ -977,23 +996,24 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
         fx = lanczos_filter(3, fx)
         fy = lanczos_filter(3, fy)
-        self.correlate7_2d_inplace_gpu(G, fx, fy, work=work)
+        self.correlate7_2d_gpu(in_img, out_img, fx, fy, work=work)
         del work
 
-    def correlate7_2d_inplace_gpu(self, G, fx, fy, work=None):
+    def correlate7_2d_gpu(self, in_img, out_img, fx, fy, work=None):
         cp = self.cp
         na = cp.newaxis
         if work is None:
-            work = cp.empty_like(G)
+            work = cp.empty_like(in_img)
         else:
             ## FIXME - only really need work array to be larger; use a view
-            assert(work.shape == G.shape)
+            assert(work.shape == in_img.shape)
 
         fx = cp.array(fx)
         fy = cp.array(fy)
 
-        assert(len(G.shape) == 4)
-        Nim,Nmod,H,W = G.shape
+        assert(len(in_img.shape) == 4)
+        Nim,Nmod,H,W = in_img.shape
+        assert(out_img.shape == in_img.shape)
 
         if len(fx.shape) == 2:
             assert(len(fx.shape) == 2)
@@ -1005,44 +1025,44 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             # Apply X filter
 
             # Special handling - left edge.
-            work[:, :, :, 0] = cp.sum(G[:, :, :, :4] * fx[:, na, na, 3:], axis=-1)
-            work[:, :, :, 1] = cp.sum(G[:, :, :, :5] * fx[:, na, na, 2:], axis=-1)
-            work[:, :, :, 2] = cp.sum(G[:, :, :, :6] * fx[:, na, na, 1:], axis=-1)
+            work[:, :, :, 0] = cp.sum(in_img[:, :, :, :4] * fx[:, na, na, 3:], axis=-1)
+            work[:, :, :, 1] = cp.sum(in_img[:, :, :, :5] * fx[:, na, na, 2:], axis=-1)
+            work[:, :, :, 2] = cp.sum(in_img[:, :, :, :6] * fx[:, na, na, 1:], axis=-1)
 
             # Special handling - right edge.
-            work[:, :, :, -1] = cp.sum(G[:, :, :, -4:] * fx[:, na, na, :4], axis=-1)
-            work[:, :, :, -2] = cp.sum(G[:, :, :, -5:] * fx[:, na, na, :5], axis=-1)
-            work[:, :, :, -3] = cp.sum(G[:, :, :, -6:] * fx[:, na, na, :6], axis=-1)
+            work[:, :, :, -1] = cp.sum(in_img[:, :, :, -4:] * fx[:, na, na, :4], axis=-1)
+            work[:, :, :, -2] = cp.sum(in_img[:, :, :, -5:] * fx[:, na, na, :5], axis=-1)
+            work[:, :, :, -3] = cp.sum(in_img[:, :, :, -6:] * fx[:, na, na, :6], axis=-1)
 
             # Middle
-            work[:, :, :, 3:-3]  = G[:, :, :,  :-6] * fx[:, na, na, na, 0]
-            work[:, :, :, 3:-3] += G[:, :, :, 1:-5] * fx[:, na, na, na, 1]
-            work[:, :, :, 3:-3] += G[:, :, :, 2:-4] * fx[:, na, na, na, 2]
-            work[:, :, :, 3:-3] += G[:, :, :, 3:-3] * fx[:, na, na, na, 3]
-            work[:, :, :, 3:-3] += G[:, :, :, 4:-2] * fx[:, na, na, na, 4]
-            work[:, :, :, 3:-3] += G[:, :, :, 5:-1] * fx[:, na, na, na, 5]
-            work[:, :, :, 3:-3] += G[:, :, :, 6:  ] * fx[:, na, na, na, 6]
+            work[:, :, :, 3:-3]  = in_img[:, :, :,  :-6] * fx[:, na, na, na, 0]
+            work[:, :, :, 3:-3] += in_img[:, :, :, 1:-5] * fx[:, na, na, na, 1]
+            work[:, :, :, 3:-3] += in_img[:, :, :, 2:-4] * fx[:, na, na, na, 2]
+            work[:, :, :, 3:-3] += in_img[:, :, :, 3:-3] * fx[:, na, na, na, 3]
+            work[:, :, :, 3:-3] += in_img[:, :, :, 4:-2] * fx[:, na, na, na, 4]
+            work[:, :, :, 3:-3] += in_img[:, :, :, 5:-1] * fx[:, na, na, na, 5]
+            work[:, :, :, 3:-3] += in_img[:, :, :, 6:  ] * fx[:, na, na, na, 6]
 
             # Apply Y filter
 
             # Special handling - bottom edge.
-            G[:, :, 0, :] = cp.sum(work[:, :, :4, :] * fy[:, na, 3:, na], axis=-2)
-            G[:, :, 1, :] = cp.sum(work[:, :, :5, :] * fy[:, na, 2:, na], axis=-2)
-            G[:, :, 2, :] = cp.sum(work[:, :, :6, :] * fy[:, na, 1:, na], axis=-2)
+            out_img[:, :, 0, :] = cp.sum(work[:, :, :4, :] * fy[:, na, 3:, na], axis=-2)
+            out_img[:, :, 1, :] = cp.sum(work[:, :, :5, :] * fy[:, na, 2:, na], axis=-2)
+            out_img[:, :, 2, :] = cp.sum(work[:, :, :6, :] * fy[:, na, 1:, na], axis=-2)
 
             # Special handling - top edge.
-            G[:, :, -1, :] = cp.sum(work[:, :, -4:, :] * fy[:, na, :4, na], axis=-2)
-            G[:, :, -2, :] = cp.sum(work[:, :, -5:, :] * fy[:, na, :5, na], axis=-2)
-            G[:, :, -3, :] = cp.sum(work[:, :, -6:, :] * fy[:, na, :6, na], axis=-2)
+            out_img[:, :, -1, :] = cp.sum(work[:, :, -4:, :] * fy[:, na, :4, na], axis=-2)
+            out_img[:, :, -2, :] = cp.sum(work[:, :, -5:, :] * fy[:, na, :5, na], axis=-2)
+            out_img[:, :, -3, :] = cp.sum(work[:, :, -6:, :] * fy[:, na, :6, na], axis=-2)
 
             # Middle
-            G[:, :, 3:-3, :]  = work[:, :,  :-6, :] * fy[:, na, na, 0, na]
-            G[:, :, 3:-3, :] += work[:, :, 1:-5, :] * fy[:, na, na, 1, na]
-            G[:, :, 3:-3, :] += work[:, :, 2:-4, :] * fy[:, na, na, 2, na]
-            G[:, :, 3:-3, :] += work[:, :, 3:-3, :] * fy[:, na, na, 3, na]
-            G[:, :, 3:-3, :] += work[:, :, 4:-2, :] * fy[:, na, na, 4, na]
-            G[:, :, 3:-3, :] += work[:, :, 5:-1, :] * fy[:, na, na, 5, na]
-            G[:, :, 3:-3, :] += work[:, :, 6:  , :] * fy[:, na, na, 6, na]
+            out_img[:, :, 3:-3, :]  = work[:, :,  :-6, :] * fy[:, na, na, 0, na]
+            out_img[:, :, 3:-3, :] += work[:, :, 1:-5, :] * fy[:, na, na, 1, na]
+            out_img[:, :, 3:-3, :] += work[:, :, 2:-4, :] * fy[:, na, na, 2, na]
+            out_img[:, :, 3:-3, :] += work[:, :, 3:-3, :] * fy[:, na, na, 3, na]
+            out_img[:, :, 3:-3, :] += work[:, :, 4:-2, :] * fy[:, na, na, 4, na]
+            out_img[:, :, 3:-3, :] += work[:, :, 5:-1, :] * fy[:, na, na, 5, na]
+            out_img[:, :, 3:-3, :] += work[:, :, 6:  , :] * fy[:, na, na, 6, na]
 
         else:
             assert(len(fx.shape) == 3)
@@ -1055,44 +1075,44 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             # Apply X filter
 
             # Special handling - left edge.
-            work[..., :, 0] = cp.sum(G[..., :, :4] * fx[..., na, 3:], axis=-1)
-            work[..., :, 1] = cp.sum(G[..., :, :5] * fx[..., na, 2:], axis=-1)
-            work[..., :, 2] = cp.sum(G[..., :, :6] * fx[..., na, 1:], axis=-1)
+            work[..., :, 0] = cp.sum(in_img[..., :, :4] * fx[..., na, 3:], axis=-1)
+            work[..., :, 1] = cp.sum(in_img[..., :, :5] * fx[..., na, 2:], axis=-1)
+            work[..., :, 2] = cp.sum(in_img[..., :, :6] * fx[..., na, 1:], axis=-1)
 
             # Special handling - right edge.
-            work[..., :, -1] = cp.sum(G[..., :, -4:] * fx[..., na, :4], axis=-1)
-            work[..., :, -2] = cp.sum(G[..., :, -5:] * fx[..., na, :5], axis=-1)
-            work[..., :, -3] = cp.sum(G[..., :, -6:] * fx[..., na, :6], axis=-1)
+            work[..., :, -1] = cp.sum(in_img[..., :, -4:] * fx[..., na, :4], axis=-1)
+            work[..., :, -2] = cp.sum(in_img[..., :, -5:] * fx[..., na, :5], axis=-1)
+            work[..., :, -3] = cp.sum(in_img[..., :, -6:] * fx[..., na, :6], axis=-1)
 
             # Middle
-            work[..., :, 3:-3]  = G[..., :,  :-6] * fx[..., na, na, 0]
-            work[..., :, 3:-3] += G[..., :, 1:-5] * fx[..., na, na, 1]
-            work[..., :, 3:-3] += G[..., :, 2:-4] * fx[..., na, na, 2]
-            work[..., :, 3:-3] += G[..., :, 3:-3] * fx[..., na, na, 3]
-            work[..., :, 3:-3] += G[..., :, 4:-2] * fx[..., na, na, 4]
-            work[..., :, 3:-3] += G[..., :, 5:-1] * fx[..., na, na, 5]
-            work[..., :, 3:-3] += G[..., :, 6:  ] * fx[..., na, na, 6]
+            work[..., :, 3:-3]  = in_img[..., :,  :-6] * fx[..., na, na, 0]
+            work[..., :, 3:-3] += in_img[..., :, 1:-5] * fx[..., na, na, 1]
+            work[..., :, 3:-3] += in_img[..., :, 2:-4] * fx[..., na, na, 2]
+            work[..., :, 3:-3] += in_img[..., :, 3:-3] * fx[..., na, na, 3]
+            work[..., :, 3:-3] += in_img[..., :, 4:-2] * fx[..., na, na, 4]
+            work[..., :, 3:-3] += in_img[..., :, 5:-1] * fx[..., na, na, 5]
+            work[..., :, 3:-3] += in_img[..., :, 6:  ] * fx[..., na, na, 6]
 
             # Apply Y filter
 
             # Special handling - bottom edge.
-            G[..., 0, :] = cp.sum(work[..., :4, :] * fy[..., 3:, na], axis=-2)
-            G[..., 1, :] = cp.sum(work[..., :5, :] * fy[..., 2:, na], axis=-2)
-            G[..., 2, :] = cp.sum(work[..., :6, :] * fy[..., 1:, na], axis=-2)
+            out_img[..., 0, :] = cp.sum(work[..., :4, :] * fy[..., 3:, na], axis=-2)
+            out_img[..., 1, :] = cp.sum(work[..., :5, :] * fy[..., 2:, na], axis=-2)
+            out_img[..., 2, :] = cp.sum(work[..., :6, :] * fy[..., 1:, na], axis=-2)
 
             # Special handling - top edge.
-            G[..., -1, :] = cp.sum(work[..., -4:, :] * fy[..., :4, na], axis=-2)
-            G[..., -2, :] = cp.sum(work[..., -5:, :] * fy[..., :5, na], axis=-2)
-            G[..., -3, :] = cp.sum(work[..., -6:, :] * fy[..., :6, na], axis=-2)
+            out_img[..., -1, :] = cp.sum(work[..., -4:, :] * fy[..., :4, na], axis=-2)
+            out_img[..., -2, :] = cp.sum(work[..., -5:, :] * fy[..., :5, na], axis=-2)
+            out_img[..., -3, :] = cp.sum(work[..., -6:, :] * fy[..., :6, na], axis=-2)
 
             # Middle
-            G[..., 3:-3, :]  = work[...,  :-6, :] * fy[..., na, 0, na]
-            G[..., 3:-3, :] += work[..., 1:-5, :] * fy[..., na, 1, na]
-            G[..., 3:-3, :] += work[..., 2:-4, :] * fy[..., na, 2, na]
-            G[..., 3:-3, :] += work[..., 3:-3, :] * fy[..., na, 3, na]
-            G[..., 3:-3, :] += work[..., 4:-2, :] * fy[..., na, 4, na]
-            G[..., 3:-3, :] += work[..., 5:-1, :] * fy[..., na, 5, na]
-            G[..., 3:-3, :] += work[..., 6:  , :] * fy[..., na, 6, na]
+            out_img[..., 3:-3, :]  = work[...,  :-6, :] * fy[..., na, 0, na]
+            out_img[..., 3:-3, :] += work[..., 1:-5, :] * fy[..., na, 1, na]
+            out_img[..., 3:-3, :] += work[..., 2:-4, :] * fy[..., na, 2, na]
+            out_img[..., 3:-3, :] += work[..., 3:-3, :] * fy[..., na, 3, na]
+            out_img[..., 3:-3, :] += work[..., 4:-2, :] * fy[..., na, 4, na]
+            out_img[..., 3:-3, :] += work[..., 5:-1, :] * fy[..., na, 5, na]
+            out_img[..., 3:-3, :] += work[..., 6:  , :] * fy[..., na, 6, na]
 
 # eg, lanczos_filter(3, -0.3 + np.arange(-3, +4))
 def lanczos_filter(order, x):
@@ -1240,12 +1260,12 @@ if __name__ == '__main__':
     gpos = GaiaPosition(ra_cen - 25.*arcsec, dec_cen, 2016.0, 0., 0., 0.)
     gal = ExpGalaxy(pos, brightness, shape)
     param_scales = [1./3600, 1./3600., 100., 100., 100., 1., 0.1, 0.1]
-    #ptsrc = PointSource(pos, brightness)
-    #param_scales = [1./3600, 1./3600, 100., 100., 100]
+    ptsrc = PointSource(pos, brightness)
+    param_scales = [1./3600, 1./3600, 100., 100., 100]
     #gal = ExpGalaxy(gpos, brightness, shape)
     #param_scales = [100., 100., 100., 1., 0.1, 0.1]
-    cat = [gal]
-    #cat = [ptsrc]
+    #cat = [gal]
+    cat = [ptsrc]
 
     psf = NormalizedPixelizedPsfEx(os.path.join(os.path.dirname(os.path.dirname(__file__)),
                                         'test',
