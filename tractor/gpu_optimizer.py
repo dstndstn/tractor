@@ -223,8 +223,10 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         muy_grid = np.zeros((len(tims), len(steps)), np.float32)
 
         Nmods = len(steps)
+        logpriors = np.zeros(Nmods, np.float32)
         for istep, (_, p, _, _) in enumerate(steps):
             tr.setParams(p)
+            logpriors[istep] = tr.getLogPrior()
 
             # Pixel positions
             pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
@@ -290,9 +292,11 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                     plt.title('dx,dy = %i,%i' % (dx, dy))
 
                     if dx == 0 and dy == 0:
+                        chisqs[imod] += cp.sum(((img_params.padpix[itim, ...] -
+                                                 mods[itim, imod, ...]) *
+                                                img_params.padie[itim, ...])**2)
                         # DEBUG
                         chi = (img_params.padpix[itim, ...] - mods[itim, imod, ...]) * img_params.padie[itim, ...]
-                        chisqs[imod] += cp.sum(((img_params.padpix[itim, ...] - mods[itim, imod, ...]) * img_params.padie[itim, ...])**2)
                         plt.imshow(chi, **chia)
                         continue
                     pix = img_params.padpix[itim, ...]
@@ -324,7 +328,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                     chisqs[imod] += cp.sum((chi_work * ie)**2)
                     #chi = (pix - mod) * ie
                     #chisqs[imod] += cp.sum(((pix - mod) * ie).astype(cp.float64)**2)
-                    plt.imshow(chi, **chia)
+                    plt.imshow(chi_work, **chia)
             ps.savefig()
 
             #print('chisqs:', chisqs)
@@ -714,8 +718,16 @@ class GpuOptimizer(GpuFriendlyOptimizer):
     def gpu_get_unitflux_galaxy_profiles(self, mogs, img_params, mux, muy):
         '''
         Computes galaxy profiles for a grid of Nimages x Nprofiles.
-        "img_params" contains (padded) image pixels and processed PSFs; Nimages in size.
-        "mogs" gives the galaxy (mixture-of-Gaussian) profiles, for the grid of Nimages x Nprofiles.
+
+        "img_params" contains (padded) image pixels and processed PSFs;
+        Nimages in size.
+
+        "mogs" gives the galaxy (mixture-of-Gaussian) profiles, for the
+        grid of (Nimages x Nprofiles).
+
+        "mux" and "muy" are sub-pixel shifts, and are each either of
+        length Nimages, or size (Nimage x Nprofiles); they just get
+        passed to the Lanczos method which can handle either.
         '''
         cp = self.cp
         # mogs[image][profile] = mog
