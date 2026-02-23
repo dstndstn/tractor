@@ -252,7 +252,12 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 for itim,(tim,x,y) in enumerate(zip(tims, px, py)):
                     mogs[itim].append(src._getShearedProfile(tim,x,y))
 
-            print('model', istep, ': log-prob', tr.getLogLikelihood())
+            #print('model', istep, ': log-prob', tr.getLogLikelihood())
+            lnl = tr.getLogLikelihood()
+            if istep == 0:
+                lnl0 = lnl
+            else:
+                print('model', istep, ': delta-lnl', lnl-lnl0)
         tr.setParams(p0)
 
         if is_galaxy:
@@ -275,6 +280,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             plt.clf()
 
             chia = dict(interpolation='nearest', origin='lower', vmin=-3, vmax=+3)
+            chi_work = cp.empty((pH, pW), np.float32)
             for imod in range(Nmods):
                 for itim in range(Nimages):
                     dx = idx_grid[itim, imod]
@@ -292,29 +298,38 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                     pix = img_params.padpix[itim, ...]
                     ie  = img_params.padie [itim, ...]
                     mod = mods[itim, imod, ...]
+
                     if dx > 0:
-                        pix = pix[..., dx:]
-                        ie  = ie [..., dx:]
-                        mod = mod[..., :-dx]
-                    elif dx < 0:
-                        pix = pix[..., :dx]
-                        ie  = ie [..., :dx]
-                        mod = mod[..., -dx:]
+                        x_pix_slice = slice(dx, None)
+                        x_mod_slice = slice(-dx)
+                    elif dx == 0:
+                        x_pix_slice = slice(None)
+                        x_mod_slice = slice(None)
+                    else:
+                        x_pix_slice = slice(dx)
+                        x_mod_slice = slice(-dx, None)
+
                     if dy > 0:
-                        pix = pix[..., dy:, :]
-                        ie  = ie [..., dy:, :]
-                        mod = mod[..., :-dy, :]
-                    elif dy < 0:
-                        pix = pix[..., :dy, :]
-                        ie  = ie [..., :dy, :]
-                        mod = mod[..., -dy:, :]
-                    chi = (pix - mod) * ie
-                    chisqs[imod] += cp.sum(((pix - mod) * ie)**2)
+                        y_pix_slice = slice(dy, None)
+                        y_mod_slice = slice(-dy)
+                    elif dy == 0:
+                        y_pix_slice = slice(None)
+                        y_mod_slice = slice(None)
+                    else:
+                        y_pix_slice = slice(dy)
+                        y_mod_slice = slice(-dy, None)
+
+                    chi_work[:,:] = pix
+                    chi_work[y_pix_slice, x_pix_slice] -= mod[y_mod_slice, x_mod_slice]
+                    chisqs[imod] += cp.sum((chi_work * ie)**2)
+                    #chi = (pix - mod) * ie
+                    #chisqs[imod] += cp.sum(((pix - mod) * ie).astype(cp.float64)**2)
                     plt.imshow(chi, **chia)
             ps.savefig()
-                    
-            print('chisqs:', chisqs)
-            print('logprobs:', -0.5 * chisqs)
+
+            #print('chisqs:', chisqs)
+            print('loglikes:', -0.5 * chisqs)
+            print('delta-lnls:', -0.5 * (chisqs[1:] - chisqs[0]))
 
         # PRIORS
             
