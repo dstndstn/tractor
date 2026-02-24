@@ -23,6 +23,7 @@ def logverb(*args):
 debug = logverb
 def logmsg(*args):
     logger.info(' '.join(map(str, args)))
+info = logmsg
 def isverbose():
     return logger.isEnabledFor(logging.DEBUG)
 
@@ -167,8 +168,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 goodtims.append(tim)
                 goodmasks.append(mask)
             if len(goodtims) == 0:
-                info('After removing None modelMasks, no images remain!')
-                return None,None
+                debug('After removing None modelMasks, no images remain!')
+                return None, None
             debug('Cut from %i to %i images with good modelMasks' % (len(tr.images), len(goodtims)))
             tims = goodtims
             masks = goodmasks
@@ -632,6 +633,9 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             colscales = cp.get(colscales)
             I = np.flatnonzero(colscales)
             debug('non-zero indices:', I)
+            if len(I) == 0:
+                debug('All derivatives are zero.')
+                return None
             debug('src_to_fit_param:', src_to_fit_param)
             debug('fit_to_src_param:', fit_to_src_param)
             new_fit_to_src_param = {}
