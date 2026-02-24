@@ -269,7 +269,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         else:
             mods = self.gpu_get_unitflux_galaxy_profiles(mogs, img_params,
                                                          mux_grid, muy_grid)
-        mods *= counts_grid[..., na, na]
+        mods *= cp.array(counts_grid[..., na, na])
 
         # mods shape: Nimages x Nmod x pH x pW
         pH, pW = img_params.pH, img_params.pW
@@ -329,7 +329,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 chisqs[imod] += cp.sum((chi_work * ie)**2)
                 #chi = (pix - mod) * ie
                 #chisqs[imod] += cp.sum(((pix - mod) * ie).astype(cp.float64)**2)
-                plt.imshow(chi_work, **chia)
+                #plt.imshow(chi_work, **chia)
         #ps.savefig()
 
         #print('chisqs:', chisqs)
