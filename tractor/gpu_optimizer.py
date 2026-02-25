@@ -1,8 +1,6 @@
 import time
 
 import numpy as np
-#from cupy_wrapper import cp
-#import cupy as cp
 
 from tractor.smarter_dense_optimizer import SmarterDenseOptimizer
 from tractor import ProfileGalaxy, HybridPSF, ConstantSky, PointSource
@@ -39,8 +37,12 @@ class GpuFriendlyOptimizer(SmarterDenseOptimizer):
 
     def getLinearUpdateDirection(self, tr, priors=True, get_icov=False, **kwargs):
         if not (tr.isParamFrozen('images') and
-            (len(tr.catalog) == 1) and
-            isinstance(tr.catalog[0], (ProfileGalaxy, PointSource))):
+                (((len(tr.catalog) == 1) and
+                  isinstance(tr.catalog[0], (ProfileGalaxy, PointSource))) or
+                 ((len(tr.catalog) == 2) and
+                  isinstance(tr.catalog[0], (ProfileGalaxy, PointSource)) and
+                  isinstance(tr.catalog[1], ConstantSurfaceBrightness))
+                 )):
             print('GpuFriendlyOptimizer: falling back to super')
             return super().getLinearUpdateDirection(tr, priors=priors, get_icov=get_icov,
                                                     **kwargs)
@@ -150,15 +152,20 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         nu = cp.newaxis
 
         t0 = time.time()
-        # Assume single source
-        assert(len(tr.catalog) == 1)
+        # Assume single source, optionally with constant surf brightness
+        assert(len(tr.catalog) in [1,2])
         tims = tr.images
 
         # Assume galaxy or point source
         src = tr.catalog[0]
         is_galaxy = isinstance(src, ProfileGalaxy)
         is_psf = isinstance(src, PointSource)
-        assert(isinstance(src, (ProfileGalaxy, PointSource)))
+        assert(is_galaxy or is_psf)
+
+        sb = None
+        if len(tr.catalog) == 2:
+            sb = tr.catalog[1]
+            assert(isinstance(sb, ConstantSurfaceBrightness))
 
         # Assume model masks are set (ie, pixel ROIs of interest are defined)
         #masks = [tr._getModelMaskByIdx(i, src) for i in range(len(tr.images))]
@@ -276,7 +283,18 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             Nshapes = (Nprofiles - 1)
         else:
             Nshapes = 0
-        Nderivs = Nshapes + Npos + Nbands
+
+        Nsb = 0
+        if sb:
+            sb_counts = np.array([tim.getPhotoCal().brightnessToCounts(sb.brightness)
+                                  for tim in tims])
+            # formally, only pixscale_at(x,y) is defined in ducks.py....
+            pixscales = np.array([tim.getWcs().pixel_scale()
+                                  for tim in tims])
+            sb_counts_per_pix = cp.array(sb_counts * pixscales**2)
+            Nsb = Nbands
+
+        Nderivs = Npos + Nbands + Nshapes + Nsb
 
         # We'll need both directions of the mapping between
         # source parameter index and index in our A matrix
@@ -284,6 +302,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         # List of (source parameter index, A matrix index)
         # This is baking in the assumption that source parameters are in the order:
         # pos, brightness, shape
+        # this is in the (source, fitting) order
         param_indices = []
         if Npos:
             param_indices.append((0,0))
@@ -293,6 +312,15 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 param_indices.append((Npos + i, Npos + tim_ubands.index(band)))
         for i in range(Nshapes):
             param_indices.append((Npos + len(src_bands) + i, Npos + Nbands + i))
+        N_sb_bands = 0
+        if sb:
+            sb_bands = sb.brightness.getParamNames()
+            N_sb_bands = len(sb_bands)
+            for i,band in enumerate(sb_bands):
+                if band in tim_ubands:
+                    param_indices.append((Npos + len(src_bands) + Nshapes + i,
+                                          Npos + Nbands + Nshapes + tim_ubands.index(band)))
+                    #print('SB band', band, ': added (source, fit) pair', param_indices[-1])
         # Mappings between the parameters we're going to fit for (fit params)
         # and source parameters (src params).  Eg, a source might have a flux
         # parameter that is not constrained by the images we are fitting.
@@ -351,7 +379,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         for i in range(Nimages):
             # Image i fills in the column corresponding to its flux
             # and a block of rows corresponding to its pixels.
-            col = tim_band_index[i] + Npos
+            col = Npos + tim_band_index[i]
             A[i * pH*pW: (i+1) * pH*pW, col] = (G[i, 0, :, :] * padie[i, :, :]).ravel()
         # We *could* form the *col* into an array and do this as a
         # one-liner; not sure that would be faster.
@@ -373,7 +401,20 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                                                      steps[:, i, nu, nu] *
                                                      padie).ravel()
 
-        B[:Npix_total] = ((padpix - fluxes[:, nu, nu] * G[:, 0, :, :]) * padie).ravel()
+        if sb:
+            # Surface-brightness derivatives.
+            for i in range(Nimages):
+                # Image i fills in the column corresponding to its sb flux
+                # and a block of rows corresponding to its pixels.
+                col = Npos + Nbands + Nshapes + tim_band_index[i]
+                A[i * pH*pW: (i+1) * pH*pW, col] = 1./pixscales[i]
+
+        if sb:
+            # add current surface brightnesses to the model
+            B[:Npix_total] = ((padpix - (fluxes[:, nu, nu] * G[:, 0, :, :] + sb_counts_per_pix[:, nu, nu]))
+                              * padie).ravel()
+        else:
+            B[:Npix_total] = ((padpix - fluxes[:, nu, nu] * G[:, 0, :, :]) * padie).ravel()
 
         if Npriors > 0:
             rA, cA, vA, pb, mub = priorVals
@@ -408,14 +449,14 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             colscales = cp.array(colscales)
 
         A /= colscales[nu, :]
-
-        X,_,_,_ = cp.linalg.lstsq(A, B)
+        X,_,_,_ = cp.linalg.lstsq(A, B, rcond=None)
         X /= colscales
 
         X = cp.get(X)
-        # Parameter indices in src of our vector X:
+        # Parameter indices in the tractor params of our vector X:
         I = np.array([fit_to_src_param[i] for i in range(len(X))])
-        sX = np.zeros(src.numberOfParams(), np.float32)
+        # The vector we're going to return:
+        sX = np.zeros(src.numberOfParams() + N_sb_bands, np.float32)
         sX[I] = X
 
         if get_A:
