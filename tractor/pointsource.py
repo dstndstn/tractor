@@ -138,14 +138,15 @@ class PointSource(MultiParams, SingleProfileSource):
         pos_frozen = self.isParamFrozen('pos') or (self.pos.numberOfParams() == 0)
         bright_frozen = self.isParamFrozen('brightness')
 
-        counts0 = img.getPhotoCal().brightnessToCounts(self.brightness)
+        photo = img.getPhotoCal()
+        counts0 = photo.brightnessToCounts(self.brightness)
         if pos_frozen and not bright_frozen:
             bsteps = self.brightness.getStepSizes(img)
             bvals = self.brightness.getParams()
             allzero = True
             for i, bstep in enumerate(bsteps):
                 oldval = self.brightness.setParam(i, bvals[i] + bstep)
-                countsi = img.getPhotoCal().brightnessToCounts(self.brightness)
+                countsi = photo.brightnessToCounts(self.brightness)
                 self.brightness.setParam(i, oldval)
                 if countsi != counts0:
                     allzero = False
@@ -229,9 +230,12 @@ class PointSource(MultiParams, SingleProfileSource):
             bvals = self.brightness.getParams()
             for i, bstep in enumerate(bsteps):
                 oldval = self.brightness.setParam(i, bvals[i] + bstep)
-                countsi = img.getPhotoCal().brightnessToCounts(self.brightness)
+                countsi = photo.brightnessToCounts(self.brightness)
                 self.brightness.setParam(i, oldval)
-                df = patch0 * ((countsi - counts0) / bstep)
-                df.setName('d(ptsrc)/d(bright%i)' % i)
+                if countsi == counts0:
+                    df = None
+                else:
+                    df = patch0 * ((countsi - counts0) / bstep)
+                    df.setName('d(ptsrc)/d(bright%i)' % i)
                 derivs.append(df)
         return derivs

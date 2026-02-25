@@ -41,6 +41,7 @@ class GpuFriendlyOptimizer(SmarterDenseOptimizer):
         if not (tr.isParamFrozen('images') and
             (len(tr.catalog) == 1) and
             isinstance(tr.catalog[0], (ProfileGalaxy, PointSource))):
+            print('GpuFriendlyOptimizer: falling back to super')
             return super().getLinearUpdateDirection(tr, priors=priors, get_icov=get_icov,
                                                     **kwargs)
         assert(get_icov == False)
@@ -824,29 +825,31 @@ if __name__ == '__main__':
     from tractor.utils import _GaussianPriors
     from tractor import NanoMaggies, LinearPhotoCal
     from tractor.patch import ModelMask
+    from tractor.basics import ConstantSurfaceBrightness
     from tractor import ParamList
     import os
     import pylab as plt
     from astrometry.util.util import Tan
 
-    #from cupy_wrapper import cp
-    import pickle
+    from cupy_wrapper import cp
 
-    opt = GpuOptimizer('cupy')
-    s = pickle.dumps(opt)
-    opt2 = pickle.loads(s)
-
-    print('Opt:', opt, opt.cp)
-    print('Opt2:', opt2, opt2.cp)
-
-    opt = GpuOptimizer('numpy')
-    s = pickle.dumps(opt)
-    opt2 = pickle.loads(s)
-    
-    print('Opt:', opt, opt.cp)
-    print('Opt2:', opt2, opt2.cp)
-
-    sys.exit(0)
+    # import pickle
+    # 
+    # opt = GpuOptimizer('cupy')
+    # s = pickle.dumps(opt)
+    # opt2 = pickle.loads(s)
+    # 
+    # print('Opt:', opt, opt.cp)
+    # print('Opt2:', opt2, opt2.cp)
+    # 
+    # opt = GpuOptimizer('numpy')
+    # s = pickle.dumps(opt)
+    # opt2 = pickle.loads(s)
+    # 
+    # print('Opt:', opt, opt.cp)
+    # print('Opt2:', opt2, opt2.cp)
+    # 
+    # sys.exit(0)
     
     def difference(x1, x2):
         return np.sum(np.abs(x1 - x2) / np.maximum(1e-16, (np.abs(x1) + np.abs(x2)) / 2.))
@@ -948,8 +951,17 @@ if __name__ == '__main__':
     param_scales = [1./3600, 1./3600, 100., 100., 100]
     #gal = ExpGalaxy(gpos, brightness, shape)
     #param_scales = [100., 100., 100., 1., 0.1, 0.1]
+
+    b2 = NanoMaggies(g=20., r=40., z=60.)
+    sb = ConstantSurfaceBrightness(b2)
+    param_scales += [5.] * sb.numberOfParams()
+
+    print('SB:', sb)
+
     #cat = [gal]
-    cat = [ptsrc]
+    cat = [ptsrc, sb]
+
+    true_cat = [s.copy() for s in cat]
 
     psf = NormalizedPixelizedPsfEx(os.path.join(os.path.dirname(os.path.dirname(__file__)),
                                         'test',
@@ -973,6 +985,7 @@ if __name__ == '__main__':
                 )
     tr = Tractor([tim1], cat)
     mod = tr.getModelImage(0)
+    print('mod 1: min value is', mod.min())
     noisy1 = mod + np.random.normal(scale=sig1, size=(h,w))
     tim1.data = noisy1
 
@@ -1000,15 +1013,24 @@ if __name__ == '__main__':
     tr.freezeParam('images')
 
     mod2 = tr.getModelImage(tim2)
+    print('mod 2: min value is', mod2.min())
     noisy2 = mod2 + np.random.normal(scale=sig2, size=(h2,w2))
     tim2.data = noisy2
 
     true_params = np.array(tr.getParams())
 
-    ## FIXME -- move initial params away from truth!
+    print('True source parameters:')
+    for src in cat:
+        print('  ', src)
+
+    ## move initial params away from truth!
 
     p0 = tr.getParams() + np.random.normal(size=len(param_scales)) * np.array(param_scales)
     tr.setParams(p0)
+
+    print('Perturbed source parameters:')
+    for src in cat:
+        print('  ', src)
 
     print('Opt', tr.optimizer)
 
@@ -1022,7 +1044,8 @@ if __name__ == '__main__':
     tr.setParams(p0)
 
     src = cat[0]
-    tr.setModelMasks([{src: ModelMask(110, 10, 80, 80),}
+    mm = ModelMask(110, 10, 80, 80)
+    tr.setModelMasks([dict([(s,mm) for s in cat])
                       for tim in tr.images])
 
     up0m = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
@@ -1080,12 +1103,16 @@ if __name__ == '__main__':
     plt.clf()
     plt.subplot(2,3,1)
     plt.imshow(mod1, **ima)
+    plt.colorbar()
     plt.subplot(2,3,4)
     plt.imshow(mod2, **ima)
+    plt.colorbar()
     plt.subplot(2,3,2)
     plt.imshow(tim1.getImage(), **ima)
+    plt.colorbar()
     plt.subplot(2,3,5)
     plt.imshow(tim2.getImage(), **ima)
+    plt.colorbar()
     plt.subplot(2,3,3)
     plt.imshow((tim1.getImage() - mod1) * tim1.getInvError(), **chima)
     plt.subplot(2,3,6)
@@ -1095,18 +1122,24 @@ if __name__ == '__main__':
     tr.optimize_loop(**optargs)
 
     print('After optimization:', tr.catalog[0])
+    for src in tr.catalog:
+        print('  ', src)
 
     mod1 = tr.getModelImage(0)
     mod2 = tr.getModelImage(1)
     plt.clf()
     plt.subplot(2,3,1)
     plt.imshow(mod1, **ima)
+    plt.colorbar()
     plt.subplot(2,3,4)
     plt.imshow(mod2, **ima)
+    plt.colorbar()
     plt.subplot(2,3,2)
     plt.imshow(tim1.getImage(), **ima)
+    plt.colorbar()
     plt.subplot(2,3,5)
     plt.imshow(tim2.getImage(), **ima)
+    plt.colorbar()
     plt.subplot(2,3,3)
     plt.imshow((tim1.getImage() - mod1) * tim1.getInvError(), **chima)
     plt.subplot(2,3,6)

@@ -30,7 +30,98 @@ from tractor.brightness import (Mag, Flux, Mags, Fluxes, NanoMaggies,
 from tractor.pointsource import BasicSource, SingleProfileSource, PointSource
 from tractor.shifted import (ParamsWrapper, ShiftedPsf, ScaledPhotoCal,
                              ScaledWcs, ShiftedWcs)
+from tractor.ducks import Source
 
+class ConstantSurfaceBrightness(MultiParams, Source):
+    '''
+    This is a source that represents a constant surface brightness / background level.
+
+    The brightness is in per-square-arcsec units.
+    '''
+    def __init__(self, br):
+        '''
+        ConstantSurfaceBrightness(pos, brightness)
+        '''
+        super(ConstantSurfaceBrightness, self).__init__(br)
+
+    #def copy(self):
+
+    @staticmethod
+    def getNamedParams():
+        return dict(brightness=0)
+
+    def getSourceType(self):
+        return 'ConstantSurfaceBrightness'
+
+    def __str__(self):
+        return self.getSourceType() + ': ' + str(self.brightness) + ' mag/arcsec^2'
+
+    def __repr__(self):
+        return self.getSourceType() + '(' + repr(self.brightness) + ')'
+
+    def getModelPatch(self, img, modelMask=None, **kwargs):
+        if modelMask is None:
+            mh,mw = img.shape
+            mx0,my0 = 0,0
+        else:
+            mh,mw = modelMask.shape
+            mx0,my0 = modelMask.x0, modelMask.y0
+        cx,cy = mx0 + mw/2, my0 + mh/2
+        pixscale = img.getWcs().pixscale_at(cx, cy)
+        # this is in per-square-arcsec
+        counts = img.getPhotoCal().brightnessToCounts(self.brightness)
+        #print('csb: pixscale=', pixscale, 'counts=', counts, 'sb=', counts*pixscale**2)
+        # convert to counts-per-pixel
+        counts *= pixscale**2
+        ## FIXME -- we could return a duck-typed Patch that doesn't
+        ## actually contain this array of pixels!!
+        mod = np.empty((mh, mw), np.float32)
+        mod[:,:] = counts
+        return Patch(mx0, my0, mod)
+
+    def getParamDerivatives(self, img, modelMask=None, **kwargs):
+        bright_frozen = self.isParamFrozen('brightness')
+        if bright_frozen:
+            # (just [], no?)
+            return [None] * self.numberOfParams()
+
+        photo = img.getPhotoCal()
+        counts0 = photo.brightnessToCounts(self.brightness)
+        bsteps = self.brightness.getStepSizes(img)
+        bvals = self.brightness.getParams()
+        scales = np.zeros(len(bsteps), np.float32)
+        for i, bstep in enumerate(bsteps):
+            oldval = self.brightness.setParam(i, bvals[i] + bstep)
+            countsi = photo.brightnessToCounts(self.brightness)
+            self.brightness.setParam(i, oldval)
+            if countsi == counts0:
+                scales[i] = 0
+            else:
+                scales[i] = (countsi - counts0) / bstep
+        if np.all(scales == 0):
+            return [None] * len(scales)
+
+        if modelMask is None:
+            mh,mw = img.shape
+            mx0,my0 = 0,0
+        else:
+            mh,mw = modelMask.shape
+            mx0,my0 = modelMask.x0, modelMask.y0
+        cx,cy = mx0 + mw/2, my0 + mh/2
+        pixscale = img.getWcs().pixscale_at(cx, cy)
+
+        mod = np.empty((mh, mw), np.float32)
+        mod[:,:] = pixscale**2
+
+        derivs = []
+        for i,s in enumerate(scales):
+            if s == 0:
+                derivs.append(None)
+                continue
+            df = Patch(mx0, my0, mod * s)
+            df.setName('d(ptsrc)/d(bright%i)' % i)
+            derivs.append(df)
+        return derivs
 
 class TractorWCSWrapper(object):
     '''
