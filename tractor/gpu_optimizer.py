@@ -5,6 +5,7 @@ import numpy as np
 from tractor.smarter_dense_optimizer import SmarterDenseOptimizer
 from tractor import ProfileGalaxy, HybridPSF, ConstantSky, PointSource
 from tractor.brightness import LinearPhotoCal
+from tractor.basics import ConstantSurfaceBrightness
 
 '''
 TO-DO:
@@ -40,10 +41,15 @@ class GpuFriendlyOptimizer(SmarterDenseOptimizer):
                 (((len(tr.catalog) == 1) and
                   isinstance(tr.catalog[0], (ProfileGalaxy, PointSource))) or
                  ((len(tr.catalog) == 2) and
-                  isinstance(tr.catalog[0], (ProfileGalaxy, PointSource)) and
+                  isinstance(tr.catalog[0], (ProfileGalaxy, PointSource, type(None))) and
                   isinstance(tr.catalog[1], ConstantSurfaceBrightness))
                  )):
-            print('GpuFriendlyOptimizer: falling back to super')
+            print('GpuFriendlyOptimizer: falling back to super.  Images frozen: %s, Cat len: %i' %
+                  (tr.isParamFrozen('images'), len(tr.catalog)))
+            for src in tr.catalog:
+                print('  src', src, 'is gal/psf: %s; is CSB: %s' %
+                      (isinstance(src, (ProfileGalaxy, PointSource)),
+                       isinstance(src, ConstantSurfaceBrightness)))
             return super().getLinearUpdateDirection(tr, priors=priors, get_icov=get_icov,
                                                     **kwargs)
         assert(get_icov == False)
@@ -156,16 +162,20 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         assert(len(tr.catalog) in [1,2])
         tims = tr.images
 
-        # Assume galaxy or point source
+        # Assume galaxy or point source, or None (when we're fitting no-source + SB)
         src = tr.catalog[0]
         is_galaxy = isinstance(src, ProfileGalaxy)
         is_psf = isinstance(src, PointSource)
-        assert(is_galaxy or is_psf)
+        is_none = (src is None)
+        assert(is_galaxy or is_psf or is_none)
 
         sb = None
         if len(tr.catalog) == 2:
             sb = tr.catalog[1]
             assert(isinstance(sb, ConstantSurfaceBrightness))
+        if is_none:
+            assert(sb)
+            # ... otherwise, what are we doing?
 
         # Assume model masks are set (ie, pixel ROIs of interest are defined)
         #masks = [tr._getModelMaskByIdx(i, src) for i in range(len(tr.images))]
@@ -190,28 +200,33 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
         Nimages = len(tims)
         extents = [mm.extent for mm in masks]
+        x0, x1, y0, y1 = np.asarray(extents).T
 
-        # Pixel positions
-        pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
-               for tim in tims]
-        px, py = np.array(pxy, dtype=np.float32).T
+        if src:
+            # Pixel positions
+            pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
+                   for tim in tims]
+            px, py = np.array(pxy, dtype=np.float32).T
+            # WCS inv(CD) matrix
+            img_cdi = [tim.getWcs().cdInverseAtPixel(x,y) for tim,x,y in zip(tims, px, py)]
+            # Current counts
+            img_counts = [tim.getPhotoCal().brightnessToCounts(src.brightness)
+                          for tim in tims]
+            src_bands = src.getBrightness().getParamNames()
+            fluxes = cp.array(img_counts)
+        else:
+            # fake source position in middle of modelMasks
+            px = (x0+x1)/2.
+            py = (y0+y1)/2.
+            src_bands = []
         # Round source pixel position to nearest integer
         ipx = px.round().astype(np.int32)
         ipy = py.round().astype(np.int32)
-
-        # WCS inv(CD) matrix
-        img_cdi = [tim.getWcs().cdInverseAtPixel(x,y) for tim,x,y in zip(tims, px, py)]
-        # Current counts
-        img_counts = [tim.getPhotoCal().brightnessToCounts(src.brightness)
-                      for tim in tims]
-        src_bands = src.getBrightness().getParamNames()
-
         ## FIXME -- this should be based on *SOURCE* properties as well, no?
         ## Here, we're basically just rounding up the modelMask size.
         ## This affects which terms in the Gaussian mixture model of the galaxy
         ## profile get rendered with FFT vs Gaussians.
         ## FIXME -- used to have PSF size included in this mix...
-        x0, x1, y0, y1 = np.asarray(extents).T
         halfsize = np.max(([(x1-x0)/2, (y1-y0)/2,
                             1+px-x0, 1+x1-px, 1+py-y0, 1+y1-py]))
         #psfH//2, psfW//2]))
@@ -236,8 +251,9 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         if is_galaxy:
             # Render galaxy profiles for shape derivatives
             G = self.gpu_get_unitflux_galaxy_profiles(mogs, img_params, mux, muy)
-        else:
+        elif is_psf:
             G = self.gpu_get_unitflux_psf(img_params, mux, muy)
+
         # import pylab as plt
         # cG = G.get()
         # plt.clf()
@@ -263,7 +279,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
         # We have either RaDecPos or GaiaPositions for the pos -- 2 or 0 params.
         Npos = 0
-        if src.isParamThawed('pos'):
+        if src and src.isParamThawed('pos'):
             Npos = src.pos.numberOfParams()
         #print('Source position parameters:', Npos)
         assert(Npos in [0, 2])
@@ -294,6 +310,9 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             sb_counts_per_pix = cp.array(sb_counts * pixscales**2)
             Nsb = Nbands
 
+        if is_none:
+            Nbands = 0
+
         Nderivs = Npos + Nbands + Nshapes + Nsb
 
         # We'll need both directions of the mapping between
@@ -320,7 +339,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 if band in tim_ubands:
                     param_indices.append((Npos + len(src_bands) + Nshapes + i,
                                           Npos + Nbands + Nshapes + tim_ubands.index(band)))
-                    #print('SB band', band, ': added (source, fit) pair', param_indices[-1])
+
         # Mappings between the parameters we're going to fit for (fit params)
         # and source parameters (src params).  Eg, a source might have a flux
         # parameter that is not constrained by the images we are fitting.
@@ -328,7 +347,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         fit_to_src_param = dict([(f,s) for s,f in param_indices])
 
         assert(all([isinstance(tim.getPhotoCal(), LinearPhotoCal) for tim in tims]))
-        fluxes = cp.array(img_counts)
         padie = img_params.padie
         padpix = img_params.padpix
         Npix_total = Nimages * pH * pW
@@ -375,14 +393,15 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                                  (dx * cdi[:, 0, 1][:, nu, nu] +
                                   dy * cdi[:, 1, 1][:, nu, nu]) * padie).ravel()
 
-        # Flux derivatives.
-        for i in range(Nimages):
-            # Image i fills in the column corresponding to its flux
-            # and a block of rows corresponding to its pixels.
-            col = Npos + tim_band_index[i]
-            A[i * pH*pW: (i+1) * pH*pW, col] = (G[i, 0, :, :] * padie[i, :, :]).ravel()
-        # We *could* form the *col* into an array and do this as a
-        # one-liner; not sure that would be faster.
+        if src:
+            # Flux derivatives.
+            for i in range(Nimages):
+                # Image i fills in the column corresponding to its flux
+                # and a block of rows corresponding to its pixels.
+                col = Npos + tim_band_index[i]
+                A[i * pH*pW: (i+1) * pH*pW, col] = (G[i, 0, :, :] * padie[i, :, :]).ravel()
+            # We *could* form the *col* into an array and do this as a
+            # one-liner; not sure that would be faster.
 
         if is_galaxy:
             # Shape derivatives.
@@ -409,10 +428,12 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 col = Npos + Nbands + Nshapes + tim_band_index[i]
                 A[i * pH*pW: (i+1) * pH*pW, col] = 1./pixscales[i]
 
-        if sb:
+        if sb and src:
             # add current surface brightnesses to the model
             B[:Npix_total] = ((padpix - (fluxes[:, nu, nu] * G[:, 0, :, :] + sb_counts_per_pix[:, nu, nu]))
                               * padie).ravel()
+        elif sb:
+            B[:Npix_total] = ((padpix - sb_counts_per_pix[:, nu, nu]) * padie).ravel()
         else:
             B[:Npix_total] = ((padpix - fluxes[:, nu, nu] * G[:, 0, :, :]) * padie).ravel()
 
@@ -456,13 +477,15 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         # Parameter indices in the tractor params of our vector X:
         I = np.array([fit_to_src_param[i] for i in range(len(X))])
         # The vector we're going to return:
-        sX = np.zeros(src.numberOfParams() + N_sb_bands, np.float32)
+        N_src_params = (src and src.numberOfParams() or 0)
+        Nout = N_src_params + N_sb_bands
+        sX = np.zeros(Nout, np.float32)
         sX[I] = X
 
         if get_A:
-            sA = np.zeros((Nrows, src.numberOfParams()), np.float32)
+            sA = np.zeros((Nrows, Nout), np.float32)
             sA[:,I] = cp.get(A)
-            s_scales = np.zeros(src.numberOfParams(), np.float32)
+            s_scales = np.zeros(Nout, np.float32)
             s_scales[I] = cp.get(colscales)
             B = cp.get(B)
             return sA, B, sX, s_scales, pH,pW
