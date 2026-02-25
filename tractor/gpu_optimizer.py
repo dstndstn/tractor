@@ -146,6 +146,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
     def gpu_one_source_update(self, tr, priors=True, get_A=False, **kwargs):
         cp = self.cp
+        nu = cp.newaxis
 
         t0 = time.time()
         # Assume single source
@@ -198,6 +199,9 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         src_bands = src.getBrightness().getParamNames()
 
         ## FIXME -- this should be based on *SOURCE* properties as well, no?
+        ## Here, we're basically just rounding up the modelMask size.
+        ## This affects which terms in the Gaussian mixture model of the galaxy
+        ## profile get rendered with FFT vs Gaussians.
         ## FIXME -- used to have PSF size included in this mix...
         x0, x1, y0, y1 = np.asarray(extents).T
         halfsize = np.max(([(x1-x0)/2, (y1-y0)/2,
@@ -264,9 +268,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         # List of the index into tim_ubands for each tim
         # This is what we'll use to build the A matrix
         tim_band_index = [tim_ubands.index(b) for b in tim_bands]
-        #print('source has bands:', src_bands)
-        #print('tims have bands:', tim_bands)
-        #print('Unique set of tim bands:', tim_ubands)
         Nbands = len(tim_ubands)
 
         if is_galaxy:
@@ -280,6 +281,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         # source parameter index and index in our A matrix
         # due to "tims" having only a subset of the bands in the source's params.
         # List of (source parameter index, A matrix index)
+        # This is baking in the assumption that source parameters are in the order:
+        # pos, brightness, shape
         param_indices = []
         if Npos:
             param_indices.append((0,0))
@@ -289,40 +292,16 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 param_indices.append((Npos + i, Npos + tim_ubands.index(band)))
         for i in range(Nshapes):
             param_indices.append((Npos + len(src_bands) + i, Npos + Nbands + i))
-        #print('Parameter indices:', param_indices)
+        # Mappings between the parameters we're going to fit for (fit params)
+        # and source parameters (src params).  Eg, a source might have a flux
+        # parameter that is not constrained by the images we are fitting.
         src_to_fit_param = dict(param_indices)
         fit_to_src_param = dict([(f,s) for s,f in param_indices])
 
-        # We can produce the residual map from the nominal galaxy profile model
-        # (scaled by flux) and the image pix.
         assert(all([isinstance(tim.getPhotoCal(), LinearPhotoCal) for tim in tims]))
         fluxes = cp.array(img_counts)
         padie = img_params.padie
         padpix = img_params.padpix
-        nu = cp.newaxis
-
-        # import pylab as plt
-        # chi_pix = (padpix - fluxes[:, nu, nu] * G[:, 0, :, :]) * padie
-        # cChi = chi_pix.get()
-        # cG = G.get()
-        # cpix = padpix.get()
-        # cflux = fluxes.get()
-        # print('Fluxes:', cflux)
-        # plt.clf()
-        # k = 1
-        # for i in range(Nimages):
-        #     plt.subplot(Nimages, 3, 3*i+1)
-        #     mod = cflux[i, nu, nu] * cG[i, 0, :, :]
-        #     plt.imshow(mod, interpolation='nearest', origin='lower')
-        #     plt.colorbar()
-        #     plt.subplot(Nimages, 3, 3*i+2)
-        #     img = cpix[i,:,:]
-        #     plt.imshow(img, interpolation='nearest', origin='lower')
-        #     plt.colorbar()
-        #     plt.subplot(Nimages, 3, 3*i+3)
-        #     plt.imshow(cChi[i, :, :], interpolation='nearest', origin='lower')
-        # plt.savefig('gchi.png')
-
         Npix_total = Nimages * pH * pW
 
         Npriors = 0
@@ -405,32 +384,16 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                     B[Npix_total + rij] += bij
             del priorVals, rA, cA, vA, pb, mub
 
-        # plt.clf()
-        # plt.imshow(A.get() != 0, interpolation='nearest', origin='lower',
-        #            vmin=0, vmax=1, cmap='gray', aspect='auto')
-        # plt.savefig('a.png')
-        # 
-        # plt.clf()
-        # cB = B.get()
-        # mx = np.abs(cB).max()
-        # plt.imshow(cB[:,nu], interpolation='nearest', origin='lower', aspect='auto',
-        #            cmap='RdBu', vmin=-mx, vmax=mx)
-        # plt.savefig('b.png')
-
-        # Precondition A: column scales
+        # Precondition the A matrix (simply) by normalizing the column scales (L2 norms)
         colscales = cp.sqrt((A**2).sum(axis=0))
 
         # Remove any columns with zero colscale (ie, no actual derivatives)
         if cp.any(colscales == 0):
-            debug('colscales:', colscales)
             colscales = cp.get(colscales)
             I = np.flatnonzero(colscales)
-            debug('non-zero indices:', I)
             if len(I) == 0:
                 debug('All derivatives are zero.')
                 return None
-            debug('src_to_fit_param:', src_to_fit_param)
-            debug('fit_to_src_param:', fit_to_src_param)
             new_fit_to_src_param = {}
             new_src_to_fit_param = {}
             for i_new,i_old in enumerate(I):
@@ -439,30 +402,18 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 new_src_to_fit_param[s] = i_new
             fit_to_src_param = new_fit_to_src_param
             src_to_fit_param = new_src_to_fit_param
-            debug('new src_to_fit_param:', src_to_fit_param)
-            debug('new fit_to_src_param:', fit_to_src_param)
             A = A[:, I]
             colscales = colscales[I]
             colscales = cp.array(colscales)
 
         A /= colscales[nu, :]
 
-        # plt.clf()
-        # cA = A.get()
-        # mx = np.abs(cA).max()
-        # plt.imshow(cA, interpolation='nearest', origin='lower', aspect='auto',
-        #            cmap='RdBu', vmin=-mx, vmax=mx)
-        # plt.savefig('a2.png')
-
         X,_,_,_ = cp.linalg.lstsq(A, B)
-        #print('(scaled) X:', X.get())
         X /= colscales
-        #print('X:', X.get())
 
-        # Parameter indices in src of our vector X:
         X = cp.get(X)
+        # Parameter indices in src of our vector X:
         I = np.array([fit_to_src_param[i] for i in range(len(X))])
-        #print('Source parameter indices:', I)
         sX = np.zeros(src.numberOfParams(), np.float32)
         sX[I] = X
 
