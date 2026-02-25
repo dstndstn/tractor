@@ -594,33 +594,26 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         IF = (sz**2 > (nsigma1**2 * vv))
         ramp = np.any((IM*IF))
 
-        mogweights = np.ones(vv.shape, dtype=cp.float32)
-        fftweights = np.ones(vv.shape, dtype=cp.float32)
-        if ramp:
-            # ramp
-            ns = sz / np.maximum(1e-6, np.sqrt(vv))
-            mogweights = np.minimum(1., (nsigma2 - ns) / (nsigma2 - nsigma1))*IM
-            fftweights = np.minimum(1., (ns - nsigma1) / (nsigma2 - nsigma1))*IF
-            assert(np.all(mogweights[IM] > 0.))
-            assert(np.all(mogweights[IM] <= 1.))
-            assert(np.all(fftweights[IF] > 0.))
-            assert(np.all(fftweights[IF] <= 1.))
-
         # Assume the MoG components are sort by increasing variance; terms we'll evaluate
         # with the FFT will be at the front, and MoG at the back.
         Nmog = IM.sum(axis=2).max(axis=(0,1))
         Nfft = IF.sum(axis=2).max(axis=(0,1))
 
         mog_mix_vars = mix_vars[:, :, -Nmog:, :]
-        mog_mix_amps = (mix_amps * mogweights)[:, :, -Nmog:]
-
         fft_mix_vars = mix_vars[:, :, :Nfft:, :]
-        fft_mix_amps = (mix_amps * fftweights)[:, :, :Nfft]
+        mog_mix_amps = mix_amps[:, :, -Nmog:]
+        fft_mix_amps = mix_amps[:, :, :Nfft]
 
-        #g_fft_mix_vars = cp.array(fft_mix_vars)
-        #a = g_fft_mix_vars[:, :, :, 0]
-        #b = 2. * g_fft_mix_vars[:, :, :, 1]
-        #d = g_fft_mix_vars[:, :, :, 2]
+        if ramp:
+            # ramp between MOG and FFT for intermediate-sigma components
+            mogweights = np.ones(vv.shape, np.float32)
+            fftweights = np.ones(vv.shape, np.float32)
+            ns = sz / np.maximum(1e-6, np.sqrt(vv))
+            mogweights = np.clip((nsigma2 - ns) / (nsigma2 - nsigma1), 0., 1.) * IM
+            fftweights = np.clip((ns - nsigma1) / (nsigma2 - nsigma1), 0., 1.) * IF
+            mog_mix_amps *= mogweights[:, :, -Nmog:]
+            fft_mix_amps *= fftweights[:, :, :Nfft]
+            del mogweights, fftweights
 
         g_fft_mix_amps = cp.array(fft_mix_amps)
         a = cp.array(fft_mix_vars[:, :, :, 0])
