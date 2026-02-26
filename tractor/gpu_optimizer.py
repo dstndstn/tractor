@@ -551,11 +551,14 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
         if sb:
             # Surface-brightness derivatives.
+            padmask = img_params.padmask
             for i in range(Nimages):
                 # Image i fills in the column corresponding to its sb flux
                 # and a block of rows corresponding to its pixels.
                 col = Npos + Nbands + Nshapes + tim_band_index[i]
-                A[i * pH*pW: (i+1) * pH*pW, col] = 1./pixscales[i]
+                # This might not be strictly necessary to mask by "padmask", but it makes the results
+                # match more closely with the traditional code, because the colscales are the same.
+                A[i * pH*pW: (i+1) * pH*pW, col] = (pixscales[i]**2 * padmask[i, :, :].ravel())
 
         if sb and src:
             # add current surface brightnesses to the model
@@ -633,7 +636,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             s_scales = np.zeros(Nout, np.float32)
             s_scales[I] = cp.get(colscales)
             B = cp.get(B)
-            return sA, B, sX, s_scales, pH,pW
+            return sA, B, sX, s_scales, pH,pW, img_params.padslices #cp.get(img_params.padmask)
 
         return sX
 
@@ -660,6 +663,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         # FIXME -- should be able to cache this; rationalize pixel transfer to GPU.
         padpix = cp.zeros((Nimages, pH,pW), cp.float32)
         padie  = cp.zeros((Nimages, pH,pW), cp.float32)
+        padmask = cp.zeros((Nimages, pH,pW), bool)
+        padslices = []
         for i,(tim,(x0,x1,y0,y1)) in enumerate(zip(tims, extents)):
             # FIXME -- put the whole images on the GPU??
             #pix = tim.getGpuImage()
@@ -673,6 +678,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             padpix[i, y0+dy : y1+dy, x0+dx : x1+dx] = cp.array(p)
             p =  ie[y0:y1, x0:x1]
             padie [i, y0+dy : y1+dy, x0+dx : x1+dx] = cp.array(p)
+            padmask[i, y0+dy : y1+dy, x0+dx : x1+dx] = True
+            padslices.append((slice(y0+dy, y1+dy), slice(x0+dx, x1+dx)))
 
         # GPU arrays:
         img_params.psf_pad = psf_pad
@@ -681,8 +688,10 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         img_params.w = w
         img_params.padpix = padpix
         img_params.padie  = padie
+        img_params.padmask = padmask
         # numpy arrays:
         img_params.psf_mogs = psf_mogs
+        img_params.padslices = padslices # debug
         # scalars:
         img_params.pH = pH
         img_params.pW = pW
@@ -753,8 +762,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         # Nimages x Nprofiles x Nmog
         sz = img_params.pW/2
         vv = mix_vars[:,:,:,0] + mix_vars[:,:,:,2]
-        IM = (sz**2 < (nsigma2**2 * vv)) * (mix_amps > 0)
-        IF = (sz**2 > (nsigma1**2 * vv)) * (mix_amps > 0)
+        IM = (sz**2 < (nsigma2**2 * vv)) * (mix_amps != 0)
+        IF = (sz**2 > (nsigma1**2 * vv)) * (mix_amps != 0)
         ramp = np.any((IM*IF))
 
         # Assume the MoG components are sorted by increasing variance; terms we'll evaluate
@@ -1495,12 +1504,13 @@ if __name__ == '__main__':
                    vmin=-scale*mx, vmax=+scale*mx)
         plt.title('diff')
         ps.savefig()
-
     
     alphas = [0.1, 0.3, 1.0]
     optargs = dict(shared_params=False, priors=True, alphas=alphas)
 
     orig_opt = tr.optimizer
+
+    tr.setModelMasks(None)
 
     up0 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
     print('LSQR Update:', up0)
@@ -1521,7 +1531,6 @@ if __name__ == '__main__':
 
     allderivs = tr.getDerivs()
     up1,ic,colmap = tr.optimizer.getUpdateDirection(tr, allderivs, get_cov=True, **optargs)
-    print('colmap', colmap)
     up1 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
     print('Smarter update:', up1)
     n = len(up1)
@@ -1557,9 +1566,7 @@ if __name__ == '__main__':
 
     tr.setParams(p0)
 
-
-    #A,B,X,scales,pH,pW = gpu_opt.gpu_one_source_update(tr, get_A=True)
-    A,B,X,scales,pH,pW = np_gpu_opt.gpu_one_source_update(tr, get_A=True, **optargs)
+    A,B,X,scales,pH,pW,padslices = np_gpu_opt.gpu_one_source_update(tr, get_A=True, **optargs)
     print('A', A.shape)
     print('B', B.shape)
     print('pH,pW', pH,pW)
@@ -1617,6 +1624,57 @@ if __name__ == '__main__':
         if ncols % 2 == 0:
             k += 1
     plt.savefig('a.png')
+
+    plt.clf()
+    nims = 2
+    R,C = nims*2, (ncols+3 + 1)//2
+    k = 1
+
+    for j in range(nims):
+        for i in range(ncols):
+            plt.subplot(R, C, k)
+            k += 1
+            deriv = A[j*pH*pW : (j+1)*pH*pW, i].reshape(pH,pW)
+            deriv = deriv[padslices[j]]
+            mx = np.max(np.abs(deriv))
+            plt.imshow(deriv, vmin=-mx, vmax=mx,
+                       interpolation='nearest', origin='lower')
+            plt.xticks([]); plt.yticks([])
+
+        plt.subplot(R, C, k)
+        k += 1
+        diff = B[j*pH*pW : (j+1)*pH*pW].reshape(pH,pW)
+        diff = diff[padslices[j]]
+        mx = np.max(np.abs(diff))
+        plt.imshow(diff, vmin=-mx, vmax=mx,
+                   interpolation='nearest', origin='lower')
+        plt.xticks([]); plt.yticks([])
+        plt.title('B')
+        Bsub = diff
+        bmx = mx
+
+        plt.subplot(R, C, k)
+        k += 1
+        diff = AX[j*pH*pW : (j+1)*pH*pW].reshape(pH,pW)
+        diff = diff[padslices[j]]
+        mx = np.max(np.abs(diff))
+        plt.imshow(diff, vmin=-mx, vmax=mx,
+                   interpolation='nearest', origin='lower')
+        plt.xticks([]); plt.yticks([])
+        plt.title('A*X')
+        AXsub = diff
+
+        plt.subplot(R, C, k)
+        k += 1
+        mx = bmx
+        plt.imshow(AXsub - Bsub, vmin=-mx, vmax=mx,
+                   interpolation='nearest', origin='lower')
+        plt.xticks([]); plt.yticks([])
+        plt.title('A*X - B')
+
+        if ncols % 2 == 0:
+            k += 1
+    plt.savefig('a-pad.png')
 
     print('sum((0 - B)**2):', np.sum(B**2))
     print('sum((AX - B)**2):', np.sum((AX - B)**2))
