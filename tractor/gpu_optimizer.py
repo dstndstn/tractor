@@ -884,6 +884,139 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         G[:, :, 3:-3, :] += work[:, :, 5:-1, :] * fy[:, na, na, 5, na]
         G[:, :, 3:-3, :] += work[:, :, 6:  , :] * fy[:, na, na, 6, na]
 
+    def gpu_one_source_models(self, tr):
+        cp = self.cp
+        na = cp.newaxis
+        tims,masks = self._gpu_checks(tr)
+        if tims is None:
+            return None
+        src = tr.catalog[0]
+        is_galaxy = isinstance(src, ProfileGalaxy)
+        is_psf = isinstance(src, PointSource)
+        extents = [mm.extent for mm in masks]
+
+        # Pixel positions (at initial params)
+        pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
+               for tim in tims]
+        px, py = np.array(pxy, dtype=np.float32).T
+        ipx = px.round().astype(np.int32)
+        ipy = py.round().astype(np.int32)
+
+        x0, x1, y0, y1 = np.asarray(extents).T
+        halfsize = np.max(([(x1-x0)/2, (y1-y0)/2,
+                            1+px-x0, 1+x1-px, 1+py-y0, 1+y1-py]))
+
+        # Pre-process image: PSF, padded pix, etc
+        img_params = self.gpu_setup_image_params(tims, halfsize, extents, ipx, ipy)
+
+        p0 = tr.getParams()
+
+        steps = [p0]
+
+        counts_grid = np.zeros((len(tims), len(steps)), np.float32)
+
+        # We need to transpose the mogs: need Nimages x Nprofiles(aka Nsteps)
+        mogs = [[] for tim in tims]
+
+        # idx_grid = np.zeros((len(tims), len(steps)), np.int32)
+        # idy_grid = np.zeros((len(tims), len(steps)), np.int32)
+
+        mux_grid = np.zeros((len(tims), len(steps)), np.float32)
+        muy_grid = np.zeros((len(tims), len(steps)), np.float32)
+
+        Nmods = len(steps)
+        logpriors = np.zeros(Nmods, np.float32)
+        for istep, p in enumerate(steps):
+            tr.setParams(p)
+            logpriors[istep] = tr.getLogPrior()
+
+            # Pixel positions
+            pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
+                   for tim in tims]
+            px, py = np.array(pxy, dtype=np.float32).T
+            # Round source pixel position to nearest integer
+            ix = px.round().astype(np.int32)
+            iy = py.round().astype(np.int32)
+            # idx_grid[:, istep] = ix - ipx
+            # idy_grid[:, istep] = iy - ipy
+
+            # subpixel portion: shifted via Lanczos interpolation
+            mux = px - ix
+            muy = py - iy
+            assert(np.abs(mux).max() <= 0.5)
+            assert(np.abs(muy).max() <= 0.5)
+            mux_grid[:, istep] = mux
+            muy_grid[:, istep] = muy
+
+            counts_grid[:, istep] = np.array(
+                [tim.getPhotoCal().brightnessToCounts(src.brightness)
+                 for tim in tims])
+
+            if is_galaxy:
+                for itim,(tim,x,y) in enumerate(zip(tims, px, py)):
+                    mogs[itim].append(src._getShearedProfile(tim,x,y))
+
+        if is_psf:
+            mods = self.gpu_get_unitflux_psf(img_params, mux_grid, muy_grid)
+        else:
+            mods = self.gpu_get_unitflux_galaxy_profiles(mogs, img_params,
+                                                         mux_grid, muy_grid)
+        mods *= counts_grid[..., na, na]
+
+        # mods shape: Nimages x Nmod x pH x pW
+        pH, pW = img_params.pH, img_params.pW
+        Nimages = len(tims)
+        assert(img_params.padpix.shape == (Nimages, pH, pW))
+        assert(img_params.padie.shape  == (Nimages, pH, pW))
+
+        assert(mods.shape == (Nimages,Nmods,pH,pW))
+
+        mods = cp.get(mods[:, 0, :, :])
+        patches = []
+        cx,cy = img_params.cx, img_params.cy
+        for i, (x0,x1,y0,y1) in enumerate(extents):
+            dx = cx - ipx[i]
+            dy = cy - ipy[i]
+            mod = mods[i, y0+dy : y1+dy, x0+dx : x1+dx]
+            patches.append(Patch(x0, y0, mod))
+        return patches
+
+    def _gpu_checks(self, tr):
+        # Assume single source
+        assert(len(tr.catalog) == 1)
+        tims = tr.images
+
+        # Assume galaxy or point source
+        src = tr.catalog[0]
+        is_galaxy = isinstance(src, ProfileGalaxy)
+        is_psf = isinstance(src, PointSource)
+        assert(isinstance(src, (ProfileGalaxy, PointSource)))
+
+        # Assume model masks are set (ie, pixel ROIs of interest are defined)
+        #masks = [tr._getModelMaskByIdx(i, src) for i in range(len(tr.images))]
+        masks = [tr._getModelMaskFor(tim, src) for tim in tims]
+        if any(m is None for m in masks):
+            debug('One or more modelMasks is None in GPU code -- cutting images')
+            goodtims = []
+            goodmasks = []
+            for tim,mask in zip(tims,masks):
+                if mask is None:
+                    continue
+                goodtims.append(tim)
+                goodmasks.append(mask)
+            if len(goodtims) == 0:
+                info('After removing None modelMasks, no images remain!')
+                return None,None
+            debug('Cut from %i to %i images with good modelMasks' % (len(tr.images), len(goodtims)))
+            tims = goodtims
+            masks = goodmasks
+            del goodtims,goodmasks
+        assert(all([m is not None for m in masks]))
+        return tims, masks
+
+
+
+
 # eg, lanczos_filter(3, -0.3 + np.arange(-3, +4))
 def lanczos_filter(order, x):
     x = np.atleast_1d(x)
