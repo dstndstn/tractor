@@ -415,7 +415,7 @@ class LsqrOptimizer(Optimizer):
                 w = inverrs[deriv.getSlice(img)]
                 vals = dimg * w
                 nz = np.flatnonzero(vals)
-                logmsg('deriv', deriv.name, 'shape', dimg.shape, '; %i of %i pixels nonzero' % (len(nz), dimg.size))
+                logverb('deriv', deriv.name, 'shape', dimg.shape, '; %i of %i pixels nonzero' % (len(nz), dimg.size))
                 if len(nz) == 0:
                     logverb('Col %i: all (weighted) derivs are zero')
                     continue

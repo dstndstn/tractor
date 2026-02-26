@@ -107,52 +107,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
     def one_source_update(self, tr, **kwargs):
         return self.gpu_one_source_update(tr, **kwargs)
 
-        # free_mem, total_mem = cp.cuda.runtime.memGetInfo()
-        # # predict memory required
-        # totalpix = sum([np.prod(tim.shape) for tim in tr.images])
-        # nd = tr.numberOfParams()+2
-        # kmax = 9
-        # # Double size of 16 bit (complex 128) array x npix x
-        # # n derivs x kmax.  5D array in batch_mixture_profiles.py
-        # est_mem = totalpix * nd * kmax * 16
-        # 
-        # if free_mem < est_mem:
-        #     print (f"Warning: Estimated memory {est_mem} is greater than free memory {free_mem}; Running CPU mode instead!")
-        #     R_gpuv = super().one_galaxy_update(tr, **kwargs)
-        #     return R_gpuv
-        # 
-        # try:
-        #     t0 = time.time()
-        #     R_gpuv = self.gpu_one_source_update(tr, **kwargs)
-        #     #mempool = cp.get_default_memory_pool()
-        #     #mempool.free_all_blocks()
-        #     dt = time.time() - t0
-        #     return R_gpuv
-        # except AssertionError:
-        #     import traceback
-        #     print ("AssertionError in VECTORIZED GPU code:")
-        #     traceback.print_exc()
-        # except cp.cuda.memory.OutOfMemoryError:
-        #     free_mem, total_mem = cp.cuda.runtime.memGetInfo()
-        #     mempool = cp.get_default_memory_pool()
-        #     used_bytes = mempool.used_bytes()
-        #     tot_bytes = mempool.total_bytes()
-        #     print ('Out of Memory for source: ', tr.catalog[0])
-        #     print (f'OOM Device {free_mem=} {total_mem=}; This mempool {used_bytes=} {tot_bytes=}')
-        #     mempool.free_all_blocks()
-        # except Exception as ex:
-        #     import traceback
-        #     print('Exception in GPU Vectorized code:')
-        #     traceback.print_exc()
-        #     raise(ex)
-        # 
-        # # Fallback to CPU version
-        # print('Falling back to CPU code...')
-        # t0 = time.time()
-        # R = super().one_source_update(tr, **kwargs)
-        # dt = time.time() - t0
-        # return R
-
     def _gpu_checks(self, tr):
         # Assume single source, optionally with a ConstantSurfaceBrightness
         assert(len(tr.catalog) in [1,2])
@@ -275,14 +229,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 for itim,(tim,x,y) in enumerate(zip(tims, px, py)):
                     mogs[itim].append(src._getShearedProfile(tim,x,y))
 
-            #print('model', istep, ': log-prob', tr.getLogLikelihood())
-            # lnl = tr.getLogLikelihood()
-            # if istep == 0:
-            #     lnl0 = lnl
-            # else:
-            #     print('model', istep, ': delta-lnl', lnl-lnl0)
-        #tr.setParams(p0)
-
         if is_psf:
             mods = self.gpu_get_unitflux_psf(img_params, mux_grid, muy_grid)
         else:
@@ -384,13 +330,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         if alpha_best is None:
             return 0., 0.
 
-        #tr.setParams(p0)
-        #OLD = super(SmarterDenseOptimizer, self).tryUpdates(tr, X, **kwargs)
-        #tr.setParams(p_best)
-        #NEW = logprob_best - logprobs[0], alpha_best
-        #print('OLD return val:', OLD)
-        #print('NEW return val:', NEW)
-
         return logprob_best - logprobs[0], alpha_best
 
     def gpu_one_source_update(self, tr, priors=True, get_A=False, **kwargs):
@@ -433,14 +372,11 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         # Round source pixel position to nearest integer
         ipx = px.round().astype(np.int32)
         ipy = py.round().astype(np.int32)
-        ## FIXME -- this should be based on *SOURCE* properties as well, no?
         ## Here, we're basically just rounding up the modelMask size.
         ## This affects which terms in the Gaussian mixture model of the galaxy
         ## profile get rendered with FFT vs Gaussians.
-        ## FIXME -- used to have PSF size included in this mix...
         halfsize = np.max(([(x1-x0)/2, (y1-y0)/2,
                             1+px-x0, 1+x1-px, 1+py-y0, 1+y1-py]))
-        #psfH//2, psfW//2]))
 
         # Pre-process image: PSF, padded pix, etc
         img_params = self.gpu_setup_image_params(tims, halfsize, extents, ipx, ipy)
@@ -465,25 +401,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         elif is_psf:
             G = self.gpu_get_unitflux_psf(img_params, mux, muy)
 
-        # import pylab as plt
-        # cG = G.get()
-        # plt.clf()
-        # k = 1
-        # for i in range(Nimages):
-        #     for j in range(Nprofiles):
-        #         plt.subplot(Nimages, Nprofiles, k)
-        #         k += 1
-        #         if j == 0:
-        #             plt.imshow(cG[i, j, :, :], interpolation='nearest', origin='lower')
-        #         else:
-        #             plt.imshow(cG[i, j, :, :] - cG[i, 0, :, :], interpolation='nearest', origin='lower')
-        # plt.savefig('g.png')
-
         # Now we have computed the galaxy profiles for the finite-differences steps.
         # Turn these into derivatives and solve the update matrix.
-        # - compute per-image updates and commbine? (ie, factored)
-        # - build one big matrix?
-
         pH, pW = img_params.pH, img_params.pW
         assert(img_params.padpix.shape == (Nimages, pH, pW))
         assert(img_params.padie.shape  == (Nimages, pH, pW))
@@ -492,7 +411,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         Npos = 0
         if src and src.isParamThawed('pos'):
             Npos = src.pos.numberOfParams()
-        #print('Source position parameters:', Npos)
         assert(Npos in [0, 2])
 
         # List of the band for each tim
@@ -729,13 +647,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         psfs = [tim.getPsf() for tim in tims]
         # Assume hybrid PSF model
         assert(all([isinstance(psf, HybridPSF) for psf in psfs]))
-
-        # Assume ConstantSky models, grab constant sky levels
-        # NOTE - instead of building this list and passing it around in ImageDerivs, etc,
-        # we could perhaps just subtract it off img_pix at the start...
-        #img_sky = [tim.getSky().getConstant() for tim in tr.images]
-        #print('sky', img_sky)
-        #assert(np.all([s == 0 for s in img_sky]))
 
         img_params = Duck()
         psfH, psfW = np.array([psf.shape for psf in psfs]).T
@@ -986,12 +897,10 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         N = len(psfs)
         # We're going to assert zero mean here, and flatten the variance
         amps = np.zeros((N, maxK))
-        #means = np.zeros((N, maxK, 2))
         varrs = np.zeros((N, maxK, 3))
         for i,psfmog in enumerate(psfmogs):
             amps [i, :psfmog.K] = psfmog.amp
             assert(np.all(psfmog.mean == 0))
-            #means[i, :psfmog.K, :] = psfmog.mean
             varrs[i, :psfmog.K, 0] = psfmog.var[:, 0, 0]
             varrs[i, :psfmog.K, 1] = psfmog.var[:, 0, 1]
             varrs[i, :psfmog.K, 2] = psfmog.var[:, 1, 1]
@@ -999,10 +908,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
         imsize = psfs[0].img.shape
         for psf in psfs:
-            #print('PSF:', psf)
-            #print('sampling:', psf.sampling)
             assert(psf.sampling == 1.)
-            #print('pixelized size', psf.img.shape)
 
         sz = 2**int(np.ceil(np.log2(halfsize * 2.)))
         W = H = sz
