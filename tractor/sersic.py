@@ -286,28 +286,19 @@ class SersicMixture(object):
 
     def _getProfile(self, sindex):
         matches = []
-        # clamp
+        # clamp low Sersic index
         if sindex <= self.lowest:
             matches.append(self.fits[0])
-            #(lo,hi,a,v) = self.fits[0]
-            #amp_funcs = a
-            #logvar_funcs = v
             sindex = self.lowest
+        # clamp high Sersic index
         elif sindex >= self.highest:
             matches.append(self.fits[-1])
-            #(lo,hi,a,v) = self.fits[-1]
-            #amp_funcs = a
-            #logvar_funcs = v
             sindex = self.highest
         else:
             for f in self.fits:
                 lo,hi,a,v = f
                 if sindex >= lo and sindex < hi:
                     matches.append(f)
-                    #print('Sersic index', sindex, '-> range', lo, hi)
-                    #amp_funcs = a
-                    #logvar_funcs = v
-                    #break
 
         if len(matches) == 2:
             # Two ranges overlap.  Ramp between them.
@@ -343,7 +334,10 @@ class SersicMixture(object):
             amps *= (1. - core) / amps.sum()
             amps = np.append(amps, core)
             varr = np.append(varr, 0.)
-
+        # Sort by increasing variance!
+        I = np.argsort(varr)
+        varr = varr[I]
+        amps = amps[I]
         return mp.MixtureOfGaussians(amps, np.zeros((len(amps), 2)), varr)
 
 class SersicIndex(ScalarParam):

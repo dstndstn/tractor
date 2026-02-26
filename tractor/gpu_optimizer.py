@@ -594,7 +594,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         IF = (sz**2 > (nsigma1**2 * vv))
         ramp = np.any((IM*IF))
 
-        # Assume the MoG components are sort by increasing variance; terms we'll evaluate
+        # Assume the MoG components are sorted by increasing variance; terms we'll evaluate
         # with the FFT will be at the front, and MoG at the back.
         Nmog = IM.sum(axis=2).max(axis=(0,1))
         Nfft = IF.sum(axis=2).max(axis=(0,1))
@@ -603,6 +603,9 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         fft_mix_vars = mix_vars[:, :, :Nfft:, :]
         mog_mix_amps = mix_amps[:, :, -Nmog:]
         fft_mix_amps = mix_amps[:, :, :Nfft]
+
+        assert(np.sum(IM) == np.sum(IM[:, :, -Nmog:]))
+        assert(np.sum(IF) == np.sum(IF[:, :, :Nfft ]))
 
         if ramp:
             # ramp between MOG and FFT for intermediate-sigma components
@@ -615,29 +618,33 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             fft_mix_amps *= fftweights[:, :, :Nfft]
             del mogweights, fftweights
 
-        g_fft_mix_amps = cp.array(fft_mix_amps)
-        a = cp.array(fft_mix_vars[:, :, :, 0])
-        b = cp.array(2. * fft_mix_vars[:, :, :, 1])
-        d = cp.array(fft_mix_vars[:, :, :, 2])
-
-        v, w = img_params.v, img_params.w
-        Nv = len(v)
-        Nw = len(w)
-
         nu = cp.newaxis
 
-        Fsum = cp.zeros((Nimages, Nprofiles, Nw, Nv), cp.float32)
-        for k in range(Nfft):
-            Fsum += (g_fft_mix_amps[:, :, k, nu, nu] *
-                     cp.exp(-2. * cp.pi**2 *
-                            (a[:, :, k, nu, nu] *  v[nu, nu, nu, :]**2 +
-                             b[:, :, k, nu, nu] * (v[nu, nu, nu, :] *
-                                                   w[nu, nu, :, nu]) +
-                             d[:, :, k, nu, nu] *  w[nu, nu, :, nu]**2)))
-        del a,b,d
-        del g_fft_mix_amps
-        G = cp.fft.irfft2(Fsum * img_params.P[:, nu, :, :])
-        del Fsum
+        if Nfft > 0:
+            g_fft_mix_amps = cp.array(fft_mix_amps)
+            a = cp.array(fft_mix_vars[:, :, :, 0])
+            b = cp.array(2. * fft_mix_vars[:, :, :, 1])
+            d = cp.array(fft_mix_vars[:, :, :, 2])
+
+            v, w = img_params.v, img_params.w
+            Nv = len(v)
+            Nw = len(w)
+
+            Fsum = cp.zeros((Nimages, Nprofiles, Nw, Nv), cp.float32)
+            for k in range(Nfft):
+                Fsum += (g_fft_mix_amps[:, :, k, nu, nu] *
+                         cp.exp(-2. * cp.pi**2 *
+                                (a[:, :, k, nu, nu] *  v[nu, nu, nu, :]**2 +
+                                 b[:, :, k, nu, nu] * (v[nu, nu, nu, :] *
+                                                       w[nu, nu, :, nu]) +
+                                 d[:, :, k, nu, nu] *  w[nu, nu, :, nu]**2)))
+            del a,b,d
+            del g_fft_mix_amps
+            G = cp.fft.irfft2(Fsum * img_params.P[:, nu, :, :])
+            del Fsum
+        else:
+            G = None
+
         pH, pW = img_params.pH, img_params.pW
         if Nmog > 0:
             ## FIXME -- trim these arrays to just non-zero weighted elements???
@@ -657,6 +664,10 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
             # variance terms: (00, 01, 11) covariance matrix elements
             det = (conv_vars[:,:,:,0] * conv_vars[:,:,:,2] - conv_vars[:,:,:,1]**2)
+            # because we pad out these arrays to the max sizes, dets can be zero.
+            assert(np.all(np.logical_or(det > 0, (det == 0) & (conv_amps == 0))))
+            # avoid 0 * inf (amp=0 * 1/(det=0))
+            det = np.maximum(det, 1e-30)
             iv0 = conv_vars[:,:,:,2] / det
             iv1 = -2. * conv_vars[:,:,:,1] / det
             iv2 = conv_vars[:,:,:,0] / det
@@ -685,12 +696,11 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             assert(distsq.shape == (Nimages, Nprofiles, Ncmog, pH, pW))
             assert(scale.shape == (Nimages, Nprofiles, Ncmog))
             # Sum over the MoG components
-            G_mog = cp.sum(distsq * scale[..., nu, nu], axis=2)
+            if G is None:
+                G = cp.sum(distsq * scale[..., nu, nu], axis=2)
+            else:
+                G += cp.sum(distsq * scale[..., nu, nu], axis=2)
             del distsq
-            assert(G_mog.shape == G.shape)
-            G += G_mog
-            del G_mog
-            # FIXME -- avoid instantiating G_mog at all, just += into G
         assert(G.shape == (Nimages,Nprofiles,pH,pW))
 
         # FIXME -- check that this all remains float32 through the computations

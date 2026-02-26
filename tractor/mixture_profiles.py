@@ -33,8 +33,9 @@ dev_var = np.array([2.23759216e-04,   1.00220099e-03,   4.18731126e-03,   1.6943
 ########## Delta function core to correct for softening
 dev_core = 0.010233
 dev_amp *= (1. - dev_core) / np.sum(dev_amp)
-dev_amp = np.append(dev_amp, dev_core)
-dev_var = np.append(dev_var, 0.)
+# Keep these in *increasing* order of variance by prepending!
+dev_amp = np.append(dev_core, dev_amp)
+dev_var = np.append(0.,       dev_var)
 ####################
 
 def get_exp_mixture():
