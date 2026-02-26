@@ -278,7 +278,10 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             return None
 
         if get_A:
-            return A, B, X, colscales
+            img_layout = {}
+            for k,v in img_offsets.items():
+                img_layout[k] = (v, img_bounds[k])
+            return A, B, X, colscales, img_layout
 
         if get_cov:
             ic = np.matmul(A.T, A)

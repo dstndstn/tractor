@@ -880,7 +880,8 @@ def lanczos_filter(order, x):
     return out
 
 if __name__ == '__main__':
-    from tractor.galaxy import ExpGalaxy
+    from tractor.galaxy import ExpGalaxy, DevGalaxy
+    from tractor.sersic import SersicGalaxy, SersicIndex
     from tractor.ellipses import EllipseE, EllipseESoft
     from tractor.basics import PixPos, Flux, ConstantSky, PointSource
     from tractor.basics import RaDecPos
@@ -895,11 +896,22 @@ if __name__ == '__main__':
     from tractor.basics import ConstantSurfaceBrightness
     from tractor import ParamList
     import os
+    import time
     import pylab as plt
     from astrometry.util.util import Tan
 
-    from cupy_wrapper import cp
+    #from cupy_wrapper import cp
 
+    t = time.time()
+    t = np.fmod(t, 1.)
+    t = int(t * 1e6)
+    seed = t
+    # 540632
+    #print('Random seed', seed)
+    seed = 540632
+    print('Setting seed', seed)
+    np.random.seed(seed)
+    
     # import pickle
     # 
     # opt = GpuOptimizer('cupy')
@@ -1007,26 +1019,32 @@ if __name__ == '__main__':
             d['cached_positions'] = dict()
             return d
 
-    brightness = NanoMaggies(g=1000., r=2000., z=500.)
+    #brightness = NanoMaggies(g=1000., r=2000., z=500.)
+    brightness = NanoMaggies(g=2000., r=4000., z=500.)
 
     shape = EllipseWithPriors(np.log(5.), 0.1, 0.4)
     pos = RaDecPos(ra_cen - 25.*arcsec, dec_cen)
     gpos = GaiaPosition(ra_cen - 25.*arcsec, dec_cen, 2016.0, 0., 0., 0.)
     #gal = ExpGalaxy(pos, brightness, shape)
-    #param_scales = [1./3600, 1./3600., 100., 100., 100., 1., 0.1, 0.1]
-    ptsrc = PointSource(pos, brightness)
-    param_scales = [1./3600, 1./3600, 100., 100., 100]
+    #gal = DevGalaxy(pos, brightness, shape)
+    param_scales = [1./3600, 1./3600., 100., 100., 100., 1., 0.1, 0.1]
+    #ptsrc = PointSource(pos, brightness)
+    #param_scales = [1./3600, 1./3600, 100., 100., 100]
     #gal = ExpGalaxy(gpos, brightness, shape)
     #param_scales = [100., 100., 100., 1., 0.1, 0.1]
-
+    gal = SersicGalaxy(pos, brightness, shape, SersicIndex(3.5))
+    param_scales = [1./3600, 1./3600, 100., 100., 100., 1., 0.1, 0.1, 0.1]
+    #print('Sersic profile:', ser.getProfile())
+    
     b2 = NanoMaggies(g=20., r=40., z=60.)
     sb = ConstantSurfaceBrightness(b2)
-    param_scales += [5.] * sb.numberOfParams()
+    #param_scales += [5.] * sb.numberOfParams()
 
-    print('SB:', sb)
+    cat = [gal]
+    #cat = [ptsrc, sb]
+    #cat = [gal, sb]
 
-    #cat = [gal]
-    cat = [ptsrc, sb]
+    optargs = dict(alphas=[0.1, 0.3, 1.0], dchisq=0.1, shared_params=False, priors=True)
 
     true_cat = [s.copy() for s in cat]
 
@@ -1052,7 +1070,6 @@ if __name__ == '__main__':
                 )
     tr = Tractor([tim1], cat)
     mod = tr.getModelImage(0)
-    print('mod 1: min value is', mod.min())
     noisy1 = mod + np.random.normal(scale=sig1, size=(h,w))
     tim1.data = noisy1
 
@@ -1080,7 +1097,6 @@ if __name__ == '__main__':
     tr.freezeParam('images')
 
     mod2 = tr.getModelImage(tim2)
-    print('mod 2: min value is', mod2.min())
     noisy2 = mod2 + np.random.normal(scale=sig2, size=(h2,w2))
     tim2.data = noisy2
 
@@ -1098,10 +1114,6 @@ if __name__ == '__main__':
     print('Perturbed source parameters:')
     for src in cat:
         print('  ', src)
-
-    print('Opt', tr.optimizer)
-
-    optargs = dict(shared_params=False, priors=True)
 
     orig_opt = tr.optimizer
 
@@ -1135,15 +1147,15 @@ if __name__ == '__main__':
 
     tr.setParams(p0)
 
-    cp.get = lambda x: x.get()
-    gpu_opt = GpuOptimizer(cp)
+    #cp.get = lambda x: x.get()
+    #gpu_opt = GpuOptimizer(cp)
 
     np.get = lambda x: x
     np_gpu_opt = GpuOptimizer(np)
 
-    tr.optimizer = gpu_opt
-    up2 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
-    print('GPU Update:', up2)
+    #tr.optimizer = gpu_opt
+    #up2 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
+    #print('GPU Update:', up2)
 
     tr.optimizer = np_gpu_opt
     up3 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
@@ -1154,14 +1166,159 @@ if __name__ == '__main__':
     print('Fractional difference (LSQR-SM):', difference(up0, up1))
     compare('LSQR', 'SM',  up0, up1, ic)
 
-    print('Fractional difference (LSQR-GPU):', difference(up0, up2))
-    print('Fractional difference (SM-GPU):', difference(up1, up2))
+    #print('Fractional difference (LSQR-GPU):', difference(up0, up2))
+    #print('Fractional difference (SM-GPU):', difference(up1, up2))
+    print('Fractional difference (LSQR-GPU[NP]):', difference(up0, up3))
+    print('Fractional difference (SM-GPU[NP])  :', difference(up1, up3))
 
-    compare('LSQR', 'GPU', up0, up2, ic)
-    compare('SM',   'GPU', up1, up2, ic)
+    #compare('LSQR', 'GPU', up0, up2, ic)
+    #compare('SM',   'GPU', up1, up2, ic)
+    compare('LSQR', 'GPU[NP]', up0, up3, ic)
+    compare('SM',   'GPU[NP]', up1, up3, ic)
 
     tr.setParams(p0)
 
+
+    patches = [src.getModelPatch(tim, modelMask=tr._getModelMaskFor(tim, src))
+               for tim in tr.images]
+        
+    gpu_patches = np_gpu_opt.gpu_one_source_models(tr)
+
+    print('Patches:', patches)
+    print('GPU patches:', gpu_patches)
+    sys.exit(0)
+
+    
+    #A,B,X,scales,pH,pW = gpu_opt.gpu_one_source_update(tr, get_A=True)
+    A,B,X,scales,pH,pW = np_gpu_opt.gpu_one_source_update(tr, get_A=True, **optargs)
+    print('A', A.shape)
+    print('B', B.shape)
+    print('pH,pW', pH,pW)
+    A *= scales[np.newaxis, :]
+    I = np.flatnonzero(scales)
+    A = A[:, I]
+    X = X[I]
+    scales = scales[I]
+    print('scales:', scales)
+    AX = A @ X
+    npix,ncols = A.shape
+    plt.clf()
+    nims = 2
+    R,C = nims*2, (ncols+3 + 1)//2
+    k = 1
+    for j in range(nims):
+        for i in range(ncols):
+            plt.subplot(R, C, k)
+            k += 1
+            deriv = A[j*pH*pW : (j+1)*pH*pW, i].reshape(pH,pW)
+            mx = np.max(np.abs(deriv))
+            plt.imshow(deriv, vmin=-mx, vmax=mx,
+                       interpolation='nearest', origin='lower')
+            plt.xticks([]); plt.yticks([])
+
+        plt.subplot(R, C, k)
+        k += 1
+        diff = B[j*pH*pW : (j+1)*pH*pW].reshape(pH,pW)
+        mx = np.max(np.abs(diff))
+        plt.imshow(diff, vmin=-mx, vmax=mx,
+                   interpolation='nearest', origin='lower')
+        plt.xticks([]); plt.yticks([])
+        plt.title('B')
+        Bsub = diff
+        bmx = mx
+
+        plt.subplot(R, C, k)
+        k += 1
+        diff = AX[j*pH*pW : (j+1)*pH*pW].reshape(pH,pW)
+        mx = np.max(np.abs(diff))
+        plt.imshow(diff, vmin=-mx, vmax=mx,
+                   interpolation='nearest', origin='lower')
+        plt.xticks([]); plt.yticks([])
+        plt.title('A*X')
+        AXsub = diff
+
+        plt.subplot(R, C, k)
+        k += 1
+        mx = bmx
+        plt.imshow(AXsub - Bsub, vmin=-mx, vmax=mx,
+                   interpolation='nearest', origin='lower')
+        plt.xticks([]); plt.yticks([])
+        plt.title('A*X - B')
+
+        if ncols % 2 == 0:
+            k += 1
+    plt.savefig('a.png')
+
+    print('sum((0 - B)**2):', np.sum(B**2))
+    print('sum((AX - B)**2):', np.sum((AX - B)**2))
+    print('X:', X)
+
+    px = tr.getParams()
+    print('px', px)
+    print('p0', p0)
+    tr.setParams(p0)
+    
+    allderivs = tr.getDerivs()
+    A,B,X,scales,img_layout = sm_opt.getUpdateDirection(tr, allderivs, get_A=True, **optargs)
+    print('A', A.shape)
+    print('B', B.shape)
+    print('scales:', scales)
+    A *= scales[np.newaxis, :]
+    AX = A @ X
+    npix,ncols = A.shape
+    plt.clf()
+    nims = 2
+    R,C = nims*2, (ncols+3 + 1)//2
+    k = 1
+    for j,tim in enumerate(tr.images):
+        offset,(x0,x1,y0,y1) = img_layout[tim]
+        for i in range(ncols):
+            plt.subplot(R, C, k)
+            k += 1
+            w,h = x1-x0, y1-y0
+            deriv = A[offset : offset + w*h, i].reshape(h,w)
+            mx = np.max(np.abs(deriv))
+            plt.imshow(deriv, vmin=-mx, vmax=mx,
+                       interpolation='nearest', origin='lower')
+            plt.xticks([]); plt.yticks([])
+
+        plt.subplot(R, C, k)
+        k += 1
+        diff = B[offset : offset + w*h].reshape(h,w)
+        mx = np.max(np.abs(diff))
+        plt.imshow(diff, vmin=-mx, vmax=mx,
+                   interpolation='nearest', origin='lower')
+        plt.xticks([]); plt.yticks([])
+        plt.title('B')
+        Bsub = diff
+        bmx = mx
+
+        plt.subplot(R, C, k)
+        k += 1
+        diff = AX[offset : offset + w*h].reshape(h,w)
+        mx = np.max(np.abs(diff))
+        plt.imshow(diff, vmin=-mx, vmax=mx,
+                   interpolation='nearest', origin='lower')
+        plt.xticks([]); plt.yticks([])
+        plt.title('A*X')
+        AXsub = diff
+
+        plt.subplot(R, C, k)
+        k += 1
+        mx = bmx
+        plt.imshow(AXsub - Bsub, vmin=-mx, vmax=mx,
+                   interpolation='nearest', origin='lower')
+        plt.xticks([]); plt.yticks([])
+        plt.title('A*X - B')
+
+        if ncols % 2 == 0:
+            k += 1
+    plt.savefig('a-sm.png')
+
+    print('sum((0 - B)**2):', np.sum(B**2))
+    print('sum((AX - B)**2):', np.sum((AX - B)**2))
+    print('X:', X)
+    
     mod1 = tr.getModelImage(0)
     mod2 = tr.getModelImage(1)
     mn,mx = np.percentile(tim1.getImage().ravel(), [2,98])
@@ -1186,9 +1343,23 @@ if __name__ == '__main__':
     plt.imshow((tim2.getImage() - mod2) * tim2.getInvError(), **chima)
     plt.savefig('before.png')
 
-    tr.optimize_loop(**optargs)
+    tr.optimizer = np_gpu_opt
+    tr.setParams(p0)
 
-    print('After optimization:', tr.catalog[0])
+    print('Starting optimize_loop with GPU[NP]')
+    print('Start:', src)
+    #tr.optimize_loop(**optargs)
+    dlnp, X, alpha = tr.optimize(**optargs)
+    print('Done optimize_loop with GPU[NP]')
+
+    print('Stepped alpha', alpha, 'for dlogprob', dlnp)
+    print('Step:', src)
+    p = tr.getParams()
+    tr.setParams(np.array(p) + np.array(X))
+    print('Full X step would be:', src)
+    tr.setParams(p)
+
+    print('After optimization (GPU):', tr.catalog[0])
     for src in tr.catalog:
         print('  ', src)
 
@@ -1212,3 +1383,44 @@ if __name__ == '__main__':
     plt.subplot(2,3,6)
     plt.imshow((tim2.getImage() - mod2) * tim2.getInvError(), **chima)
     plt.savefig('after.png')
+
+    tr.optimizer = sm_opt
+    tr.setParams(p0)
+
+    print('Starting optimize_loop with SM')
+    #tr.optimize_loop(**optargs)
+    dlnp, X, alpha = tr.optimize(**optargs)
+    print('Done optimize_loop with SM')
+
+    print('Stepped alpha', alpha, 'for dlogprob', dlnp)
+    print('Step:', src)
+    p = tr.getParams()
+    tr.setParams(np.array(p) + np.array(X))
+    print('Full X step would be:', src)
+    tr.setParams(p)
+
+    print('After optimization (SM):', tr.catalog[0])
+    for src in tr.catalog:
+        print('  ', src)
+
+    mod1 = tr.getModelImage(0)
+    mod2 = tr.getModelImage(1)
+    plt.clf()
+    plt.subplot(2,3,1)
+    plt.imshow(mod1, **ima)
+    plt.colorbar()
+    plt.subplot(2,3,4)
+    plt.imshow(mod2, **ima)
+    plt.colorbar()
+    plt.subplot(2,3,2)
+    plt.imshow(tim1.getImage(), **ima)
+    plt.colorbar()
+    plt.subplot(2,3,5)
+    plt.imshow(tim2.getImage(), **ima)
+    plt.colorbar()
+    plt.subplot(2,3,3)
+    plt.imshow((tim1.getImage() - mod1) * tim1.getInvError(), **chima)
+    plt.subplot(2,3,6)
+    plt.imshow((tim2.getImage() - mod2) * tim2.getInvError(), **chima)
+    plt.savefig('after-sm.png')
+        
