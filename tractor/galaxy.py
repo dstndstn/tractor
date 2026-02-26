@@ -133,7 +133,7 @@ class Galaxy(MultiParams, SingleProfileSource):
 
     # returns [ Patch, Patch, ... ] of length numberOfParams().
     # Galaxy.
-    def getParamDerivatives(self, img, modelMask=None, **kwargs):
+    def getParamDerivatives(self, img, modelMask=None, get_patch0=False, **kwargs):
         pos0 = self.getPosition()
         wcs = img.getWcs()
         (px0, py0) = wcs.positionToPixel(pos0, self)
@@ -147,15 +147,18 @@ class Galaxy(MultiParams, SingleProfileSource):
 
         patch0 = self.getUnitFluxModelPatch(img, px=px0, py=py0, minval=minval,
                                             modelMask=modelMask, **kwargs)
+        derivs = []
+        if get_patch0:
+            derivs.append(patch0)
         if patch0 is None:
-            return [None] * self.numberOfParams()
+            derivs.extend([None] * self.numberOfParams())
+            return derivs
 
         if modelMask is None:
             x0,x1,y0,y1 = patch0.getExtent()
             modelMask = ModelMask.fromExtent(x0,x1,y0,y1)
         assert(modelMask is not None)
 
-        derivs = []
         # derivatives wrt position
         if self.isParamThawed('pos') and (self.pos.numberOfParams() > 0):
             if counts == 0:

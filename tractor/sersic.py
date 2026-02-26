@@ -406,13 +406,12 @@ class SersicGalaxy(HoggGalaxy):
 
     def getParamDerivatives(self, img, modelMask=None, **kwargs):
         # superclass produces derivatives wrt pos, brightness, and shape.
-        derivs = super(SersicGalaxy, self).getParamDerivatives(
-            img, modelMask=modelMask, **kwargs)
+        derivs = super().getParamDerivatives(
+            img, modelMask=modelMask, get_patch0=True, **kwargs)
+        patch0 = derivs.pop(0)
 
         pos0 = self.getPosition()
         (px0, py0) = img.getWcs().positionToPixel(pos0, self)
-        patch0 = self.getUnitFluxModelPatch(img, px=px0, py=py0,
-                                            modelMask=modelMask, **kwargs)
         if patch0 is None:
             derivs.append(None)
             return derivs
@@ -433,11 +432,11 @@ class SersicGalaxy(HoggGalaxy):
                     newval = oldvals[i] + step
 
                 oldval = self.sersicindex.setParam(i, newval)
-                patchx = self.getUnitFluxModelPatch(
+                newpatch = self.getUnitFluxModelPatch(
                     img, px=px0, py=py0, modelMask=modelMask, **kwargs)
                 self.sersicindex.setParam(i, oldval)
-                if patchx is None:
-                    print('patchx is None:')
+                if newpatch is None:
+                    print('Sersic newpatch is None:')
                     print('  ', self)
                     print('  stepping galaxy sersicindex',
                           self.sersicindex.getParamNames()[i])
@@ -445,7 +444,7 @@ class SersicGalaxy(HoggGalaxy):
                     print('  to', self.sersicindex.getParams()[i])
                     derivs.append(None)
 
-                dx = (patchx - patch0) * (counts / step)
+                dx = (newpatch - patch0) * (counts / step)
                 dx.setName('d(%s)/d(%s)' % (self.dname, inames[i]))
                 derivs.append(dx)
         return derivs
