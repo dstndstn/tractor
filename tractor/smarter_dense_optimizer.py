@@ -207,7 +207,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                     print('multiple modelMasks (sources) for this image?')
                     print('\tderiv extent', dx0,dx1, dy0,dy1)
                     print('\timage bounds', x0,x1,y0,y1, img)
-                    raise RuntimeError('SmarterDenseOptimizer failure')
+                    raise RuntimeError('SmarterDenseOptimizer failure (multiple modelmasks)')
 
             if scale_columns:
                 colscales[col] = scale
@@ -223,7 +223,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                 for rij,vij,bij in zip(ri, vi, bi):
                     A[Npixels + rij, col] = vij
                     B[Npixels + rij] += bij
-            del priorVals, rA, cA, vA, pb, _
+            del priorVals, rA, cA, vA, pb
 
         if scale_columns:
             colscales = np.sqrt(colscales)
