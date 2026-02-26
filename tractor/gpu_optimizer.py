@@ -55,21 +55,18 @@ class GpuFriendlyOptimizer(SmarterDenseOptimizer):
         assert(get_icov == False)
         return self.one_source_update(tr, priors=priors, **kwargs)
 
-    # def per_image_updates(self, tr, **kwargs):
-    #     if not (tr.isParamFrozen('images') and
-    #         (len(tr.catalog) == 1) and
-    #         isinstance(tr.catalog[0], ProfileGalaxy)):
-    #         t0 = time.time()
-    #         R = super().per_image_updates(tr, **kwargs)
-    #         dt = time.time() - t0
-    #         self.t_super += dt
-    #         self.n_super += 1
-    #         return R
-    #     return self.one_galaxy_update(tr, **kwargs)
+    def tryUpdates(self, tr, X, **kwargs):
+        if not (tr.isParamFrozen('images') and
+            (len(tr.catalog) == 1) and
+            isinstance(tr.catalog[0], (ProfileGalaxy, PointSource))):
+            return super().tryUpdates(tr, X, **kwargs)
+        return self.one_source_try_updates(tr, X, **kwargs)
 
     def one_source_update(self, tr, **kwargs):
-        #return super().all_image_updates(tr, **kwargs)
         return super().getLinearUpdateDirection(tr, **kwargs)
+
+    def one_source_try_updates(self, tr, X, **kwargs):
+        return super().tryUpdates(tr, X, **kwargs)
 
 class GpuOptimizer(GpuFriendlyOptimizer):
 
@@ -103,6 +100,9 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
     def __repr__(self):
         return 'GpuOptimizer(' + (self.cp_orig or str(self.cp)) + ')'
+
+    def one_source_try_updates(self, tr, X, **kwargs):
+        return self.gpu_one_source_try_updates(tr, X, **kwargs)
 
     def one_source_update(self, tr, **kwargs):
         return self.gpu_one_source_update(tr, **kwargs)
@@ -153,13 +153,9 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         # dt = time.time() - t0
         # return R
 
-    def gpu_one_source_update(self, tr, priors=True, get_A=False, **kwargs):
-        cp = self.cp
-        nu = cp.newaxis
-
-        t0 = time.time()
-        # Assume single source, optionally with constant surf brightness
-        assert(len(tr.catalog) in [1,2])
+    def _gpu_checks(self, tr):
+        # Assume single source
+        assert(len(tr.catalog) == 1)
         tims = tr.images
 
         # Assume galaxy or point source, or None (when we're fitting no-source + SB)
@@ -191,12 +187,222 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 goodmasks.append(mask)
             if len(goodtims) == 0:
                 debug('After removing None modelMasks, no images remain!')
-                return None
+                return None, None
             debug('Cut from %i to %i images with good modelMasks' % (len(tr.images), len(goodtims)))
             tims = goodtims
             masks = goodmasks
             del goodtims,goodmasks
         assert(all([m is not None for m in masks]))
+        return tims, masks
+
+    def gpu_one_source_try_updates(self, tr, X, alphas=None, **kwargs):
+        cp = self.cp
+        na = cp.newaxis
+        tims,masks = self._gpu_checks(tr)
+        if tims is None:
+            return None
+        src = tr.catalog[0]
+        is_galaxy = isinstance(src, ProfileGalaxy)
+        is_psf = isinstance(src, PointSource)
+        extents = [mm.extent for mm in masks]
+
+        # Pixel positions (at initial params)
+        pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
+               for tim in tims]
+        px, py = np.array(pxy, dtype=np.float32).T
+        ipx = px.round().astype(np.int32)
+        ipy = py.round().astype(np.int32)
+
+        ## FIXME -- this should be based on *SOURCE* properties as well, no?
+        ## FIXME -- used to have PSF size included in this mix...
+        x0, x1, y0, y1 = np.asarray(extents).T
+        halfsize = np.max(([(x1-x0)/2, (y1-y0)/2,
+                            1+px-x0, 1+x1-px, 1+py-y0, 1+y1-py]))
+
+        # Pre-process image: PSF, padded pix, etc
+        img_params = self.gpu_setup_image_params(tims, halfsize, extents, ipx, ipy)
+
+        p0 = tr.getParams()
+
+        # FIXME -- check_step??
+        # Get lists of alpha values and parameters to try
+        steps = [(0., p0, False, False)] + self.getParameterSteps(tr, X, alphas)
+        if len(steps) == 0:
+            self.last_step_hit_limit = True
+            self.hit_limit = True
+            return 0., 0.
+
+        counts_grid = np.zeros((len(tims), len(steps)), np.float32)
+
+        # We need to transpose the mogs: need Nimages x Nprofiles(aka Nsteps)
+        mogs = [[] for tim in tims]
+
+        idx_grid = np.zeros((len(tims), len(steps)), np.int32)
+        idy_grid = np.zeros((len(tims), len(steps)), np.int32)
+
+        mux_grid = np.zeros((len(tims), len(steps)), np.float32)
+        muy_grid = np.zeros((len(tims), len(steps)), np.float32)
+
+        Nmods = len(steps)
+        logpriors = np.zeros(Nmods, np.float32)
+        for istep, (_, p, _, _) in enumerate(steps):
+            tr.setParams(p)
+            logpriors[istep] = tr.getLogPrior()
+
+            # Pixel positions
+            pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
+                   for tim in tims]
+            px, py = np.array(pxy, dtype=np.float32).T
+            # Round source pixel position to nearest integer
+            ix = px.round().astype(np.int32)
+            iy = py.round().astype(np.int32)
+            idx_grid[:, istep] = ix - ipx
+            idy_grid[:, istep] = iy - ipy
+
+            # subpixel portion: shifted via Lanczos interpolation
+            mux = px - ix
+            muy = py - iy
+            assert(np.abs(mux).max() <= 0.5)
+            assert(np.abs(muy).max() <= 0.5)
+            mux_grid[:, istep] = mux
+            muy_grid[:, istep] = muy
+
+            counts_grid[:, istep] = np.array(
+                [tim.getPhotoCal().brightnessToCounts(src.brightness)
+                 for tim in tims])
+
+            if is_galaxy:
+                for itim,(tim,x,y) in enumerate(zip(tims, px, py)):
+                    mogs[itim].append(src._getShearedProfile(tim,x,y))
+
+            #print('model', istep, ': log-prob', tr.getLogLikelihood())
+            # lnl = tr.getLogLikelihood()
+            # if istep == 0:
+            #     lnl0 = lnl
+            # else:
+            #     print('model', istep, ': delta-lnl', lnl-lnl0)
+        #tr.setParams(p0)
+
+        if is_psf:
+            mods = self.gpu_get_unitflux_psf(img_params, mux_grid, muy_grid)
+        else:
+            mods = self.gpu_get_unitflux_galaxy_profiles(mogs, img_params,
+                                                         mux_grid, muy_grid)
+        mods *= cp.array(counts_grid[..., na, na])
+
+        # mods shape: Nimages x Nmod x pH x pW
+        pH, pW = img_params.pH, img_params.pW
+        Nimages = len(tims)
+        assert(img_params.padpix.shape == (Nimages, pH, pW))
+        assert(img_params.padie.shape  == (Nimages, pH, pW))
+
+        assert(mods.shape == (Nimages,Nmods,pH,pW))
+        chisqs = np.zeros(Nmods, np.float32)
+
+        #plt.clf()
+        #chia = dict(interpolation='nearest', origin='lower', vmin=-3, vmax=+3)
+        # FIXME -- quick path if all idx,idy == 0, or if all for one model == 0 ?
+        chi_work = cp.empty((pH, pW), np.float32)
+        for imod in range(Nmods):
+            for itim in range(Nimages):
+                dx = idx_grid[itim, imod]
+                dy = idy_grid[itim, imod]
+
+                #plt.subplot(Nmods, Nimages, imod*Nimages + itim + 1)
+                #plt.title('dx,dy = %i,%i' % (dx, dy))
+
+                if dx == 0 and dy == 0:
+                    chisqs[imod] += cp.sum(((img_params.padpix[itim, ...] -
+                                             mods[itim, imod, ...]) *
+                                            img_params.padie[itim, ...])**2)
+                    # DEBUG
+                    #chi = (img_params.padpix[itim, ...] - mods[itim, imod, ...]) * img_params.padie[itim, ...]
+                    #plt.imshow(chi, **chia)
+                    continue
+                pix = img_params.padpix[itim, ...]
+                ie  = img_params.padie [itim, ...]
+                mod = mods[itim, imod, ...]
+
+                if dx > 0:
+                    x_pix_slice = slice(dx, None)
+                    x_mod_slice = slice(-dx)
+                elif dx == 0:
+                    x_pix_slice = slice(None)
+                    x_mod_slice = slice(None)
+                else:
+                    x_pix_slice = slice(dx)
+                    x_mod_slice = slice(-dx, None)
+
+                if dy > 0:
+                    y_pix_slice = slice(dy, None)
+                    y_mod_slice = slice(-dy)
+                elif dy == 0:
+                    y_pix_slice = slice(None)
+                    y_mod_slice = slice(None)
+                else:
+                    y_pix_slice = slice(dy)
+                    y_mod_slice = slice(-dy, None)
+
+                chi_work[:,:] = pix
+                chi_work[y_pix_slice, x_pix_slice] -= mod[y_mod_slice, x_mod_slice]
+                chisqs[imod] += cp.sum((chi_work * ie)**2)
+                #chi = (pix - mod) * ie
+                #chisqs[imod] += cp.sum(((pix - mod) * ie).astype(cp.float64)**2)
+                #plt.imshow(chi_work, **chia)
+        #ps.savefig()
+
+        #print('chisqs:', chisqs)
+        #print('loglikes:', -0.5 * chisqs)
+        #print('delta-lnls:', -0.5 * (chisqs[1:] - chisqs[0]))
+
+        logprobs = logpriors - 0.5 * chisqs
+
+        logprob_best = logprobs[0]
+        alpha_best = None
+        p_best = p0
+        for istep, ((alpha, p, step_limit, hit_limit), logprob) in enumerate(
+            zip(steps, logprobs)):
+            if istep == 0:
+                continue
+            if hit_limit:
+                self.hit_limit = True
+            if not np.isfinite(logprob):
+                tr.setParams(p)
+                print('GPUOptimizer: log-prob %s.  Prior %s, Likelihood %s. Source: %s' %
+                      (logprob, logpriors[istep], -0.5*chisqs[istep], str(src)))
+                break
+            if logprob < (logprob_best - 1.):
+                # We're getting significantly worse -- quit line search
+                break
+            if logprob > logprob_best:
+                # Best we've found so far -- accept this step!
+                self.last_step_hit_limit = hit_limit
+                alpha_best = alpha
+                logprob_best = logprob
+                p_best = p
+        tr.setParams(p_best)
+        if alpha_best is None:
+            return 0., 0.
+
+        #tr.setParams(p0)
+        #OLD = super(SmarterDenseOptimizer, self).tryUpdates(tr, X, **kwargs)
+        #tr.setParams(p_best)
+        #NEW = logprob_best - logprobs[0], alpha_best
+        #print('OLD return val:', OLD)
+        #print('NEW return val:', NEW)
+
+        return logprob_best - logprobs[0], alpha_best
+
+    def gpu_one_source_update(self, tr, priors=True, get_A=False, **kwargs):
+        cp = self.cp
+        t0 = time.time()
+
+        tims,masks = self._gpu_checks(tr)
+        if tims is None:
+            return None
+        src = tr.catalog[0]
+        is_galaxy = isinstance(src, ProfileGalaxy)
+        is_psf = isinstance(src, PointSource)
 
         Nimages = len(tims)
         extents = [mm.extent for mm in masks]
@@ -574,12 +780,37 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         # and then running the in-place.
         padpsf = img_params.psf_pad
         nimg,h,w = padpsf.shape
-        G = cp.empty((nimg, 1, h, w), cp.float32)
-        G[:, 0, :, :] = padpsf
-        self.lanczos_shift_images_inplace_gpu(G, mux, muy)
-        return G
+
+        assert(mux.shape == muy.shape)
+        if len(mux.shape) == 1:
+            assert(len(mux) == nimg)
+            npro = 1
+            in_img = padpsf.reshape((nimg, npro, h, w))
+        else:
+            assert(len(mux.shape) == 2)
+            assert(mux.shape[0] == nimg)
+            _,npro = mux.shape
+            # hmmm, unnecessary copy...
+            #in_img = padpsf[:, cp.newaxis, :, :].reshape((nimg, npro, h, w))
+            in_img = padpsf[:, cp.newaxis, :, :].repeat(npro, axis=1)
+        out_img = cp.empty((nimg, npro, h, w), cp.float32)
+        self.lanczos_shift_images_gpu(in_img, out_img, mux, muy)
+        return out_img
 
     def gpu_get_unitflux_galaxy_profiles(self, mogs, img_params, mux, muy):
+        '''
+        Computes galaxy profiles for a grid of Nimages x Nprofiles.
+
+        "img_params" contains (padded) image pixels and processed PSFs;
+        Nimages in size.
+
+        "mogs" gives the galaxy (mixture-of-Gaussian) profiles, for the
+        grid of (Nimages x Nprofiles).
+
+        "mux" and "muy" are sub-pixel shifts, and are each either of
+        length Nimages, or size (Nimage x Nprofiles); they just get
+        passed to the Lanczos method which can handle either.
+        '''
         cp = self.cp
         # mogs[image][profile] = mog
         Nimages = len(mogs)
@@ -720,7 +951,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         assert(G.shape == (Nimages,Nprofiles,pH,pW))
 
         # FIXME -- check that this all remains float32 through the computations
-        self.lanczos_shift_images_inplace_gpu(G, mux, muy)
+        self.lanczos_shift_images_gpu(G, G, mux, muy)
 
         return G
 
@@ -796,93 +1027,161 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         w = w.astype(cp.float32)
         return P, (cx, cy), (H, W), (v, w), psf_mogs, pad
 
-    def lanczos_shift_images_inplace_gpu(self, G, x, y, work=None):
+    def lanczos_shift_images_gpu(self, in_img, out_img, x, y, work=None):
         cp = self.cp
         '''
         Only vectorized in the specific way we need:
-        G images:
+
+        in_img images:
         (Nimages x Nmodels x H x W)
+
         x, y:
         each of length (Nimages,)
+        OR
+        of size (Nimage x Nmodels)
+
         work:
         same shape as G; pre-allocated work array.
+
+        out_img can be = in_img for in-place shifting.
         '''
-        assert(len(G.shape) == 4)
+        assert(len(in_img.shape) == 4)
         if work is not None:
-            assert(work.shape == G.shape)
-        assert(len(x) == len(y))
-        Nim, Nmod, H, W = G.shape
-        assert(len(x) == Nim)
-        # Create Lanczos filter arrays, shape (Nim, 7)
-        fx = np.arange(-3, +4)[np.newaxis, :] + x[:, np.newaxis]
-        fy = np.arange(-3, +4)[np.newaxis, :] + y[:, np.newaxis]
+            assert(work.shape == in_img.shape)
+        Nim, Nmod, H, W = in_img.shape
+        assert(out_img.shape == in_img.shape)
+        assert(x.shape == y.shape)
+
+        if len(x.shape) == 1:
+            assert(len(x) == Nim)
+            # Create Lanczos filter arrays, shape (Nim, 7)
+            fx = np.arange(-3, +4)[np.newaxis, :] + x[:, np.newaxis]
+            fy = np.arange(-3, +4)[np.newaxis, :] + y[:, np.newaxis]
+        else:
+            assert(x.shape == (Nim, Nmod))
+            # Create Lanczos filter arrays, shape (Nim, Nmod, 7)
+            fx = np.arange(-3, +4)[np.newaxis, np.newaxis, :] + x[..., np.newaxis]
+            fy = np.arange(-3, +4)[np.newaxis, np.newaxis, :] + y[..., np.newaxis]
+
         fx = lanczos_filter(3, fx)
         fy = lanczos_filter(3, fy)
-        self.correlate7_2d_inplace_gpu(G, fx, fy, work=work)
+        self.correlate7_2d_gpu(in_img, out_img, fx, fy, work=work)
         del work
 
-    def correlate7_2d_inplace_gpu(self, G, fx, fy, work=None):
+    def correlate7_2d_gpu(self, in_img, out_img, fx, fy, work=None):
         cp = self.cp
+        na = cp.newaxis
         if work is None:
-            work = cp.empty_like(G)
+            work = cp.empty_like(in_img)
         else:
             ## FIXME - only really need work array to be larger; use a view
-            assert(work.shape == G.shape)
+            assert(work.shape == in_img.shape)
 
         fx = cp.array(fx)
         fy = cp.array(fy)
 
-        assert(len(G.shape) == 4)
-        Nim,Nmod,H,W = G.shape
-        assert(len(fx.shape) == 2)
-        assert(fx.shape == fy.shape)
-        Nim2,K = fx.shape
-        assert(Nim2 == Nim)
-        assert(K == 7)
+        assert(len(in_img.shape) == 4)
+        Nim,Nmod,H,W = in_img.shape
+        assert(out_img.shape == in_img.shape)
 
-        # Apply X filter
+        if len(fx.shape) == 2:
+            assert(len(fx.shape) == 2)
+            assert(fx.shape == fy.shape)
+            Nim2,K = fx.shape
+            assert(Nim2 == Nim)
+            assert(K == 7)
 
-        na = cp.newaxis
+            # Apply X filter
 
-        # Special handling - left edge.
-        work[:, :, :, 0] = cp.sum(G[:, :, :, :4] * fx[:, na, na, 3:], axis=-1)
-        work[:, :, :, 1] = cp.sum(G[:, :, :, :5] * fx[:, na, na, 2:], axis=-1)
-        work[:, :, :, 2] = cp.sum(G[:, :, :, :6] * fx[:, na, na, 1:], axis=-1)
+            # Special handling - left edge.
+            work[:, :, :, 0] = cp.sum(in_img[:, :, :, :4] * fx[:, na, na, 3:], axis=-1)
+            work[:, :, :, 1] = cp.sum(in_img[:, :, :, :5] * fx[:, na, na, 2:], axis=-1)
+            work[:, :, :, 2] = cp.sum(in_img[:, :, :, :6] * fx[:, na, na, 1:], axis=-1)
 
-        # Special handling - right edge.
-        work[:, :, :, -1] = cp.sum(G[:, :, :, -4:] * fx[:, na, na, :4], axis=-1)
-        work[:, :, :, -2] = cp.sum(G[:, :, :, -5:] * fx[:, na, na, :5], axis=-1)
-        work[:, :, :, -3] = cp.sum(G[:, :, :, -6:] * fx[:, na, na, :6], axis=-1)
+            # Special handling - right edge.
+            work[:, :, :, -1] = cp.sum(in_img[:, :, :, -4:] * fx[:, na, na, :4], axis=-1)
+            work[:, :, :, -2] = cp.sum(in_img[:, :, :, -5:] * fx[:, na, na, :5], axis=-1)
+            work[:, :, :, -3] = cp.sum(in_img[:, :, :, -6:] * fx[:, na, na, :6], axis=-1)
 
-        # Middle
-        work[:, :, :, 3:-3]  = G[:, :, :,  :-6] * fx[:, na, na, na, 0]
-        work[:, :, :, 3:-3] += G[:, :, :, 1:-5] * fx[:, na, na, na, 1]
-        work[:, :, :, 3:-3] += G[:, :, :, 2:-4] * fx[:, na, na, na, 2]
-        work[:, :, :, 3:-3] += G[:, :, :, 3:-3] * fx[:, na, na, na, 3]
-        work[:, :, :, 3:-3] += G[:, :, :, 4:-2] * fx[:, na, na, na, 4]
-        work[:, :, :, 3:-3] += G[:, :, :, 5:-1] * fx[:, na, na, na, 5]
-        work[:, :, :, 3:-3] += G[:, :, :, 6:  ] * fx[:, na, na, na, 6]
+            # Middle
+            work[:, :, :, 3:-3]  = in_img[:, :, :,  :-6] * fx[:, na, na, na, 0]
+            work[:, :, :, 3:-3] += in_img[:, :, :, 1:-5] * fx[:, na, na, na, 1]
+            work[:, :, :, 3:-3] += in_img[:, :, :, 2:-4] * fx[:, na, na, na, 2]
+            work[:, :, :, 3:-3] += in_img[:, :, :, 3:-3] * fx[:, na, na, na, 3]
+            work[:, :, :, 3:-3] += in_img[:, :, :, 4:-2] * fx[:, na, na, na, 4]
+            work[:, :, :, 3:-3] += in_img[:, :, :, 5:-1] * fx[:, na, na, na, 5]
+            work[:, :, :, 3:-3] += in_img[:, :, :, 6:  ] * fx[:, na, na, na, 6]
 
-        # Apply Y filter
+            # Apply Y filter
 
-        # Special handling - bottom edge.
-        G[:, :, 0, :] = cp.sum(work[:, :, :4, :] * fy[:, na, 3:, na], axis=-2)
-        G[:, :, 1, :] = cp.sum(work[:, :, :5, :] * fy[:, na, 2:, na], axis=-2)
-        G[:, :, 2, :] = cp.sum(work[:, :, :6, :] * fy[:, na, 1:, na], axis=-2)
+            # Special handling - bottom edge.
+            out_img[:, :, 0, :] = cp.sum(work[:, :, :4, :] * fy[:, na, 3:, na], axis=-2)
+            out_img[:, :, 1, :] = cp.sum(work[:, :, :5, :] * fy[:, na, 2:, na], axis=-2)
+            out_img[:, :, 2, :] = cp.sum(work[:, :, :6, :] * fy[:, na, 1:, na], axis=-2)
 
-        # Special handling - top edge.
-        G[:, :, -1, :] = cp.sum(work[:, :, -4:, :] * fy[:, na, :4, na], axis=-2)
-        G[:, :, -2, :] = cp.sum(work[:, :, -5:, :] * fy[:, na, :5, na], axis=-2)
-        G[:, :, -3, :] = cp.sum(work[:, :, -6:, :] * fy[:, na, :6, na], axis=-2)
+            # Special handling - top edge.
+            out_img[:, :, -1, :] = cp.sum(work[:, :, -4:, :] * fy[:, na, :4, na], axis=-2)
+            out_img[:, :, -2, :] = cp.sum(work[:, :, -5:, :] * fy[:, na, :5, na], axis=-2)
+            out_img[:, :, -3, :] = cp.sum(work[:, :, -6:, :] * fy[:, na, :6, na], axis=-2)
 
-        # Middle
-        G[:, :, 3:-3, :]  = work[:, :,  :-6, :] * fy[:, na, na, 0, na]
-        G[:, :, 3:-3, :] += work[:, :, 1:-5, :] * fy[:, na, na, 1, na]
-        G[:, :, 3:-3, :] += work[:, :, 2:-4, :] * fy[:, na, na, 2, na]
-        G[:, :, 3:-3, :] += work[:, :, 3:-3, :] * fy[:, na, na, 3, na]
-        G[:, :, 3:-3, :] += work[:, :, 4:-2, :] * fy[:, na, na, 4, na]
-        G[:, :, 3:-3, :] += work[:, :, 5:-1, :] * fy[:, na, na, 5, na]
-        G[:, :, 3:-3, :] += work[:, :, 6:  , :] * fy[:, na, na, 6, na]
+            # Middle
+            out_img[:, :, 3:-3, :]  = work[:, :,  :-6, :] * fy[:, na, na, 0, na]
+            out_img[:, :, 3:-3, :] += work[:, :, 1:-5, :] * fy[:, na, na, 1, na]
+            out_img[:, :, 3:-3, :] += work[:, :, 2:-4, :] * fy[:, na, na, 2, na]
+            out_img[:, :, 3:-3, :] += work[:, :, 3:-3, :] * fy[:, na, na, 3, na]
+            out_img[:, :, 3:-3, :] += work[:, :, 4:-2, :] * fy[:, na, na, 4, na]
+            out_img[:, :, 3:-3, :] += work[:, :, 5:-1, :] * fy[:, na, na, 5, na]
+            out_img[:, :, 3:-3, :] += work[:, :, 6:  , :] * fy[:, na, na, 6, na]
+
+        else:
+            assert(len(fx.shape) == 3)
+            assert(fx.shape == fy.shape)
+            Nim2,Nmod2,K = fx.shape
+            assert(Nim2 == Nim)
+            assert(Nmod2 == Nmod)
+            assert(K == 7)
+
+            # Apply X filter
+
+            # Special handling - left edge.
+            work[..., :, 0] = cp.sum(in_img[..., :, :4] * fx[..., na, 3:], axis=-1)
+            work[..., :, 1] = cp.sum(in_img[..., :, :5] * fx[..., na, 2:], axis=-1)
+            work[..., :, 2] = cp.sum(in_img[..., :, :6] * fx[..., na, 1:], axis=-1)
+
+            # Special handling - right edge.
+            work[..., :, -1] = cp.sum(in_img[..., :, -4:] * fx[..., na, :4], axis=-1)
+            work[..., :, -2] = cp.sum(in_img[..., :, -5:] * fx[..., na, :5], axis=-1)
+            work[..., :, -3] = cp.sum(in_img[..., :, -6:] * fx[..., na, :6], axis=-1)
+
+            # Middle
+            work[..., :, 3:-3]  = in_img[..., :,  :-6] * fx[..., na, na, 0]
+            work[..., :, 3:-3] += in_img[..., :, 1:-5] * fx[..., na, na, 1]
+            work[..., :, 3:-3] += in_img[..., :, 2:-4] * fx[..., na, na, 2]
+            work[..., :, 3:-3] += in_img[..., :, 3:-3] * fx[..., na, na, 3]
+            work[..., :, 3:-3] += in_img[..., :, 4:-2] * fx[..., na, na, 4]
+            work[..., :, 3:-3] += in_img[..., :, 5:-1] * fx[..., na, na, 5]
+            work[..., :, 3:-3] += in_img[..., :, 6:  ] * fx[..., na, na, 6]
+
+            # Apply Y filter
+
+            # Special handling - bottom edge.
+            out_img[..., 0, :] = cp.sum(work[..., :4, :] * fy[..., 3:, na], axis=-2)
+            out_img[..., 1, :] = cp.sum(work[..., :5, :] * fy[..., 2:, na], axis=-2)
+            out_img[..., 2, :] = cp.sum(work[..., :6, :] * fy[..., 1:, na], axis=-2)
+
+            # Special handling - top edge.
+            out_img[..., -1, :] = cp.sum(work[..., -4:, :] * fy[..., :4, na], axis=-2)
+            out_img[..., -2, :] = cp.sum(work[..., -5:, :] * fy[..., :5, na], axis=-2)
+            out_img[..., -3, :] = cp.sum(work[..., -6:, :] * fy[..., :6, na], axis=-2)
+
+            # Middle
+            out_img[..., 3:-3, :]  = work[...,  :-6, :] * fy[..., na, 0, na]
+            out_img[..., 3:-3, :] += work[..., 1:-5, :] * fy[..., na, 1, na]
+            out_img[..., 3:-3, :] += work[..., 2:-4, :] * fy[..., na, 2, na]
+            out_img[..., 3:-3, :] += work[..., 3:-3, :] * fy[..., na, 3, na]
+            out_img[..., 3:-3, :] += work[..., 4:-2, :] * fy[..., na, 4, na]
+            out_img[..., 3:-3, :] += work[..., 5:-1, :] * fy[..., na, 5, na]
+            out_img[..., 3:-3, :] += work[..., 6:  , :] * fy[..., na, 6, na]
 
     def gpu_one_source_models(self, tr):
         cp = self.cp
@@ -1061,8 +1360,11 @@ if __name__ == '__main__':
     print('Setting seed', seed)
     np.random.seed(seed)
     
+
+    from astrometry.util.plotutils import PlotSequence
+    ps = PlotSequence('chi')
+    
     # import pickle
-    # 
     # opt = GpuOptimizer('cupy')
     # s = pickle.dumps(opt)
     # opt2 = pickle.loads(s)
@@ -1076,7 +1378,6 @@ if __name__ == '__main__':
     # 
     # print('Opt:', opt, opt.cp)
     # print('Opt2:', opt2, opt2.cp)
-    # 
     # sys.exit(0)
     
     def difference(x1, x2):
@@ -1175,12 +1476,13 @@ if __name__ == '__main__':
     pos = RaDecPos(ra_cen - 25.*arcsec, dec_cen)
     gpos = GaiaPosition(ra_cen - 25.*arcsec, dec_cen, 2016.0, 0., 0., 0.)
     #gal = ExpGalaxy(pos, brightness, shape)
-    #gal = DevGalaxy(pos, brightness, shape)
+    gal = DevGalaxy(pos, brightness, shape)
     param_scales = [1./3600, 1./3600., 100., 100., 100., 1., 0.1, 0.1]
     #ptsrc = PointSource(pos, brightness)
     #param_scales = [1./3600, 1./3600, 100., 100., 100]
     #gal = ExpGalaxy(gpos, brightness, shape)
     #param_scales = [100., 100., 100., 1., 0.1, 0.1]
+
     gal = SersicGalaxy(pos, brightness, shape, SersicIndex(3.5))
     param_scales = [1./3600, 1./3600, 100., 100., 100., 1., 0.1, 0.1, 0.1]
     #print('Sersic profile:', ser.getProfile())
@@ -1263,6 +1565,9 @@ if __name__ == '__main__':
     print('Perturbed source parameters:')
     for src in cat:
         print('  ', src)
+
+    alphas = [0.1, 0.3, 1.0]
+    optargs = dict(shared_params=False, priors=True, alphas=alphas)
 
     orig_opt = tr.optimizer
 

@@ -123,6 +123,14 @@ class FakeCupyArray(object):
     def __neg__(self):
         x = self._get()
         return asarray(-x)
+    def __eq__(self, other):
+        x = self._get()
+        if isinstance(other, FakeCupyArray):
+            other = other.get()
+        return asarray(x == other)
+    def __bool__(self):
+        x = self._get()
+        return x.__bool__()
     def dot(self, other):
         x = self._get()
         if isinstance(other, FakeCupyArray):
@@ -144,6 +152,10 @@ class FakeCupyArray(object):
     def copy(self, **kwargs):
         x = self._get()
         x = x.copy(**kwargs)
+        return asarray(x)
+    def ravel(self, *args):
+        x = self._get()
+        x = x.ravel(*args)
         return asarray(x)
 
 complex64 = np.complex64
@@ -261,6 +273,11 @@ def sum(a, **kwargs):
 
 def arange(*args, **kwargs):
     x = np.arange(*args, **kwargs)
+    return asarray(x)
+
+def any(a, **kwargs):
+    a = a.get()
+    x = np.any(a, **kwargs)
     return asarray(x)
 
 newaxis = np.newaxis
