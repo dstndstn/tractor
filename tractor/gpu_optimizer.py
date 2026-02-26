@@ -3,7 +3,7 @@ import time
 import numpy as np
 
 from tractor.smarter_dense_optimizer import SmarterDenseOptimizer
-from tractor import ProfileGalaxy, HybridPSF, ConstantSky, PointSource
+from tractor import ProfileGalaxy, HybridPSF, ConstantSky, PointSource, Patch
 from tractor.brightness import LinearPhotoCal
 from tractor.basics import ConstantSurfaceBrightness
 
@@ -395,6 +395,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
     def gpu_one_source_update(self, tr, priors=True, get_A=False, **kwargs):
         cp = self.cp
+        nu = cp.newaxis
         t0 = time.time()
 
         tims,masks = self._gpu_checks(tr)
@@ -403,6 +404,10 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         src = tr.catalog[0]
         is_galaxy = isinstance(src, ProfileGalaxy)
         is_psf = isinstance(src, PointSource)
+        is_none = (src is None)
+        sb = None
+        if len(tr.catalog) == 2:
+            sb = tr.catalog[1]
 
         Nimages = len(tims)
         extents = [mm.extent for mm in masks]
@@ -1280,41 +1285,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             patches.append(Patch(x0, y0, mod))
         return patches
 
-    def _gpu_checks(self, tr):
-        # Assume single source
-        assert(len(tr.catalog) == 1)
-        tims = tr.images
-
-        # Assume galaxy or point source
-        src = tr.catalog[0]
-        is_galaxy = isinstance(src, ProfileGalaxy)
-        is_psf = isinstance(src, PointSource)
-        assert(isinstance(src, (ProfileGalaxy, PointSource)))
-
-        # Assume model masks are set (ie, pixel ROIs of interest are defined)
-        #masks = [tr._getModelMaskByIdx(i, src) for i in range(len(tr.images))]
-        masks = [tr._getModelMaskFor(tim, src) for tim in tims]
-        if any(m is None for m in masks):
-            debug('One or more modelMasks is None in GPU code -- cutting images')
-            goodtims = []
-            goodmasks = []
-            for tim,mask in zip(tims,masks):
-                if mask is None:
-                    continue
-                goodtims.append(tim)
-                goodmasks.append(mask)
-            if len(goodtims) == 0:
-                info('After removing None modelMasks, no images remain!')
-                return None,None
-            debug('Cut from %i to %i images with good modelMasks' % (len(tr.images), len(goodtims)))
-            tims = goodtims
-            masks = goodmasks
-            del goodtims,goodmasks
-        assert(all([m is not None for m in masks]))
-        return tims, masks
-
-
-
 
 # eg, lanczos_filter(3, -0.3 + np.arange(-3, +4))
 def lanczos_filter(order, x):
@@ -1344,6 +1314,7 @@ if __name__ == '__main__':
     from tractor.basics import ConstantSurfaceBrightness
     from tractor import ParamList
     import os
+    import sys
     import time
     import pylab as plt
     from astrometry.util.util import Tan
@@ -1505,7 +1476,6 @@ if __name__ == '__main__':
     psf = HybridPixelizedPSF(psf,
                              gauss=NCircularGaussianPSF([psf.fwhm / 2.35], [1.]))
     psf = psf.constantPsfAt(w/2, h/2)
-    print('const psf', psf)
 
     pixscale1 = 0.5*arcsec
 
@@ -1640,8 +1610,26 @@ if __name__ == '__main__':
 
     print('Patches:', patches)
     print('GPU patches:', gpu_patches)
-    sys.exit(0)
 
+    for p,gp in zip(patches, gpu_patches):
+        plt.clf()
+        plt.subplot(1,3,1)
+        mx = p.patch.max()
+        ima = dict(interpolation='nearest', origin='lower', vmin=0, vmax=mx)
+        plt.imshow(p.patch, **ima)
+        plt.title('cpu')
+        plt.subplot(1,3,2)
+        plt.imshow(gp.patch, **ima)
+        plt.title('gpu')
+        plt.subplot(1,3,3)
+        scale = 0.1
+        plt.imshow(gp.patch - p.patch, interpolation='nearest', origin='lower',
+                   vmin=-scale*mx, vmax=+scale*mx)
+        plt.title('diff')
+        ps.savefig()
+
+    
+    sys.exit(0)
     
     #A,B,X,scales,pH,pW = gpu_opt.gpu_one_source_update(tr, get_A=True)
     A,B,X,scales,pH,pW = np_gpu_opt.gpu_one_source_update(tr, get_A=True, **optargs)
