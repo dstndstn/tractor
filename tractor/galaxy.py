@@ -432,6 +432,9 @@ class ProfileGalaxy(object):
             #print('  sizes vs PSF size', pW, ':', ', '.join(['%.3g' % s for s in np.sqrt(vv)]))
             ramp = np.any(IM*IF)
 
+            Nmog = 0
+            Nfft = 0
+
             if np.any(IM):
                 amps = amix.amp[IM]
                 if ramp:
@@ -446,6 +449,12 @@ class ProfileGalaxy(object):
                 mogmix = mp.MixtureOfGaussians(amps,
                                                amix.mean[IM, :] + np.array([px, py])[np.newaxis, :],
                                                amix.var[IM, :, :], quick=True)
+                Nmog = np.sum(amps != 0)
+                # print('MOG amps:')
+                # s = ''
+                # for k in range(len(amps)):
+                #     s += '* ' if (amps[k] != 0) else '. '
+                # print(s)
 
             if np.any(IF):
                 amps = amix.amp[IF]
@@ -453,9 +462,17 @@ class ProfileGalaxy(object):
                     amps *= fftweights
                 fftmix = mp.MixtureOfGaussians(amps, amix.mean[IF, :], amix.var[IF, :, :],
                                                 quick=True)
+                Nfft = np.sum(amps != 0)
+                # print('FFT amps:')
+                # s = ''
+                # for k in range(len(amps)):
+                #     s += '* ' if (amps[k] != 0) else '. '
+                # print(s)
             else:
                 fftmix = None
 
+            #print('MOG: %i  FFT: %i' % (Nmog, Nfft))
+                
         if fftmix is not None:
             #print('Evaluating FFT mixture:', len(fftmix.amp), 'components in size', pH,pW)
             #print('Amps:', fftmix.amp)

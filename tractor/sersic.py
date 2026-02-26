@@ -314,7 +314,6 @@ class SersicMixture(object):
             assert(ramp_lo <= sindex)
             assert(sindex < ramp_hi)
             ramp_frac = (sindex - ramp_lo) / (ramp_hi - ramp_lo)
-            #print('Sersic index', sindex, ': ramping between ranges', (lo0,hi0), 'and', (lo1,hi1), '; ramp', (ramp_lo, ramp_hi), 'fraction', ramp_frac)
             amps0 = np.array([f(sindex) for f in a0])
             amps0 /= amps0.sum()
             amps1 = np.array([f(sindex) for f in a1])
@@ -453,6 +452,7 @@ class SersicGalaxy(HoggGalaxy):
             oldvals = self.sersicindex.getParams()
             ups = self.sersicindex.getUpperBounds()
             los = self.sersicindex.getLowerBounds()
+            #n0 = len(self._getShearedProfile(img, px, py).amp)
             n0 = len(self.getProfile().amp)
 
             for i,step in enumerate(steps):

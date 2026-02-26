@@ -154,8 +154,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         # return R
 
     def _gpu_checks(self, tr):
-        # Assume single source
-        assert(len(tr.catalog) == 1)
+        # Assume single source, optionally with a ConstantSurfaceBrightness
+        assert(len(tr.catalog) in [1,2])
         tims = tr.images
 
         # Assume galaxy or point source, or None (when we're fitting no-source + SB)
@@ -842,20 +842,28 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         # Nimages x Nprofiles x Nmog
         sz = img_params.pW/2
         vv = mix_vars[:,:,:,0] + mix_vars[:,:,:,2]
-        IM = (sz**2 < (nsigma2**2 * vv))
-        IF = (sz**2 > (nsigma1**2 * vv))
+        IM = (sz**2 < (nsigma2**2 * vv)) * (mix_amps > 0)
+        IF = (sz**2 > (nsigma1**2 * vv)) * (mix_amps > 0)
         ramp = np.any((IM*IF))
 
         # Assume the MoG components are sorted by increasing variance; terms we'll evaluate
         # with the FFT will be at the front, and MoG at the back.
-        Nmog = IM.sum(axis=2).max(axis=(0,1))
-        Nfft = IF.sum(axis=2).max(axis=(0,1))
+        # (BUT, because we pad out the arrays to the max K of MoG components, the end of the array
+        # can contain zeros!)
+        Kmog = np.flatnonzero(IM.max(axis=(0,1)))
+        Kfft = np.flatnonzero(IF.max(axis=(0,1)))
+        Nmog = len(Kmog)
+        Nfft = len(Kfft)
+        assert(np.all(Kmog == (np.arange(Nmog) + (Kmax - Nmog))))
+        assert(np.all(Kfft == np.arange(Nfft)))
 
         mog_mix_vars = mix_vars[:, :, -Nmog:, :]
         fft_mix_vars = mix_vars[:, :, :Nfft:, :]
         mog_mix_amps = mix_amps[:, :, -Nmog:]
         fft_mix_amps = mix_amps[:, :, :Nfft]
 
+        # Assert that the block of the MoG model that we're pulling off to process with
+        # the MoG / FFT methods include all of the instances where we want to run those methods.
         assert(np.sum(IM) == np.sum(IM[:, :, -Nmog:]))
         assert(np.sum(IF) == np.sum(IF[:, :, :Nfft ]))
 
@@ -864,10 +872,15 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             mogweights = np.ones(vv.shape, np.float32)
             fftweights = np.ones(vv.shape, np.float32)
             ns = sz / np.maximum(1e-6, np.sqrt(vv))
-            mogweights = np.clip((nsigma2 - ns) / (nsigma2 - nsigma1), 0., 1.) * IM
-            fftweights = np.clip((ns - nsigma1) / (nsigma2 - nsigma1), 0., 1.) * IF
-            mog_mix_amps *= mogweights[:, :, -Nmog:]
-            fft_mix_amps *= fftweights[:, :, :Nfft]
+            mogweights = (np.clip((nsigma2 - ns) / (nsigma2 - nsigma1), 0., 1.) * IM)[..., -Nmog:]
+            fftweights = (np.clip((ns - nsigma1) / (nsigma2 - nsigma1), 0., 1.) * IF)[..., :Nfft]
+            mogweights *= mog_mix_amps
+            mog_mix_amps = mogweights
+            fftweights *= fft_mix_amps
+            fft_mix_amps = fftweights
+            # BRUTAL -- mog_mix_amps and fft_mix_amps are VIEWS into the same mix_amps array!
+            #mog_mix_amps *= mogweights[:, :, -Nmog:]
+            #fft_mix_amps *= fftweights[:, :, :Nfft]
             del mogweights, fftweights
 
         nu = cp.newaxis
@@ -1447,12 +1460,13 @@ if __name__ == '__main__':
     pos = RaDecPos(ra_cen - 25.*arcsec, dec_cen)
     gpos = GaiaPosition(ra_cen - 25.*arcsec, dec_cen, 2016.0, 0., 0., 0.)
     #gal = ExpGalaxy(pos, brightness, shape)
-    gal = DevGalaxy(pos, brightness, shape)
-    param_scales = [1./3600, 1./3600., 100., 100., 100., 1., 0.1, 0.1]
+    #gal = DevGalaxy(pos, brightness, shape)
+    #param_scales = [1./3600, 1./3600., 100., 100., 100., 1., 0.1, 0.1]
     #ptsrc = PointSource(pos, brightness)
     #param_scales = [1./3600, 1./3600, 100., 100., 100]
     #gal = ExpGalaxy(gpos, brightness, shape)
-    #param_scales = [100., 100., 100., 1., 0.1, 0.1]
+    gal = DevGalaxy(gpos, brightness, shape)
+    param_scales = [100., 100., 100., 1., 0.1, 0.1]
 
     gal = SersicGalaxy(pos, brightness, shape, SersicIndex(3.5))
     param_scales = [1./3600, 1./3600, 100., 100., 100., 1., 0.1, 0.1, 0.1]
@@ -1460,11 +1474,11 @@ if __name__ == '__main__':
     
     b2 = NanoMaggies(g=20., r=40., z=60.)
     sb = ConstantSurfaceBrightness(b2)
-    #param_scales += [5.] * sb.numberOfParams()
+    param_scales += [5.] * sb.numberOfParams()
 
-    cat = [gal]
+    #cat = [gal]
     #cat = [ptsrc, sb]
-    #cat = [gal, sb]
+    cat = [gal, sb]
 
     optargs = dict(alphas=[0.1, 0.3, 1.0], dchisq=0.1, shared_params=False, priors=True)
 
@@ -1536,6 +1550,47 @@ if __name__ == '__main__':
     for src in cat:
         print('  ', src)
 
+    #cp.get = lambda x: x.get()
+    #gpu_opt = GpuOptimizer(cp)
+
+    np.get = lambda x: x
+    np_gpu_opt = GpuOptimizer(np)
+
+    src = cat[0]
+    mm = ModelMask(110, 10, 80, 80)
+    tr.setModelMasks([dict([(s,mm) for s in cat])
+                      for tim in tr.images])
+
+    print()
+    print('CPU patches...')
+    patches = [src.getModelPatch(tim, modelMask=tr._getModelMaskFor(tim, src))
+               for tim in tr.images]
+
+    print()
+    print('GPU patches...')
+    gpu_patches = np_gpu_opt.gpu_one_source_models(tr)
+
+    print('Patches:', patches)
+    print('GPU patches:', gpu_patches)
+
+    for p,gp in zip(patches, gpu_patches):
+        plt.clf()
+        plt.subplot(1,3,1)
+        mx = p.patch.max()
+        ima = dict(interpolation='nearest', origin='lower', vmin=0, vmax=mx)
+        plt.imshow(p.patch, **ima)
+        plt.title('cpu')
+        plt.subplot(1,3,2)
+        plt.imshow(gp.patch, **ima)
+        plt.title('gpu')
+        plt.subplot(1,3,3)
+        scale = 0.1
+        plt.imshow(gp.patch - p.patch, interpolation='nearest', origin='lower',
+                   vmin=-scale*mx, vmax=+scale*mx)
+        plt.title('diff')
+        ps.savefig()
+
+    
     alphas = [0.1, 0.3, 1.0]
     optargs = dict(shared_params=False, priors=True, alphas=alphas)
 
@@ -1571,12 +1626,6 @@ if __name__ == '__main__':
 
     tr.setParams(p0)
 
-    #cp.get = lambda x: x.get()
-    #gpu_opt = GpuOptimizer(cp)
-
-    np.get = lambda x: x
-    np_gpu_opt = GpuOptimizer(np)
-
     #tr.optimizer = gpu_opt
     #up2 = tr.optimizer.getLinearUpdateDirection(tr, **optargs)
     #print('GPU Update:', up2)
@@ -1603,34 +1652,6 @@ if __name__ == '__main__':
     tr.setParams(p0)
 
 
-    patches = [src.getModelPatch(tim, modelMask=tr._getModelMaskFor(tim, src))
-               for tim in tr.images]
-        
-    gpu_patches = np_gpu_opt.gpu_one_source_models(tr)
-
-    print('Patches:', patches)
-    print('GPU patches:', gpu_patches)
-
-    for p,gp in zip(patches, gpu_patches):
-        plt.clf()
-        plt.subplot(1,3,1)
-        mx = p.patch.max()
-        ima = dict(interpolation='nearest', origin='lower', vmin=0, vmax=mx)
-        plt.imshow(p.patch, **ima)
-        plt.title('cpu')
-        plt.subplot(1,3,2)
-        plt.imshow(gp.patch, **ima)
-        plt.title('gpu')
-        plt.subplot(1,3,3)
-        scale = 0.1
-        plt.imshow(gp.patch - p.patch, interpolation='nearest', origin='lower',
-                   vmin=-scale*mx, vmax=+scale*mx)
-        plt.title('diff')
-        ps.savefig()
-
-    
-    sys.exit(0)
-    
     #A,B,X,scales,pH,pW = gpu_opt.gpu_one_source_update(tr, get_A=True)
     A,B,X,scales,pH,pW = np_gpu_opt.gpu_one_source_update(tr, get_A=True, **optargs)
     print('A', A.shape)
@@ -1790,16 +1811,16 @@ if __name__ == '__main__':
 
     print('Starting optimize_loop with GPU[NP]')
     print('Start:', src)
-    #tr.optimize_loop(**optargs)
-    dlnp, X, alpha = tr.optimize(**optargs)
+    tr.optimize_loop(**optargs)
     print('Done optimize_loop with GPU[NP]')
 
-    print('Stepped alpha', alpha, 'for dlogprob', dlnp)
-    print('Step:', src)
-    p = tr.getParams()
-    tr.setParams(np.array(p) + np.array(X))
-    print('Full X step would be:', src)
-    tr.setParams(p)
+    # dlnp, X, alpha = tr.optimize(**optargs)
+    # print('Stepped alpha', alpha, 'for dlogprob', dlnp)
+    # print('Step:', src)
+    # p = tr.getParams()
+    # tr.setParams(np.array(p) + np.array(X))
+    # print('Full X step would be:', src)
+    # tr.setParams(p)
 
     print('After optimization (GPU):', tr.catalog[0])
     for src in tr.catalog:
@@ -1830,16 +1851,16 @@ if __name__ == '__main__':
     tr.setParams(p0)
 
     print('Starting optimize_loop with SM')
-    #tr.optimize_loop(**optargs)
-    dlnp, X, alpha = tr.optimize(**optargs)
+    tr.optimize_loop(**optargs)
     print('Done optimize_loop with SM')
 
-    print('Stepped alpha', alpha, 'for dlogprob', dlnp)
-    print('Step:', src)
-    p = tr.getParams()
-    tr.setParams(np.array(p) + np.array(X))
-    print('Full X step would be:', src)
-    tr.setParams(p)
+    # dlnp, X, alpha = tr.optimize(**optargs)
+    # print('Stepped alpha', alpha, 'for dlogprob', dlnp)
+    # print('Step:', src)
+    # p = tr.getParams()
+    # tr.setParams(np.array(p) + np.array(X))
+    # print('Full X step would be:', src)
+    # tr.setParams(p)
 
     print('After optimization (SM):', tr.catalog[0])
     for src in tr.catalog:

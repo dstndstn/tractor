@@ -19,6 +19,7 @@ class ConstrainedOptimizer(LsqrOptimizer):
         for step in range(steps):
             self.stepLimited = False
             dlnp,X,alpha = self.optimize(tractor, **kwargs)
+            print('optimize_loop step %i: dlnp %.1f, alpha %f, X:' % (step, dlnp, alpha), X)
             if check_step is not None:
                 r = check_step(optimizer=self, tractor=tractor, dlnp=dlnp, X=X, alpha=alpha)
                 if not r:
@@ -40,6 +41,7 @@ class ConstrainedOptimizer(LsqrOptimizer):
 
         # Get lists of alpha values and parameters to try
         steps = self.getParameterSteps(tractor, X, alphas)
+        print('TryUpdates: steps', steps)
 
         if len(steps) == 0:
             self.last_step_hit_limit = True
@@ -50,6 +52,7 @@ class ConstrainedOptimizer(LsqrOptimizer):
                 self.hit_limit = True
 
             tractor.setParams(p)
+            print('tryUpdates: alpha', alpha)
 
             if check_step is not None:
                 r = check_step(optimizer=self, tractor=tractor, X=X, alpha=alpha)
@@ -63,11 +66,14 @@ class ConstrainedOptimizer(LsqrOptimizer):
                       (logprob, tractor.getLogPrior(), tractor.getLogLikelihood(),
                        '\n  '.join([str(s) for s in tractor.catalog])))
                 break
+            print('  delta-logprob vs best: %.3f' % (logprob - logprob_best))
             if logprob < (logprob_best - 1.):
                 # We're getting significantly worse -- quit line search
+                print('  getting worse - quit')
                 break
             if logprob > logprob_best:
                 # Best we've found so far -- accept this step!
+                print('  best so far')
                 self.last_step_hit_limit = hit_limit
                 alpha_best = alpha
                 logprob_best = logprob

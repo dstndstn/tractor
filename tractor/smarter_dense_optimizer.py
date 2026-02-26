@@ -216,6 +216,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             rA, cA, vA, pb, _ = priorVals
             for ri,ci,vi,bi in zip(rA, cA, vA, pb):
                 col = column_map[ci]
+                #print('Prior in col', ci, '->', col)
                 assert(col >= 0)
                 if scale_columns:
                     # (note, np.dot works when vi is a list)
