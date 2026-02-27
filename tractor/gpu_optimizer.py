@@ -338,7 +338,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         t0 = time.time()
 
         tims,masks = self._gpu_checks(tr)
-        if tims is None:
+        if tims is None or len(tims) == 0:
             return None
         src = tr.catalog[0]
         is_galaxy = isinstance(src, ProfileGalaxy)
@@ -772,10 +772,16 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         # can contain zeros!)
         Kmog = np.flatnonzero(IM.max(axis=(0,1)))
         Kfft = np.flatnonzero(IF.max(axis=(0,1)))
-        Nmog = len(Kmog)
-        Nfft = len(Kfft)
-        assert(np.all(Kmog == (np.arange(Nmog) + (Kmax - Nmog))))
-        assert(np.all(Kfft == np.arange(Nfft)))
+        if len(Kmog) == 0:
+            Nmog = 0
+        else:
+            Nmog = Kmax - min(Kmog)
+        if len(Kfft) == 0:
+            Nfft = 0
+        else:
+            Nfft = 1 + max(Kfft)
+        assert(np.all(Kmog >= (Kmax-Nmog)))
+        assert(np.all(Kfft < Nfft))
 
         mog_mix_vars = mix_vars[:, :, -Nmog:, :]
         fft_mix_vars = mix_vars[:, :, :Nfft:, :]
@@ -836,7 +842,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             # (ie, the non-padded rectangles of the images)
             psf_amps, psf_vars = img_params.psf_mogs
             _,Npsfmog = psf_amps.shape
-            assert(G.shape == (Nimages,Nprofiles,pH,pW))
+            if G is not None:
+                assert(G.shape == (Nimages,Nprofiles,pH,pW))
             assert(mog_mix_amps.shape == (Nimages, Nprofiles, Nmog))
             assert(mog_mix_vars.shape == (Nimages, Nprofiles, Nmog, 3))
             assert(psf_amps.shape == (Nimages, Npsfmog))
