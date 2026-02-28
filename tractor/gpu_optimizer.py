@@ -641,6 +641,11 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         return sX
 
     def gpu_setup_image_params(self, tims, halfsize, extents, ipx, ipy):
+        '''
+        ipx,ipy: arrays of length = len(tims), of the tim pixel coordinate
+                 that will be placed in the padded image coord cx,cy.
+                 ie, the center of the padded patches that we'll compute.
+        '''
         cp = self.cp
         # Assume no (varying) sky background levels
         assert(all([isinstance(tim.sky, ConstantSky) for tim in tims]))
@@ -661,23 +666,20 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
         # Embed pix and ie in images the same size as pW,pH.
         # FIXME -- should be able to cache this; rationalize pixel transfer to GPU.
-        padpix = cp.zeros((Nimages, pH,pW), cp.float32)
-        padie  = cp.zeros((Nimages, pH,pW), cp.float32)
+        padpix  = cp.zeros((Nimages, pH,pW), cp.float32)
+        padie   = cp.zeros((Nimages, pH,pW), cp.float32)
         padmask = cp.zeros((Nimages, pH,pW), bool)
         padslices = []
         for i,(tim,(x0,x1,y0,y1)) in enumerate(zip(tims, extents)):
-            # FIXME -- put the whole images on the GPU??
-            #pix = tim.getGpuImage()
-            #ie  = tim.getGpuInvError()
             pix = tim.getImage()
             ie = tim.getInvError()
 
             dx = cx - ipx[i]
             dy = cy - ipy[i]
             p = pix[y0:y1, x0:x1]
-            padpix[i, y0+dy : y1+dy, x0+dx : x1+dx] = cp.array(p)
+            padpix [i, y0+dy : y1+dy, x0+dx : x1+dx] = cp.array(p)
             p =  ie[y0:y1, x0:x1]
-            padie [i, y0+dy : y1+dy, x0+dx : x1+dx] = cp.array(p)
+            padie  [i, y0+dy : y1+dy, x0+dx : x1+dx] = cp.array(p)
             padmask[i, y0+dy : y1+dy, x0+dx : x1+dx] = True
             padslices.append((slice(y0+dy, y1+dy), slice(x0+dx, x1+dx)))
 
