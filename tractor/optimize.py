@@ -433,12 +433,12 @@ class Optimizer(object):
         alphaBest = None
         p0 = tractor.getParams()
         for alpha in alphas:
-            logmsg('  Stepping with alpha =', alpha)
+            logverb('  Stepping with alpha =', alpha)
             pa = [p + alpha * d for p, d in zip(p0, X)]
             tractor.setParams(pa)
             pAfter = tractor.getLogProb()
             logverb('  Log-prob after:', pAfter)
-            logmsg('  delta log-prob:', pAfter - pBefore)
+            logverb('  delta log-prob:', pAfter - pBefore)
 
             #print('Step', alpha, 'p', pAfter, 'dlnp', pAfter-pBefore)
             
