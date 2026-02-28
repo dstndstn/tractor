@@ -1254,7 +1254,7 @@ if __name__ == '__main__':
     import pylab as plt
     from astrometry.util.util import Tan
 
-    #from cupy_wrapper import cp
+    #from tractor.utils.cupy_wrapper import cp
 
     t = time.time()
     t = np.fmod(t, 1.)
