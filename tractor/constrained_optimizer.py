@@ -19,6 +19,7 @@ class ConstrainedOptimizer(LsqrOptimizer):
         for step in range(steps):
             self.stepLimited = False
             dlnp,X,alpha = self.optimize(tractor, **kwargs)
+            #print('optimize_loop step %i: dlnp %.1f, alpha %f, X:' % (step, dlnp, alpha), X)
             if check_step is not None:
                 r = check_step(optimizer=self, tractor=tractor, dlnp=dlnp, X=X, alpha=alpha)
                 if not r:

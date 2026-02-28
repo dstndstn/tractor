@@ -286,28 +286,19 @@ class SersicMixture(object):
 
     def _getProfile(self, sindex):
         matches = []
-        # clamp
+        # clamp low Sersic index
         if sindex <= self.lowest:
             matches.append(self.fits[0])
-            #(lo,hi,a,v) = self.fits[0]
-            #amp_funcs = a
-            #logvar_funcs = v
             sindex = self.lowest
+        # clamp high Sersic index
         elif sindex >= self.highest:
             matches.append(self.fits[-1])
-            #(lo,hi,a,v) = self.fits[-1]
-            #amp_funcs = a
-            #logvar_funcs = v
             sindex = self.highest
         else:
             for f in self.fits:
                 lo,hi,a,v = f
                 if sindex >= lo and sindex < hi:
                     matches.append(f)
-                    #print('Sersic index', sindex, '-> range', lo, hi)
-                    #amp_funcs = a
-                    #logvar_funcs = v
-                    #break
 
         if len(matches) == 2:
             # Two ranges overlap.  Ramp between them.
@@ -323,7 +314,6 @@ class SersicMixture(object):
             assert(ramp_lo <= sindex)
             assert(sindex < ramp_hi)
             ramp_frac = (sindex - ramp_lo) / (ramp_hi - ramp_lo)
-            #print('Sersic index', sindex, ': ramping between ranges', (lo0,hi0), 'and', (lo1,hi1), '; ramp', (ramp_lo, ramp_hi), 'fraction', ramp_frac)
             amps0 = np.array([f(sindex) for f in a0])
             amps0 /= amps0.sum()
             amps1 = np.array([f(sindex) for f in a1])
@@ -343,7 +333,10 @@ class SersicMixture(object):
             amps *= (1. - core) / amps.sum()
             amps = np.append(amps, core)
             varr = np.append(varr, 0.)
-
+        # Sort by increasing variance!
+        I = np.argsort(varr)
+        varr = varr[I]
+        amps = amps[I]
         return mp.MixtureOfGaussians(amps, np.zeros((len(amps), 2)), varr)
 
 class SersicIndex(ScalarParam):
@@ -406,13 +399,12 @@ class SersicGalaxy(HoggGalaxy):
 
     def getParamDerivatives(self, img, modelMask=None, **kwargs):
         # superclass produces derivatives wrt pos, brightness, and shape.
-        derivs = super(SersicGalaxy, self).getParamDerivatives(
-            img, modelMask=modelMask, **kwargs)
+        derivs = super().getParamDerivatives(
+            img, modelMask=modelMask, get_patch0=True, **kwargs)
+        patch0 = derivs.pop(0)
 
         pos0 = self.getPosition()
         (px0, py0) = img.getWcs().positionToPixel(pos0, self)
-        patch0 = self.getUnitFluxModelPatch(img, px=px0, py=py0,
-                                            modelMask=modelMask, **kwargs)
         if patch0 is None:
             derivs.append(None)
             return derivs
@@ -433,11 +425,11 @@ class SersicGalaxy(HoggGalaxy):
                     newval = oldvals[i] + step
 
                 oldval = self.sersicindex.setParam(i, newval)
-                patchx = self.getUnitFluxModelPatch(
+                newpatch = self.getUnitFluxModelPatch(
                     img, px=px0, py=py0, modelMask=modelMask, **kwargs)
                 self.sersicindex.setParam(i, oldval)
-                if patchx is None:
-                    print('patchx is None:')
+                if newpatch is None:
+                    print('Sersic newpatch is None:')
                     print('  ', self)
                     print('  stepping galaxy sersicindex',
                           self.sersicindex.getParamNames()[i])
@@ -445,11 +437,50 @@ class SersicGalaxy(HoggGalaxy):
                     print('  to', self.sersicindex.getParams()[i])
                     derivs.append(None)
 
-                dx = (patchx - patch0) * (counts / step)
+                dx = (newpatch - patch0) * (counts / step)
                 dx.setName('d(%s)/d(%s)' % (self.dname, inames[i]))
                 derivs.append(dx)
         return derivs
 
+    def getDerivativeShearedProfiles(self, img, px, py):
+        # superclass produces derivatives wrt shape
+        derivs = super().getDerivativeShearedProfiles(img, px, py)
+
+        if self.isParamThawed('sersicindex'):
+            steps = self.sersicindex.getStepSizes()
+            inames = self.sersicindex.getParamNames()
+            oldvals = self.sersicindex.getParams()
+            ups = self.sersicindex.getUpperBounds()
+            los = self.sersicindex.getLowerBounds()
+            #n0 = len(self._getShearedProfile(img, px, py).amp)
+            n0 = len(self.getProfile().amp)
+
+            for i,step in enumerate(steps):
+                # Assume step is positive, and check whether stepping
+                # would exceed the upper bound.
+                assert(step > 0)
+                newval = oldvals[i] + step
+                if newval > ups[i]:
+                    step *= -1.
+                    newval = oldvals[i] + step
+                    assert(newval > los[i])
+                oldval = self.sersicindex.setParam(i, newval)
+                pro = self._getShearedProfile(img, px, py)
+                if len(pro.amp) != n0:
+                    # If we can, try stepping the opposite direction to avoid changing the
+                    # number of Gaussian components
+                    new2 = oldvals[i] - step
+                    if new2 < ups[i] and new2 > los[i]:
+                        self.sersicindex.setParam(i, new2)
+                        pro2 = self._getShearedProfile(img, px, py)
+                        if len(pro2.amp) == n0:
+                            # use this one instead
+                            pro = pro2
+                            step *= -1
+
+                self.sersicindex.setParam(i, oldval)
+                derivs.append(('sersicindex.'+inames[i], pro, step))
+        return derivs
 
 if __name__ == '__main__':
     from basics import *

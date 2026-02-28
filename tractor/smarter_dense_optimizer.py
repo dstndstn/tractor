@@ -207,7 +207,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                     print('multiple modelMasks (sources) for this image?')
                     print('\tderiv extent', dx0,dx1, dy0,dy1)
                     print('\timage bounds', x0,x1,y0,y1, img)
-                    raise RuntimeError('SmarterDenseOptimizer failure')
+                    raise RuntimeError('SmarterDenseOptimizer failure (multiple modelmasks)')
 
             if scale_columns:
                 colscales[col] = scale
@@ -216,6 +216,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             rA, cA, vA, pb, _ = priorVals
             for ri,ci,vi,bi in zip(rA, cA, vA, pb):
                 col = column_map[ci]
+                #print('Prior in col', ci, '->', col)
                 assert(col >= 0)
                 if scale_columns:
                     # (note, np.dot works when vi is a list)
@@ -223,7 +224,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                 for rij,vij,bij in zip(ri, vi, bi):
                     A[Npixels + rij, col] = vij
                     B[Npixels + rij] += bij
-            del priorVals, rA, cA, vA, pb, _
+            del priorVals, rA, cA, vA, pb
 
         if scale_columns:
             colscales = np.sqrt(colscales)
@@ -278,7 +279,10 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             return None
 
         if get_A:
-            return A, B, X, colscales
+            img_layout = {}
+            for k,v in img_offsets.items():
+                img_layout[k] = (v, img_bounds[k])
+            return A, B, X, colscales, img_layout
 
         if get_cov:
             ic = np.matmul(A.T, A)

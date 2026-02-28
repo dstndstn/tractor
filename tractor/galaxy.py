@@ -133,7 +133,7 @@ class Galaxy(MultiParams, SingleProfileSource):
 
     # returns [ Patch, Patch, ... ] of length numberOfParams().
     # Galaxy.
-    def getParamDerivatives(self, img, modelMask=None, **kwargs):
+    def getParamDerivatives(self, img, modelMask=None, get_patch0=False, **kwargs):
         pos0 = self.getPosition()
         wcs = img.getWcs()
         (px0, py0) = wcs.positionToPixel(pos0, self)
@@ -147,15 +147,18 @@ class Galaxy(MultiParams, SingleProfileSource):
 
         patch0 = self.getUnitFluxModelPatch(img, px=px0, py=py0, minval=minval,
                                             modelMask=modelMask, **kwargs)
+        derivs = []
+        if get_patch0:
+            derivs.append(patch0)
         if patch0 is None:
-            return [None] * self.numberOfParams()
+            derivs.extend([None] * self.numberOfParams())
+            return derivs
 
         if modelMask is None:
             x0,x1,y0,y1 = patch0.getExtent()
             modelMask = ModelMask.fromExtent(x0,x1,y0,y1)
         assert(modelMask is not None)
 
-        derivs = []
         # derivatives wrt position
         if self.isParamThawed('pos') and (self.pos.numberOfParams() > 0):
             if counts == 0:
@@ -429,6 +432,9 @@ class ProfileGalaxy(object):
             #print('  sizes vs PSF size', pW, ':', ', '.join(['%.3g' % s for s in np.sqrt(vv)]))
             ramp = np.any(IM*IF)
 
+            Nmog = 0
+            Nfft = 0
+
             if np.any(IM):
                 amps = amix.amp[IM]
                 if ramp:
@@ -443,6 +449,12 @@ class ProfileGalaxy(object):
                 mogmix = mp.MixtureOfGaussians(amps,
                                                amix.mean[IM, :] + np.array([px, py])[np.newaxis, :],
                                                amix.var[IM, :, :], quick=True)
+                Nmog = np.sum(amps != 0)
+                # print('MOG amps:')
+                # s = ''
+                # for k in range(len(amps)):
+                #     s += '* ' if (amps[k] != 0) else '. '
+                # print(s)
 
             if np.any(IF):
                 amps = amix.amp[IF]
@@ -450,9 +462,17 @@ class ProfileGalaxy(object):
                     amps *= fftweights
                 fftmix = mp.MixtureOfGaussians(amps, amix.mean[IF, :], amix.var[IF, :, :],
                                                 quick=True)
+                Nfft = np.sum(amps != 0)
+                # print('FFT amps:')
+                # s = ''
+                # for k in range(len(amps)):
+                #     s += '* ' if (amps[k] != 0) else '. '
+                # print(s)
             else:
                 fftmix = None
 
+            #print('MOG: %i  FFT: %i' % (Nmog, Nfft))
+                
         if fftmix is not None:
             #print('Evaluating FFT mixture:', len(fftmix.amp), 'components in size', pH,pW)
             #print('Amps:', fftmix.amp)
