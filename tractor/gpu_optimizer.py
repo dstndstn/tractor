@@ -119,6 +119,9 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         img_params = self.gpu_setup_image_params(tims, halfsize, x0,x1,y0,y1, ipx, ipy)
         return img_params
 
+    def clear_cached_image_params(self):
+        self.image_params = None
+
     def cache_image_params(self, tr):
         tims,masks = self._gpu_checks(tr)
         if tims is None:
@@ -1585,22 +1588,21 @@ if __name__ == '__main__':
     tr.setModelMasks([dict([(s,mm) for s in cat])
                       for tim in tr.images])
 
-    # Test cache
-
-    print()
-    print('CPU patches...')
-    patches = [src.getModelPatch(tim, modelMask=tr._getModelMaskFor(tim, src))
-               for tim in tr.images]
-
-    print()
-    print('GPU patches...')
-    np_gpu_opt.cache_image_params(tr)
-    gpu_patches = np_gpu_opt.gpu_one_source_models(tr)
-    print('Padded size:', np_gpu_opt.image_params.pH)
-    
-    print('Patches:', patches)
-    print('GPU patches:', gpu_patches)
-
+    # # Test cache
+    # 
+    # print()
+    # print('CPU patches...')
+    # patches = [src.getModelPatch(tim, modelMask=tr._getModelMaskFor(tim, src))
+    #            for tim in tr.images]
+    # 
+    # print()
+    # print('GPU patches...')
+    # np_gpu_opt.cache_image_params(tr)
+    # gpu_patches = np_gpu_opt.gpu_one_source_models(tr)
+    # print('Padded size:', np_gpu_opt.image_params.pH)
+    # 
+    # print('Patches:', patches)
+    # print('GPU patches:', gpu_patches)
     # Nims = len(patches)
     # plt.clf()
     # for i,(p,gp) in enumerate(zip(patches, gpu_patches)):
@@ -1622,7 +1624,61 @@ if __name__ == '__main__':
     # dr = np.hstack((np.arange(1,5), -np.arange(1,5), np.zeros(4), np.zeros(4)))
     # dd = np.hstack((np.zeros(4), np.zeros(4), np.arange(1,5), -np.arange(1,5)))
     # 
-    pos0 = src.pos.copy()
+    # pos0 = src.pos.copy()
+    # Nims = len(patches)
+    # plt.clf()
+    # for i,(p,gp) in enumerate(zip(patches, gpu_patches)):
+    #     plt.subplot(Nims,3,i*3 + 1)
+    #     mx = p.patch.max()
+    #     ima = dict(interpolation='nearest', origin='lower', vmin=0, vmax=mx)
+    #     plt.imshow(p.patch, **ima)
+    #     plt.title('cpu')
+    #     plt.subplot(Nims,3,i*3 + 2)
+    #     plt.imshow(gp.patch, **ima)
+    #     plt.title('gpu')
+    #     plt.subplot(Nims,3, i*3 + 3)
+    #     scale = 0.1
+    #     plt.imshow(gp.patch - p.patch, interpolation='nearest', origin='lower',
+    #                vmin=-scale*mx, vmax=+scale*mx)
+    #     plt.title('diff')
+    # ps.savefig()
+    # 
+    # dr = np.hstack((np.arange(1,5), -np.arange(1,5), np.zeros(4), np.zeros(4)))
+    # dd = np.hstack((np.zeros(4), np.zeros(4), np.arange(1,5), -np.arange(1,5)))
+    # 
+    # pos0 = src.pos.copy()
+    # 
+    # for dri,ddi in zip(dr,dd):
+    #     r = pos0.ra
+    #     r += dri * 10. * pixscale1
+    #     src.pos.ra = r
+    #     d = pos0.dec
+    #     d += ddi * 10. * pixscale1
+    #     src.pos.dec = d
+    #     patches = [src.getModelPatch(tim, modelMask=tr._getModelMaskFor(tim, src))
+    #                for tim in tr.images]
+    #     gpu_patches = np_gpu_opt.gpu_one_source_models(tr)
+    #     
+    #     Nims = len(patches)
+    #     plt.clf()
+    #     for i,(p,gp) in enumerate(zip(patches, gpu_patches)):
+    #         plt.subplot(Nims,3,i*3 + 1)
+    #         mx = p.patch.max()
+    #         ima = dict(interpolation='nearest', origin='lower', vmin=0, vmax=mx)
+    #         plt.imshow(p.patch, **ima)
+    #         plt.title('cpu')
+    #         plt.subplot(Nims,3,i*3 + 2)
+    #         plt.imshow(gp.patch, **ima)
+    #         plt.title('gpu')
+    #         plt.subplot(Nims,3, i*3 + 3)
+    #         scale = 0.1
+    #         plt.imshow(gp.patch - p.patch, interpolation='nearest', origin='lower',
+    #                    vmin=-scale*mx, vmax=+scale*mx)
+    #         plt.title('diff')
+    #     ps.savefig()
+    # 
+    #     
+    # sys.exit(0)
     # 
     # for dri,ddi in zip(dr,dd):
     #     r = pos0.ra
@@ -1653,103 +1709,47 @@ if __name__ == '__main__':
     #         plt.title('diff')
     #     ps.savefig()
 
-    # modelMasks are centered on the source -- move the initial position relative to that
-    src.pos = pos0
-    src.pos.ra = src.pos.ra + 20. * pixscale1
+    # # modelMasks are centered on the source -- move the initial position relative to that
+    # src.pos = pos0
+    # src.pos.ra = src.pos.ra + 20. * pixscale1
+    # 
+    # p0 = tr.getParams()
+    # 
+    # # Test cache -- try updates
+    # 
+    # sm_opt = SmarterDenseOptimizer()
+    # 
+    # X = np.zeros(tr.numberOfParams())
+    # X[0] = -5. * pixscale1
+    # alphas = np.arange(1, 10)
+    # 
+    # print()
+    # print('SM try...')
+    # smtry = sm_opt.tryUpdates(tr, X, alphas=alphas)
+    # tr.setParams(p0)
+    # 
+    # print()
+    # print('GPU try...')
+    # np_gpu_opt.cache_image_params(tr)
+    # gputry = np_gpu_opt.gpu_one_source_try_updates(tr, X, alphas=alphas, ps=ps)
+    # 
+    # print('SM try:', smtry)
+    # print('GPU try:', gputry)
 
-    p0 = tr.getParams()
-    
-    # Test cache -- try updates
-
-    sm_opt = SmarterDenseOptimizer()
-
-    X = np.zeros(tr.numberOfParams())
-    X[0] = -5. * pixscale1
-    alphas = np.arange(1, 10)
-
-    print()
-    print('SM try...')
-    smtry = sm_opt.tryUpdates(tr, X, alphas=alphas)
-    tr.setParams(p0)
-    
-    print()
-    print('GPU try...')
-    np_gpu_opt.cache_image_params(tr)
-    gputry = np_gpu_opt.gpu_one_source_try_updates(tr, X, alphas=alphas, ps=ps)
-
-    print('SM try:', smtry)
-    print('GPU try:', gputry)
-
-
-
-    print()
-    print('SM update...')
-    smup = sm_opt.getLinearUpdateDirection(tr, **optargs)
-
-    print()
-    print('GPU update...')
-    np_gpu_opt.cache_image_params(tr)
-    gpuup = np_gpu_opt.gpu_one_source_update(tr, **optargs)
-
-    print('SM  up:', smup)
-    print('GPU up:', gpuup)
-
-    sys.exit(0)
-    
-    Nims = len(patches)
-    plt.clf()
-    for i,(p,gp) in enumerate(zip(patches, gpu_patches)):
-        plt.subplot(Nims,3,i*3 + 1)
-        mx = p.patch.max()
-        ima = dict(interpolation='nearest', origin='lower', vmin=0, vmax=mx)
-        plt.imshow(p.patch, **ima)
-        plt.title('cpu')
-        plt.subplot(Nims,3,i*3 + 2)
-        plt.imshow(gp.patch, **ima)
-        plt.title('gpu')
-        plt.subplot(Nims,3, i*3 + 3)
-        scale = 0.1
-        plt.imshow(gp.patch - p.patch, interpolation='nearest', origin='lower',
-                   vmin=-scale*mx, vmax=+scale*mx)
-        plt.title('diff')
-    ps.savefig()
-
-    dr = np.hstack((np.arange(1,5), -np.arange(1,5), np.zeros(4), np.zeros(4)))
-    dd = np.hstack((np.zeros(4), np.zeros(4), np.arange(1,5), -np.arange(1,5)))
-
-    pos0 = src.pos.copy()
-
-    for dri,ddi in zip(dr,dd):
-        r = pos0.ra
-        r += dri * 10. * pixscale1
-        src.pos.ra = r
-        d = pos0.dec
-        d += ddi * 10. * pixscale1
-        src.pos.dec = d
-        patches = [src.getModelPatch(tim, modelMask=tr._getModelMaskFor(tim, src))
-                   for tim in tr.images]
-        gpu_patches = np_gpu_opt.gpu_one_source_models(tr)
-        
-        Nims = len(patches)
-        plt.clf()
-        for i,(p,gp) in enumerate(zip(patches, gpu_patches)):
-            plt.subplot(Nims,3,i*3 + 1)
-            mx = p.patch.max()
-            ima = dict(interpolation='nearest', origin='lower', vmin=0, vmax=mx)
-            plt.imshow(p.patch, **ima)
-            plt.title('cpu')
-            plt.subplot(Nims,3,i*3 + 2)
-            plt.imshow(gp.patch, **ima)
-            plt.title('gpu')
-            plt.subplot(Nims,3, i*3 + 3)
-            scale = 0.1
-            plt.imshow(gp.patch - p.patch, interpolation='nearest', origin='lower',
-                       vmin=-scale*mx, vmax=+scale*mx)
-            plt.title('diff')
-        ps.savefig()
-
-        
-    sys.exit(0)
+    # Test cache: get linear update
+    # print()
+    # print('SM update...')
+    # smup = sm_opt.getLinearUpdateDirection(tr, **optargs)
+    # 
+    # print()
+    # print('GPU update...')
+    # np_gpu_opt.cache_image_params(tr)
+    # gpuup = np_gpu_opt.gpu_one_source_update(tr, **optargs)
+    # 
+    # print('SM  up:', smup)
+    # print('GPU up:', gpuup)
+    # 
+    # sys.exit(0)
 
     alphas = [0.1, 0.3, 1.0]
     optargs = dict(shared_params=False, priors=True, alphas=alphas)
@@ -2017,22 +2017,15 @@ if __name__ == '__main__':
     plt.savefig('before.png')
 
     tr.optimizer = np_gpu_opt
-    tr.setParams(p0)
 
+    tr.setParams(p0)
     print('Starting optimize_loop with GPU[NP]')
     print('Start:', src)
+    np_gpu_opt.clear_cached_image_params()
     tr.optimize_loop(**optargs)
     print('Done optimize_loop with GPU[NP]')
 
-    # dlnp, X, alpha = tr.optimize(**optargs)
-    # print('Stepped alpha', alpha, 'for dlogprob', dlnp)
-    # print('Step:', src)
-    # p = tr.getParams()
-    # tr.setParams(np.array(p) + np.array(X))
-    # print('Full X step would be:', src)
-    # tr.setParams(p)
-
-    print('After optimization (GPU):', tr.catalog[0])
+    print('After optimization (GPU):')
     for src in tr.catalog:
         print('  ', src)
 
@@ -2057,9 +2050,49 @@ if __name__ == '__main__':
     plt.imshow((tim2.getImage() - mod2) * tim2.getInvError(), **chima)
     plt.savefig('after.png')
 
-    tr.optimizer = sm_opt
     tr.setParams(p0)
+    print('Starting optimize_loop with GPU[NP] and image caching')
+    print('Start:', src)
+    np_gpu_opt.cache_image_params(tr)
+    tr.optimize_loop(**optargs)
+    print('Done optimize_loop with GPU[NP] and caching')
 
+    # dlnp, X, alpha = tr.optimize(**optargs)
+    # print('Stepped alpha', alpha, 'for dlogprob', dlnp)
+    # print('Step:', src)
+    # p = tr.getParams()
+    # tr.setParams(np.array(p) + np.array(X))
+    # print('Full X step would be:', src)
+    # tr.setParams(p)
+
+    print('After optimization (GPU, caching):')
+    for src in tr.catalog:
+        print('  ', src)
+
+    mod1 = tr.getModelImage(0)
+    mod2 = tr.getModelImage(1)
+    plt.clf()
+    plt.subplot(2,3,1)
+    plt.imshow(mod1, **ima)
+    plt.colorbar()
+    plt.subplot(2,3,4)
+    plt.imshow(mod2, **ima)
+    plt.colorbar()
+    plt.subplot(2,3,2)
+    plt.imshow(tim1.getImage(), **ima)
+    plt.colorbar()
+    plt.subplot(2,3,5)
+    plt.imshow(tim2.getImage(), **ima)
+    plt.colorbar()
+    plt.subplot(2,3,3)
+    plt.imshow((tim1.getImage() - mod1) * tim1.getInvError(), **chima)
+    plt.subplot(2,3,6)
+    plt.imshow((tim2.getImage() - mod2) * tim2.getInvError(), **chima)
+    plt.savefig('after-cache.png')
+
+    tr.optimizer = sm_opt
+
+    tr.setParams(p0)
     print('Starting optimize_loop with SM')
     tr.optimize_loop(**optargs)
     print('Done optimize_loop with SM')
@@ -2072,7 +2105,7 @@ if __name__ == '__main__':
     # print('Full X step would be:', src)
     # tr.setParams(p)
 
-    print('After optimization (SM):', tr.catalog[0])
+    print('After optimization (SM):')
     for src in tr.catalog:
         print('  ', src)
 
