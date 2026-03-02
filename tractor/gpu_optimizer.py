@@ -275,8 +275,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 for itim,(tim,x,y) in enumerate(zip(tims, px, py)):
                     mogs[itim].append(src._getShearedProfile(tim,x,y))
 
-        print('idx_grid', idx_grid)
-        print('idy_grid', idy_grid)
+        #print('idx_grid', idx_grid)
+        #print('idy_grid', idy_grid)
 
         if is_psf:
             mods = self.gpu_get_unitflux_psf(img_params, mux_grid, muy_grid)
@@ -284,8 +284,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             mods = self.gpu_get_unitflux_galaxy_profiles(mogs, img_params,
                                                          mux_grid, muy_grid)
         mods *= cp.array(counts_grid[..., nu, nu])
-        #if sb:
-        #    mods += sb_counts_grid[..., nu, nu]
+        # don't add SB here, add after shifting, for better margin handling
 
         # mods shape: Nimages x Nmod x pH x pW
         pH, pW = img_params.pH, img_params.pW
@@ -358,7 +357,10 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                     y_pix_slice = slice(dy)
                     y_mod_slice = slice(-dy, None)
 
-                chi_work[:,:] = pix - sb_counts_grid[itim, imod]
+                if sb:
+                    chi_work[:,:] = pix - sb_counts_grid[itim, imod]
+                else:
+                    chi_work[:,:] = pix
                 chi_work[y_pix_slice, x_pix_slice] -= mod[y_mod_slice, x_mod_slice]
                 chisqs[imod] += cp.sum((chi_work * ie)**2)
                 if ps:
@@ -466,33 +468,37 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             G = self.gpu_get_unitflux_galaxy_profiles(mogs, img_params, mux, muy)
         elif is_psf:
             G = self.gpu_get_unitflux_psf(img_params, mux, muy)
+        else:
+            # SB only
+            G = None
 
-        ix = ix.astype(int)
-        iy = iy.astype(int)
-        if np.any(ix != img_params.ipx) or np.any(iy != img_params.ipy):
-            print('Shifting models: dx', ix - img_params.ipx, 'dy', iy - img_params.ipy)
-            Gtmp = cp.zeros_like(G)
-            for itim,(dx,dy) in enumerate(zip(ix - img_params.ipx, iy - img_params.ipy)):
-                if dx > 0:
-                    x_out_slice = slice(dx, None)
-                    x_in_slice  = slice(-dx)
-                elif dx == 0:
-                    x_out_slice = slice(None)
-                    x_in_slice = slice(None)
-                else:
-                    x_out_slice = slice(dx)
-                    x_in_slice = slice(-dx, None)
-                if dy > 0:
-                    y_out_slice = slice(dy, None)
-                    y_in_slice = slice(-dy)
-                elif dy == 0:
-                    y_out_slice = slice(None)
-                    y_in_slice = slice(None)
-                else:
-                    y_out_slice = slice(dy)
-                    y_in_slice = slice(-dy, None)
-                Gtmp[itim, :, y_out_slice, x_out_slice] = G[itim, :, y_in_slice, x_in_slice]
-            G = Gtmp
+        if G is not None:
+            ix = ix.astype(int)
+            iy = iy.astype(int)
+            if np.any(ix != img_params.ipx) or np.any(iy != img_params.ipy):
+                #print('Shifting models: dx', ix - img_params.ipx, 'dy', iy - img_params.ipy)
+                Gtmp = cp.zeros_like(G)
+                for itim,(dx,dy) in enumerate(zip(ix - img_params.ipx, iy - img_params.ipy)):
+                    if dx > 0:
+                        x_out_slice = slice(dx, None)
+                        x_in_slice  = slice(-dx)
+                    elif dx == 0:
+                        x_out_slice = slice(None)
+                        x_in_slice = slice(None)
+                    else:
+                        x_out_slice = slice(dx)
+                        x_in_slice = slice(-dx, None)
+                    if dy > 0:
+                        y_out_slice = slice(dy, None)
+                        y_in_slice = slice(-dy)
+                    elif dy == 0:
+                        y_out_slice = slice(None)
+                        y_in_slice = slice(None)
+                    else:
+                        y_out_slice = slice(dy)
+                        y_in_slice = slice(-dy, None)
+                    Gtmp[itim, :, y_out_slice, x_out_slice] = G[itim, :, y_in_slice, x_in_slice]
+                G = Gtmp
 
         # Now we have computed the galaxy profiles for the finite-differences steps.
         # Turn these into derivatives and solve the update matrix.
