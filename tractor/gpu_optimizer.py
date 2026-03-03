@@ -129,7 +129,10 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
         # Assume model masks are set (ie, pixel ROIs of interest are defined)
         #masks = [tr._getModelMaskByIdx(i, src) for i in range(len(tr.images))]
-        masks = [tr._getModelMaskFor(tim, src) for tim in tims]
+        if not is_none:
+            masks = [tr._getModelMaskFor(tim, src) for tim in tims]
+        else:
+            masks = [tr._getModelMaskFor(tim, sb) for tim in tims]
         if any(m is None for m in masks):
             debug('One or more modelMasks is None in GPU code -- cutting images')
             goodtims = []
@@ -158,18 +161,25 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         src = tr.catalog[0]
         is_galaxy = isinstance(src, ProfileGalaxy)
         is_psf = isinstance(src, PointSource)
+        sb = None
+        is_none = (src is None)
+        if len(tr.catalog) == 2:
+            sb = tr.catalog[1]
         extents = [mm.extent for mm in masks]
+        x0, x1, y0, y1 = np.asarray(extents).T
 
-        # Pixel positions (at initial params)
-        pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
-               for tim in tims]
-        px, py = np.array(pxy, dtype=np.float32).T
+        if src:
+            # Pixel positions (at initial params)
+            pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
+                   for tim in tims]
+            px, py = np.array(pxy, dtype=np.float32).T
+        else:
+            # fake source position in middle of modelMasks
+            px = (x0+x1)/2.
+            py = (y0+y1)/2.
         ipx = px.round().astype(np.int32)
         ipy = py.round().astype(np.int32)
 
-        ## FIXME -- this should be based on *SOURCE* properties as well, no?
-        ## FIXME -- used to have PSF size included in this mix...
-        x0, x1, y0, y1 = np.asarray(extents).T
         halfsize = np.max(([(x1-x0)/2, (y1-y0)/2,
                             1+px-x0, 1+x1-px, 1+py-y0, 1+y1-py]))
 
@@ -187,6 +197,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             return 0., 0.
 
         counts_grid = np.zeros((len(tims), len(steps)), np.float32)
+        if sb:
+            sb_counts_grid = np.zeros((len(tims), len(steps)), np.float32)
 
         # We need to transpose the mogs: need Nimages x Nprofiles(aka Nsteps)
         mogs = [[] for tim in tims]
@@ -225,6 +237,12 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 [tim.getPhotoCal().brightnessToCounts(src.brightness)
                  for tim in tims])
 
+            if sb:
+                sb_counts_grid[:, istep] = np.array(
+                    [tim.getPhotoCal().brightnessToCounts(sb.brightness) *
+                     tim.getWcs().pixel_scale()**2
+                     for tim in tims])
+
             if is_galaxy:
                 for itim,(tim,x,y) in enumerate(zip(tims, px, py)):
                     mogs[itim].append(src._getShearedProfile(tim,x,y))
@@ -234,7 +252,9 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         else:
             mods = self.gpu_get_unitflux_galaxy_profiles(mogs, img_params,
                                                          mux_grid, muy_grid)
-        mods *= cp.array(counts_grid[..., na, na])
+        mods *= cp.array(counts_grid)[..., na, na]
+        if sb:
+            mods += cp.array(sb_counts_grid)[..., na, na]
 
         # mods shape: Nimages x Nmod x pH x pW
         pH, pW = img_params.pH, img_params.pW
@@ -551,14 +571,14 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
         if sb:
             # Surface-brightness derivatives.
-            padmask = img_params.padmask
             for i in range(Nimages):
                 # Image i fills in the column corresponding to its sb flux
                 # and a block of rows corresponding to its pixels.
                 col = Npos + Nbands + Nshapes + tim_band_index[i]
                 # This might not be strictly necessary to mask by "padmask", but it makes the results
                 # match more closely with the traditional code, because the colscales are the same.
-                A[i * pH*pW: (i+1) * pH*pW, col] = (pixscales[i]**2 * padmask[i, :, :].ravel())
+                # FIXME -- here we must be assuming LinearPhotoCal with scale = 1!
+                A[i * pH*pW: (i+1) * pH*pW, col] = (pixscales[i]**2 * padie[i, :, :].ravel())
 
         if sb and src:
             # add current surface brightnesses to the model
