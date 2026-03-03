@@ -57,8 +57,12 @@ class GpuFriendlyOptimizer(SmarterDenseOptimizer):
 
     def tryUpdates(self, tr, X, **kwargs):
         if not (tr.isParamFrozen('images') and
-            (len(tr.catalog) == 1) and
-            isinstance(tr.catalog[0], (ProfileGalaxy, PointSource))):
+                (((len(tr.catalog) == 1) and
+                  isinstance(tr.catalog[0], (ProfileGalaxy, PointSource))) or
+                 ((len(tr.catalog) == 2) and
+                  isinstance(tr.catalog[0], (ProfileGalaxy, PointSource, type(None))) and
+                  isinstance(tr.catalog[1], ConstantSurfaceBrightness))
+                 )):
             return super().tryUpdates(tr, X, **kwargs)
         return self.one_source_try_updates(tr, X, **kwargs)
 
