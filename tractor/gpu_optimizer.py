@@ -640,24 +640,16 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             colscales = colscales[I]
             colscales = cp.array(colscales)
 
-        A /= colscales[nu, :]
-        #t0 = time.time()
-        X,_,_,_ = cp.linalg.lstsq(A, B, rcond=None)
-        #t1 = time.time()
-        X /= colscales
+        # Cut A down to only active rows
+        goodrows = cp.any(A, axis=1)
+        if not cp.all(goodrows):
+            A = A[goodrows, :]
+            B = B[goodrows]
+            del goodrows
 
-        # FIXME -- is it faster to cut the problem to non-zero rows??
-        # t2 = time.time()
-        # rows = cp.any(A != 0, axis=1)
-        # A2 = A[rows,:]
-        # B2 = B[rows]
-        # X2,_,_,_ = cp.linalg.lstsq(A2, B2, rcond=None)
-        # t3 = time.time()
-        # X2 /= colscales
-        # print('%i of %i rows are active' % (np.sum(cp.get(rows)), len(rows)))
-        # print('Orig: %.3f sec, Cut: %.3f sec' % (t1-t0, t3-t2))
-        # print('X :', X)
-        # print('X2:', X2)
+        A /= colscales[nu, :]
+        X,_,_,_ = cp.linalg.lstsq(A, B, rcond=None)
+        X /= colscales
 
         X = cp.get(X)
         # Parameter indices in the tractor params of our vector X:
