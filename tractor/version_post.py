@@ -1,11 +1,9 @@
 if True:
-    if git_version.startswith('main-gpu-'):
-        version = '0.' + git_version.replace('main-gpu-', '')
-    else:
-        words = git_version.split('-')
-        if len(words) == 3:
-            version = words[0] + '.dev' + words[1]
-        else:
-            version = git_version
-        if version.startswith('dr'):
-            version = version[2:]
+    version = git_version
+    if version.startswith('main-gpu-'):
+        version = '0.' + version.replace('main-gpu-', '')
+    words = version.split('-')
+    if len(words) == 3:
+        version = words[0] + '.dev' + words[1]
+    if version.startswith('dr'):
+        version = version[2:]
