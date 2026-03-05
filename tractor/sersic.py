@@ -1,3 +1,4 @@
+import functools
 '''
 This file is part of the Tractor project.
 Copyright 2014, Dustin Lang and David W. Hogg.
@@ -284,6 +285,7 @@ class SersicMixture(object):
         (lo,hi,a,v) = self.fits[-1]
         self.highest = hi
 
+    @functools.lru_cache(maxsize=5)
     def _getProfile(self, sindex):
         matches = []
         # clamp low Sersic index
