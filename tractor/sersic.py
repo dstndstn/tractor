@@ -1,4 +1,3 @@
-import functools
 '''
 This file is part of the Tractor project.
 Copyright 2014, Dustin Lang and David W. Hogg.
@@ -9,10 +8,11 @@ Licensed under the GPLv2; see the file COPYING for details.
 
 General Sersic galaxy model.
 '''
-from __future__ import print_function
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
+
+import functools
 
 import numpy as np
 
