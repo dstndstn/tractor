@@ -350,6 +350,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             if istep == 0:
                 continue
             if hit_limit:
+                self.stepLimited = True
                 self.hit_limit = True
             if not np.isfinite(logprob):
                 tr.setParams(p)
