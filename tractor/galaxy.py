@@ -21,22 +21,17 @@ from tractor.basics import SingleProfileSource, BasicSource
 
 debug_ps = None
 
-
 def get_galaxy_cache():
     return None
-
 
 def set_galaxy_cache_size(N=10000):
     # Ugh, dealing with caching + extents / modelMasks was too much
     pass
 
-
 enable_galaxy_cache = set_galaxy_cache_size
-
 
 def disable_galaxy_cache():
     pass
-
 
 class GalaxyShape(ParamList):
     '''
@@ -138,9 +133,10 @@ class Galaxy(MultiParams, SingleProfileSource):
 
     # returns [ Patch, Patch, ... ] of length numberOfParams().
     # Galaxy.
-    def getParamDerivatives(self, img, modelMask=None, **kwargs):
+    def getParamDerivatives(self, img, modelMask=None, get_patch0=False, **kwargs):
         pos0 = self.getPosition()
-        (px0, py0) = img.getWcs().positionToPixel(pos0, self)
+        wcs = img.getWcs()
+        (px0, py0) = wcs.positionToPixel(pos0, self)
         counts = img.getPhotoCal().brightnessToCounts(self.brightness)
 
         minsb = img.modelMinval
@@ -151,53 +147,54 @@ class Galaxy(MultiParams, SingleProfileSource):
 
         patch0 = self.getUnitFluxModelPatch(img, px=px0, py=py0, minval=minval,
                                             modelMask=modelMask, **kwargs)
-        if patch0 is None:
-            return [None] * self.numberOfParams()
         derivs = []
+        if get_patch0:
+            derivs.append(patch0)
+        if patch0 is None:
+            derivs.extend([None] * self.numberOfParams())
+            return derivs
 
         if modelMask is None:
-            modelMask = ModelMask.fromExtent(*patch0.getExtent())
+            x0,x1,y0,y1 = patch0.getExtent()
+            modelMask = ModelMask.fromExtent(x0,x1,y0,y1)
         assert(modelMask is not None)
 
-        # FIXME -- would we be better to do central differences in
-        # pixel space, and convert to Position via CD matrix?
-
         # derivatives wrt position
-        psteps = pos0.getStepSizes()
-        if not self.isParamFrozen('pos'):
-            params = pos0.getParams()
+        if self.isParamThawed('pos') and (self.pos.numberOfParams() > 0):
             if counts == 0:
-                derivs.extend([None] * len(params))
-                psteps = []
-            for i, pstep in enumerate(psteps):
-                oldval = pos0.setParam(i, params[i] + pstep)
-                (px, py) = img.getWcs().positionToPixel(pos0, self)
-                pos0.setParam(i, oldval)
-                patchx = self.getUnitFluxModelPatch(
-                    img, px=px, py=py, minval=minval, modelMask=modelMask,
-                    **kwargs)
-                if patchx is None or patchx.getImage() is None:
-                    derivs.append(None)
-                    continue
-                dx = (patchx - patch0) * (counts / pstep)
-                dx.setName('d(%s)/d(pos%i)' % (self.dname, i))
-                derivs.append(dx)
+                derivs.extend([None] * len(pos0.getParams()))
+            else:
+                p0 = patch0.patch
+                dx = np.zeros_like(p0)
+                dx[1:-1, 1:-1] = (p0[1:-1, :-2] - p0[1:-1, 2:]) / 2.
+                dy = np.zeros_like(p0)
+                dy[1:-1, 1:-1] = (p0[:-2, 1:-1] - p0[2:, 1:-1]) / 2.
+                patchdx = Patch(patch0.x0, patch0.y0, dx)
+                patchdy = Patch(patch0.x0, patch0.y0, dy)
+                del dx, dy
+                dradec = wcs.pixelDerivsToPositionDerivs(pos0, self, counts,
+                                                         patch0, patchdx, patchdy)
+                derivs.extend(dradec)
+                del patchdx, patchdy
 
         # derivatives wrt brightness
-        bsteps = self.brightness.getStepSizes()
         if not self.isParamFrozen('brightness'):
+            bsteps = self.brightness.getStepSizes()
             params = self.brightness.getParams()
             for i, bstep in enumerate(bsteps):
                 oldval = self.brightness.setParam(i, params[i] + bstep)
                 countsi = img.getPhotoCal().brightnessToCounts(self.brightness)
                 self.brightness.setParam(i, oldval)
-                df = patch0 * ((countsi - counts) / bstep)
-                df.setName('d(%s)/d(bright%i)' % (self.dname, i))
+                if countsi == counts:
+                    df = None
+                else:
+                    df = patch0 * ((countsi - counts) / bstep)
+                    df.setName('d(%s)/d(bright%i)' % (self.dname, i))
                 derivs.append(df)
 
         # derivatives wrt shape
-        gsteps = self.shape.getStepSizes()
         if not self.isParamFrozen('shape'):
+            gsteps = self.shape.getStepSizes()
             gnames = self.shape.getParamNames()
             oldvals = self.shape.getParams()
             if counts == 0:
@@ -223,23 +220,28 @@ class Galaxy(MultiParams, SingleProfileSource):
                 derivs.append(dx)
         return derivs
 
-
 class ProfileGalaxy(object):
     '''
     A mix-in class that renders itself based on a Mixture-of-Gaussians
     profile.
     '''
-
     def getName(self):
         return 'ProfileGalaxy'
 
     def getProfile(self):
         return None
 
-    # Here's the main method to override;
+    # Here are the two main methods to override;
     def _getAffineProfile(self, img, px, py):
         ''' Returns a MixtureOfGaussians profile that has been
         affine-transformed into the pixel space of the image.
+        '''
+        return None
+
+    def _getShearedProfile(self, img, px, py):
+        ''' Returns a MixtureOfGaussians profile that has been
+        shear-transformed into the pixel space of the image.
+        At px,py (but not offset to px,py).
         '''
         return None
 
@@ -270,13 +272,14 @@ class ProfileGalaxy(object):
         else:
             # choose the patch size
             halfsize = self._getUnitFluxPatchSize(img, px=px, py=py, minval=minval)
+            H,W = img.shape
             # find overlapping pixels to render
             (outx, inx) = get_overlapping_region(
                 int(np.floor(px - halfsize)), int(np.ceil(px + halfsize + 1)),
-                0, img.getWidth())
+                0, W-1)
             (outy, iny) = get_overlapping_region(
                 int(np.floor(py - halfsize)), int(np.ceil(py + halfsize + 1)),
-                0, img.getHeight())
+                0, H-1)
             if inx == [] or iny == []:
                 # no overlap
                 return None
@@ -328,15 +331,7 @@ class ProfileGalaxy(object):
             return run_mog(mm=modelMask)
 
         # Otherwise, FFT:
-        imh, imw = img.shape
-        if modelMask is None:
-            # Avoid huge galaxies -> huge halfsize in a tiny image (blob)
-            imsz = max(imh, imw)
-            halfsize = min(halfsize, imsz)
-            # FIXME -- should take some kind of combination of
-            # modelMask, PSF, and Galaxy sizes!
-
-        else:
+        if modelMask is not None:
             # ModelMask sets the sizes.
             mh, mw = modelMask.shape
             x1 = x0 + mw
@@ -344,24 +339,17 @@ class ProfileGalaxy(object):
 
             halfsize = max(mh / 2., mw / 2.)
             # How far from the source center to furthest modelMask edge?
-            # FIXME -- add 1 for Lanczos margin?
             halfsize = max(halfsize, max(max(1 + px - x0, 1 + x1 - px),
                                          max(1 + py - y0, 1 + y1 - py)))
             psfh, psfw = psf.shape
             halfsize = max(halfsize, max(psfw / 2., psfh / 2.))
-            #print('Halfsize:', halfsize)
             if force_halfsize is not None:
                 halfsize = force_halfsize
             # is the source center outside the modelMask?
             sourceOut = (px < x0 or px > x1 - 1 or py < y0 or py > y1 - 1)
-            # print('mh,mw', mh,mw, 'sourceout?', sourceOut)
 
             if sourceOut:
-                if hybrid:
-                    return run_mog(mm=modelMask)
-
-                # Super Yuck -- FFT, modelMask, source is outside the
-                # box.
+                # What is the closest point in the modelMask?
                 neardx, neardy = 0., 0.
                 if px < x0:
                     neardx = x0 - px
@@ -372,39 +360,20 @@ class ProfileGalaxy(object):
                 if py > y1:
                     neardy = py - y1
                 nearest = np.hypot(neardx, neardy)
-                #print('Nearest corner:', nearest, 'vs radius', self.getRadius())
                 if nearest > self.getRadius():
                     return None
-                # how far is the furthest point from the source center?
-                farw = max(abs(x0 - px), abs(x1 - px))
-                farh = max(abs(y0 - py), abs(y1 - py))
-                bigx0 = int(np.floor(px - farw))
-                bigx1 = int(np.ceil(px + farw))
-                bigy0 = int(np.floor(py - farh))
-                bigy1 = int(np.ceil(py + farh))
-                bigw = 1 + bigx1 - bigx0
-                bigh = 1 + bigy1 - bigy0
-                boffx = x0 - bigx0
-                boffy = y0 - bigy0
-                assert(bigw >= mw)
-                assert(bigh >= mh)
-                assert(boffx >= 0)
-                assert(boffy >= 0)
-                bigMask = np.zeros((bigh, bigw), bool)
-                if modelMask.mask is not None:
-                    bigMask[boffy:boffy + mh,
-                            boffx:boffx + mw] = modelMask.mask
-                else:
-                    bigMask[boffy:boffy + mh, boffx:boffx + mw] = True
-                bigMask = ModelMask(bigx0, bigy0, bigMask)
-                # print('Recursing:', self, ':', (mh,mw), 'to', (bigh,bigw))
-                bigmodel = self._realGetUnitFluxModelPatch(
-                    img, px, py, minval, modelMask=bigMask)
-                return Patch(x0, y0,
-                             bigmodel.patch[boffy:boffy + mh, boffx:boffx + mw])
 
-        # print('Getting Fourier transform of PSF at', px,py)
-        # print('Tim shape:', img.shape)
+                if hybrid:
+                    return run_mog(mm=modelMask)
+                else:
+                    raise RuntimeError('sourceOut, not hybrid')
+
+        #print('Getting Fourier transform of PSF at', px,py, halfsize)
+        #print(type(psf))
+        #print (psf.getFourierTransform)
+        #print('Tim shape:', img.shape)
+        if halfsize > 4096:
+            raise RuntimeError('Halfsize %i' % halfsize)
         P, (cx, cy), (pH, pW), (v, w) = psf.getFourierTransform(px, py, halfsize)
 
         dx = px - cx
@@ -453,10 +422,10 @@ class ProfileGalaxy(object):
             # render w/ MoG.
             IM = ((pW/2)**2 < (nsigma2**2 * vv))
             IF = ((pW/2)**2 > (nsigma1**2 * vv))
-            #print('Evaluating', np.sum(IM), 'terms as MoG,', np.sum(IF), 'with FFT,',
-            #      np.sum(IM) + np.sum(IF) - len(IM), 'with both')
-            #print('  sizes vs PSF size', pW, ':', ', '.join(['%.3g' % s for s in np.sqrt(vv)]))
             ramp = np.any(IM*IF)
+
+            Nmog = 0
+            Nfft = 0
 
             if np.any(IM):
                 amps = amix.amp[IM]
@@ -472,6 +441,7 @@ class ProfileGalaxy(object):
                 mogmix = mp.MixtureOfGaussians(amps,
                                                amix.mean[IM, :] + np.array([px, py])[np.newaxis, :],
                                                amix.var[IM, :, :], quick=True)
+                Nmog = np.sum(amps != 0)
 
             if np.any(IF):
                 amps = amix.amp[IF]
@@ -479,12 +449,11 @@ class ProfileGalaxy(object):
                     amps *= fftweights
                 fftmix = mp.MixtureOfGaussians(amps, amix.mean[IF, :], amix.var[IF, :, :],
                                                 quick=True)
+                Nfft = np.sum(amps != 0)
             else:
                 fftmix = None
 
         if fftmix is not None:
-            #print('Evaluating FFT mixture:', len(fftmix.amp), 'components in size', pH,pW)
-            #print('Amps:', fftmix.amp)
             Fsum = fftmix.getFourierTransform(v, w, zero_mean=True)
             # In Intel's mkl_fft library, the irfftn code path is faster than irfft2
             # (the irfft2 version sets args (to their default values) which triggers padding
@@ -493,9 +462,6 @@ class ProfileGalaxy(object):
             G = np.fft.irfftn(Fsum * P)
 
             assert(G.shape == (pH,pW))
-            # FIXME -- we could try to be sneaky and Lanczos-interp
-            # after cutting G down to nearly its final size... tricky
-            # tho
 
             # Lanczos-3 interpolation in ~the same way we do for
             # pixelized PSFs.
@@ -508,6 +474,7 @@ class ProfileGalaxy(object):
 
         if modelMask is not None:
             gh, gw = G.shape
+            assert((gw == pW) and (gh == pH))
             if sx != 0 or sy != 0:
                 yi, yo = get_overlapping_region(-sy, -sy + mh - 1, 0, gh - 1)
                 xi, xo = get_overlapping_region(-sx, -sx + mw - 1, 0, gw - 1)
@@ -712,10 +679,33 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
             return self.halfsize
         pixscale = img.wcs.pixscale_at(px, py)
         halfsize = max(1., self.getRadius() / pixscale)
-        halfsize += img.psf.getRadius()
+        # limit to image size
+        h,w = img.shape
+        imsize = max(h, w)//2
+        halfsize = min(halfsize, imsize)
+        # ... but then increase up to PSF size
+        psfsize = img.psf.getRadius()
+        halfsize = max(halfsize, psfsize)
         halfsize = int(np.ceil(halfsize))
         return halfsize
 
+    def getDerivativeShearedProfiles(self, img, px, py):
+        # Returns a list of sheared profiles that will be needed to compute
+        # derivatives for this source; this is assumed in addition to the
+        # sheared profile at the current parameter settings.
+        derivs = []
+        if self.isParamThawed('shape'):
+            gsteps = self.shape.getStepSizes()
+            gnames = self.shape.getParamNames()
+            oldvals = self.shape.getParams()
+            for i, gstep in enumerate(gsteps):
+                oldval = self.shape.setParam(i, oldvals[i] + gstep)
+                pro = self._getShearedProfile(img, px, py)
+                #print('Param', gnames[i], 'was', oldval, 'stepped to', oldvals[i]+gstep,
+                #      '-> profile', pro.var.ravel())
+                self.shape.setParam(i, oldval)
+                derivs.append(('shape.'+gnames[i], pro, gstep))
+        return derivs
 
 class GaussianGalaxy(HoggGalaxy):
     nre = 6.
@@ -732,7 +722,6 @@ class GaussianGalaxy(HoggGalaxy):
 
     def getProfile(self):
         return GaussianGalaxy.profile
-
 
 class ExpGalaxy(HoggGalaxy):
     nre = 4.
@@ -752,7 +741,6 @@ class ExpGalaxy(HoggGalaxy):
 
     def getProfile(self):
         return ExpGalaxy.profile
-
 
 class DevGalaxy(HoggGalaxy):
     nre = 8.

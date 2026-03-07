@@ -135,7 +135,7 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         return self.img
 
     def getPointSourcePatch(self, px, py, minval=0., modelMask=None,
-                            radius=None, **kwargs):
+                            radius=None, derivs=False, **kwargs):
         if self.sampling != 1.:
             return self._getOversampledPointSourcePatch(px, py, minval=minval,
                                                         modelMask=modelMask,
@@ -192,7 +192,19 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         mm = mm[padding:-padding, padding:-padding]
         assert(np.all(np.isfinite(mm)))
 
-        return Patch(mx0, my0, mm)
+        patch = Patch(mx0, my0, mm)
+        if not derivs:
+            return patch
+        # Return a tuple of original, dx, dy patches.
+        # We leave a 1-pixel margin of zeros around the outside, matched in both
+        # directions - it's kind of nice for the dx and dy to have the same footprint?
+        dx = np.zeros_like(patch.patch)
+        dx[1:-1, 1:-1] = -(patch.patch[1:-1, 2:] - patch.patch[1:-1, :-2]) / 2.
+        dy = np.zeros_like(patch.patch)
+        dy[1:-1, 1:-1] = -(patch.patch[2:, 1:-1] - patch.patch[:-2, 1:-1]) / 2.
+        patch_dx = Patch(patch.x0, patch.y0, dx)
+        patch_dy = Patch(patch.x0, patch.y0, dy)
+        return patch, patch_dx, patch_dy
 
     def getFourierTransformSize(self, radius):
         # Next power-of-two size
@@ -930,3 +942,30 @@ try:
     getCircularMog = functools.lru_cache(maxsize=16)(getCircularMog)
 except:
     pass
+
+# mixin class
+class NormalizedPsf(object):
+    def getFourierTransform(self, px, py, radius):
+        fft, (cx,cy), shape, (v,w) = super().getFourierTransform(px, py, radius)
+        n = np.abs(fft[0][0])
+        if n != 0:
+            fft /= n
+        return fft, (cx,cy), shape, (v,w)
+
+    def getImage(self, px, py):
+        img = super().getImage(px, py)
+        n = np.sum(img)
+        if n != 0:
+            img /= n
+        return img
+
+    def _sampleImage(self, img, dx, dy, **kwargs):
+        xl,yl,img = super()._sampleImage(img, dx, dy, **kwargs)
+        n = img.sum()
+        if n != 0:
+            img /= n
+        return xl,yl,img
+
+class NormalizedPixelizedPsf(NormalizedPsf, PixelizedPSF):
+    def __str__(self):
+        return 'NormalizedPixelizedPSF'

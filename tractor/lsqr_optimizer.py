@@ -250,10 +250,13 @@ class LsqrOptimizer(Optimizer):
         lnp += -0.5 * chisq
         return lnp, chis, ims
 
-    def optimize(self, tractor, alphas=None, damp=0, priors=True,
-                 scale_columns=True,
-                 shared_params=True, variance=False, just_variance=False,
-                 **nil):
+    def getLinearUpdateDirection(self, tractor,
+                                 damp=0,
+                                 priors=True,
+                                 scale_columns=True,
+                                 shared_params=True,
+                                 variance=False,
+                                 **kwargs):
         #logverb(tractor.getName() + ': Finding derivs...')
         #t0 = Time()
         allderivs = tractor.getDerivs()
@@ -270,7 +273,18 @@ class LsqrOptimizer(Optimizer):
                                     scale_columns=scale_columns,
                                     shared_params=shared_params,
                                     variance=variance)
-        #print('Update:', X)
+
+        #print (f"LSQR {X=}")
+        return X
+
+    def optimize(self, tractor, alphas=None, damp=0, priors=True,
+                 scale_columns=True,
+                 shared_params=True, variance=False, just_variance=False,
+                 **nil):
+        kwa = dict(damp=damp, priors=priors,
+                   scale_columns=scale_columns, shared_params=shared_params,
+                   variance=variance)
+        X = self.getLinearUpdateDirection(tractor, **kwa)
         if X is None:
             # Failure
             return (0., None, 0.)
@@ -316,6 +330,8 @@ class LsqrOptimizer(Optimizer):
                            chiImages=None, variance=False,
                            shared_params=True,
                            get_A_matrix=False):
+        from scipy.sparse import csr_matrix
+        from scipy.sparse.linalg import lsqr
         #
         # Returns: numpy array containing update direction.
         # If *variance* is True, return    (update,variance)
@@ -379,16 +395,10 @@ class LsqrOptimizer(Optimizer):
         del nextrow
         Ncols = len(allderivs)
 
-        if variance:
-            var = np.zeros(Ncols, np.float32)
-
         # FIXME -- shared_params should share colscales!
 
-        colscales = np.ones(Ncols)
+        colscales = np.zeros(Ncols)
         for col, param in enumerate(allderivs):
-            RR = []
-            VV = []
-            WW = []
             for (deriv, img) in param:
                 inverrs = img.getInvError()
                 (H, W) = img.shape
@@ -402,107 +412,84 @@ class LsqrOptimizer(Optimizer):
                 assert(np.all(pix < img.numberOfPixels()))
                 # (grab non-zero indices)
                 dimg = deriv.getImage()
-                nz = np.flatnonzero(dimg)
-                #print('  source', j, 'derivative', p, 'has', len(nz), 'non-zero entries')
+                w = inverrs[deriv.getSlice(img)]
+                vals = dimg * w
+                nz = np.flatnonzero(vals)
+                logverb('deriv', deriv.name, 'shape', dimg.shape, '; %i of %i pixels nonzero' % (len(nz), dimg.size))
                 if len(nz) == 0:
-                    logverb('Col %i: all derivs are zero')
+                    logverb('Col %i: all (weighted) derivs are zero')
+                    continue
+                vals = vals.flat[nz]
+                if scale_columns:
+                    colscales[col] += np.dot(vals, vals)
+                if scales_only:
                     continue
                 rows = row0 + pix[nz]
-                #print('Adding derivative', deriv.getName(), 'for image', img.name)
-                vals = dimg.flat[nz]
-                w = inverrs[deriv.getSlice(img)].flat[nz]
-                assert(vals.shape == w.shape)
-                # if not scales_only:
-                RR.append(rows)
-                VV.append(vals)
-                WW.append(w)
-
-            # massage, re-scale, and clean up matrix elements
-            if len(VV) == 0:
-                continue
-            rows = np.hstack(RR)
-            VV = np.hstack(VV)
-            WW = np.hstack(WW)
-            vals = VV * WW
-
-            # shouldn't be necessary since we check len(nz)>0 above
-            # if len(vals) == 0:
-            #   continue
-            mx = np.max(np.abs(vals))
-            if mx == 0:
-                logmsg('mx == 0:', len(np.flatnonzero(VV)), 'of', len(VV), 'non-zero derivatives,',
-                       len(np.flatnonzero(WW)), 'of', len(
-                           WW), 'non-zero weights;',
-                       len(np.flatnonzero(vals)), 'non-zero products')
-                continue
-            # MAGIC number: near-zero matrix elements -> 0
-            # 'mx' is the max value in this column.
-            FACTOR = 1.e-10
-            I = (np.abs(vals) > (FACTOR * mx))
-            rows = rows[I]
-            vals = vals[I]
-            # L2 norm
-            scale = np.sqrt(np.dot(vals,vals))
-            colscales[col] = scale
-            if scales_only:
-                continue
-
-            if variance:
-                var[col] = scale**2
-
-            sprows.append(rows)
-            spcols.append(col)
-            if scale_columns:
-                if scale == 0.:
-                    spvals.append(vals)
-                else:
-                    spvals.append(vals / scale)
-            else:
+                sprows.append(rows)
                 spvals.append(vals)
+                spcols.append(col)
 
-        if scales_only:
-            return colscales
+        assert(len(sprows) == len(spcols))
+        assert(len(sprows) == len(spvals))
 
         b = None
         if priors:
-            # We don't include the priors in the "colscales"
-            # computation above, mostly because the priors are
-            # returned as sparse additions to the matrix, and not
-            # necessarily column-oriented the way the other params
-            # are.  It would be possible to make it work, but dstn is
-            # not convinced it's worth the effort right now.
             X = tractor.getLogPriorDerivatives()
             if X is not None:
-                rA, cA, vA, pb, mub = X
-                sprows.extend([[rij + Nrows for rij in ri] for ri in rA])
-                spcols.extend(cA)
-                if scale_columns:
-                    spvals.extend([vi / colscales[ci] for vi, ci in zip(vA, cA)])
-                else:
-                    spvals.extend(vA)
-                #print('Prior: adding sparse vals', [vi / colscales[ci] for vi, ci in zip(vA, cA)])
-                #print(' with b', pb)
+                rA, cA, vA, pb, _ = X
+
+                for ri, ci, vi in zip(rA, cA, vA):
+                    if scale_columns:
+                        colscales[ci] += np.dot(vi, vi)
+                    if scales_only:
+                        continue
+                    sprows.append(np.array(ri) + Nrows)
+                    spcols.append(ci)
+                    spvals.append(vi)
+
                 oldnrows = Nrows
                 nr = listmax(rA, -1) + 1
                 Nrows += nr
-                logverb('Nrows was %i, added %i rows of priors => %i' %
-                        (oldnrows, nr, Nrows))
-                # if len(cA) == 0:
-                #     Ncols = 0
-                # else:
-                #     Ncols = 1 + max(cA)
-
-                b = np.zeros(Nrows)
+                #logverb('Nrows was %i, added %i rows of priors => %i' % (oldnrows, nr, Nrows))
+                b = np.zeros(Nrows, np.float32)
                 b[oldnrows:] = np.hstack(pb)
 
         if len(spcols) == 0:
             logverb("len(spcols) == 0")
             return []
 
+        assert(len(sprows) == len(spcols))
+        assert(len(sprows) == len(spvals))
+
+        if scales_only:
+            return np.sqrt(colscales)
+
+        if variance:
+            var = colscales
+
+        if scale_columns:
+            colscales = np.sqrt(colscales)
+            rr,cc,vv = [],[],[]
+            for r,c,v in zip(sprows, spcols, spvals):
+                scale = colscales[c]
+                if scale == 0:
+                    continue
+                v = v / scale
+                # Magic number -- drop any matrix values that are tiny
+                TINY = 1e-8
+                I = np.flatnonzero(np.abs(v) > TINY)
+                if len(I) == 0:
+                    continue
+                rr.append(r[I])
+                vv.append(v[I])
+                cc.append(c)
+            spvals = vv
+            sprows = rr
+            spcols = cc
+
         # 'spcols' has one integer per 'sprows' block.
         # below we hstack the rows, but before doing that, remember how
         # many rows are in each chunk.
-        spcols = np.array(spcols)
         nrowspercol = np.array([len(x) for x in sprows])
 
         if shared_params:
@@ -510,7 +497,7 @@ class LsqrOptimizer(Optimizer):
             #print('Before applying shared parameter map:')
             #print('spcols:', len(spcols), 'elements')
             #print('  ', len(set(spcols)), 'unique')
-            spcols = paramindexmap[spcols]
+            spcols = [paramindexmap[c] for c in spcols]
             # print('After:')
             #print('spcols:', len(spcols), 'elements')
             #print('  ', len(set(spcols)), 'unique')
@@ -523,7 +510,7 @@ class LsqrOptimizer(Optimizer):
         # just the regions we need!
         #
         if b is None:
-            b = np.zeros(Nrows)
+            b = np.zeros(Nrows, np.float32)
 
         chimap = {}
         if chiImages is not None:
@@ -532,29 +519,17 @@ class LsqrOptimizer(Optimizer):
 
         # FIXME -- could compute just chi ROIs here.
 
-        # iterating this way avoids setting the elements more than once
         for img, row0 in imgoffs.items():
             chi = chimap.get(img, None)
             if chi is None:
-                #print('computing chi image')
                 chi = tractor.getChiImage(img=img)
             chi = chi.ravel()
             NP = len(chi)
             # we haven't touched these pix before
             assert(np.all(b[row0: row0 + NP] == 0))
             assert(np.all(np.isfinite(chi)))
-            #print('Setting [%i:%i) from chi img' % (row0, row0+NP))
             b[row0: row0 + NP] = chi
-        # Zero out unused rows -- FIXME, is this useful??
-        # print('Nrows', Nrows, 'vs len(urows)', len(urows))
-        # bnz = np.zeros(Nrows)
-        # bnz[urows] = b[urows]
-        # print('b', len(b), 'vs bnz', len(bnz))
-        # b = bnz
         assert(np.all(np.isfinite(b)))
-
-        from scipy.sparse import csr_matrix
-        from scipy.sparse.linalg import lsqr
 
         spvals = np.hstack(spvals)
         if not np.all(np.isfinite(spvals)):
@@ -562,53 +537,51 @@ class LsqrOptimizer(Optimizer):
             return None
         assert(np.all(np.isfinite(spvals)))
 
-        sprows = np.hstack(sprows)  # hogg's lovin' hstack *again* here
+        sprows = np.hstack(sprows)
         assert(len(sprows) == len(spvals))
 
-        # For LSQR, expand 'spcols' to be the same length as 'sprows'.
-        cc = np.empty(len(sprows))
+        # For csr_matrix, expand 'spcols' to be the same length as 'sprows'.
+        cc = np.empty(len(sprows), np.int32)
         i = 0
         for c, n in zip(spcols, nrowspercol):
             cc[i: i + n] = c
             i += n
         spcols = cc
+        del cc
+        del nrowspercol
         assert(i == len(sprows))
         assert(len(sprows) == len(spcols))
 
-        logverb('  Number of sparse matrix elements:', len(sprows))
-        urows = np.unique(sprows)
-        ucols = np.unique(spcols)
-        logverb('  Unique rows (pixels):', len(urows))
-        logverb('  Unique columns (params):', len(ucols))
-        if len(urows) == 0 or len(ucols) == 0:
-            return []
-        logverb('  Max row:', urows[-1])
-        logverb('  Max column:', ucols[-1])
-        logverb('  Sparsity factor (possible elements / filled elements):',
-                float(len(urows) * len(ucols)) / float(len(sprows)))
+        import logging
+        logger = logging.getLogger('tractor.engine')
+        if logger.isEnabledFor(logging.DEBUG):
+            logverb('  Number of sparse matrix elements:', len(sprows))
+            urows = np.unique(sprows)
+            ucols = np.unique(spcols)
+            logverb('  Unique rows (pixels):', len(urows))
+            logverb('  Unique columns (params):', len(ucols))
+            logverb('  Max row:', urows[-1])
+            logverb('  Max column:', ucols[-1])
+            logverb('  Sparsity factor (possible elements / filled elements):',
+                    float(len(urows) * len(ucols)) / float(len(sprows)))
+            logverb('LSQR: %i cols (%i unique), %i elements' %
+                    (Ncols, len(ucols), len(spvals) - 1))
 
         # FIXME -- does it make LSQR faster if we remap the row and column
         # indices so that no rows/cols are empty?
 
-        # FIXME -- we could probably construct the CSC matrix ourselves!
+        # FIXME -- we could probably construct a duck-typed CSR matrix ourselves
+        # to avoid expanding out the columns
 
         # Build sparse matrix
-        #A = csc_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
         A = csr_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
+        del spvals, sprows, spcols
 
         if get_A_matrix:
+            # FIXME -- this isn't much good without colscales...
             return A
 
         lsqropts = dict(show=isverbose(), damp=damp)
-
-        # Run lsqr()
-        logverb('LSQR: %i cols (%i unique), %i elements' %
-                (Ncols, len(ucols), len(spvals) - 1))
-
-        # print('A matrix:')
-        # print(A.todense())
-        # print('vector b:')
-        # print(b)
 
         bail = False
         try:
@@ -641,7 +614,7 @@ class LsqrOptimizer(Optimizer):
         # print('  xnorm =', xnorm)
         # print('  var =', var)
 
-        logverb('scaled  X=', X)
+        #logverb('scaled  X=', X)
         X = np.array(X)
 
         if shared_params:
@@ -669,10 +642,3 @@ class LsqrOptimizer(Optimizer):
             return X, 1./np.array(var)
 
         return X
-
-    # def getParameterScales(self):
-    #     print(self.getName()+': Finding derivs...')
-    #     allderivs = self.getDerivs()
-    #     print('Finding column scales...')
-    #     s = self.getUpdateDirection(allderivs, scales_only=True)
-    #     return s

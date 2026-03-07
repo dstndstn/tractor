@@ -33,8 +33,9 @@ dev_var = np.array([2.23759216e-04,   1.00220099e-03,   4.18731126e-03,   1.6943
 ########## Delta function core to correct for softening
 dev_core = 0.010233
 dev_amp *= (1. - dev_core) / np.sum(dev_amp)
-dev_amp = np.append(dev_amp, dev_core)
-dev_var = np.append(dev_var, 0.)
+# Keep these in *increasing* order of variance by prepending!
+dev_amp = np.append(dev_core, dev_amp)
+dev_var = np.append(0.,       dev_var)
 ####################
 
 def get_exp_mixture():
@@ -139,9 +140,7 @@ class MixtureOfGaussians(object):
         assert(shift.shape == (self.D,))
         assert(scale.shape == (self.D, self.D))
         newmean = self.mean + shift
-        newvar = np.zeros_like(self.var)
-        for k in range(self.K):
-            newvar[k, :, :] = np.linalg.multi_dot((scale, self.var[k,:,:], scale.T))
+        newvar = scale @ self.var @ scale.T
         return MixtureOfGaussians(self.amp, newmean, newvar, quick=True)
 
     def apply_shear(self, scale):
@@ -152,29 +151,7 @@ class MixtureOfGaussians(object):
         scale: DxD-matrix transformation
         '''
         assert(scale.shape == (self.D, self.D))
-        newvar = np.zeros_like(self.var)
-        # for k in range(self.K):
-        #     newvar[k, :, :] = np.linalg.multi_dot((scale, self.var[k,:,:], scale.T))
-
-        a = scale[0,0]
-        b = scale[0,1]
-        c = scale[1,0]
-        d = scale[1,1]
-        for k in range(self.K):
-            e = self.var[k,0,0]
-            f = self.var[k,0,1]
-            g = self.var[k,1,0]
-            h = self.var[k,1,1]
-            # hi I am writing out 2x2 matrix multiplication ftw?
-            t1 = a*e+b*f
-            t2 = c*e+d*f
-            t3 = a*g+b*h
-            t4 = c*g+d*h
-            newvar[k, 0, 0] = a*t1 + b*t3
-            newvar[k, 0, 1] = a*t2 + b*t4
-            newvar[k, 1, 0] = c*t1 + d*t3
-            newvar[k, 1, 1] = c*t2 + d*t4
-
+        newvar = scale @ self.var @ scale.T
         return MixtureOfGaussians(self.amp, self.mean, newvar, quick=True)
 
     # dstn: should this be called "correlate"?
