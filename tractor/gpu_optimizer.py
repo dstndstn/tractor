@@ -1,5 +1,4 @@
 import time
-
 import numpy as np
 
 from tractor.smarter_dense_optimizer import SmarterDenseOptimizer
@@ -7,13 +6,6 @@ from tractor import ProfileGalaxy, HybridPSF, ConstantSky, PointSource, Patch
 from tractor.brightness import LinearPhotoCal
 from tractor.basics import ConstantSurfaceBrightness
 
-'''
-TO-DO:
--- check in oneblob.py - are we passing NormalizedPixelizedPsfEx (VARYING) PSF objects
-   in at some point?  They should all get turned into constant PSFs.
--- check PSF sampling != 1.0
-
-'''
 import logging
 logger = logging.getLogger('tractor.gpu_optimizer')
 def logverb(*args):
@@ -31,11 +23,6 @@ class Duck(object):
 
 class GpuFriendlyOptimizer(SmarterDenseOptimizer):
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.t_super = 0.
-        self.n_super = 0
-
     def getLinearUpdateDirection(self, tr, priors=True, get_icov=False, **kwargs):
         if not (tr.isParamFrozen('images') and
                 (((len(tr.catalog) == 1) and
@@ -44,12 +31,13 @@ class GpuFriendlyOptimizer(SmarterDenseOptimizer):
                   isinstance(tr.catalog[0], (ProfileGalaxy, PointSource, type(None))) and
                   isinstance(tr.catalog[1], ConstantSurfaceBrightness))
                  )):
-            print('GpuFriendlyOptimizer: falling back to super.  Images frozen: %s, Cat len: %i' %
-                  (tr.isParamFrozen('images'), len(tr.catalog)))
-            for src in tr.catalog:
-                print('  src', src, 'is gal/psf: %s; is CSB: %s' %
-                      (isinstance(src, (ProfileGalaxy, PointSource)),
-                       isinstance(src, ConstantSurfaceBrightness)))
+            if logger.isEnabledFor(logging.DEBUG):
+                logverb('GpuFriendlyOptimizer: falling back to super.  Images frozen: %s, Cat len: %i' %
+                    (tr.isParamFrozen('images'), len(tr.catalog)))
+                for src in tr.catalog:
+                    logverb('  src', src, 'is gal/psf: %s; is CSB: %s' %
+                        (isinstance(src, (ProfileGalaxy, PointSource)),
+                        isinstance(src, ConstantSurfaceBrightness)))
             return super().getLinearUpdateDirection(tr, priors=priors, get_icov=get_icov,
                                                     **kwargs)
         assert(get_icov == False)
@@ -1355,66 +1343,33 @@ if __name__ == '__main__':
         def getName(cls):
             return "EllipseWithPriors(%g)" % cls.ellipticityStd
 
-    # From legacypipe, a Position class with no parameters.
+    # (Modified) from legacypipe, a Position class with no parameters.
     # Gaia measures positions better than we will, we assume, so the
     # GaiaPosition class pretends that it does not have any parameters
     # that can be optimized; therefore they stay fixed.
     class GaiaPosition(ParamList):
-        def __init__(self, ra, dec, ref_epoch, pmra, pmdec, parallax):
-            '''
-            Units:
-            - matches Gaia DR1
-            - pmra,pmdec are in mas/yr.  pmra is in angular speed (ie, has a cos(dec) factor)
-            - parallax is in mas.
-            - ref_epoch: year (eg 2015.5)
-            '''
+        def __init__(self, ra, dec):
             self.ra = ra
             self.dec = dec
-            self.ref_epoch = float(ref_epoch)
-            self.pmra = pmra
-            self.pmdec = pmdec
-            self.parallax = parallax
+            self.pos = RaDecPos(self.ra, self.dec)
             super(GaiaPosition, self).__init__()
-            self.cached_positions = {}
         def copy(self):
-            return GaiaPosition(self.ra, self.dec, self.ref_epoch, self.pmra, self.pmdec,
-                                self.parallax)
+            return GaiaPosition(self.ra, self.dec)
         def getPositionAtTime(self, mjd):
-            from tractor import RaDecPos
-            try:
-                return self.cached_positions[mjd]
-            except KeyError:
-                # not cached
-                pass
-            if self.pmra == 0. and self.pmdec == 0. and self.parallax == 0.:
-                pos = RaDecPos(self.ra, self.dec)
-                self.cached_positions[mjd] = pos
-                return pos
-            ra,dec = radec_at_mjd(self.ra, self.dec, self.ref_epoch,
-                                  self.pmra, self.pmdec, self.parallax, mjd)
-            pos = RaDecPos(ra, dec)
-            self.cached_positions[mjd] = pos
             return pos
         @staticmethod
         def getName():
             return 'GaiaPosition'
         def __str__(self):
-            return ('%s: RA, Dec = (%.5f, %.5f), pm (%.1f, %.1f), parallax %.3f' %
-                    (self.getName(), self.ra, self.dec, self.pmra, self.pmdec, self.parallax))
-        def __getstate__(self):
-            '''
-            For pickling: omit cached positions
-            '''
-            d = self.__dict__.copy()
-            d['cached_positions'] = dict()
-            return d
+            return ('%s: RA, Dec = (%.5f, %.5f)' %
+                    (self.getName(), self.ra, self.dec))
 
     #brightness = NanoMaggies(g=1000., r=2000., z=500.)
     brightness = NanoMaggies(g=2000., r=4000., z=500.)
 
     shape = EllipseWithPriors(np.log(5.), 0.1, 0.4)
     pos = RaDecPos(ra_cen - 25.*arcsec, dec_cen)
-    gpos = GaiaPosition(ra_cen - 25.*arcsec, dec_cen, 2016.0, 0., 0., 0.)
+    gpos = GaiaPosition(ra_cen - 25.*arcsec, dec_cen)
     #gal = ExpGalaxy(pos, brightness, shape)
     #gal = DevGalaxy(pos, brightness, shape)
     #param_scales = [1./3600, 1./3600., 100., 100., 100., 1., 0.1, 0.1]
