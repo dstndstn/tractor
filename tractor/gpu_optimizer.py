@@ -285,7 +285,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             mods = self.gpu_get_unitflux_galaxy_profiles(mogs, img_params,
                                                          mux_grid, muy_grid)
         if is_psf or is_galaxy:
-            mods *= cp.array(counts_grid)[..., na, na]
+            mods *= cp.array(counts_grid)[..., nu, nu]
         # add sb below to make shifting better
 
         # mods shape: Nimages x Nmod x pH x pW
