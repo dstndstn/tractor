@@ -634,7 +634,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         if not cp.all(goodrows):
             A = A[goodrows, :]
             B = B[goodrows]
-            del goodrows
+            if not get_A:
+                del goodrows
 
         A /= colscales[nu, :]
         X,_,_,_ = cp.linalg.lstsq(A, B, rcond=None)
@@ -652,11 +653,12 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
         if get_A:
             sA = np.zeros((Nrows, Nout), np.float32)
-            sA[:,I] = cp.get(A)
+            sA[goodrows,:][:,I] = cp.get(A)
             s_scales = np.zeros(Nout, np.float32)
             s_scales[I] = cp.get(colscales)
-            B = cp.get(B)
-            return sA, B, sX, s_scales, pH,pW, img_params.padslices #cp.get(img_params.padmask)
+            sB = np.zeros(Nrows, np.float32)
+            sB[goodrows] = cp.get(B)
+            return sA, sB, sX, s_scales, pH,pW, img_params.padslices
 
         return sX
 
