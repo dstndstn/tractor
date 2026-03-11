@@ -8,10 +8,11 @@ Licensed under the GPLv2; see the file COPYING for details.
 
 General Sersic galaxy model.
 '''
-from __future__ import print_function
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
+
+import functools
 
 import numpy as np
 
@@ -284,6 +285,7 @@ class SersicMixture(object):
         (lo,hi,a,v) = self.fits[-1]
         self.highest = hi
 
+    @functools.lru_cache(maxsize=5)
     def _getProfile(self, sindex):
         matches = []
         # clamp low Sersic index

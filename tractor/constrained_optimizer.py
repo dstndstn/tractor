@@ -9,7 +9,7 @@ class ConstrainedOptimizer(LsqrOptimizer):
         # The smallest parameter update step we will try, in tryUpdates / getParameterSteps
         self.tiny_alpha = 1e-8
 
-    def optimize_loop(self, tractor, dchisq=0., steps=50,
+    def optimize_loop(self, tractor, dchisq=0., steps=100,
                       dchisq_limited=1e-6,
                       check_step=None,
                       **kwargs):
@@ -43,6 +43,7 @@ class ConstrainedOptimizer(LsqrOptimizer):
         steps = self.getParameterSteps(tractor, X, alphas)
 
         if len(steps) == 0:
+            self.stepLimited = True
             self.last_step_hit_limit = True
             self.hit_limit = True
 
