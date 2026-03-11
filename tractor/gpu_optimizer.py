@@ -1291,7 +1291,41 @@ if __name__ == '__main__':
 
     from astrometry.util.plotutils import PlotSequence
     ps = PlotSequence('chi')
-    
+
+    nims = 11
+    nmod = 1
+    h,w = 64,64
+    in_img = np.zeros((nims, nmod, h, w), np.float32)
+    #out_img = np.zeros((nims, nmod, h, w), np.float32)
+
+    dx = np.linspace(-0.5, +0.5, 11).astype(np.float32)
+    dy = np.zeros(nims, np.float32) + 0.5
+
+    in_img[:, :, :, 0] = 2.
+    in_img[:, :, :, 32] = 2.
+    in_img[:, :, :, w-2] = 2.
+
+    import cupy as cp
+    cp.get = lambda x: x.get()
+    gpu_opt = GpuOptimizer(cp)
+    gpu_in = cp.array(in_img)
+    gpu_out = cp.zeros((nims, nmod, h, w), np.float32)
+    gpu_opt.lanczos_shift_images_gpu(gpu_in, gpu_out, dx, dy)
+
+    out_img = cp.get(gpu_out)
+
+    for i in range(nims):
+        plt.clf()
+        plt.subplot(2,2,1)
+        plt.imshow(out_img[i, 0, :, :], interpolation='nearest', origin='lower')
+        plt.subplot(2,2,3)
+        plt.plot(out_img[i, 0, 32, :])
+        plt.ylim(-0.2, +2.0)
+        plt.subplot(2,2,4)
+        plt.plot(out_img[i, 0, :, 32])
+        ps.savefig()
+
+    sys.exit(0)
     # import pickle
     # opt = GpuOptimizer('cupy')
     # s = pickle.dumps(opt)
