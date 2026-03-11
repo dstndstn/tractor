@@ -583,8 +583,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 # Image i fills in the column corresponding to its sb flux
                 # and a block of rows corresponding to its pixels.
                 col = Npos + Nbands + Nshapes + tim_band_index[i]
-                # This might not be strictly necessary to mask by "padmask", but it makes the results
-                # match more closely with the traditional code, because the colscales are the same.
                 # FIXME -- here we must be assuming LinearPhotoCal with scale = 1!
                 A[i * pH*pW: (i+1) * pH*pW, col] = (pixscales[i]**2 * padie[i, :, :].ravel())
 
@@ -690,7 +688,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         # FIXME -- should be able to cache this; rationalize pixel transfer to GPU.
         padpix  = cp.zeros((Nimages, pH,pW), cp.float32)
         padie   = cp.zeros((Nimages, pH,pW), cp.float32)
-        padmask = cp.zeros((Nimages, pH,pW), bool)
         padslices = []
         for i,(tim,(x0,x1,y0,y1)) in enumerate(zip(tims, extents)):
             pix = tim.getImage()
@@ -702,7 +699,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             padpix [i, y0+dy : y1+dy, x0+dx : x1+dx] = cp.array(p)
             p =  ie[y0:y1, x0:x1]
             padie  [i, y0+dy : y1+dy, x0+dx : x1+dx] = cp.array(p)
-            padmask[i, y0+dy : y1+dy, x0+dx : x1+dx] = True
             padslices.append((slice(y0+dy, y1+dy), slice(x0+dx, x1+dx)))
 
         # GPU arrays:
@@ -712,7 +708,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         img_params.w = w
         img_params.padpix = padpix
         img_params.padie  = padie
-        img_params.padmask = padmask
         # numpy arrays:
         img_params.psf_mogs = psf_mogs
         img_params.padslices = padslices # debug
