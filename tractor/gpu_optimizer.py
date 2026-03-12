@@ -18,6 +18,51 @@ info = logmsg
 def isverbose():
     return logger.isEnabledFor(logging.DEBUG)
 
+from astrometry.util.plotutils import PlotSequence
+pscache = PlotSequence('cache')
+
+cache_fail_pickle = 1
+
+
+def objects_equal(o1, o2):
+    if o1 == o2:
+        print('Objects of type', type(o1), type(o2), 'are equal')
+        return True
+
+    print('Objects of type', type(o1), type(o2), 'are not equal')
+    if type(o1) != type(o2):
+        print('Different types')
+        return False
+
+    if isinstance(o1, list):
+        if len(o1) != len(o2):
+            print('Lists have different lengths: %i, %i' % len(o1), len(o2))
+            return False
+        for i in range(len(o1)):
+            print('Comparing list index %i' % i)
+            if not objects_equal(o1[i], o2[i]):
+                print('List index %i differs' % i)
+                return False
+        print('Lists equal')
+        return True
+    if isinstance(o1, (dict, object)):
+        if isinstance(o1, dict):
+            d1 = o1
+            d2 = o2
+        else:
+            d1 = o1.__dict__
+            d2 = o2.__dict__
+        if sorted(d1.keys()) != sorted(d2.keys()):
+            print('Keys differ:', sorted(d1.keys()), sorted(d2.keys()))
+            return False
+        print('Keys are equal')
+        for k in d1.keys():
+            print('Checking key', k)
+            if not objects_equal(d1[k], d2[k]):
+                print('Key', k, 'differs')
+                return False
+        return True
+
 class Duck(object):
     pass
 
@@ -133,9 +178,158 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         self.image_params = img_params
 
     def one_source_try_updates(self, tr, X, **kwargs):
+        self.save_chis = []
+        if self.image_params:
+            p0 = tr.getParams()
+            r1 = self.gpu_one_source_try_updates(tr, X, **kwargs)
+            p1 = tr.getParams()
+            ip = self.image_params
+            self.image_params = None
+            tr.setParams(p0)
+            r2 = self.gpu_one_source_try_updates(tr, X, **kwargs)
+            p2 = tr.getParams()
+            self.image_params = ip
+            print('try_updates: r1', r1, 'r2', r2)
+            print('final params equal:', np.all(p1 == p2))
+            if not np.all(p1 == p2):
+                print('p1', p1)
+                print('p2', p2)
+            chisq1,alpha1 = r1
+            chisq2,alpha2 = r2
+            if alpha1 != alpha2:
+                #if r1 != r2:
+
+                tr.setParams(p0)
+                self.save_chis = []
+
+                import pickle
+                # global cache_fail_pickle
+                # outfn = 'cache-fail-%03i.pickle' % cache_fail_pickle
+                # cache_fail_pickle += 1
+                # pickle.dump(dict(tr=tr, X=X, kwargs=kwargs, opt=self),
+                #             open(outfn, 'wb'))
+                # print('Wrote', outfn)
+
+                tr_p1 = pickle.dumps(tr)
+                o_p1 = pickle.dumps(self)
+                
+                print()
+                print('with cache:')
+                self.save_chis = []
+                r1 = self.gpu_one_source_try_updates(tr, X, ps=pscache, **kwargs)
+                save_chis_1 = self.save_chis
+                self.save_chis = []
+                tr.setParams(p0)
+
+                tr_p2 = pickle.dumps(tr)
+                o_p2 = pickle.dumps(self)
+                print('tr_p1 == tr_p2?', (tr_p1 == tr_p2))
+                if tr_p1 != tr_p2:
+                    objects_equal(pickle.loads(tr_p1), pickle.loads(tr_p2))
+                print('o_p1 == o_p2?', (o_p1 == o_p2))
+
+                ip = self.image_params
+                self.image_params = None
+                tr.setParams(p0)
+
+                tr_p3 = pickle.dumps(tr)
+                o_p3 = pickle.dumps(self)
+                
+                print()
+                print('without cache:')
+                self.save_chis = []
+                r2 = self.gpu_one_source_try_updates(tr, X, ps=pscache, **kwargs)
+                save_chis_2 = self.save_chis
+                self.save_chis = []
+                tr.setParams(p0)
+
+                tr_p4 = pickle.dumps(tr)
+                o_p4 = pickle.dumps(self)
+                print('tr_p3 == tr_p4?', (tr_p3 == tr_p4))
+                print('o_p3 == o_p4?', (o_p3 == o_p4))
+
+                self.image_params = ip
+
+                import pylab as plt
+                #
+                for ((dx1,dy1,imod1,itim1,chi1,mod1,chisub1),
+                     (dx2,dy2,imod2,itim2,chi2,mod2,chisub2)) in zip(
+                        save_chis_1, save_chis_2):
+                    print('saved chis:')
+                    print('1: ', dx1,dy1,imod1,itim1)
+                    print('2: ', dx2,dy2,imod2,itim2)
+                    if np.all(chi1 == chi2):
+                        print('All chi pixels equal')
+                        continue
+                    print('Chisq 1:', np.sum(chi1**2))
+                    print('Chisq 2:', np.sum(chi2**2))
+                    if np.sum(chi1**2) == np.sum(chi2**2):
+                        print('Sum of chi-squared values equal')
+                        continue
+                    print('All model pixels equal?', np.all(mod1 == mod2))
+                    print('All chi-sub pixels equal?', np.all(chisub1 == chisub2))
+
+                    print()
+                    print('*** imod %i, itim %i differ ***' % (imod1, itim1))
+                    print()
+
+                    # Don't expect the chis to be equal...
+                    # plt.clf()
+                    # mx = np.abs(chi1).max()
+                    # chia = dict(interpolation='nearest', origin='lower', vmin=-mx, vmax=mx)
+                    # plt.subplot(2,2,1)
+                    # plt.imshow(chi1, **chia)
+                    # plt.title('1: %.3f' % np.sum(chi1**2))
+                    # #pscache.savefig()
+                    # plt.subplot(2,2,2)
+                    # plt.imshow(chi2, **chia)
+                    # plt.title('2: %.3f' % np.sum(chi2**2))
+                    # #pscache.savefig()
+                    # mx = np.abs(chi1 - chi2).max()
+                    # chia = dict(interpolation='nearest', origin='lower', vmin=-mx, vmax=mx)
+                    # plt.subplot(2,2,3)
+                    # plt.imshow(chi1 - chi2, **chia)
+                    # plt.title('diff of chi')
+                    # pscache.savefig()
+
+                    plt.clf()
+                    mx = np.abs(chisub1).max()
+                    chia = dict(interpolation='nearest', origin='lower', vmin=-mx, vmax=mx)
+                    plt.subplot(2,2,1)
+                    plt.imshow(chisub1, **chia)
+                    plt.title('1: %.3f' % np.sum(chisub1**2))
+                    #pscache.savefig()
+                    plt.subplot(2,2,2)
+                    plt.imshow(chisub2, **chia)
+                    plt.title('2: %.3f' % np.sum(chisub2**2))
+                    #pscache.savefig()
+                    mx = np.abs(chisub1 - chisub2).max()
+                    chia = dict(interpolation='nearest', origin='lower', vmin=-mx, vmax=mx)
+                    plt.subplot(2,2,3)
+                    plt.imshow(chisub1 - chisub2, **chia)
+                    plt.title('diff of chi-subs')
+                    pscache.savefig()
+                    
+            #assert(r1 == r2)
+            self.save_chis = []
+            return r2
+        self.save_chis = []
         return self.gpu_one_source_try_updates(tr, X, **kwargs)
 
     def one_source_update(self, tr, **kwargs):
+        if self.image_params:
+            #p0 = tr.getParams()
+            r1 = self.gpu_one_source_update(tr, **kwargs)
+            ip = self.image_params
+            self.image_params = None
+            #tr.setParams(p0)
+            r2 = self.gpu_one_source_update(tr, **kwargs)
+            self.image_params = ip
+            print('update:')
+            print('  r1', r1)
+            print('  r2', r2)
+            assert(np.all(r1 == r2))
+            return r2
         return self.gpu_one_source_update(tr, **kwargs)
 
     def _gpu_checks(self, tr):
@@ -209,8 +403,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             px = (x0+x1)/2.
             py = (y0+y1)/2.
 
-        ipx = px.round().astype(np.int32)
-        ipy = py.round().astype(np.int32)
+        #ipx = px.round().astype(np.int32)
+        #ipy = py.round().astype(np.int32)
 
         img_params = self.get_image_params(tims, px, py, x0,x1,y0,y1)
 
@@ -251,8 +445,9 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 # Round source pixel position to nearest integer
                 ix = px.round().astype(np.int32)
                 iy = py.round().astype(np.int32)
-                idx_grid[:, istep] = ix - ipx
-                idy_grid[:, istep] = iy - ipy
+                # motion compared to the (perhaps cached) image center
+                idx_grid[:, istep] = ix - img_params.ipx
+                idy_grid[:, istep] = iy - img_params.ipy
 
                 # subpixel portion: shifted via Lanczos interpolation
                 mux = px - ix
@@ -275,9 +470,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             if is_galaxy:
                 for itim,(tim,x,y) in enumerate(zip(tims, px, py)):
                     mogs[itim].append(src._getShearedProfile(tim,x,y))
-
-        #print('idx_grid', idx_grid)
-        #print('idy_grid', idy_grid)
 
         if is_psf:
             mods = self.gpu_get_unitflux_psf(img_params, mux_grid, muy_grid)
@@ -303,8 +495,12 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             #chia = dict(interpolation='nearest', origin='lower', vmin=-3, vmax=+3)
             chia = dict(interpolation='nearest', origin='lower')
         chi_work = cp.empty((pH, pW), np.float32)
+        print('sb', sb, 'src', src)
+        print('img_params ipx,ipy:', img_params.ipx, img_params.ipy)
         for imod in range(Nmods):
 
+            print('imod', imod, 'step', steps[imod])
+            
             if ps:
                 plt.clf()
 
@@ -333,15 +529,40 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                                                  mods[itim, imod, ...]) *
                                                 img_params.padie[itim, ...])**2)
 
+                    print('dx,dy = 0,0: chisqs %g' % chisqs[imod])
                     if ps:
-                        if sb:
+                        if sb and is_none:
+                            chi = ((img_params.padpix[itim, ...] -
+                                    sb_counts_grid[itim, imod]) *
+                                   img_params.padie[itim, ...])
+                        elif sb:
                             chi = ((img_params.padpix[itim, ...] -
                                     (mods[itim, imod, ...] + sb_counts_grid[itim, imod])) *
                                    img_params.padie[itim, ...])
                         else:
-                            chi = ((img_params.padpix[itim, ...] - mods[itim, imod, ...]) *
-                                   img_params.padie[itim, ...])
+                            #chi = ((img_params.padpix[itim, ...] - mods[itim, imod, ...]) *
+                            #       img_params.padie[itim, ...])
+                            chi = img_params.padpix[itim, ...] - mods[itim, imod, ...]
+                            chi *= img_params.padie[itim, ...]
                         plt.imshow(chi, **chia)
+
+                        chi = cp.get(chi)
+                        print('chisq %.1f' % (np.sum(chi**2)))
+
+                        chiy = np.flatnonzero(np.max(chi != 0, axis=1))
+                        chix = np.flatnonzero(np.max(chi != 0, axis=0))
+                        chy0 = min(chiy)
+                        chy1 = max(chiy)+1
+                        chx0 = min(chix)
+                        chx1 = max(chix)+1
+                        chisub = chi[chy0:chy1, chx0:chx1].copy()
+                        print('chisq %.1f' % (np.sum(chisub**2)))
+                        print('chi-sub:', chx0, chx1, chy0, chy1, chx1-chx0, chy1-chy0)
+                        print('chisq margins:', np.sum(chi[:chy0, :]**2), np.sum(chi[chy1:, :]**2),
+                              np.sum(chi[:, :chx0]**2), np.sum(chi[:, chx1:]**2))
+
+                        self.save_chis.append((dx,dy,imod,itim,cp.get(chi),cp.get(mods[itim,imod,:,:]),
+                                               chisub))
                     # DEBUG
                     #chi = (img_params.padpix[itim, ...] - mods[itim, imod, ...]) * img_params.padie[itim, ...]
                     #plt.imshow(chi, **chia)
@@ -356,6 +577,9 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                     chi_work[:,:] = pix
 
                 if not is_none:
+
+                    model_overlaps = np.zeros(chi_work.shape, bool)
+                    
                     mod = mods[itim, imod, ...]
                     if dx > 0:
                         x_pix_slice = slice(dx, None)
@@ -377,14 +601,42 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                         y_pix_slice = slice(dy)
                         y_mod_slice = slice(-dy, None)
                     chi_work[y_pix_slice, x_pix_slice] -= mod[y_mod_slice, x_mod_slice]
-                        
-                chisqs[imod] += cp.sum((chi_work * ie)**2)
+
+                    model_overlaps[y_pix_slice, x_pix_slice] = True
+
+                chi_work *= ie
+                chisqs[imod] += cp.sum(chi_work**2)
+                #chisqs[imod] += cp.sum((chi_work * ie)**2)
+                print('dx,dy = %i,%i: chisqs %g' % (dx,dy,chisqs[imod]))
+
+                Nclipped = np.sum((cp.get(ie) > 0) * (model_overlaps == False))
+                if Nclipped:
+                    print('%i pixels have ie>0 but model was clipped' % Nclipped)
+
                 if ps:
                     #chi_work[:,:] = 0
                     #chi_work[y_pix_slice, x_pix_slice] = mod[y_mod_slice, x_mod_slice]
                     #plt.title('mod (dx,dy %i,%i)' % (dx,dy))
                     #plt.imshow(chi_work * ie, **chia)
-                    plt.imshow(chi_work * ie, **chia)
+                    plt.imshow(chi_work, **chia)
+                    #self.save_chis.append((dx,dy,imod,itim,cp.get(chi_work * ie),cp.get(mod)))
+                    print('chisq %.1f' % (np.sum(cp.get(chi_work)**2)))
+
+                    chi = cp.get(chi_work).copy()
+                    chiy = np.flatnonzero(np.max(chi != 0, axis=1))
+                    chix = np.flatnonzero(np.max(chi != 0, axis=0))
+                    chy0 = min(chiy)
+                    chy1 = max(chiy)+1
+                    chx0 = min(chix)
+                    chx1 = max(chix)+1
+                    chisub = chi[chy0:chy1, chx0:chx1].copy()
+                    print('chisq %.1f' % (np.sum(chisub**2)))
+                    print('chi-sub:', chx0, chx1, chy0, chy1, chx1-chx0, chy1-chy0)
+                    print('chisq margins:', np.sum(chi[:chy0, :]**2), np.sum(chi[chy1:, :]**2),
+                          np.sum(chi[:, :chx0]**2), np.sum(chi[:, chx1:]**2))
+                    self.save_chis.append((dx,dy,imod,itim,chi,cp.get(mod),
+                                           chisub))
+
             if ps:
                 ps.savefig()
 
@@ -671,8 +923,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 # Image i fills in the column corresponding to its sb flux
                 # and a block of rows corresponding to its pixels.
                 col = Npos + Nbands + Nshapes + tim_band_index[i]
-                # This might not be strictly necessary to mask by "padmask", but it makes the results
-                # match more closely with the traditional code, because the colscales are the same.
                 # FIXME -- here we must be assuming LinearPhotoCal with scale = 1!
                 A[i * pH*pW: (i+1) * pH*pW, col] = (pixscales[i]**2 * padie[i, :, :].ravel())
 
@@ -722,7 +972,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         if not cp.all(goodrows):
             A = A[goodrows, :]
             B = B[goodrows]
-            del goodrows
+            if not get_A:
+                del goodrows
 
         A /= colscales[nu, :]
         X,_,_,_ = cp.linalg.lstsq(A, B, rcond=None)
@@ -740,11 +991,12 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
         if get_A:
             sA = np.zeros((Nrows, Nout), np.float32)
-            sA[:,I] = cp.get(A)
+            sA[goodrows,:][:,I] = cp.get(A)
             s_scales = np.zeros(Nout, np.float32)
             s_scales[I] = cp.get(colscales)
-            B = cp.get(B)
-            return sA, B, sX, s_scales, pH,pW, img_params.padslices #cp.get(img_params.padmask)
+            sB = np.zeros(Nrows, np.float32)
+            sB[goodrows] = cp.get(B)
+            return sA, sB, sX, s_scales, pH,pW, img_params.padslices
 
         return sX
 
@@ -776,7 +1028,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         # FIXME -- should be able to cache this; rationalize pixel transfer to GPU.
         padpix  = cp.zeros((Nimages, pH,pW), cp.float32)
         padie   = cp.zeros((Nimages, pH,pW), cp.float32)
-        padmask = cp.zeros((Nimages, pH,pW), bool)
         padslices = []
         for i,(tim,x0,x1,y0,y1) in enumerate(zip(tims, ex0,ex1,ey0,ey1)):
             pix = tim.getImage()
@@ -788,7 +1039,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             padpix [i, y0+dy : y1+dy, x0+dx : x1+dx] = cp.array(p)
             p =  ie[y0:y1, x0:x1]
             padie  [i, y0+dy : y1+dy, x0+dx : x1+dx] = cp.array(p)
-            padmask[i, y0+dy : y1+dy, x0+dx : x1+dx] = True
             padslices.append((slice(y0+dy, y1+dy), slice(x0+dx, x1+dx)))
 
         # GPU arrays:
@@ -798,7 +1048,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         img_params.w = w
         img_params.padpix = padpix
         img_params.padie  = padie
-        img_params.padmask = padmask
         # numpy arrays:
         img_params.psf_mogs = psf_mogs
         img_params.ipx = ipx
@@ -1373,7 +1622,9 @@ if __name__ == '__main__':
     import time
     import pylab as plt
     from astrometry.util.util import Tan
-
+    import pickle
+    from glob import glob
+    
     #from tractor.utils.cupy_wrapper import cp
 
     t = time.time()
@@ -1390,40 +1641,147 @@ if __name__ == '__main__':
     from astrometry.util.plotutils import PlotSequence
     ps = PlotSequence('chi')
 
-    nims = 11
-    nmod = 1
-    h,w = 64,64
-    in_img = np.zeros((nims, nmod, h, w), np.float32)
-    #out_img = np.zeros((nims, nmod, h, w), np.float32)
+    fns = glob('/pscratch/sd/d/dstn/cache-fail-*.pickle')
+    fns.sort()
+    for fn in fns:
+        print()
+        print(fn)
+        #X = pickle.load(open('/pscratch/sd/d/dstn/cache-fail-001.pickle', 'rb'))
+        X = pickle.load(open(fn, 'rb'))
+        print(X.keys())
+        tr = X['tr']
+        xup = X['X']
+        kwargs = X['kwargs']
+        optimizer = X['opt']
 
-    dx = np.linspace(-0.5, +0.5, 11).astype(np.float32)
-    dy = np.zeros(nims, np.float32) + 0.5
-
-    in_img[:, :, :, 0] = 2.
-    in_img[:, :, :, 32] = 2.
-    in_img[:, :, :, w-2] = 2.
-
-    import cupy as cp
-    cp.get = lambda x: x.get()
-    gpu_opt = GpuOptimizer(cp)
-    gpu_in = cp.array(in_img)
-    gpu_out = cp.zeros((nims, nmod, h, w), np.float32)
-    gpu_opt.lanczos_shift_images_gpu(gpu_in, gpu_out, dx, dy)
-
-    out_img = cp.get(gpu_out)
-
-    for i in range(nims):
-        plt.clf()
-        plt.subplot(2,2,1)
-        plt.imshow(out_img[i, 0, :, :], interpolation='nearest', origin='lower')
-        plt.subplot(2,2,3)
-        plt.plot(out_img[i, 0, 32, :])
-        plt.ylim(-0.2, +2.0)
-        plt.subplot(2,2,4)
-        plt.plot(out_img[i, 0, :, 32])
-        ps.savefig()
+        print('tr', tr)
+        print('x', xup)
+        print('opt', optimizer)
+        print('kwargs:', kwargs)
+        #kwargs = dict(alphas=[0.1, 0.3, 1.0])
+        kwargs = dict(alphas=[0.1, 0.3, 1.0])
+        #kwargs = dict(alphas=[0.1])
+    
+        optimizer.one_source_try_updates(tr, xup, **kwargs)
 
     sys.exit(0)
+
+
+
+    X = pickle.load(open('/pscratch/sd/d/dstn/profiling3/model-sel-blob1-src290-psf.pickle', 'rb'))
+    tractor = X['srctractor']
+    optargs = X['optargs']
+
+    print(tractor)
+    tractor.model_kwargs = {}
+
+    class MyCheck(object):
+        def __init__(self):
+            self.reset()
+        def reset(self):
+            self.params = []
+            self.xvals = []
+
+        def __call__(self, optimizer=None, tractor=None, dlnp=None, X=None, alpha=None):
+            print('check_step', tractor.catalog[0])
+            self.params.append(tractor.getParams())
+            self.xvals.append(X.copy())
+
+            plt.clf()
+            for i,tim in enumerate(tractor.images):
+                h,w = tim.shape
+                sz = 20
+                #slc = slice(h//2-sz, h//2+sz), slice(w//2-sz, w//2+sz)
+                plt.subplot(4,4, i+1)
+                plt.imshow(tim.getImage(), vmin=-3.*tim.sig1, vmax=+1000.*tim.sig1,
+                           interpolation='nearest', origin='lower')
+
+                #plt.subplot(4,4, 4+i+1)
+                mod = tractor.getModelImage(tim)
+                #plt.imshow(mod, vmin=-3.*tim.sig1, vmax=+1000.*tim.sig1,
+                #           interpolation='nearest', origin='lower')
+                mi = np.argmax(mod.ravel())
+                mi,mj = np.unravel_index(mi, mod.shape)
+                slc = slice(mi-sz, mi+sz), slice(mj-sz, mj+sz)
+                mx = (tim.getImage()[slc]).max()
+                plt.subplot(4,4, 8+i+1)
+                plt.imshow(tim.getImage()[slc], vmin=-3.*tim.sig1, vmax=mx,
+                           interpolation='nearest', origin='lower')
+                plt.subplot(4,4, 12+i+1)
+                plt.imshow(mod[slc], vmin=-3.*tim.sig1, vmax=mx,
+                           interpolation='nearest', origin='lower')
+
+                plt.subplot(4,4, 4+i+1)
+                chi = ((tim.getImage() - mod) * tim.getInvError())[slc]
+                mx = np.abs(chi).max()
+                plt.imshow(chi, vmin=-mx, vmax=mx,
+                           interpolation='nearest', origin='lower')
+
+            ps.savefig()
+
+            
+            return True
+
+    check = MyCheck()
+    optargs.update(check_step=check)
+
+    np.get = lambda x: x
+    np_gpu_opt = GpuOptimizer(np)
+
+    sm_opt = SmarterDenseOptimizer()
+
+    p0 = tractor.getParams()
+
+    # tractor.optimizer = sm_opt
+    # R = tractor.optimize_loop(**optargs)
+    # print('Smarter:', R)
+    #tractor.setParams(p0)
+
+    tractor.optimizer = np_gpu_opt
+    R = tractor.optimize_loop(**optargs)
+    print('GPU:', R)
+
+    pickle.dump(dict(params=check.params, xvals=check.xvals),
+                open('opt_params.pickle', 'wb'))
+
+    sys.exit(0)
+
+    
+    if False:
+        nims = 11
+        nmod = 1
+        h,w = 64,64
+        in_img = np.zeros((nims, nmod, h, w), np.float32)
+        #out_img = np.zeros((nims, nmod, h, w), np.float32)
+    
+        dx = np.linspace(-0.5, +0.5, 11).astype(np.float32)
+        dy = np.zeros(nims, np.float32) + 0.5
+    
+        in_img[:, :, :, 0] = 2.
+        in_img[:, :, :, 32] = 2.
+        in_img[:, :, :, w-2] = 2.
+    
+        import cupy as cp
+        cp.get = lambda x: x.get()
+        gpu_opt = GpuOptimizer(cp)
+        gpu_in = cp.array(in_img)
+        gpu_out = cp.zeros((nims, nmod, h, w), np.float32)
+        gpu_opt.lanczos_shift_images_gpu(gpu_in, gpu_out, dx, dy)
+    
+        out_img = cp.get(gpu_out)
+    
+        for i in range(nims):
+            plt.clf()
+            plt.subplot(2,2,1)
+            plt.imshow(out_img[i, 0, :, :], interpolation='nearest', origin='lower')
+            plt.subplot(2,2,3)
+            plt.plot(out_img[i, 0, 32, :])
+            plt.ylim(-0.2, +2.0)
+            plt.subplot(2,2,4)
+            plt.plot(out_img[i, 0, :, 32])
+            ps.savefig()
+    
+        sys.exit(0)
     # import pickle
     # opt = GpuOptimizer('cupy')
     # s = pickle.dumps(opt)
@@ -1505,8 +1863,6 @@ if __name__ == '__main__':
     #gal = ExpGalaxy(pos, brightness, shape)
     #gal = DevGalaxy(pos, brightness, shape)
     #param_scales = [1./3600, 1./3600., 100., 100., 100., 1., 0.1, 0.1]
-    #ptsrc = PointSource(pos, brightness)
-    #param_scales = [1./3600, 1./3600, 100., 100., 100]
     #gal = ExpGalaxy(gpos, brightness, shape)
     gal = DevGalaxy(gpos, brightness, shape)
     param_scales = [100., 100., 100., 1., 0.1, 0.1]
@@ -1514,14 +1870,16 @@ if __name__ == '__main__':
     gal = SersicGalaxy(pos, brightness, shape, SersicIndex(3.5))
     param_scales = [1./3600, 1./3600, 100., 100., 100., 1., 0.1, 0.1, 0.1]
     #print('Sersic profile:', ser.getProfile())
+    ptsrc = PointSource(pos, brightness)
+    param_scales = [1./3600, 1./3600, 100., 100., 100]
     
     b2 = NanoMaggies(g=20., r=40., z=60.)
     sb = ConstantSurfaceBrightness(b2)
     param_scales += [5.] * sb.numberOfParams()
 
     #cat = [gal]
-    #cat = [ptsrc, sb]
-    cat = [gal, sb]
+    cat = [ptsrc, sb]
+    #cat = [gal, sb]
 
     optargs = dict(alphas=[0.1, 0.3, 1.0], dchisq=0.1, shared_params=False, priors=True)
 
@@ -2037,9 +2395,11 @@ if __name__ == '__main__':
     tr.setParams(p0)
     print('Starting optimize_loop with GPU[NP]')
     print('Start:', src)
+
     np_gpu_opt.clear_cached_image_params()
-    tr.optimize_loop(**optargs)
+    R = tr.optimize_loop(**optargs)
     print('Done optimize_loop with GPU[NP]')
+    print('Result:', R)
 
     print('After optimization (GPU):')
     for src in tr.catalog:
@@ -2110,8 +2470,9 @@ if __name__ == '__main__':
 
     tr.setParams(p0)
     print('Starting optimize_loop with SM')
-    tr.optimize_loop(**optargs)
+    R = tr.optimize_loop(**optargs)
     print('Done optimize_loop with SM')
+    print('Result:', R)
 
     # dlnp, X, alpha = tr.optimize(**optargs)
     # print('Stepped alpha', alpha, 'for dlogprob', dlnp)
