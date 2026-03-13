@@ -197,122 +197,125 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             chisq1,alpha1 = r1
             chisq2,alpha2 = r2
             if alpha1 != alpha2:
-                #if r1 != r2:
+                print('try_updates: alphas different: %s, %s' % (alpha1, alpha2))
 
-                tr.setParams(p0)
-                self.save_chis = []
+            if alpha1 != alpha2:
 
                 import pickle
-                # global cache_fail_pickle
-                # outfn = 'cache-fail-%03i.pickle' % cache_fail_pickle
-                # cache_fail_pickle += 1
-                # pickle.dump(dict(tr=tr, X=X, kwargs=kwargs, opt=self),
-                #             open(outfn, 'wb'))
-                # print('Wrote', outfn)
+                global cache_fail_pickle
+                outfn = '/pscratch/sd/d/dstn/cache/cache-fail-%03i-try.pickle' % cache_fail_pickle
+                cache_fail_pickle += 1
+                pickle.dump(dict(tr=tr, X=X, kwargs=kwargs, opt=self),
+                            open(outfn, 'wb'))
+                print('Wrote', outfn)
 
-                tr_p1 = pickle.dumps(tr)
-                o_p1 = pickle.dumps(self)
-                
-                print()
-                print('with cache:')
-                self.save_chis = []
-                r1 = self.gpu_one_source_try_updates(tr, X, ps=pscache, **kwargs)
-                save_chis_1 = self.save_chis
-                self.save_chis = []
-                tr.setParams(p0)
-
-                tr_p2 = pickle.dumps(tr)
-                o_p2 = pickle.dumps(self)
-                print('tr_p1 == tr_p2?', (tr_p1 == tr_p2))
-                if tr_p1 != tr_p2:
-                    objects_equal(pickle.loads(tr_p1), pickle.loads(tr_p2))
-                print('o_p1 == o_p2?', (o_p1 == o_p2))
-
-                ip = self.image_params
-                self.image_params = None
-                tr.setParams(p0)
-
-                tr_p3 = pickle.dumps(tr)
-                o_p3 = pickle.dumps(self)
-                
-                print()
-                print('without cache:')
-                self.save_chis = []
-                r2 = self.gpu_one_source_try_updates(tr, X, ps=pscache, **kwargs)
-                save_chis_2 = self.save_chis
-                self.save_chis = []
-                tr.setParams(p0)
-
-                tr_p4 = pickle.dumps(tr)
-                o_p4 = pickle.dumps(self)
-                print('tr_p3 == tr_p4?', (tr_p3 == tr_p4))
-                print('o_p3 == o_p4?', (o_p3 == o_p4))
-
-                self.image_params = ip
-
-                import pylab as plt
-                #
-                for ((dx1,dy1,imod1,itim1,chi1,mod1,chisub1),
-                     (dx2,dy2,imod2,itim2,chi2,mod2,chisub2)) in zip(
-                        save_chis_1, save_chis_2):
-                    print('saved chis:')
-                    print('1: ', dx1,dy1,imod1,itim1)
-                    print('2: ', dx2,dy2,imod2,itim2)
-                    if np.all(chi1 == chi2):
-                        print('All chi pixels equal')
-                        continue
-                    print('Chisq 1:', np.sum(chi1**2))
-                    print('Chisq 2:', np.sum(chi2**2))
-                    if np.sum(chi1**2) == np.sum(chi2**2):
-                        print('Sum of chi-squared values equal')
-                        continue
-                    print('All model pixels equal?', np.all(mod1 == mod2))
-                    print('All chi-sub pixels equal?', np.all(chisub1 == chisub2))
-
-                    print()
-                    print('*** imod %i, itim %i differ ***' % (imod1, itim1))
-                    print()
-
-                    # Don't expect the chis to be equal...
-                    # plt.clf()
-                    # mx = np.abs(chi1).max()
-                    # chia = dict(interpolation='nearest', origin='lower', vmin=-mx, vmax=mx)
-                    # plt.subplot(2,2,1)
-                    # plt.imshow(chi1, **chia)
-                    # plt.title('1: %.3f' % np.sum(chi1**2))
-                    # #pscache.savefig()
-                    # plt.subplot(2,2,2)
-                    # plt.imshow(chi2, **chia)
-                    # plt.title('2: %.3f' % np.sum(chi2**2))
-                    # #pscache.savefig()
-                    # mx = np.abs(chi1 - chi2).max()
-                    # chia = dict(interpolation='nearest', origin='lower', vmin=-mx, vmax=mx)
-                    # plt.subplot(2,2,3)
-                    # plt.imshow(chi1 - chi2, **chia)
-                    # plt.title('diff of chi')
-                    # pscache.savefig()
-
-                    plt.clf()
-                    mx = np.abs(chisub1).max()
-                    chia = dict(interpolation='nearest', origin='lower', vmin=-mx, vmax=mx)
-                    plt.subplot(2,2,1)
-                    plt.imshow(chisub1, **chia)
-                    plt.title('1: %.3f' % np.sum(chisub1**2))
-                    #pscache.savefig()
-                    plt.subplot(2,2,2)
-                    plt.imshow(chisub2, **chia)
-                    plt.title('2: %.3f' % np.sum(chisub2**2))
-                    #pscache.savefig()
-                    mx = np.abs(chisub1 - chisub2).max()
-                    chia = dict(interpolation='nearest', origin='lower', vmin=-mx, vmax=mx)
-                    plt.subplot(2,2,3)
-                    plt.imshow(chisub1 - chisub2, **chia)
-                    plt.title('diff of chi-subs')
-                    pscache.savefig()
+                # tr.setParams(p0)
+                # self.save_chis = []
+                # 
+                # tr_p1 = pickle.dumps(tr)
+                # o_p1 = pickle.dumps(self)
+                # 
+                # print()
+                # print('with cache:')
+                # self.save_chis = []
+                # r1 = self.gpu_one_source_try_updates(tr, X, ps=pscache, **kwargs)
+                # save_chis_1 = self.save_chis
+                # self.save_chis = []
+                # tr.setParams(p0)
+                # 
+                # tr_p2 = pickle.dumps(tr)
+                # o_p2 = pickle.dumps(self)
+                # print('tr_p1 == tr_p2?', (tr_p1 == tr_p2))
+                # if tr_p1 != tr_p2:
+                #     objects_equal(pickle.loads(tr_p1), pickle.loads(tr_p2))
+                # print('o_p1 == o_p2?', (o_p1 == o_p2))
+                # 
+                # ip = self.image_params
+                # self.image_params = None
+                # tr.setParams(p0)
+                # 
+                # tr_p3 = pickle.dumps(tr)
+                # o_p3 = pickle.dumps(self)
+                # 
+                # print()
+                # print('without cache:')
+                # self.save_chis = []
+                # r2 = self.gpu_one_source_try_updates(tr, X, ps=pscache, **kwargs)
+                # save_chis_2 = self.save_chis
+                # self.save_chis = []
+                # tr.setParams(p0)
+                # 
+                # tr_p4 = pickle.dumps(tr)
+                # o_p4 = pickle.dumps(self)
+                # print('tr_p3 == tr_p4?', (tr_p3 == tr_p4))
+                # print('o_p3 == o_p4?', (o_p3 == o_p4))
+                # 
+                # self.image_params = ip
+                # 
+                # import pylab as plt
+                # #
+                # for ((dx1,dy1,imod1,itim1,chi1,mod1,chisub1),
+                #      (dx2,dy2,imod2,itim2,chi2,mod2,chisub2)) in zip(
+                #         save_chis_1, save_chis_2):
+                #     print('saved chis:')
+                #     print('1: ', dx1,dy1,imod1,itim1)
+                #     print('2: ', dx2,dy2,imod2,itim2)
+                #     if np.all(chi1 == chi2):
+                #         print('All chi pixels equal')
+                #         continue
+                #     print('Chisq 1:', np.sum(chi1**2))
+                #     print('Chisq 2:', np.sum(chi2**2))
+                #     if np.sum(chi1**2) == np.sum(chi2**2):
+                #         print('Sum of chi-squared values equal')
+                #         continue
+                #     print('All model pixels equal?', np.all(mod1 == mod2))
+                #     print('All chi-sub pixels equal?', np.all(chisub1 == chisub2))
+                # 
+                #     print()
+                #     print('*** imod %i, itim %i differ ***' % (imod1, itim1))
+                #     print()
+                # 
+                #     # Don't expect the chis to be equal...
+                #     # plt.clf()
+                #     # mx = np.abs(chi1).max()
+                #     # chia = dict(interpolation='nearest', origin='lower', vmin=-mx, vmax=mx)
+                #     # plt.subplot(2,2,1)
+                #     # plt.imshow(chi1, **chia)
+                #     # plt.title('1: %.3f' % np.sum(chi1**2))
+                #     # #pscache.savefig()
+                #     # plt.subplot(2,2,2)
+                #     # plt.imshow(chi2, **chia)
+                #     # plt.title('2: %.3f' % np.sum(chi2**2))
+                #     # #pscache.savefig()
+                #     # mx = np.abs(chi1 - chi2).max()
+                #     # chia = dict(interpolation='nearest', origin='lower', vmin=-mx, vmax=mx)
+                #     # plt.subplot(2,2,3)
+                #     # plt.imshow(chi1 - chi2, **chia)
+                #     # plt.title('diff of chi')
+                #     # pscache.savefig()
+                # 
+                #     plt.clf()
+                #     mx = np.abs(chisub1).max()
+                #     chia = dict(interpolation='nearest', origin='lower', vmin=-mx, vmax=mx)
+                #     plt.subplot(2,2,1)
+                #     plt.imshow(chisub1, **chia)
+                #     plt.title('1: %.3f' % np.sum(chisub1**2))
+                #     #pscache.savefig()
+                #     plt.subplot(2,2,2)
+                #     plt.imshow(chisub2, **chia)
+                #     plt.title('2: %.3f' % np.sum(chisub2**2))
+                #     #pscache.savefig()
+                #     mx = np.abs(chisub1 - chisub2).max()
+                #     chia = dict(interpolation='nearest', origin='lower', vmin=-mx, vmax=mx)
+                #     plt.subplot(2,2,3)
+                #     plt.imshow(chisub1 - chisub2, **chia)
+                #     plt.title('diff of chi-subs')
+                #     pscache.savefig()
                     
             #assert(r1 == r2)
             self.save_chis = []
-            return r2
+            #return r2
+            return r1
         self.save_chis = []
         return self.gpu_one_source_try_updates(tr, X, **kwargs)
 
@@ -323,13 +326,30 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             ip = self.image_params
             self.image_params = None
             #tr.setParams(p0)
-            r2 = self.gpu_one_source_update(tr, **kwargs)
+            #r2 = self.gpu_one_source_update(tr, **kwargs)
+            A,B,r2,scales,pH,pW,padslices = self.gpu_one_source_update(tr, get_A=True, **kwargs)
+            ic = np.matmul(A.T, A)
+            ic *= scales[np.newaxis,:] * scales[:,np.newaxis]
+            diff = (r1 - r2).T @ (ic @ (r1 - r2))
+
             self.image_params = ip
             print('update:')
             print('  r1', r1)
             print('  r2', r2)
-            assert(np.all(r1 == r2))
-            return r2
+            print('  scales:', scales)
+            print('  diff: %.3f sigma' % diff)
+            
+            if not (np.all(r1 == r2) or diff < 0.01):
+                #assert(np.all(r1 == r2))
+                import pickle
+                global cache_fail_pickle
+                outfn = '/pscratch/sd/d/dstn/cache/cache-fail-%03i-update.pickle' % cache_fail_pickle
+                cache_fail_pickle += 1
+                pickle.dump(dict(tr=tr, kwargs=kwargs, opt=self),
+                            open(outfn, 'wb'))
+                print('Wrote', outfn)
+            #return r2
+            return r1            
         return self.gpu_one_source_update(tr, **kwargs)
 
     def _gpu_checks(self, tr):
@@ -476,6 +496,10 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         elif is_galaxy:
             mods = self.gpu_get_unitflux_galaxy_profiles(mogs, img_params,
                                                          mux_grid, muy_grid)
+        elif is_none:
+            # need this for working space
+            mods = cp.zeros((Nimages, Nmods, pH, pW), cp.float32)
+
         if is_psf or is_galaxy:
             mods *= cp.array(counts_grid)[..., nu, nu]
         # add sb below to make shifting better
@@ -487,7 +511,11 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         assert(img_params.padie.shape  == (Nimages, pH, pW))
         if is_psf or is_galaxy:
             assert(mods.shape == (Nimages,Nmods,pH,pW))
+
+        # temp
         chisqs = cp.zeros(Nmods, np.float32)
+
+        dchisqs = cp.zeros(Nmods, np.float32)
 
         if ps:
             import pylab as plt
@@ -515,21 +543,38 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
                 if dx == 0 and dy == 0:
 
-                    if sb and is_none:
-                        # only SB
-                        chisqs[imod] += cp.sum(((img_params.padpix[itim, ...] -
-                                                 sb_counts_grid[itim, imod]) *
-                                                img_params.padie[itim, ...])**2)
-                    elif sb:
-                        chisqs[imod] += cp.sum(((img_params.padpix[itim, ...] -
-                                                 (mods[itim, imod, ...] + sb_counts_grid[itim, imod])) *
-                                                img_params.padie[itim, ...])**2)
-                    else:
-                        chisqs[imod] += cp.sum(((img_params.padpix[itim, ...] -
-                                                 mods[itim, imod, ...]) *
-                                                img_params.padie[itim, ...])**2)
+                    # convert "mods" into "chi"
+                    if sb:
+                        mods[itim, imod, ...] += sb_counts_grid[itim, imod]
+                    mods[itim, imod, ...] = ((img_params.padpix[itim, ...] - mods[itim, imod, ...]) *
+                                             img_params.padie[itim, ...])
 
-                    print('dx,dy = 0,0: chisqs %g' % chisqs[imod])
+                    if imod != 0:
+                        # compute dchisq
+                        chi0 = mods[itim, 0, ...]
+                        # FIXME - can compute this in-place in "mods"
+                        dchi = mods[itim, imod, ...] - chi0
+                        dchisqs[imod] += 2. * cp.sum(chi0 * dchi) + cp.sum(dchi**2)
+
+                    # check
+                    chisqs[imod] += cp.sum(mods[itim, imod, ...]**2)
+
+                    
+                    # if sb and is_none:
+                    #     # only SB
+                    #     chisqs[imod] += cp.sum(((img_params.padpix[itim, ...] -
+                    #                              sb_counts_grid[itim, imod]) *
+                    #                             img_params.padie[itim, ...])**2)
+                    # elif sb:
+                    #     chisqs[imod] += cp.sum(((img_params.padpix[itim, ...] -
+                    #                              (mods[itim, imod, ...] + sb_counts_grid[itim, imod])) *
+                    #                             img_params.padie[itim, ...])**2)
+                    # else:
+                    #     chisqs[imod] += cp.sum(((img_params.padpix[itim, ...] -
+                    #                              mods[itim, imod, ...]) *
+                    #                             img_params.padie[itim, ...])**2)
+                    # 
+                    # print('dx,dy = 0,0: chisqs %g' % chisqs[imod])
                     if ps:
                         if sb and is_none:
                             chi = ((img_params.padpix[itim, ...] -
@@ -605,7 +650,20 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                     model_overlaps[y_pix_slice, x_pix_slice] = True
 
                 chi_work *= ie
+
+                # Copy back to "mods"
+                # (FIXME - can merge with the below to avoid too much data copying)
+                mods[itim, imod, ...] = chi_work
+
+                if imod != 0:
+                    # compute dchisq
+                    chi0 = mods[itim, 0, ...]
+                    # FIXME - can compute this in-place in "mods"
+                    dchi = mods[itim, imod, ...] - chi0
+                    dchisqs[imod] += 2. * cp.sum(chi0 * dchi) + cp.sum(dchi**2)
+
                 chisqs[imod] += cp.sum(chi_work**2)
+
                 #chisqs[imod] += cp.sum((chi_work * ie)**2)
                 print('dx,dy = %i,%i: chisqs %g' % (dx,dy,chisqs[imod]))
 
@@ -643,38 +701,50 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         #print('chisqs:', chisqs)
         #print('loglikes:', -0.5 * chisqs)
         #print('delta-lnls:', -0.5 * (chisqs[1:] - chisqs[0]))
+
+        dchisqs = cp.get(dchisqs)
+        dlogprobs = logpriors - 0.5 * dchisqs
+
         chisqs = cp.get(chisqs)
         logprobs = logpriors - 0.5 * chisqs
 
-        logprob_best = logprobs[0]
+        print('logprobs:', logprobs)
+        print('diff logprobs:', logprobs - logprobs[0])
+        print('    dlogprobs:', dlogprobs)
+        
+        #logprob_best = logprobs[0]
+        dlogprob_best = dlogprobs[0] # = 0.0
         alpha_best = None
         p_best = p0
-        for istep, ((alpha, p, step_limit, hit_limit), logprob) in enumerate(
-            zip(steps, logprobs)):
+        #for istep, ((alpha, p, step_limit, hit_limit), logprob) in enumerate(
+        #    zip(steps, logprobs)):
+        for istep, ((alpha, p, step_limit, hit_limit), dlogprob) in enumerate(
+            zip(steps, dlogprobs)):
             if istep == 0:
                 continue
             if hit_limit:
                 self.stepLimited = True
                 self.hit_limit = True
-            if not np.isfinite(logprob):
+            if not np.isfinite(dlogprob):
                 tr.setParams(p)
-                print('GPUOptimizer: log-prob %s.  Prior %s, Likelihood %s. Source: %s' %
-                      (logprob, logpriors[istep], -0.5*chisqs[istep], str(src)))
+                print('GPUOptimizer: dlogprob %s.  Prior %s, dLikelihood %s. Source: %s' %
+                      (dlogprob, logpriors[istep], -0.5*dchisqs[istep], str(src)))
                 break
-            if logprob < (logprob_best - 1.):
+            if dlogprob < (dlogprob_best - 1.):
                 # We're getting significantly worse -- quit line search
                 break
-            if logprob > logprob_best:
+            if dlogprob > dlogprob_best:
                 # Best we've found so far -- accept this step!
                 self.last_step_hit_limit = hit_limit
                 alpha_best = alpha
-                logprob_best = logprob
+                dlogprob_best = dlogprob
                 p_best = p
         tr.setParams(p_best)
         if alpha_best is None:
             return 0., 0.
 
-        return logprob_best - logprobs[0], alpha_best
+        #return logprob_best - logprobs[0], alpha_best
+        return dlogprob_best, alpha_best
 
     def gpu_one_source_update(self, tr, priors=True, get_A=False, **kwargs):
         cp = self.cp
