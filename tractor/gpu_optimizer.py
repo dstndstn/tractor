@@ -783,7 +783,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         vv = mix_vars[:,:,:,0] + mix_vars[:,:,:,2]
         IM = (sz**2 < (nsigma2**2 * vv)) * (mix_amps != 0)
         IF = (sz**2 > (nsigma1**2 * vv)) * (mix_amps != 0)
-        ramp = np.any((IM*IF))
 
         # Assume the MoG components are sorted by increasing variance; terms we'll evaluate
         # with the FFT will be at the front, and MoG at the back.
@@ -812,7 +811,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         assert(np.sum(IM) == np.sum(IM[:, :, -Nmog:]))
         assert(np.sum(IF) == np.sum(IF[:, :, :Nfft ]))
 
-        if ramp:
+        if Nmog + Nfft > Kmax:
             # ramp between MOG and FFT for intermediate-sigma components
             mogweights = np.ones(vv.shape, np.float32)
             fftweights = np.ones(vv.shape, np.float32)
