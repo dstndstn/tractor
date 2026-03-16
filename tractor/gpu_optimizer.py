@@ -1340,7 +1340,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         vv = mix_vars[:,:,:,0] + mix_vars[:,:,:,2]
         IM = (sz**2 < (nsigma2**2 * vv)) * (mix_amps != 0)
         IF = (sz**2 > (nsigma1**2 * vv)) * (mix_amps != 0)
-        #ramp = np.any((IM*IF))
 
         # Assume the MoG components are sorted by increasing variance; terms we'll evaluate
         # with the FFT will be at the front, and MoG at the back.
@@ -1364,18 +1363,12 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         mog_mix_amps = mix_amps[:, :, -Nmog:]
         fft_mix_amps = mix_amps[:, :, :Nfft]
 
-        print('Nmog:', Nmog, 'Nfft:', Nfft)
-        ramp = Nmog + Nfft > Kmax
-        print('MOG amps (#1):', mog_mix_amps[0, 0, ...])
-        print('FFT amps (#1):', fft_mix_amps[0, 0, ...])
-
         # Assert that the block of the MoG model that we're pulling off to process with
         # the MoG / FFT methods include all of the instances where we want to run those methods.
         assert(np.sum(IM) == np.sum(IM[:, :, -Nmog:]))
         assert(np.sum(IF) == np.sum(IF[:, :, :Nfft ]))
 
-        if ramp:
-            print('ramp')
+        if Nmog + Nfft > Kmax:
             # ramp between MOG and FFT for intermediate-sigma components
             mogweights = np.ones(vv.shape, np.float32)
             fftweights = np.ones(vv.shape, np.float32)
@@ -1386,10 +1379,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             mog_mix_amps = mogweights
             fftweights *= fft_mix_amps
             fft_mix_amps = fftweights
-            print('MOG amps (#1):', mog_mix_amps[0, 0, ...])
-            print('FFT amps (#1):', fft_mix_amps[0, 0, ...])
-
-            # BRUTAL -- mog_mix_amps and fft_mix_amps are VIEWS into the same mix_amps array!
+            # BRUTAL -- don't do this -- mog_mix_amps and fft_mix_amps are VIEWS into the same mix_amps array!
             #mog_mix_amps *= mogweights[:, :, -Nmog:]
             #fft_mix_amps *= fftweights[:, :, :Nfft]
             del mogweights, fftweights
@@ -1417,7 +1407,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             del a,b,d
             del g_fft_mix_amps
             G = cp.fft.irfft2(Fsum * img_params.P[:, nu, :, :])
-            print('Sum after FFT:', cp.sum(G))
             del Fsum
         else:
             G = None
@@ -1478,7 +1467,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 G = cp.sum(distsq * scale[..., nu, nu], axis=2)
             else:
                 G += cp.sum(distsq * scale[..., nu, nu], axis=2)
-            print('Sum after MOG:', cp.sum(G))
             del distsq
         assert(G.shape == (Nimages,Nprofiles,pH,pW))
 
@@ -1903,6 +1891,87 @@ if __name__ == '__main__':
         #print('result:', r)
 
     sys.exit(0)
+
+
+
+    X = pickle.load(open('/pscratch/sd/d/dstn/profiling3/model-sel-blob1-src290-psf.pickle', 'rb'))
+    tractor = X['srctractor']
+    optargs = X['optargs']
+
+    print(tractor)
+    tractor.model_kwargs = {}
+
+    class MyCheck(object):
+        def __init__(self):
+            self.reset()
+        def reset(self):
+            self.params = []
+            self.xvals = []
+
+        def __call__(self, optimizer=None, tractor=None, dlnp=None, X=None, alpha=None):
+            print('check_step', tractor.catalog[0])
+            self.params.append(tractor.getParams())
+            self.xvals.append(X.copy())
+
+            plt.clf()
+            for i,tim in enumerate(tractor.images):
+                h,w = tim.shape
+                sz = 20
+                #slc = slice(h//2-sz, h//2+sz), slice(w//2-sz, w//2+sz)
+                plt.subplot(4,4, i+1)
+                plt.imshow(tim.getImage(), vmin=-3.*tim.sig1, vmax=+1000.*tim.sig1,
+                           interpolation='nearest', origin='lower')
+
+                #plt.subplot(4,4, 4+i+1)
+                mod = tractor.getModelImage(tim)
+                #plt.imshow(mod, vmin=-3.*tim.sig1, vmax=+1000.*tim.sig1,
+                #           interpolation='nearest', origin='lower')
+                mi = np.argmax(mod.ravel())
+                mi,mj = np.unravel_index(mi, mod.shape)
+                slc = slice(mi-sz, mi+sz), slice(mj-sz, mj+sz)
+                mx = (tim.getImage()[slc]).max()
+                plt.subplot(4,4, 8+i+1)
+                plt.imshow(tim.getImage()[slc], vmin=-3.*tim.sig1, vmax=mx,
+                           interpolation='nearest', origin='lower')
+                plt.subplot(4,4, 12+i+1)
+                plt.imshow(mod[slc], vmin=-3.*tim.sig1, vmax=mx,
+                           interpolation='nearest', origin='lower')
+
+                plt.subplot(4,4, 4+i+1)
+                chi = ((tim.getImage() - mod) * tim.getInvError())[slc]
+                mx = np.abs(chi).max()
+                plt.imshow(chi, vmin=-mx, vmax=mx,
+                           interpolation='nearest', origin='lower')
+
+            ps.savefig()
+
+            
+            return True
+
+    check = MyCheck()
+    optargs.update(check_step=check)
+
+    np.get = lambda x: x
+    np_gpu_opt = GpuOptimizer(np)
+
+    sm_opt = SmarterDenseOptimizer()
+
+    p0 = tractor.getParams()
+
+    # tractor.optimizer = sm_opt
+    # R = tractor.optimize_loop(**optargs)
+    # print('Smarter:', R)
+    #tractor.setParams(p0)
+
+    tractor.optimizer = np_gpu_opt
+    R = tractor.optimize_loop(**optargs)
+    print('GPU:', R)
+
+    pickle.dump(dict(params=check.params, xvals=check.xvals),
+                open('opt_params.pickle', 'wb'))
+
+    sys.exit(0)
+
 
 
 
@@ -2635,6 +2704,7 @@ if __name__ == '__main__':
     print('Start:', src)
 
     np_gpu_opt.clear_cached_image_params()
+
     R = tr.optimize_loop(**optargs)
     print('Done optimize_loop with GPU[NP]')
     print('Result:', R)
@@ -2665,11 +2735,17 @@ if __name__ == '__main__':
     plt.savefig('after.png')
 
     tr.setParams(p0)
+
     print('Starting optimize_loop with GPU[NP] and image caching')
     print('Start:', src)
     np_gpu_opt.cache_image_params(tr)
     tr.optimize_loop(**optargs)
     print('Done optimize_loop with GPU[NP] and caching')
+
+    print('Starting optimize_loop with SM')
+    R = tr.optimize_loop(**optargs)
+    print('Done optimize_loop with SM')
+    print('Result:', R)
 
     # dlnp, X, alpha = tr.optimize(**optargs)
     # print('Stepped alpha', alpha, 'for dlogprob', dlnp)
