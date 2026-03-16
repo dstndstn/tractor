@@ -97,16 +97,12 @@ class GpuOptimizer(GpuFriendlyOptimizer):
     def get_image_params(self, tims, px, py, x0,x1,y0,y1, margin=5):
         if self.image_params:
             return self.image_params
-        #x0, x1, y0, y1 = extents
         # Round source pixel position to nearest integer
         ipx = px.round().astype(np.int32)
         ipy = py.round().astype(np.int32)
-        #
         # FIXME -- only add the margin if the rounded-up halfsize will not itself
         # leave a big-enough margin.
-
-        halfsize = margin + np.max([#(x1-x0)/2, (y1-y0)/2,
-            1+ipx-x0, 1+x1-ipx, 1+ipy-y0, 1+y1-ipy])
+        halfsize = margin + np.max([1+ipx-x0, 1+x1-ipx, 1+ipy-y0, 1+y1-ipy])
         # Pre-process image: PSF, padded pix, etc
         img_params = self.gpu_setup_image_params(tims, halfsize, x0,x1,y0,y1, ipx, ipy)
         return img_params
@@ -209,9 +205,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             px = (x0+x1)/2.
             py = (y0+y1)/2.
 
-        ipx = px.round().astype(np.int32)
-        ipy = py.round().astype(np.int32)
-
         img_params = self.get_image_params(tims, px, py, x0,x1,y0,y1)
 
         p0 = tr.getParams()
@@ -251,8 +244,9 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 # Round source pixel position to nearest integer
                 ix = px.round().astype(np.int32)
                 iy = py.round().astype(np.int32)
-                idx_grid[:, istep] = ix - ipx
-                idy_grid[:, istep] = iy - ipy
+                # motion compared to the (perhaps cached) image center
+                idx_grid[:, istep] = ix - img_params.ipx
+                idy_grid[:, istep] = iy - img_params.ipy
 
                 # subpixel portion: shifted via Lanczos interpolation
                 mux = px - ix
@@ -276,14 +270,15 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 for itim,(tim,x,y) in enumerate(zip(tims, px, py)):
                     mogs[itim].append(src._getShearedProfile(tim,x,y))
 
-        #print('idx_grid', idx_grid)
-        #print('idy_grid', idy_grid)
-
         if is_psf:
             mods = self.gpu_get_unitflux_psf(img_params, mux_grid, muy_grid)
         elif is_galaxy:
             mods = self.gpu_get_unitflux_galaxy_profiles(mogs, img_params,
                                                          mux_grid, muy_grid)
+        elif is_none:
+            # need this for working space
+            mods = cp.zeros((Nimages, Nmods, pH, pW), cp.float32)
+
         if is_psf or is_galaxy:
             mods *= cp.array(counts_grid)[..., nu, nu]
         # add sb below to make shifting better
@@ -295,7 +290,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         assert(img_params.padie.shape  == (Nimages, pH, pW))
         if is_psf or is_galaxy:
             assert(mods.shape == (Nimages,Nmods,pH,pW))
-        chisqs = cp.zeros(Nmods, np.float32)
+        dchisqs = cp.zeros(Nmods, np.float32)
 
         if ps:
             import pylab as plt
@@ -318,33 +313,36 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                     plt.title('dx,dy = %i,%i' % (dx, dy))
 
                 if dx == 0 and dy == 0:
+                    if ps:
+                        mod_copy = mods[itim, imod, ...].copy()
 
-                    if sb and is_none:
-                        # only SB
-                        chisqs[imod] += cp.sum(((img_params.padpix[itim, ...] -
-                                                 sb_counts_grid[itim, imod]) *
-                                                img_params.padie[itim, ...])**2)
-                    elif sb:
-                        chisqs[imod] += cp.sum(((img_params.padpix[itim, ...] -
-                                                 (mods[itim, imod, ...] + sb_counts_grid[itim, imod])) *
-                                                img_params.padie[itim, ...])**2)
-                    else:
-                        chisqs[imod] += cp.sum(((img_params.padpix[itim, ...] -
-                                                 mods[itim, imod, ...]) *
-                                                img_params.padie[itim, ...])**2)
+                    # Convert "mods" into "chi"
+                    if sb:
+                        # FIXME - can vectorize this
+                        mods[itim, imod, ...] += sb_counts_grid[itim, imod]
+                    mods[itim, imod, ...] = ((img_params.padpix[itim, ...] -
+                                              mods[itim, imod, ...]) *
+                                             img_params.padie[itim, ...])
+
+                    if imod != 0:
+                        # compute dchisq
+                        chi0 = mods[itim, 0, ...]
+                        # FIXME - can compute this in-place in "mods"
+                        #dchi = mods[itim, imod, ...] - chi0
+                        #dchisqs[imod] += 2. * cp.sum(chi0 * dchi) + cp.sum(dchi**2)
+                        # FIXME - can vectorize this
+                        # now compute delta-chi
+                        dchi = mods[itim, imod, ...]
+                        dchi -= chi0
+                        dchisqs[imod] += 2. * cp.sum(chi0 * dchi) + cp.sum(dchi**2)
 
                     if ps:
                         if sb:
-                            chi = ((img_params.padpix[itim, ...] -
-                                    (mods[itim, imod, ...] + sb_counts_grid[itim, imod])) *
-                                   img_params.padie[itim, ...])
-                        else:
-                            chi = ((img_params.padpix[itim, ...] - mods[itim, imod, ...]) *
-                                   img_params.padie[itim, ...])
+                            mod_copy += sb_counts_grid[itim, imod]
+                        chi = ((img_params.padpix[itim, ...] - mod_copy) *
+                               img_params.padie[itim, ...])
+                        chi = cp.get(chi)
                         plt.imshow(chi, **chia)
-                    # DEBUG
-                    #chi = (img_params.padpix[itim, ...] - mods[itim, imod, ...]) * img_params.padie[itim, ...]
-                    #plt.imshow(chi, **chia)
                     continue
 
                 pix = img_params.padpix[itim, ...]
@@ -377,25 +375,31 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                         y_pix_slice = slice(dy)
                         y_mod_slice = slice(-dy, None)
                     chi_work[y_pix_slice, x_pix_slice] -= mod[y_mod_slice, x_mod_slice]
-                        
-                chisqs[imod] += cp.sum((chi_work * ie)**2)
+
+                chi_work *= ie
+                if imod == 0:
+                    mods[itim, imod, ...] = chi_work
+                else:
+                    chi0 = mods[itim, 0, ...]
+                    # FIXME - can vectorize this
+                    # compute "dchi" in mods:
+                    mods[itim, imod, ...] = chi_work - chi0
+                    dchi = mods[itim, imod, ...]
+                    dchisqs[imod] += 2. * cp.sum(chi0 * dchi) + cp.sum(dchi**2)
+
                 if ps:
-                    #chi_work[:,:] = 0
-                    #chi_work[y_pix_slice, x_pix_slice] = mod[y_mod_slice, x_mod_slice]
-                    #plt.title('mod (dx,dy %i,%i)' % (dx,dy))
-                    #plt.imshow(chi_work * ie, **chia)
-                    plt.imshow(chi_work * ie, **chia)
+                    plt.imshow(chi_work, **chia)
             if ps:
                 ps.savefig()
 
         #print('chisqs:', chisqs)
         #print('loglikes:', -0.5 * chisqs)
         #print('delta-lnls:', -0.5 * (chisqs[1:] - chisqs[0]))
-        chisqs = cp.get(chisqs)
-        logprobs = logpriors - 0.5 * chisqs
+        dchisqs = cp.get(dchisqs)
+        dlogprobs = (logpriors - logpriors[0]) - 0.5 * dchisqs
 
-        logprob_best = logprobs[0]
-        alpha_best = None
+        dlogprob_best = dlogprobs[0] # should be = 0.0
+        alpha_best = 0.
         p_best = p0
         for istep, ((alpha, p, step_limit, hit_limit), logprob) in enumerate(
             zip(steps, logprobs)):
@@ -404,25 +408,23 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             if hit_limit:
                 self.stepLimited = True
                 self.hit_limit = True
-            if not np.isfinite(logprob):
+            if not np.isfinite(dlogprob):
                 tr.setParams(p)
-                print('GPUOptimizer: log-prob %s.  Prior %s, Likelihood %s. Source: %s' %
-                      (logprob, logpriors[istep], -0.5*chisqs[istep], str(src)))
+                print('GPUOptimizer: dlog-prob %s.  Prior %s, dLikelihood %s. Source: %s' %
+                      (dlogprob, logpriors[istep], -0.5*dchisqs[istep], str(src)))
                 break
-            if logprob < (logprob_best - 1.):
+            if dlogprob < (dlogprob_best - 1.):
                 # We're getting significantly worse -- quit line search
                 break
-            if logprob > logprob_best:
+            # FIXME - add a tiny margin (1e-3) for numerical stability?
+            if dlogprob > dlogprob_best:
                 # Best we've found so far -- accept this step!
                 self.last_step_hit_limit = hit_limit
                 alpha_best = alpha
-                logprob_best = logprob
+                dlogprob_best = dlogprob
                 p_best = p
         tr.setParams(p_best)
-        if alpha_best is None:
-            return 0., 0.
-
-        return logprob_best - logprobs[0], alpha_best
+        return dlogprob_best, alpha_best
 
     def gpu_one_source_update(self, tr, priors=True, get_A=False, **kwargs):
         cp = self.cp
@@ -916,7 +918,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             mog_mix_amps = mogweights
             fftweights *= fft_mix_amps
             fft_mix_amps = fftweights
-            # BRUTAL -- mog_mix_amps and fft_mix_amps are VIEWS into the same mix_amps array!
+            # BRUTAL: don't do this: mog_mix_amps and fft_mix_amps are VIEWS into the same mix_amps array!
             #mog_mix_amps *= mogweights[:, :, -Nmog:]
             #fft_mix_amps *= fftweights[:, :, :Nfft]
             del mogweights, fftweights
