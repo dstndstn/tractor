@@ -181,12 +181,19 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         self.save_chis = []
         if self.image_params:
             p0 = tr.getParams()
+            print('With cache: pH', self.image_params.pH)
+            self.save_chis = []
             r1 = self.gpu_one_source_try_updates(tr, X, **kwargs)
+            save_chis_1 = self.save_chis
+            self.save_chis = []
             p1 = tr.getParams()
             ip = self.image_params
             self.image_params = None
             tr.setParams(p0)
+            print('Without cache:')
             r2 = self.gpu_one_source_try_updates(tr, X, **kwargs)
+            save_chis_2 = self.save_chis
+            self.save_chis = []
             p2 = tr.getParams()
             self.image_params = ip
             print('try_updates: r1', r1, 'r2', r2)
@@ -199,16 +206,134 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             if alpha1 != alpha2:
                 print('try_updates: alphas different: %s, %s' % (alpha1, alpha2))
 
+            print('Delta-chi-squared difference: %.9f' % np.abs(chisq1 - chisq2))
+
+            import pylab as plt
+
+            tr.setParams(p0)
+            src = tr.catalog[0]
+            tim = tr.images[0]
+            pixie = tim.getImage() * tim.getInvError()
+            x,y = tim.getWcs().positionToPixel(src.getPosition(), src)
+            plt.clf()
+            plt.imshow(pixie, interpolation='nearest', origin='lower', cmap='gray')
+            ax = plt.axis()
+            plt.plot(x, y, 'r+', ms=10)
+            plt.axis(ax)
+            pscache.savefig()
+            
+            for ((dx1,dy1,imod1,itim1,chi1,mod1,chisub1,modsub1,pixiesub1,pixie1),
+                 (dx2,dy2,imod2,itim2,chi2,mod2,chisub2,modsub2,pixiesub2,pixie2)) in zip(
+                    save_chis_1, save_chis_2):
+                print('saved chis:')
+                print('1: ', dx1,dy1,imod1,itim1)
+                print('2: ', dx2,dy2,imod2,itim2)
+                if chi1.shape == chi2.shape and np.all(chi1 == chi2):
+                    print('All chi pixels equal')
+                    continue
+                print('Chisq 1:', np.sum(chi1**2))
+                print('Chisq 2:', np.sum(chi2**2))
+                if np.sum(chi1**2) == np.sum(chi2**2):
+                    print('Sum of chi-squared values equal')
+                    continue
+                if mod1.shape != mod2.shape:
+                    print('Models are different shapes')
+                else:
+                    print('All model pixels equal?', np.all(mod1 == mod2))
+                print('All chi-sub pixels equal?', np.all(chisub1 == chisub2))
+
+                print('Pixie-sub equal?', np.all(pixiesub1 == pixiesub2))
+
+                plt.clf()
+                #mx = np.abs(modsub1).max()
+                ia = dict(interpolation='nearest', origin='lower')
+                dia = ia
+                #ia = dict(interpolation='nearest', origin='lower', vmin=0, vmax=mx)
+                #dia = dict(interpolation='nearest', origin='lower', vmin=-mx, vmax=mx)
+                plt.subplot(1,2,1)
+                plt.imshow(pixie1, **ia)
+                plt.colorbar()
+                plt.subplot(1,2,2)
+                plt.imshow(pixie2, **ia)
+                plt.colorbar()
+                plt.suptitle('pix * ie')
+                pscache.savefig()
+
+                plt.clf()
+                mx = np.abs(modsub1).max()
+                ia = dict(interpolation='nearest', origin='lower')
+                dia = ia
+                #ia = dict(interpolation='nearest', origin='lower', vmin=0, vmax=mx)
+                #dia = dict(interpolation='nearest', origin='lower', vmin=-mx, vmax=mx)
+                plt.subplot(1,2,1)
+                plt.imshow(mod1, **ia)
+                plt.colorbar()
+                plt.subplot(1,2,2)
+                plt.imshow(mod2, **ia)
+                plt.colorbar()
+                plt.suptitle('models')
+                pscache.savefig()
+
+                plt.clf()
+                mx = np.abs(modsub1).max()
+                ia = dict(interpolation='nearest', origin='lower')
+                dia = ia
+                #ia = dict(interpolation='nearest', origin='lower', vmin=0, vmax=mx)
+                #dia = dict(interpolation='nearest', origin='lower', vmin=-mx, vmax=mx)
+                plt.subplot(1,2,1)
+                plt.imshow(pixiesub1, **ia)
+                plt.colorbar()
+                plt.subplot(1,2,2)
+                plt.imshow(pixiesub2, **ia)
+                plt.colorbar()
+                plt.suptitle('pix * ie (sub)')
+                pscache.savefig()
+
+                plt.clf()
+                mx = np.abs(modsub1).max()
+                ia = dict(interpolation='nearest', origin='lower')
+                dia = ia
+                #ia = dict(interpolation='nearest', origin='lower', vmin=0, vmax=mx)
+                #dia = dict(interpolation='nearest', origin='lower', vmin=-mx, vmax=mx)
+                plt.subplot(1,3,1)
+                plt.imshow(modsub1, **ia)
+                plt.colorbar()
+                plt.subplot(1,3,2)
+                plt.imshow(modsub2, **ia)
+                plt.colorbar()
+                plt.subplot(1,3,3)
+                plt.imshow(modsub1 - modsub2, **dia)
+                plt.colorbar()
+                plt.suptitle('models (sub)')
+                pscache.savefig()
+
+                plt.clf()
+                mx = np.abs(chisub1).max()
+                #chia = dict(interpolation='nearest', origin='lower', vmin=-mx, vmax=mx)
+                chia = dict(interpolation='nearest', origin='lower')
+                plt.subplot(1,3,1)
+                plt.imshow(chisub1, **chia)
+                plt.colorbar()
+                plt.subplot(1,3,2)
+                plt.imshow(chisub2, **chia)
+                plt.colorbar()
+                plt.subplot(1,3,3)
+                plt.imshow(chisub1 - chisub2, **chia)
+                plt.colorbar()
+                plt.suptitle('chis')
+                pscache.savefig()
+            
             if alpha1 != alpha2:
-
-                import pickle
-                global cache_fail_pickle
-                outfn = '/pscratch/sd/d/dstn/cache/cache-fail-%03i-try.pickle' % cache_fail_pickle
-                cache_fail_pickle += 1
-                pickle.dump(dict(tr=tr, X=X, kwargs=kwargs, opt=self),
-                            open(outfn, 'wb'))
-                print('Wrote', outfn)
-
+                
+                # import pickle
+                # global cache_fail_pickle
+                # outfn = '/pscratch/sd/d/dstn/cache/cache-fail-%03i-try.pickle' % cache_fail_pickle
+                # cache_fail_pickle += 1
+                # pickle.dump(dict(tr=tr, X=X, kwargs=kwargs, opt=self),
+                #             open(outfn, 'wb'))
+                # print('Wrote', outfn)
+                pass
+                
                 # tr.setParams(p0)
                 # self.save_chis = []
                 # 
@@ -315,6 +440,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             #assert(r1 == r2)
             self.save_chis = []
             #return r2
+            tr.setParams(p1)
             return r1
         self.save_chis = []
         return self.gpu_one_source_try_updates(tr, X, **kwargs)
@@ -338,7 +464,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             print('  r2', r2)
             print('  scales:', scales)
             print('  diff: %.3f sigma' % diff)
-            
+
             if not (np.all(r1 == r2) or diff < 0.01):
                 #assert(np.all(r1 == r2))
                 import pickle
@@ -423,10 +549,9 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             px = (x0+x1)/2.
             py = (y0+y1)/2.
 
-        #ipx = px.round().astype(np.int32)
-        #ipy = py.round().astype(np.int32)
-
         img_params = self.get_image_params(tims, px, py, x0,x1,y0,y1)
+        print('pH', img_params.pH)
+        print('image params ipx,ipy:', img_params.ipx, img_params.ipy)
 
         p0 = tr.getParams()
 
@@ -526,12 +651,11 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         print('sb', sb, 'src', src)
         print('img_params ipx,ipy:', img_params.ipx, img_params.ipy)
         for imod in range(Nmods):
-
-            print('imod', imod, 'step', steps[imod])
-            
+            #print('imod', imod, 'step', steps[imod])
             if ps:
                 plt.clf()
 
+            print('dx,dy', [(int(x),int(y)) for x,y in zip(idx_grid[:,imod],idy_grid[:,imod])])
             for itim in range(Nimages):
                 dx = idx_grid[itim, imod]
                 dy = idy_grid[itim, imod]
@@ -542,6 +666,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                     plt.title('dx,dy = %i,%i' % (dx, dy))
 
                 if dx == 0 and dy == 0:
+                    if ps:
+                        mod_copy = cp.get(mods[itim, imod, ...]).copy()
 
                     # convert "mods" into "chi"
                     if sb:
@@ -582,12 +708,12 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                                    img_params.padie[itim, ...])
                         elif sb:
                             chi = ((img_params.padpix[itim, ...] -
-                                    (mods[itim, imod, ...] + sb_counts_grid[itim, imod])) *
+                                    (mod_copy + sb_counts_grid[itim, imod])) *
                                    img_params.padie[itim, ...])
                         else:
                             #chi = ((img_params.padpix[itim, ...] - mods[itim, imod, ...]) *
                             #       img_params.padie[itim, ...])
-                            chi = img_params.padpix[itim, ...] - mods[itim, imod, ...]
+                            chi = img_params.padpix[itim, ...] - mod_copy
                             chi *= img_params.padie[itim, ...]
                         plt.imshow(chi, **chia)
 
@@ -605,9 +731,14 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                         print('chi-sub:', chx0, chx1, chy0, chy1, chx1-chx0, chy1-chy0)
                         print('chisq margins:', np.sum(chi[:chy0, :]**2), np.sum(chi[chy1:, :]**2),
                               np.sum(chi[:, :chx0]**2), np.sum(chi[:, chx1:]**2))
+                        mod_sub = mod_copy[chy0:chy1, chx0:chx1]
 
-                        self.save_chis.append((dx,dy,imod,itim,cp.get(chi),cp.get(mods[itim,imod,:,:]),
-                                               chisub))
+                        pixie = cp.get((img_params.padpix[itim, ...] *
+                                        img_params.padie[itim, ...])).copy()
+                        pixie_sub = pixie[chy0:chy1, chx0:chx1].copy()
+
+                        self.save_chis.append((dx,dy,imod,itim,cp.get(chi).copy(),
+                                               mod_copy, chisub, mod_sub, pixie_sub, pixie))
                     # DEBUG
                     #chi = (img_params.padpix[itim, ...] - mods[itim, imod, ...]) * img_params.padie[itim, ...]
                     #plt.imshow(chi, **chia)
@@ -626,6 +757,10 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                     model_overlaps = np.zeros(chi_work.shape, bool)
                     
                     mod = mods[itim, imod, ...]
+
+                    mod_copy = mod.copy()
+                    mod_shifted = cp.zeros_like(mod_copy)
+                    
                     if dx > 0:
                         x_pix_slice = slice(dx, None)
                         x_mod_slice = slice(-dx)
@@ -646,6 +781,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                         y_pix_slice = slice(dy)
                         y_mod_slice = slice(-dy, None)
                     chi_work[y_pix_slice, x_pix_slice] -= mod[y_mod_slice, x_mod_slice]
+
+                    mod_shifted[y_pix_slice, x_pix_slice] = mod[y_mod_slice, x_mod_slice]
 
                     model_overlaps[y_pix_slice, x_pix_slice] = True
 
@@ -688,12 +825,18 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                     chx0 = min(chix)
                     chx1 = max(chix)+1
                     chisub = chi[chy0:chy1, chx0:chx1].copy()
+                    #mod_sub = mod_copy[chy0:chy1, chx0:chx1].copy()
+                    mod_sub = mod_shifted[chy0:chy1, chx0:chx1].copy()
+
+                    pixie = (pix * ie).copy()
+                    pixie_sub = (pix * ie)[chy0:chy1, chx0:chx1].copy()
+
                     print('chisq %.1f' % (np.sum(chisub**2)))
                     print('chi-sub:', chx0, chx1, chy0, chy1, chx1-chx0, chy1-chy0)
                     print('chisq margins:', np.sum(chi[:chy0, :]**2), np.sum(chi[chy1:, :]**2),
                           np.sum(chi[:, :chx0]**2), np.sum(chi[:, chx1:]**2))
-                    self.save_chis.append((dx,dy,imod,itim,chi,cp.get(mod),
-                                           chisub))
+                    self.save_chis.append((dx,dy,imod,itim,chi,
+                                           mod_shifted, chisub, mod_sub, pixie_sub, pixie))
 
             if ps:
                 ps.savefig()
@@ -703,7 +846,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         #print('delta-lnls:', -0.5 * (chisqs[1:] - chisqs[0]))
 
         dchisqs = cp.get(dchisqs)
-        dlogprobs = logpriors - 0.5 * dchisqs
+        dlogprobs = (logpriors - logpriors[0]) - 0.5 * dchisqs
 
         chisqs = cp.get(chisqs)
         logprobs = logpriors - 0.5 * chisqs
@@ -714,7 +857,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         
         #logprob_best = logprobs[0]
         dlogprob_best = dlogprobs[0] # = 0.0
-        alpha_best = None
+        alpha_best = 0.
         p_best = p0
         #for istep, ((alpha, p, step_limit, hit_limit), logprob) in enumerate(
         #    zip(steps, logprobs)):
@@ -734,16 +877,14 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 # We're getting significantly worse -- quit line search
                 break
             if dlogprob > dlogprob_best:
+                print('  dlogprob %.8f > best %.8f; alpha_best=%g' % (dlogprob, dlogprob_best, alpha))
                 # Best we've found so far -- accept this step!
                 self.last_step_hit_limit = hit_limit
                 alpha_best = alpha
                 dlogprob_best = dlogprob
                 p_best = p
         tr.setParams(p_best)
-        if alpha_best is None:
-            return 0., 0.
 
-        #return logprob_best - logprobs[0], alpha_best
         return dlogprob_best, alpha_best
 
     def gpu_one_source_update(self, tr, priors=True, get_A=False, **kwargs):
@@ -1199,7 +1340,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         vv = mix_vars[:,:,:,0] + mix_vars[:,:,:,2]
         IM = (sz**2 < (nsigma2**2 * vv)) * (mix_amps != 0)
         IF = (sz**2 > (nsigma1**2 * vv)) * (mix_amps != 0)
-        ramp = np.any((IM*IF))
+        #ramp = np.any((IM*IF))
 
         # Assume the MoG components are sorted by increasing variance; terms we'll evaluate
         # with the FFT will be at the front, and MoG at the back.
@@ -1223,12 +1364,18 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         mog_mix_amps = mix_amps[:, :, -Nmog:]
         fft_mix_amps = mix_amps[:, :, :Nfft]
 
+        print('Nmog:', Nmog, 'Nfft:', Nfft)
+        ramp = Nmog + Nfft > Kmax
+        print('MOG amps (#1):', mog_mix_amps[0, 0, ...])
+        print('FFT amps (#1):', fft_mix_amps[0, 0, ...])
+
         # Assert that the block of the MoG model that we're pulling off to process with
         # the MoG / FFT methods include all of the instances where we want to run those methods.
         assert(np.sum(IM) == np.sum(IM[:, :, -Nmog:]))
         assert(np.sum(IF) == np.sum(IF[:, :, :Nfft ]))
 
         if ramp:
+            print('ramp')
             # ramp between MOG and FFT for intermediate-sigma components
             mogweights = np.ones(vv.shape, np.float32)
             fftweights = np.ones(vv.shape, np.float32)
@@ -1239,6 +1386,9 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             mog_mix_amps = mogweights
             fftweights *= fft_mix_amps
             fft_mix_amps = fftweights
+            print('MOG amps (#1):', mog_mix_amps[0, 0, ...])
+            print('FFT amps (#1):', fft_mix_amps[0, 0, ...])
+
             # BRUTAL -- mog_mix_amps and fft_mix_amps are VIEWS into the same mix_amps array!
             #mog_mix_amps *= mogweights[:, :, -Nmog:]
             #fft_mix_amps *= fftweights[:, :, :Nfft]
@@ -1267,6 +1417,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             del a,b,d
             del g_fft_mix_amps
             G = cp.fft.irfft2(Fsum * img_params.P[:, nu, :, :])
+            print('Sum after FFT:', cp.sum(G))
             del Fsum
         else:
             G = None
@@ -1327,6 +1478,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 G = cp.sum(distsq * scale[..., nu, nu], axis=2)
             else:
                 G += cp.sum(distsq * scale[..., nu, nu], axis=2)
+            print('Sum after MOG:', cp.sum(G))
             del distsq
         assert(G.shape == (Nimages,Nprofiles,pH,pW))
 
@@ -1711,7 +1863,14 @@ if __name__ == '__main__':
     from astrometry.util.plotutils import PlotSequence
     ps = PlotSequence('chi')
 
-    fns = glob('/pscratch/sd/d/dstn/cache-fail-*.pickle')
+    # cache/cache-fail-018-try.pickle
+    # cache/cache-fail-051-try.pickle
+    # cache/cache-fail-086-try.pickle
+    # cache/cache-fail-087-try.pickle ++
+
+    #fns = glob('/pscratch/sd/d/dstn/cache-fail-*.pickle')
+    #fns = glob('cache/cache-fail-*.pickle')
+    fns = ['cache/cache-fail-087-try.pickle']
     fns.sort()
     for fn in fns:
         print()
@@ -1724,15 +1883,24 @@ if __name__ == '__main__':
         kwargs = X['kwargs']
         optimizer = X['opt']
 
-        print('tr', tr)
-        print('x', xup)
-        print('opt', optimizer)
-        print('kwargs:', kwargs)
+        #print('tr', tr)
+        #print('x', xup)
+        #print('opt', optimizer)
+        #print('kwargs:', kwargs)
+        print('Sources:', tr.catalog)
         #kwargs = dict(alphas=[0.1, 0.3, 1.0])
         kwargs = dict(alphas=[0.1, 0.3, 1.0])
         #kwargs = dict(alphas=[0.1])
-    
-        optimizer.one_source_try_updates(tr, xup, **kwargs)
+
+        kwargs.update(ps=ps)
+
+        #mods = optimizer.gpu_get_unitflux_galaxy_profiles(mogs, img_params,
+        #mux_grid, muy_grid)
+        
+        #print('opt.image_params:', optimizer.image_params)
+
+        r = optimizer.one_source_try_updates(tr, xup, **kwargs)
+        #print('result:', r)
 
     sys.exit(0)
 
