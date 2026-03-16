@@ -149,9 +149,7 @@ class Optimizer(object):
         # (if it were a numpy array) of (len(images), len(Nsrcparams))
         # where each element is None, or a Patch with the unit-flux
         # model of that source in that image.
-        #
-        # For sources that have a single brightness param, Nsrcparams
-        # = Nsources.
+        
         #
         umodels = []
         umodtosource = {}

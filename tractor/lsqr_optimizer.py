@@ -574,8 +574,11 @@ class LsqrOptimizer(Optimizer):
         # to avoid expanding out the columns
 
         # Build sparse matrix
+        print('LSQR: full Nrows, Ncols is %i, %i' % (Nrows, Ncols))
+        print('Number of non-zero matrix elements:', len(spvals))
+        t0 = Time()
         A = csr_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
-        del spvals, sprows, spcols
+        #del spvals, sprows, spcols
 
         if get_A_matrix:
             # FIXME -- this isn't much good without colscales...
@@ -594,9 +597,39 @@ class LsqrOptimizer(Optimizer):
             bail = True
         # finally:
         np.seterr(**oldsettings)
+        del A
+        #del b
+        t1 = Time()
 
+        Urows,Irows = np.unique(sprows, return_inverse=True)
+        Ucols,Icols = np.unique(spcols, return_inverse=True)
+
+        NUrows = len(Urows)
+        NUcols = len(Ucols)
+        print('LSQR: populated NUrows, NUcols is %i, %i' % (NUrows, NUcols))
+        A = csr_matrix((spvals, (Irows, Icols)), shape=(NUrows, NUcols))
+        b = b[Urows]
+
+        bail = False
+        try:
+            # lsqr can trigger floating-point errors
+            oldsettings = np.seterr(all='print')
+            (X2, istop2, niters2, r1norm2, r2norm2, anorm2, acond2,
+             arnorm2, xnorm2, lsqrvar2) = lsqr(A, b, **lsqropts)
+        except ZeroDivisionError:
+            print('ZeroDivisionError caught.  Returning zero.')
+            bail = True
+        # finally:
+        np.seterr(**oldsettings)
         del A
         del b
+
+        t2 = Time()
+
+        print('LSQR:', X)
+        print('  vs:', X2)
+        print('Full:', t1-t0)
+        print(' Sub:', t2-t1)
 
         if bail:
             if shared_params:
