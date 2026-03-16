@@ -671,8 +671,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 # Image i fills in the column corresponding to its sb flux
                 # and a block of rows corresponding to its pixels.
                 col = Npos + Nbands + Nshapes + tim_band_index[i]
-                # This might not be strictly necessary to mask by "padmask", but it makes the results
-                # match more closely with the traditional code, because the colscales are the same.
                 # FIXME -- here we must be assuming LinearPhotoCal with scale = 1!
                 A[i * pH*pW: (i+1) * pH*pW, col] = (pixscales[i]**2 * padie[i, :, :].ravel())
 
@@ -722,7 +720,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         if not cp.all(goodrows):
             A = A[goodrows, :]
             B = B[goodrows]
-            del goodrows
+            if not get_A:
+                del goodrows
 
         A /= colscales[nu, :]
         X,_,_,_ = cp.linalg.lstsq(A, B, rcond=None)
@@ -740,11 +739,12 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
         if get_A:
             sA = np.zeros((Nrows, Nout), np.float32)
-            sA[:,I] = cp.get(A)
+            sA[goodrows,:][:,I] = cp.get(A)
             s_scales = np.zeros(Nout, np.float32)
             s_scales[I] = cp.get(colscales)
-            B = cp.get(B)
-            return sA, B, sX, s_scales, pH,pW, img_params.padslices #cp.get(img_params.padmask)
+            sB = np.zeros(Nrows, np.float32)
+            sB[goodrows] = cp.get(B)
+            return sA, sB, sX, s_scales, pH,pW, img_params.padslices
 
         return sX
 
@@ -776,7 +776,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         # FIXME -- should be able to cache this; rationalize pixel transfer to GPU.
         padpix  = cp.zeros((Nimages, pH,pW), cp.float32)
         padie   = cp.zeros((Nimages, pH,pW), cp.float32)
-        padmask = cp.zeros((Nimages, pH,pW), bool)
         padslices = []
         for i,(tim,x0,x1,y0,y1) in enumerate(zip(tims, ex0,ex1,ey0,ey1)):
             pix = tim.getImage()
@@ -788,7 +787,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             padpix [i, y0+dy : y1+dy, x0+dx : x1+dx] = cp.array(p)
             p =  ie[y0:y1, x0:x1]
             padie  [i, y0+dy : y1+dy, x0+dx : x1+dx] = cp.array(p)
-            padmask[i, y0+dy : y1+dy, x0+dx : x1+dx] = True
             padslices.append((slice(y0+dy, y1+dy), slice(x0+dx, x1+dx)))
 
         # GPU arrays:
@@ -798,7 +796,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         img_params.w = w
         img_params.padpix = padpix
         img_params.padie  = padie
-        img_params.padmask = padmask
         # numpy arrays:
         img_params.psf_mogs = psf_mogs
         img_params.ipx = ipx
@@ -880,7 +877,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         vv = mix_vars[:,:,:,0] + mix_vars[:,:,:,2]
         IM = (sz**2 < (nsigma2**2 * vv)) * (mix_amps != 0)
         IF = (sz**2 > (nsigma1**2 * vv)) * (mix_amps != 0)
-        ramp = np.any((IM*IF))
 
         # Assume the MoG components are sorted by increasing variance; terms we'll evaluate
         # with the FFT will be at the front, and MoG at the back.
@@ -909,7 +905,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         assert(np.sum(IM) == np.sum(IM[:, :, -Nmog:]))
         assert(np.sum(IF) == np.sum(IF[:, :, :Nfft ]))
 
-        if ramp:
+        if Nmog + Nfft > Kmax:
             # ramp between MOG and FFT for intermediate-sigma components
             mogweights = np.ones(vv.shape, np.float32)
             fftweights = np.ones(vv.shape, np.float32)
@@ -1373,7 +1369,8 @@ if __name__ == '__main__':
     import time
     import pylab as plt
     from astrometry.util.util import Tan
-
+    import pickle
+    
     #from tractor.utils.cupy_wrapper import cp
 
     t = time.time()
@@ -1390,40 +1387,124 @@ if __name__ == '__main__':
     from astrometry.util.plotutils import PlotSequence
     ps = PlotSequence('chi')
 
-    nims = 11
-    nmod = 1
-    h,w = 64,64
-    in_img = np.zeros((nims, nmod, h, w), np.float32)
-    #out_img = np.zeros((nims, nmod, h, w), np.float32)
 
-    dx = np.linspace(-0.5, +0.5, 11).astype(np.float32)
-    dy = np.zeros(nims, np.float32) + 0.5
 
-    in_img[:, :, :, 0] = 2.
-    in_img[:, :, :, 32] = 2.
-    in_img[:, :, :, w-2] = 2.
 
-    import cupy as cp
-    cp.get = lambda x: x.get()
-    gpu_opt = GpuOptimizer(cp)
-    gpu_in = cp.array(in_img)
-    gpu_out = cp.zeros((nims, nmod, h, w), np.float32)
-    gpu_opt.lanczos_shift_images_gpu(gpu_in, gpu_out, dx, dy)
 
-    out_img = cp.get(gpu_out)
+    X = pickle.load(open('/pscratch/sd/d/dstn/profiling3/model-sel-blob1-src290-psf.pickle', 'rb'))
+    tractor = X['srctractor']
+    optargs = X['optargs']
 
-    for i in range(nims):
-        plt.clf()
-        plt.subplot(2,2,1)
-        plt.imshow(out_img[i, 0, :, :], interpolation='nearest', origin='lower')
-        plt.subplot(2,2,3)
-        plt.plot(out_img[i, 0, 32, :])
-        plt.ylim(-0.2, +2.0)
-        plt.subplot(2,2,4)
-        plt.plot(out_img[i, 0, :, 32])
-        ps.savefig()
+    print(tractor)
+    tractor.model_kwargs = {}
+
+    class MyCheck(object):
+        def __init__(self):
+            self.reset()
+        def reset(self):
+            self.params = []
+            self.xvals = []
+
+        def __call__(self, optimizer=None, tractor=None, dlnp=None, X=None, alpha=None):
+            print('check_step', tractor.catalog[0])
+            self.params.append(tractor.getParams())
+            self.xvals.append(X.copy())
+
+            plt.clf()
+            for i,tim in enumerate(tractor.images):
+                h,w = tim.shape
+                sz = 20
+                #slc = slice(h//2-sz, h//2+sz), slice(w//2-sz, w//2+sz)
+                plt.subplot(4,4, i+1)
+                plt.imshow(tim.getImage(), vmin=-3.*tim.sig1, vmax=+1000.*tim.sig1,
+                           interpolation='nearest', origin='lower')
+
+                #plt.subplot(4,4, 4+i+1)
+                mod = tractor.getModelImage(tim)
+                #plt.imshow(mod, vmin=-3.*tim.sig1, vmax=+1000.*tim.sig1,
+                #           interpolation='nearest', origin='lower')
+                mi = np.argmax(mod.ravel())
+                mi,mj = np.unravel_index(mi, mod.shape)
+                slc = slice(mi-sz, mi+sz), slice(mj-sz, mj+sz)
+                mx = (tim.getImage()[slc]).max()
+                plt.subplot(4,4, 8+i+1)
+                plt.imshow(tim.getImage()[slc], vmin=-3.*tim.sig1, vmax=mx,
+                           interpolation='nearest', origin='lower')
+                plt.subplot(4,4, 12+i+1)
+                plt.imshow(mod[slc], vmin=-3.*tim.sig1, vmax=mx,
+                           interpolation='nearest', origin='lower')
+
+                plt.subplot(4,4, 4+i+1)
+                chi = ((tim.getImage() - mod) * tim.getInvError())[slc]
+                mx = np.abs(chi).max()
+                plt.imshow(chi, vmin=-mx, vmax=mx,
+                           interpolation='nearest', origin='lower')
+
+            ps.savefig()
+
+            
+            return True
+
+    check = MyCheck()
+    optargs.update(check_step=check)
+
+    np.get = lambda x: x
+    np_gpu_opt = GpuOptimizer(np)
+
+    sm_opt = SmarterDenseOptimizer()
+
+    p0 = tractor.getParams()
+
+    # tractor.optimizer = sm_opt
+    # R = tractor.optimize_loop(**optargs)
+    # print('Smarter:', R)
+    #tractor.setParams(p0)
+
+    tractor.optimizer = np_gpu_opt
+    R = tractor.optimize_loop(**optargs)
+    print('GPU:', R)
+
+    pickle.dump(dict(params=check.params, xvals=check.xvals),
+                open('opt_params.pickle', 'wb'))
 
     sys.exit(0)
+
+    
+    if False:
+        nims = 11
+        nmod = 1
+        h,w = 64,64
+        in_img = np.zeros((nims, nmod, h, w), np.float32)
+        #out_img = np.zeros((nims, nmod, h, w), np.float32)
+    
+        dx = np.linspace(-0.5, +0.5, 11).astype(np.float32)
+        dy = np.zeros(nims, np.float32) + 0.5
+    
+        in_img[:, :, :, 0] = 2.
+        in_img[:, :, :, 32] = 2.
+        in_img[:, :, :, w-2] = 2.
+    
+        import cupy as cp
+        cp.get = lambda x: x.get()
+        gpu_opt = GpuOptimizer(cp)
+        gpu_in = cp.array(in_img)
+        gpu_out = cp.zeros((nims, nmod, h, w), np.float32)
+        gpu_opt.lanczos_shift_images_gpu(gpu_in, gpu_out, dx, dy)
+    
+        out_img = cp.get(gpu_out)
+    
+        for i in range(nims):
+            plt.clf()
+            plt.subplot(2,2,1)
+            plt.imshow(out_img[i, 0, :, :], interpolation='nearest', origin='lower')
+            plt.subplot(2,2,3)
+            plt.plot(out_img[i, 0, 32, :])
+            plt.ylim(-0.2, +2.0)
+            plt.subplot(2,2,4)
+            plt.plot(out_img[i, 0, :, 32])
+            ps.savefig()
+    
+        sys.exit(0)
     # import pickle
     # opt = GpuOptimizer('cupy')
     # s = pickle.dumps(opt)
@@ -1505,8 +1586,6 @@ if __name__ == '__main__':
     #gal = ExpGalaxy(pos, brightness, shape)
     #gal = DevGalaxy(pos, brightness, shape)
     #param_scales = [1./3600, 1./3600., 100., 100., 100., 1., 0.1, 0.1]
-    #ptsrc = PointSource(pos, brightness)
-    #param_scales = [1./3600, 1./3600, 100., 100., 100]
     #gal = ExpGalaxy(gpos, brightness, shape)
     gal = DevGalaxy(gpos, brightness, shape)
     param_scales = [100., 100., 100., 1., 0.1, 0.1]
@@ -1514,14 +1593,16 @@ if __name__ == '__main__':
     gal = SersicGalaxy(pos, brightness, shape, SersicIndex(3.5))
     param_scales = [1./3600, 1./3600, 100., 100., 100., 1., 0.1, 0.1, 0.1]
     #print('Sersic profile:', ser.getProfile())
+    ptsrc = PointSource(pos, brightness)
+    param_scales = [1./3600, 1./3600, 100., 100., 100]
     
     b2 = NanoMaggies(g=20., r=40., z=60.)
     sb = ConstantSurfaceBrightness(b2)
     param_scales += [5.] * sb.numberOfParams()
 
     #cat = [gal]
-    #cat = [ptsrc, sb]
-    cat = [gal, sb]
+    cat = [ptsrc, sb]
+    #cat = [gal, sb]
 
     optargs = dict(alphas=[0.1, 0.3, 1.0], dchisq=0.1, shared_params=False, priors=True)
 
@@ -2037,9 +2118,12 @@ if __name__ == '__main__':
     tr.setParams(p0)
     print('Starting optimize_loop with GPU[NP]')
     print('Start:', src)
+
     np_gpu_opt.clear_cached_image_params()
-    tr.optimize_loop(**optargs)
+    R = tr.optimize_loop(**optargs)
+
     print('Done optimize_loop with GPU[NP]')
+    print('Result:', R)
 
     print('After optimization (GPU):')
     for src in tr.catalog:
@@ -2110,8 +2194,9 @@ if __name__ == '__main__':
 
     tr.setParams(p0)
     print('Starting optimize_loop with SM')
-    tr.optimize_loop(**optargs)
+    R = tr.optimize_loop(**optargs)
     print('Done optimize_loop with SM')
+    print('Result:', R)
 
     # dlnp, X, alpha = tr.optimize(**optargs)
     # print('Stepped alpha', alpha, 'for dlogprob', dlnp)
