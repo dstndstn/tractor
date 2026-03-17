@@ -65,6 +65,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
     def __init__(self, cp, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.set_cp(cp)
+        self.image_params = None
 
     def __getstate__(self):
         d = self.__dict__.copy()
@@ -92,6 +93,40 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
     def __repr__(self):
         return 'GpuOptimizer(' + (self.cp_orig or str(self.cp)) + ')'
+
+    def get_image_params(self, tims, px, py, x0,x1,y0,y1, margin=5):
+        if self.image_params:
+            return self.image_params
+        # Round source pixel position to nearest integer
+        ipx = px.round().astype(np.int32)
+        ipy = py.round().astype(np.int32)
+        # FIXME -- only add the margin if the rounded-up halfsize will not itself
+        # leave a big-enough margin.
+        halfsize = margin + np.max([1+ipx-x0, 1+x1-ipx, 1+ipy-y0, 1+y1-ipy])
+        # Pre-process image: PSF, padded pix, etc
+        img_params = self.gpu_setup_image_params(tims, halfsize, x0,x1,y0,y1, ipx, ipy)
+        return img_params
+
+    def clear_cached_image_params(self):
+        self.image_params = None
+
+    def cache_image_params(self, tr):
+        tims,masks = self._gpu_checks(tr)
+        if tims is None:
+            return False
+        extents = [mm.extent for mm in masks]
+        x0, x1, y0, y1 = np.asarray(extents).T
+        src = tr.catalog[0]
+        if src:
+            pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
+                   for tim in tims]
+            px, py = np.array(pxy, dtype=np.float32).T
+        else:
+            # fake source position in middle of modelMasks
+            px = (x0+x1)/2.
+            py = (y0+y1)/2.
+        img_params = self.get_image_params(tims, px, py, x0,x1,y0,y1)
+        self.image_params = img_params
 
     def one_source_try_updates(self, tr, X, **kwargs):
         return self.gpu_one_source_try_updates(tr, X, **kwargs)
@@ -144,17 +179,17 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         assert(all([m is not None for m in masks]))
         return tims, masks
 
-    def gpu_one_source_try_updates(self, tr, X, alphas=None, **kwargs):
+    def gpu_one_source_try_updates(self, tr, X, alphas=None, ps=None, **kwargs):
         cp = self.cp
-        na = cp.newaxis
+        nu = cp.newaxis
         tims,masks = self._gpu_checks(tr)
         if tims is None:
             return 0., 0.
         src = tr.catalog[0]
         is_galaxy = isinstance(src, ProfileGalaxy)
         is_psf = isinstance(src, PointSource)
-        sb = None
         is_none = (src is None)
+        sb = None
         if len(tr.catalog) == 2:
             sb = tr.catalog[1]
         extents = [mm.extent for mm in masks]
@@ -169,14 +204,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             # fake source position in middle of modelMasks
             px = (x0+x1)/2.
             py = (y0+y1)/2.
-        ipx = px.round().astype(np.int32)
-        ipy = py.round().astype(np.int32)
 
-        halfsize = np.max(([(x1-x0)/2, (y1-y0)/2,
-                            1+px-x0, 1+x1-px, 1+py-y0, 1+y1-py]))
-
-        # Pre-process image: PSF, padded pix, etc
-        img_params = self.gpu_setup_image_params(tims, halfsize, extents, ipx, ipy)
+        img_params = self.get_image_params(tims, px, py, x0,x1,y0,y1)
 
         p0 = tr.getParams()
 
@@ -215,8 +244,9 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 # Round source pixel position to nearest integer
                 ix = px.round().astype(np.int32)
                 iy = py.round().astype(np.int32)
-                idx_grid[:, istep] = ix - ipx
-                idy_grid[:, istep] = iy - ipy
+                # motion compared to the (perhaps cached) image center
+                idx_grid[:, istep] = ix - img_params.ipx
+                idy_grid[:, istep] = iy - img_params.ipy
 
                 # subpixel portion: shifted via Lanczos interpolation
                 mux = px - ix
@@ -240,54 +270,98 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 for itim,(tim,x,y) in enumerate(zip(tims, px, py)):
                     mogs[itim].append(src._getShearedProfile(tim,x,y))
 
+        if ((self.image_params is not None) and (
+                np.any((idx_grid > 0) * (idx_grid > img_params.maxdx[:, np.newaxis])) or
+                np.any((idx_grid < 0) * (idx_grid < img_params.mindx[:, np.newaxis])) or
+                np.any((idy_grid > 0) * (idy_grid > img_params.maxdy[:, np.newaxis])) or
+                np.any((idy_grid < 0) * (idy_grid < img_params.mindy[:, np.newaxis])))):
+            i0,i1 = np.nonzero(
+                ((idx_grid > 0) * (idx_grid > img_params.maxdx[:, np.newaxis])) |
+                ((idx_grid < 0) * (idx_grid < img_params.mindx[:, np.newaxis])) |
+                ((idy_grid > 0) * (idy_grid > img_params.maxdy[:, np.newaxis])) |
+                ((idy_grid < 0) * (idy_grid < img_params.mindy[:, np.newaxis])))
+            logverb('Clipped (dx=%s, dy=%s).  Running try without image cache:' %
+                    (idx_grid[i0,i1], idy_grid[i0,i1]))
+            ip = self.image_params
+            self.image_params = None
+            tr.setParams(p0)
+            dlnp,a = self.gpu_one_source_try_updates(tr, X, alphas=alphas, **kwargs)
+            self.image_params = ip
+            return dlnp,a
+
+        pH, pW = img_params.pH, img_params.pW
+        Nimages = len(tims)
+
         if is_psf:
             mods = self.gpu_get_unitflux_psf(img_params, mux_grid, muy_grid)
         elif is_galaxy:
             mods = self.gpu_get_unitflux_galaxy_profiles(mogs, img_params,
                                                          mux_grid, muy_grid)
+        elif is_none:
+            # need this for working space
+            mods = cp.zeros((Nimages, Nmods, pH, pW), cp.float32)
+
         if is_psf or is_galaxy:
-            mods *= cp.array(counts_grid)[..., na, na]
+            mods *= cp.array(counts_grid)[..., nu, nu]
         # add sb below to make shifting better
 
         # mods shape: Nimages x Nmod x pH x pW
-        pH, pW = img_params.pH, img_params.pW
-        Nimages = len(tims)
         assert(img_params.padpix.shape == (Nimages, pH, pW))
         assert(img_params.padie.shape  == (Nimages, pH, pW))
         if is_psf or is_galaxy:
             assert(mods.shape == (Nimages,Nmods,pH,pW))
-        chisqs = cp.zeros(Nmods, np.float32)
+        dchisqs = cp.zeros(Nmods, np.float32)
 
-        #plt.clf()
-        #chia = dict(interpolation='nearest', origin='lower', vmin=-3, vmax=+3)
-        # FIXME -- quick path if all idx,idy == 0, or if all for one model == 0 ?
+        if ps:
+            import pylab as plt
+            plt.clf()
+            #chia = dict(interpolation='nearest', origin='lower', vmin=-3, vmax=+3)
+            chia = dict(interpolation='nearest', origin='lower')
         chi_work = cp.empty((pH, pW), np.float32)
         for imod in range(Nmods):
+
+            if ps:
+                plt.clf()
+
             for itim in range(Nimages):
                 dx = idx_grid[itim, imod]
                 dy = idy_grid[itim, imod]
 
-                #plt.subplot(Nmods, Nimages, imod*Nimages + itim + 1)
-                #plt.title('dx,dy = %i,%i' % (dx, dy))
+                if ps:
+                    #plt.subplot(Nmods, Nimages, imod*Nimages + itim + 1)
+                    plt.subplot(1, Nimages, itim+1)
+                    plt.title('dx,dy = %i,%i' % (dx, dy))
 
                 if dx == 0 and dy == 0:
-                    if sb and is_none:
-                        # only SB
-                        chisqs[imod] += cp.sum(((img_params.padpix[itim, ...] -
-                                                 sb_counts_grid[itim, imod]) *
-                                                img_params.padie[itim, ...])**2)
-                    elif sb:
-                        chisqs[imod] += cp.sum(((img_params.padpix[itim, ...] -
-                                                 (mods[itim, imod, ...] + sb_counts_grid[itim, imod])) *
-                                                img_params.padie[itim, ...])**2)
-                    else:
-                        chisqs[imod] += cp.sum(((img_params.padpix[itim, ...] -
-                                                 mods[itim, imod, ...]) *
-                                                img_params.padie[itim, ...])**2)
-                    # DEBUG
-                    #chi = (img_params.padpix[itim, ...] - mods[itim, imod, ...]) * img_params.padie[itim, ...]
-                    #plt.imshow(chi, **chia)
+                    if ps:
+                        mod_copy = mods[itim, imod, ...].copy()
+
+                    # Convert "mods" into "chi"
+                    if sb:
+                        # FIXME - can vectorize this
+                        mods[itim, imod, ...] += sb_counts_grid[itim, imod]
+                    mods[itim, imod, ...] = ((img_params.padpix[itim, ...] -
+                                              mods[itim, imod, ...]) *
+                                             img_params.padie[itim, ...])
+
+                    if imod != 0:
+                        # compute dchisq
+                        chi0 = mods[itim, 0, ...]
+                        # FIXME - can vectorize this
+                        # now compute delta-chi in "mods"
+                        dchi = mods[itim, imod, ...]
+                        dchi -= chi0
+                        dchisqs[imod] += 2. * cp.sum(chi0 * dchi) + cp.sum(dchi**2)
+
+                    if ps:
+                        if sb:
+                            mod_copy += sb_counts_grid[itim, imod]
+                        chi = ((img_params.padpix[itim, ...] - mod_copy) *
+                               img_params.padie[itim, ...])
+                        chi = cp.get(chi)
+                        plt.imshow(chi, **chia)
                     continue
+
                 pix = img_params.padpix[itim, ...]
                 ie  = img_params.padie [itim, ...]
 
@@ -318,47 +392,57 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                         y_pix_slice = slice(dy)
                         y_mod_slice = slice(-dy, None)
                     chi_work[y_pix_slice, x_pix_slice] -= mod[y_mod_slice, x_mod_slice]
-                chisqs[imod] += cp.sum((chi_work * ie)**2)
-                #chi = (pix - mod) * ie
-                #chisqs[imod] += cp.sum(((pix - mod) * ie).astype(cp.float64)**2)
-                #plt.imshow(chi_work, **chia)
-        #ps.savefig()
+
+                chi_work *= ie
+                if imod == 0:
+                    mods[itim, imod, ...] = chi_work
+                else:
+                    chi0 = mods[itim, 0, ...]
+                    # FIXME - can vectorize this
+                    # compute "dchi" in mods:
+                    mods[itim, imod, ...] = chi_work - chi0
+                    dchi = mods[itim, imod, ...]
+                    dchisqs[imod] += 2. * cp.sum(chi0 * dchi) + cp.sum(dchi**2)
+
+                if ps:
+                    plt.imshow(chi_work, **chia)
+            if ps:
+                ps.savefig()
 
         #print('chisqs:', chisqs)
         #print('loglikes:', -0.5 * chisqs)
         #print('delta-lnls:', -0.5 * (chisqs[1:] - chisqs[0]))
-        chisqs = cp.get(chisqs)
-        logprobs = logpriors - 0.5 * chisqs
+        dchisqs = cp.get(dchisqs)
+        dlogprobs = (logpriors - logpriors[0]) - 0.5 * dchisqs
 
-        logprob_best = logprobs[0]
-        alpha_best = None
+        dlogprob_best = dlogprobs[0] # should be = 0.0
+        alpha_best = 0.
         p_best = p0
-        for istep, ((alpha, p, step_limit, hit_limit), logprob) in enumerate(
-            zip(steps, logprobs)):
+        for istep, ((alpha, p, step_limit, hit_limit), dlogprob) in enumerate(
+            zip(steps, dlogprobs)):
             if istep == 0:
                 continue
             if hit_limit:
                 self.stepLimited = True
                 self.hit_limit = True
-            if not np.isfinite(logprob):
+            if not np.isfinite(dlogprob):
                 tr.setParams(p)
-                print('GPUOptimizer: log-prob %s.  Prior %s, Likelihood %s. Source: %s' %
-                      (logprob, logpriors[istep], -0.5*chisqs[istep], str(src)))
+                print('GPUOptimizer: dlog-prob %s.  Prior %s, dLikelihood %s. Source: %s' %
+                      (dlogprob, logpriors[istep], -0.5*dchisqs[istep], str(src)))
                 break
-            if logprob < (logprob_best - 1.):
+            if dlogprob < (dlogprob_best - 1.):
                 # We're getting significantly worse -- quit line search
                 break
-            if logprob > logprob_best:
+            # FIXME - add a tiny margin (1e-3) for numerical stability?
+            if dlogprob > dlogprob_best:
                 # Best we've found so far -- accept this step!
                 self.last_step_hit_limit = hit_limit
                 alpha_best = alpha
-                logprob_best = logprob
+                dlogprob_best = dlogprob
                 p_best = p
-        tr.setParams(p_best)
-        if alpha_best is None:
-            return 0., 0.
 
-        return logprob_best - logprobs[0], alpha_best
+        tr.setParams(p_best)
+        return dlogprob_best, alpha_best
 
     def gpu_one_source_update(self, tr, priors=True, get_A=False, **kwargs):
         cp = self.cp
@@ -397,17 +481,39 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             px = (x0+x1)/2.
             py = (y0+y1)/2.
             src_bands = []
-        # Round source pixel position to nearest integer
-        ipx = px.round().astype(np.int32)
-        ipy = py.round().astype(np.int32)
-        ## Here, we're basically just rounding up the modelMask size.
-        ## This affects which terms in the Gaussian mixture model of the galaxy
-        ## profile get rendered with FFT vs Gaussians.
-        halfsize = np.max(([(x1-x0)/2, (y1-y0)/2,
-                            1+px-x0, 1+x1-px, 1+py-y0, 1+y1-py]))
 
-        # Pre-process image: PSF, padded pix, etc
-        img_params = self.gpu_setup_image_params(tims, halfsize, extents, ipx, ipy)
+        img_params = self.get_image_params(tims, px, py, x0,x1,y0,y1)
+
+        ix = np.round(px)
+        iy = np.round(py)
+        # subpixel portion: shifted via Lanczos interpolation
+        mux = px - ix
+        muy = py - iy
+        assert(np.abs(mux).max() <= 0.5)
+        assert(np.abs(muy).max() <= 0.5)
+        ix = ix.astype(int)
+        iy = iy.astype(int)
+
+        dx_vals = ix - img_params.ipx
+        dy_vals = iy - img_params.ipy
+
+        if ((self.image_params is not None) and (
+                np.any((dx_vals > 0) * (dx_vals > img_params.maxdx)) or
+                np.any((dx_vals < 0) * (dx_vals < img_params.mindx)) or
+                np.any((dy_vals > 0) * (dy_vals > img_params.maxdy)) or
+                np.any((dy_vals < 0) * (dy_vals < img_params.mindy)))):
+            i0, = np.nonzero(
+                ((dx_vals > 0) * (dx_vals > img_params.maxdx)) |
+                ((dx_vals < 0) * (dx_vals < img_params.mindx)) |
+                ((dy_vals > 0) * (dy_vals > img_params.maxdy)) |
+                ((dy_vals < 0) * (dy_vals < img_params.mindy)))
+            logverb('Clipped (dx=%s, dy=%s).  Running update without image cache:' %
+                    (dx_vals[i0], dy_vals[i0]))
+            ip = self.image_params
+            self.image_params = None
+            x = self.gpu_one_source_update(tr, priors=priors, **kwargs)
+            self.image_params = ip
+            return x
 
         if is_galaxy:
             # Get galaxy profiles for shape derivatives.
@@ -417,17 +523,41 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             Nprofiles = max([len(d) for d in amixes])
             mogs = [[m for _,m,_ in amix_img] for amix_img in amixes]
 
-        # subpixel portion: shifted via Lanczos interpolation
-        mux = px - ipx
-        muy = py - ipy
-        assert(np.abs(mux).max() <= 0.5)
-        assert(np.abs(muy).max() <= 0.5)
 
         if is_galaxy:
             # Render galaxy profiles for shape derivatives
             G = self.gpu_get_unitflux_galaxy_profiles(mogs, img_params, mux, muy)
         elif is_psf:
             G = self.gpu_get_unitflux_psf(img_params, mux, muy)
+        else:
+            # SB only
+            G = None
+
+        if G is not None:
+            if np.any(dx_vals != 0) or np.any(dy_vals != 0):
+                Gtmp = cp.zeros_like(G)
+                for itim,(dx,dy) in enumerate(zip(dx_vals, dy_vals)):
+                    if dx > 0:
+                        x_out_slice = slice(dx, None)
+                        x_in_slice  = slice(-dx)
+                    elif dx == 0:
+                        x_out_slice = slice(None)
+                        x_in_slice = slice(None)
+                    else:
+                        x_out_slice = slice(dx)
+                        x_in_slice = slice(-dx, None)
+                    if dy > 0:
+                        y_out_slice = slice(dy, None)
+                        y_in_slice = slice(-dy)
+                    elif dy == 0:
+                        y_out_slice = slice(None)
+                        y_in_slice = slice(None)
+                    else:
+                        y_out_slice = slice(dy)
+                        y_in_slice = slice(-dy, None)
+                    Gtmp[itim, :, y_out_slice, x_out_slice] = G[itim, :, y_in_slice, x_in_slice]
+
+                G = Gtmp
 
         # Now we have computed the galaxy profiles for the finite-differences steps.
         # Turn these into derivatives and solve the update matrix.
@@ -660,7 +790,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
 
         return sX
 
-    def gpu_setup_image_params(self, tims, halfsize, extents, ipx, ipy):
+    def gpu_setup_image_params(self, tims, halfsize, ex0,ex1,ey0,ey1, ipx, ipy):
         '''
         ipx,ipy: arrays of length = len(tims), of the tim pixel coordinate
                  that will be placed in the padded image coord cx,cy.
@@ -685,11 +815,16 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         assert(P.shape == (Nimages,len(w),len(v)))
 
         # Embed pix and ie in images the same size as pW,pH.
-        # FIXME -- should be able to cache this; rationalize pixel transfer to GPU.
         padpix  = cp.zeros((Nimages, pH,pW), cp.float32)
         padie   = cp.zeros((Nimages, pH,pW), cp.float32)
         padslices = []
-        for i,(tim,(x0,x1,y0,y1)) in enumerate(zip(tims, extents)):
+
+        mindx = np.zeros(Nimages, np.int32)
+        maxdx = np.zeros(Nimages, np.int32)
+        mindy = np.zeros(Nimages, np.int32)
+        maxdy = np.zeros(Nimages, np.int32)
+
+        for i,(tim,x0,x1,y0,y1) in enumerate(zip(tims, ex0,ex1,ey0,ey1)):
             pix = tim.getImage()
             ie = tim.getInvError()
 
@@ -701,6 +836,24 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             padie  [i, y0+dy : y1+dy, x0+dx : x1+dx] = cp.array(p)
             padslices.append((slice(y0+dy, y1+dy), slice(x0+dx, x1+dx)))
 
+            # What are the largest/smallest dx/dy values we will be able to handle with
+            # this padded image size?
+            ix_hot = cp.get(cp.flatnonzero(cp.max(padie[i, ...] > 0, axis=0)))
+            if len(ix_hot) == 0:
+                #?? No non-zero ie pixels...
+                maxdx[i] = pW
+                mindx[i] = -pW
+            else:
+                maxdx[i] = ix_hot[0]
+                mindx[i] = ix_hot[-1] - pW + 1
+            iy_hot = cp.get(cp.flatnonzero(cp.max(padie[i, ...] > 0, axis=1)))
+            if len(iy_hot) == 0:
+                maxdy[i] = pH
+                mindy[i] = -pH
+            else:
+                maxdy[i] = iy_hot[0]
+                mindy[i] = iy_hot[-1] - pH + 1
+
         # GPU arrays:
         img_params.psf_pad = psf_pad
         img_params.P = P
@@ -710,6 +863,16 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         img_params.padie  = padie
         # numpy arrays:
         img_params.psf_mogs = psf_mogs
+        img_params.ipx = ipx
+        img_params.ipy = ipy
+        img_params.mindx = mindx
+        img_params.maxdx = maxdx
+        img_params.mindy = mindy
+        img_params.maxdy = maxdy
+        # Coordinates of the (full size) padded image in each tim
+        img_params.padx0 = ipx - cx
+        img_params.pady0 = ipy - cy
+        # list of slices --> to slice the padded arrays back to the original extents
         img_params.padslices = padslices # debug
         # scalars:
         img_params.pH = pH
@@ -822,7 +985,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             mog_mix_amps = mogweights
             fftweights *= fft_mix_amps
             fft_mix_amps = fftweights
-            # BRUTAL -- mog_mix_amps and fft_mix_amps are VIEWS into the same mix_amps array!
+            # BRUTAL: don't do this: mog_mix_amps and fft_mix_amps are VIEWS into the same mix_amps array!
             #mog_mix_amps *= mogweights[:, :, -Nmog:]
             #fft_mix_amps *= fftweights[:, :, :Nfft]
             del mogweights, fftweights
@@ -1151,51 +1314,43 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         is_galaxy = isinstance(src, ProfileGalaxy)
         is_psf = isinstance(src, PointSource)
         extents = [mm.extent for mm in masks]
+        ex0, ex1, ey0, ey1 = np.asarray(extents).T
 
-        # Pixel positions (at initial params)
+        # Pixel positions
         pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
                for tim in tims]
         px, py = np.array(pxy, dtype=np.float32).T
-        ipx = px.round().astype(np.int32)
-        ipy = py.round().astype(np.int32)
 
-        x0, x1, y0, y1 = np.asarray(extents).T
-        halfsize = np.max(([(x1-x0)/2, (y1-y0)/2,
-                            1+px-x0, 1+x1-px, 1+py-y0, 1+y1-py]))
+        img_params = self.get_image_params(tims, px, py, ex0,ex1,ey0,ey1)
 
-        # Pre-process image: PSF, padded pix, etc
-        img_params = self.gpu_setup_image_params(tims, halfsize, extents, ipx, ipy)
-
-        p0 = tr.getParams()
-
-        steps = [p0]
-
+        # We're reusing code that renders Nimages x Nmodels, but we only have one model.
+        #p0 = tr.getParams()
+        #steps = [p0]
+        steps = [None]
         counts_grid = np.zeros((len(tims), len(steps)), np.float32)
 
         # We need to transpose the mogs: need Nimages x Nprofiles(aka Nsteps)
         mogs = [[] for tim in tims]
 
-        # idx_grid = np.zeros((len(tims), len(steps)), np.int32)
-        # idy_grid = np.zeros((len(tims), len(steps)), np.int32)
+        idx_grid = np.zeros((len(tims), len(steps)), np.int32)
+        idy_grid = np.zeros((len(tims), len(steps)), np.int32)
 
         mux_grid = np.zeros((len(tims), len(steps)), np.float32)
         muy_grid = np.zeros((len(tims), len(steps)), np.float32)
 
         Nmods = len(steps)
-        logpriors = np.zeros(Nmods, np.float32)
         for istep, p in enumerate(steps):
-            tr.setParams(p)
-            logpriors[istep] = tr.getLogPrior()
-
-            # Pixel positions
-            pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
-                   for tim in tims]
-            px, py = np.array(pxy, dtype=np.float32).T
+            if istep:
+                tr.setParams(p)
+                # Pixel positions
+                pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
+                       for tim in tims]
+                px, py = np.array(pxy, dtype=np.float32).T
             # Round source pixel position to nearest integer
             ix = px.round().astype(np.int32)
             iy = py.round().astype(np.int32)
-            # idx_grid[:, istep] = ix - ipx
-            # idy_grid[:, istep] = iy - ipy
+            idx_grid[:, istep] = ix - img_params.ipx
+            idy_grid[:, istep] = iy - img_params.ipy
 
             # subpixel portion: shifted via Lanczos interpolation
             mux = px - ix
@@ -1225,16 +1380,28 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         Nimages = len(tims)
         assert(img_params.padpix.shape == (Nimages, pH, pW))
         assert(img_params.padie.shape  == (Nimages, pH, pW))
-
         assert(mods.shape == (Nimages,Nmods,pH,pW))
 
         mods = cp.get(mods[:, 0, :, :])
         patches = []
-        cx,cy = img_params.cx, img_params.cy
-        for i, (x0,x1,y0,y1) in enumerate(extents):
-            dx = cx - ipx[i]
-            dy = cy - ipy[i]
-            mod = mods[i, y0+dy : y1+dy, x0+dx : x1+dx]
+        for i, (x0,x1,y0,y1,padx0,pady0, dx,dy) in enumerate(zip(ex0,ex1,ey0,ey1,
+                                                                 img_params.padx0, img_params.pady0,
+                                                                 idx_grid[:,0], idy_grid[:,0])):
+            mx0 = x0 - padx0 - dx
+            mx1 = x1 - padx0 - dx
+            my0 = y0 - pady0 - dy
+            my1 = y1 - pady0 - dy
+            if mx0 < 0 or my0 < 0 or mx1 >= pW or my1 >= pH:
+                from astrometry.util.miscutils import get_overlapping_region
+                #print('Model patch not big enough: mx0,my0 %i, %i, mx1,my1 %i, %i vs pW,pH %i, %i' %
+                #      (mx0, my0, mx1, my1, pW,pH))
+                # Create a zero patch and copy in the parts that do overlap:
+                mod = np.zeros((y1-y0, x1-x0), np.float32)
+                xi,xo = get_overlapping_region(mx0, mx1-1, 0, pW-1)
+                yi,yo = get_overlapping_region(my0, my1-1, 0, pH-1)
+                mod[yo, xo] = mods[i, yi, xi]
+            else:
+                mod = mods[i, my0:my1, mx0:mx1]
             patches.append(Patch(x0, y0, mod))
         return patches
 
@@ -1587,35 +1754,169 @@ if __name__ == '__main__':
     tr.setModelMasks([dict([(s,mm) for s in cat])
                       for tim in tr.images])
 
-    print()
-    print('CPU patches...')
-    patches = [src.getModelPatch(tim, modelMask=tr._getModelMaskFor(tim, src))
-               for tim in tr.images]
+    # # Test cache
+    # 
+    # print()
+    # print('CPU patches...')
+    # patches = [src.getModelPatch(tim, modelMask=tr._getModelMaskFor(tim, src))
+    #            for tim in tr.images]
+    # 
+    # print()
+    # print('GPU patches...')
+    # np_gpu_opt.cache_image_params(tr)
+    # gpu_patches = np_gpu_opt.gpu_one_source_models(tr)
+    # print('Padded size:', np_gpu_opt.image_params.pH)
+    # 
+    # print('Patches:', patches)
+    # print('GPU patches:', gpu_patches)
+    # Nims = len(patches)
+    # plt.clf()
+    # for i,(p,gp) in enumerate(zip(patches, gpu_patches)):
+    #     plt.subplot(Nims,3,i*3 + 1)
+    #     mx = p.patch.max()
+    #     ima = dict(interpolation='nearest', origin='lower', vmin=0, vmax=mx)
+    #     plt.imshow(p.patch, **ima)
+    #     plt.title('cpu')
+    #     plt.subplot(Nims,3,i*3 + 2)
+    #     plt.imshow(gp.patch, **ima)
+    #     plt.title('gpu')
+    #     plt.subplot(Nims,3, i*3 + 3)
+    #     scale = 0.1
+    #     plt.imshow(gp.patch - p.patch, interpolation='nearest', origin='lower',
+    #                vmin=-scale*mx, vmax=+scale*mx)
+    #     plt.title('diff')
+    # ps.savefig()
+    # 
+    # dr = np.hstack((np.arange(1,5), -np.arange(1,5), np.zeros(4), np.zeros(4)))
+    # dd = np.hstack((np.zeros(4), np.zeros(4), np.arange(1,5), -np.arange(1,5)))
+    # 
+    # pos0 = src.pos.copy()
+    # Nims = len(patches)
+    # plt.clf()
+    # for i,(p,gp) in enumerate(zip(patches, gpu_patches)):
+    #     plt.subplot(Nims,3,i*3 + 1)
+    #     mx = p.patch.max()
+    #     ima = dict(interpolation='nearest', origin='lower', vmin=0, vmax=mx)
+    #     plt.imshow(p.patch, **ima)
+    #     plt.title('cpu')
+    #     plt.subplot(Nims,3,i*3 + 2)
+    #     plt.imshow(gp.patch, **ima)
+    #     plt.title('gpu')
+    #     plt.subplot(Nims,3, i*3 + 3)
+    #     scale = 0.1
+    #     plt.imshow(gp.patch - p.patch, interpolation='nearest', origin='lower',
+    #                vmin=-scale*mx, vmax=+scale*mx)
+    #     plt.title('diff')
+    # ps.savefig()
+    # 
+    # dr = np.hstack((np.arange(1,5), -np.arange(1,5), np.zeros(4), np.zeros(4)))
+    # dd = np.hstack((np.zeros(4), np.zeros(4), np.arange(1,5), -np.arange(1,5)))
+    # 
+    # pos0 = src.pos.copy()
+    # 
+    # for dri,ddi in zip(dr,dd):
+    #     r = pos0.ra
+    #     r += dri * 10. * pixscale1
+    #     src.pos.ra = r
+    #     d = pos0.dec
+    #     d += ddi * 10. * pixscale1
+    #     src.pos.dec = d
+    #     patches = [src.getModelPatch(tim, modelMask=tr._getModelMaskFor(tim, src))
+    #                for tim in tr.images]
+    #     gpu_patches = np_gpu_opt.gpu_one_source_models(tr)
+    #     
+    #     Nims = len(patches)
+    #     plt.clf()
+    #     for i,(p,gp) in enumerate(zip(patches, gpu_patches)):
+    #         plt.subplot(Nims,3,i*3 + 1)
+    #         mx = p.patch.max()
+    #         ima = dict(interpolation='nearest', origin='lower', vmin=0, vmax=mx)
+    #         plt.imshow(p.patch, **ima)
+    #         plt.title('cpu')
+    #         plt.subplot(Nims,3,i*3 + 2)
+    #         plt.imshow(gp.patch, **ima)
+    #         plt.title('gpu')
+    #         plt.subplot(Nims,3, i*3 + 3)
+    #         scale = 0.1
+    #         plt.imshow(gp.patch - p.patch, interpolation='nearest', origin='lower',
+    #                    vmin=-scale*mx, vmax=+scale*mx)
+    #         plt.title('diff')
+    #     ps.savefig()
+    # 
+    #     
+    # sys.exit(0)
+    # 
+    # for dri,ddi in zip(dr,dd):
+    #     r = pos0.ra
+    #     r += dri * 10. * pixscale1
+    #     src.pos.ra = r
+    #     d = pos0.dec
+    #     d += ddi * 10. * pixscale1
+    #     src.pos.dec = d
+    #     patches = [src.getModelPatch(tim, modelMask=tr._getModelMaskFor(tim, src))
+    #                for tim in tr.images]
+    #     gpu_patches = np_gpu_opt.gpu_one_source_models(tr)
+    #     
+    #     Nims = len(patches)
+    #     plt.clf()
+    #     for i,(p,gp) in enumerate(zip(patches, gpu_patches)):
+    #         plt.subplot(Nims,3,i*3 + 1)
+    #         mx = p.patch.max()
+    #         ima = dict(interpolation='nearest', origin='lower', vmin=0, vmax=mx)
+    #         plt.imshow(p.patch, **ima)
+    #         plt.title('cpu')
+    #         plt.subplot(Nims,3,i*3 + 2)
+    #         plt.imshow(gp.patch, **ima)
+    #         plt.title('gpu')
+    #         plt.subplot(Nims,3, i*3 + 3)
+    #         scale = 0.1
+    #         plt.imshow(gp.patch - p.patch, interpolation='nearest', origin='lower',
+    #                    vmin=-scale*mx, vmax=+scale*mx)
+    #         plt.title('diff')
+    #     ps.savefig()
 
-    print()
-    print('GPU patches...')
-    gpu_patches = np_gpu_opt.gpu_one_source_models(tr)
+    # # modelMasks are centered on the source -- move the initial position relative to that
+    # src.pos = pos0
+    # src.pos.ra = src.pos.ra + 20. * pixscale1
+    # 
+    # p0 = tr.getParams()
+    # 
+    # # Test cache -- try updates
+    # 
+    # sm_opt = SmarterDenseOptimizer()
+    # 
+    # X = np.zeros(tr.numberOfParams())
+    # X[0] = -5. * pixscale1
+    # alphas = np.arange(1, 10)
+    # 
+    # print()
+    # print('SM try...')
+    # smtry = sm_opt.tryUpdates(tr, X, alphas=alphas)
+    # tr.setParams(p0)
+    # 
+    # print()
+    # print('GPU try...')
+    # np_gpu_opt.cache_image_params(tr)
+    # gputry = np_gpu_opt.gpu_one_source_try_updates(tr, X, alphas=alphas, ps=ps)
+    # 
+    # print('SM try:', smtry)
+    # print('GPU try:', gputry)
 
-    print('Patches:', patches)
-    print('GPU patches:', gpu_patches)
+    # Test cache: get linear update
+    # print()
+    # print('SM update...')
+    # smup = sm_opt.getLinearUpdateDirection(tr, **optargs)
+    # 
+    # print()
+    # print('GPU update...')
+    # np_gpu_opt.cache_image_params(tr)
+    # gpuup = np_gpu_opt.gpu_one_source_update(tr, **optargs)
+    # 
+    # print('SM  up:', smup)
+    # print('GPU up:', gpuup)
+    # 
+    # sys.exit(0)
 
-    for p,gp in zip(patches, gpu_patches):
-        plt.clf()
-        plt.subplot(1,3,1)
-        mx = p.patch.max()
-        ima = dict(interpolation='nearest', origin='lower', vmin=0, vmax=mx)
-        plt.imshow(p.patch, **ima)
-        plt.title('cpu')
-        plt.subplot(1,3,2)
-        plt.imshow(gp.patch, **ima)
-        plt.title('gpu')
-        plt.subplot(1,3,3)
-        scale = 0.1
-        plt.imshow(gp.patch - p.patch, interpolation='nearest', origin='lower',
-                   vmin=-scale*mx, vmax=+scale*mx)
-        plt.title('diff')
-        ps.savefig()
-    
     alphas = [0.1, 0.3, 1.0]
     optargs = dict(shared_params=False, priors=True, alphas=alphas)
 
@@ -1882,23 +2183,18 @@ if __name__ == '__main__':
     plt.savefig('before.png')
 
     tr.optimizer = np_gpu_opt
-    tr.setParams(p0)
 
+    tr.setParams(p0)
     print('Starting optimize_loop with GPU[NP]')
     print('Start:', src)
+
+    np_gpu_opt.clear_cached_image_params()
     R = tr.optimize_loop(**optargs)
+
     print('Done optimize_loop with GPU[NP]')
     print('Result:', R)
 
-    # dlnp, X, alpha = tr.optimize(**optargs)
-    # print('Stepped alpha', alpha, 'for dlogprob', dlnp)
-    # print('Step:', src)
-    # p = tr.getParams()
-    # tr.setParams(np.array(p) + np.array(X))
-    # print('Full X step would be:', src)
-    # tr.setParams(p)
-
-    print('After optimization (GPU):', tr.catalog[0])
+    print('After optimization (GPU):')
     for src in tr.catalog:
         print('  ', src)
 
@@ -1923,9 +2219,49 @@ if __name__ == '__main__':
     plt.imshow((tim2.getImage() - mod2) * tim2.getInvError(), **chima)
     plt.savefig('after.png')
 
-    tr.optimizer = sm_opt
     tr.setParams(p0)
+    print('Starting optimize_loop with GPU[NP] and image caching')
+    print('Start:', src)
+    np_gpu_opt.cache_image_params(tr)
+    tr.optimize_loop(**optargs)
+    print('Done optimize_loop with GPU[NP] and caching')
 
+    # dlnp, X, alpha = tr.optimize(**optargs)
+    # print('Stepped alpha', alpha, 'for dlogprob', dlnp)
+    # print('Step:', src)
+    # p = tr.getParams()
+    # tr.setParams(np.array(p) + np.array(X))
+    # print('Full X step would be:', src)
+    # tr.setParams(p)
+
+    print('After optimization (GPU, caching):')
+    for src in tr.catalog:
+        print('  ', src)
+
+    mod1 = tr.getModelImage(0)
+    mod2 = tr.getModelImage(1)
+    plt.clf()
+    plt.subplot(2,3,1)
+    plt.imshow(mod1, **ima)
+    plt.colorbar()
+    plt.subplot(2,3,4)
+    plt.imshow(mod2, **ima)
+    plt.colorbar()
+    plt.subplot(2,3,2)
+    plt.imshow(tim1.getImage(), **ima)
+    plt.colorbar()
+    plt.subplot(2,3,5)
+    plt.imshow(tim2.getImage(), **ima)
+    plt.colorbar()
+    plt.subplot(2,3,3)
+    plt.imshow((tim1.getImage() - mod1) * tim1.getInvError(), **chima)
+    plt.subplot(2,3,6)
+    plt.imshow((tim2.getImage() - mod2) * tim2.getInvError(), **chima)
+    plt.savefig('after-cache.png')
+
+    tr.optimizer = sm_opt
+
+    tr.setParams(p0)
     print('Starting optimize_loop with SM')
     R = tr.optimize_loop(**optargs)
     print('Done optimize_loop with SM')
@@ -1939,7 +2275,7 @@ if __name__ == '__main__':
     # print('Full X step would be:', src)
     # tr.setParams(p)
 
-    print('After optimization (SM):', tr.catalog[0])
+    print('After optimization (SM):')
     for src in tr.catalog:
         print('  ', src)
 

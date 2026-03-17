@@ -59,7 +59,7 @@ class ConstrainedOptimizer(LsqrOptimizer):
                     break
 
             logprob = tractor.getLogProb()
-
+            #print('alpha', alpha, '-> logprob', logprob)
             if not np.isfinite(logprob):
                 print('ConstrainedOptimizer: log-prob %s.  Prior %s, Likelihood %s.  Sources:\n  %s' %
                       (logprob, tractor.getLogPrior(), tractor.getLogLikelihood(),
