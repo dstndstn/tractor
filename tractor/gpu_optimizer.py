@@ -401,8 +401,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         dlogprob_best = dlogprobs[0] # should be = 0.0
         alpha_best = 0.
         p_best = p0
-        for istep, ((alpha, p, step_limit, hit_limit), logprob) in enumerate(
-            zip(steps, logprobs)):
+        for istep, ((alpha, p, step_limit, hit_limit), dlogprob) in enumerate(
+            zip(steps, dlogprobs)):
             if istep == 0:
                 continue
             if hit_limit:
