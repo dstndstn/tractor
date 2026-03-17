@@ -275,19 +275,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 np.any((idx_grid < 0) * (idx_grid < img_params.mindx[:, np.newaxis])) or
                 np.any((idy_grid > 0) * (idy_grid > img_params.maxdy[:, np.newaxis])) or
                 np.any((idy_grid < 0) * (idy_grid < img_params.mindy[:, np.newaxis])))):
-            # print('Predict clipping')
-            # i0,i1 = np.nonzero((idx_grid > 0) * (idx_grid > img_params.maxdx[:,np.newaxis]))
-            # if len(i0):
-            #     print('Predict dx clipping: %s > %s' % (idx_grid[i0,i1], img_params.maxdx[i0]))
-            # i0,i1 = np.nonzero((idx_grid < 0) * (idx_grid < img_params.mindx[:,np.newaxis]))
-            # if len(i0):
-            #     print('Predict dx clipping: %s < %s' % (idx_grid[i0,i1], img_params.maxdx[i0]))
-            # i0,i1 = np.nonzero((idy_grid > 0) * (idy_grid > img_params.maxdy[:,np.newaxis]))
-            # if len(i0):
-            #     print('Predict dy clipping: %s > %s' % (idy_grid[i0,i1], img_params.maxdy[i0]))
-            # i0,i1 = np.nonzero((idy_grid < 0) * (idy_grid < img_params.mindy[:,np.newaxis]))
-            # if len(i0):
-            #     print('Predict dy clipping: %s > %s' % (idy_grid[i0,i1], img_params.mindy[i0]))
             i0,i1 = np.nonzero(
                 ((idx_grid > 0) * (idx_grid > img_params.maxdx[:, np.newaxis])) |
                 ((idx_grid < 0) * (idx_grid < img_params.mindx[:, np.newaxis])) |
@@ -514,18 +501,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 np.any((dx_vals < 0) * (dx_vals < img_params.mindx)) or
                 np.any((dy_vals > 0) * (dy_vals > img_params.maxdy)) or
                 np.any((dy_vals < 0) * (dy_vals < img_params.mindy)))):
-            # iclip = np.flatnonzero((dx_vals > 0) * (dx_vals > img_params.maxdx))
-            # if len(iclip):
-            #     print('Predict dx clipping: %s > %s' % (dx_vals[iclip], img_params.maxdx[iclip]))
-            # iclip = np.flatnonzero((dx_vals < 0) * (dx_vals < img_params.mindx))
-            # if len(iclip):
-            #     print('Predict dx clipping: %s < %s' % (dx_vals[iclip], img_params.mindx[iclip]))
-            # iclip = np.flatnonzero((dy_vals > 0) * (dy_vals > img_params.maxdy))
-            # if len(iclip):
-            #     print('Predict dy clipping: %s > %s' % (dy_vals[iclip], img_params.maxdy[iclip]))
-            # iclip = np.flatnonzero((dy_vals < 0) * (dy_vals < img_params.mindy))
-            # if len(iclip):
-            #     print('Predict dy clipping: %s < %s' % (dy_vals[iclip], img_params.mindy[iclip]))
             i0, = np.nonzero(
                 ((dx_vals > 0) * (dx_vals > img_params.maxdx)) |
                 ((dx_vals < 0) * (dx_vals < img_params.mindx)) |
