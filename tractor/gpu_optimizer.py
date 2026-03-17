@@ -292,6 +292,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             assert(mods.shape == (Nimages,Nmods,pH,pW))
         dchisqs = cp.zeros(Nmods, np.float32)
 
+        did_clip = False
+        
         if ps:
             import pylab as plt
             plt.clf()
@@ -376,6 +378,14 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                         y_mod_slice = slice(-dy, None)
                     chi_work[y_pix_slice, x_pix_slice] -= mod[y_mod_slice, x_mod_slice]
 
+                    model_overlaps = np.zeros(chi_work.shape, bool)
+                    model_overlaps[y_pix_slice, x_pix_slice] = True
+                    Nclipped = np.sum((cp.get(ie) > 0) * (model_overlaps == False))
+                    if Nclipped:
+                        print('try: %i pixels have ie>0 but model was clipped; dx,dy %i,%i' %
+                              (Nclipped, dx, dy))
+                        did_clip = True
+                        
                 chi_work *= ie
                 if imod == 0:
                     mods[itim, imod, ...] = chi_work
@@ -423,6 +433,18 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 alpha_best = alpha
                 dlogprob_best = dlogprob
                 p_best = p
+
+        if did_clip and self.image_params is not None:
+            print('Clipped.  Running without image cache:')
+            ip = self.image_params
+            self.image_params = None
+            tr.setParams(p0)
+            dlnp,a = self.gpu_one_source_try_updates(tr, X, alphas=alphas, **kwargs)
+            print('With image cache (clipped): dlnp %.6f, alpha %.3f' % (dlogprob_best, alpha_best))
+            print('Without image cache       : dlnp %.6f, alpha %.3f' % (dlnp, a))
+            self.image_params = ip
+            return dlnp,a
+
         tr.setParams(p_best)
         return dlogprob_best, alpha_best
 
@@ -491,6 +513,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             # SB only
             G = None
 
+        did_clip = False
+
         if G is not None:
             ix = ix.astype(int)
             iy = iy.astype(int)
@@ -517,6 +541,15 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                         y_out_slice = slice(dy)
                         y_in_slice = slice(-dy, None)
                     Gtmp[itim, :, y_out_slice, x_out_slice] = G[itim, :, y_in_slice, x_in_slice]
+
+                    model_overlaps = np.zeros((img_params.pH, img_params.pW), bool)
+                    model_overlaps[y_out_slice, x_out_slice] = True
+                    Nclipped = np.sum((cp.get(img_params.padie) > 0) * (model_overlaps == False))
+                    if Nclipped:
+                        print('update: %i pixels have ie>0 but model was clipped; dx,dy %i,%i' %
+                              (Nclipped, dx, dy))
+                        did_clip = True
+
                 G = Gtmp
 
         # Now we have computed the galaxy profiles for the finite-differences steps.
@@ -747,6 +780,16 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             sB = np.zeros(Nrows, np.float32)
             sB[goodrows] = cp.get(B)
             return sA, sB, sX, s_scales, pH,pW, img_params.padslices
+
+        if did_clip and self.image_params is not None:
+            print('Clipped.  Running update without image cache:')
+            ip = self.image_params
+            self.image_params = None
+            x = self.gpu_one_source_update(tr, priors=priors, **kwargs)
+            print('With image cache (clipped): x %s' % sX)
+            print('Without image cache       : x %s' % x)
+            self.image_params = ip
+            return x
 
         return sX
 
