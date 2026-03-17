@@ -289,6 +289,9 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             self.image_params = ip
             return dlnp,a
 
+        pH, pW = img_params.pH, img_params.pW
+        Nimages = len(tims)
+
         if is_psf:
             mods = self.gpu_get_unitflux_psf(img_params, mux_grid, muy_grid)
         elif is_galaxy:
@@ -303,8 +306,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         # add sb below to make shifting better
 
         # mods shape: Nimages x Nmod x pH x pW
-        pH, pW = img_params.pH, img_params.pW
-        Nimages = len(tims)
         assert(img_params.padpix.shape == (Nimages, pH, pW))
         assert(img_params.padie.shape  == (Nimages, pH, pW))
         if is_psf or is_galaxy:
