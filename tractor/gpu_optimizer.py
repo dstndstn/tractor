@@ -270,23 +270,37 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 for itim,(tim,x,y) in enumerate(zip(tims, px, py)):
                     mogs[itim].append(src._getShearedProfile(tim,x,y))
 
-        if (np.any((idx_grid > 0) * (idx_grid > img_params.maxdx[:, np.newaxis])) or
-            np.any((idx_grid < 0) * (idx_grid < img_params.mindx[:, np.newaxis])) or
-            np.any((idy_grid > 0) * (idy_grid > img_params.maxdy[:, np.newaxis])) or
-            np.any((idy_grid < 0) * (idy_grid < img_params.mindy[:, np.newaxis]))):
-            print('Predict clipping')
-            i0,i1 = np.nonzero((idx_grid > 0) * (idx_grid > img_params.maxdx[:,np.newaxis]))
-            if len(i0):
-                print('Predict dx clipping: %s > %s' % (idx_grid[i0,i1], img_params.maxdx[i0]))
-            i0,i1 = np.nonzero((idx_grid < 0) * (idx_grid < img_params.mindx[:,np.newaxis]))
-            if len(i0):
-                print('Predict dx clipping: %s < %s' % (idx_grid[i0,i1], img_params.maxdx[i0]))
-            i0,i1 = np.nonzero((idy_grid > 0) * (idy_grid > img_params.maxdy[:,np.newaxis]))
-            if len(i0):
-                print('Predict dy clipping: %s > %s' % (idy_grid[i0,i1], img_params.maxdy[i0]))
-            i0,i1 = np.nonzero((idy_grid < 0) * (idy_grid < img_params.mindy[:,np.newaxis]))
-            if len(i0):
-                print('Predict dy clipping: %s > %s' % (idy_grid[i0,i1], img_params.mindy[i0]))
+        if ((self.image_params is not None) and (
+                np.any((idx_grid > 0) * (idx_grid > img_params.maxdx[:, np.newaxis])) or
+                np.any((idx_grid < 0) * (idx_grid < img_params.mindx[:, np.newaxis])) or
+                np.any((idy_grid > 0) * (idy_grid > img_params.maxdy[:, np.newaxis])) or
+                np.any((idy_grid < 0) * (idy_grid < img_params.mindy[:, np.newaxis])))):
+            # print('Predict clipping')
+            # i0,i1 = np.nonzero((idx_grid > 0) * (idx_grid > img_params.maxdx[:,np.newaxis]))
+            # if len(i0):
+            #     print('Predict dx clipping: %s > %s' % (idx_grid[i0,i1], img_params.maxdx[i0]))
+            # i0,i1 = np.nonzero((idx_grid < 0) * (idx_grid < img_params.mindx[:,np.newaxis]))
+            # if len(i0):
+            #     print('Predict dx clipping: %s < %s' % (idx_grid[i0,i1], img_params.maxdx[i0]))
+            # i0,i1 = np.nonzero((idy_grid > 0) * (idy_grid > img_params.maxdy[:,np.newaxis]))
+            # if len(i0):
+            #     print('Predict dy clipping: %s > %s' % (idy_grid[i0,i1], img_params.maxdy[i0]))
+            # i0,i1 = np.nonzero((idy_grid < 0) * (idy_grid < img_params.mindy[:,np.newaxis]))
+            # if len(i0):
+            #     print('Predict dy clipping: %s > %s' % (idy_grid[i0,i1], img_params.mindy[i0]))
+            i0,i1 = np.nonzero(
+                ((idx_grid > 0) * (idx_grid > img_params.maxdx[:, np.newaxis])) |
+                ((idx_grid < 0) * (idx_grid < img_params.mindx[:, np.newaxis])) |
+                ((idy_grid > 0) * (idy_grid > img_params.maxdy[:, np.newaxis])) |
+                ((idy_grid < 0) * (idy_grid < img_params.mindy[:, np.newaxis])))
+            logverb('Clipped (dx=%s, dy=%s).  Running try without image cache:' %
+                    (idx_grid[i0,i1], idy_grid[i0,i1]))
+            ip = self.image_params
+            self.image_params = None
+            tr.setParams(p0)
+            dlnp,a = self.gpu_one_source_try_updates(tr, X, alphas=alphas, **kwargs)
+            self.image_params = ip
+            return dlnp,a
 
         if is_psf:
             mods = self.gpu_get_unitflux_psf(img_params, mux_grid, muy_grid)
@@ -309,10 +323,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         if is_psf or is_galaxy:
             assert(mods.shape == (Nimages,Nmods,pH,pW))
         dchisqs = cp.zeros(Nmods, np.float32)
-
-        # If we are caching image params, there's the potential for clipping.
-        might_clip = (self.image_params is not None)
-        did_clip = False
 
         if ps:
             import pylab as plt
@@ -395,37 +405,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                         y_mod_slice = slice(-dy, None)
                     chi_work[y_pix_slice, x_pix_slice] -= mod[y_mod_slice, x_mod_slice]
 
-                    ## FIXME -- since ie is static, we could pre-compute which 'dx' and 'dy' values
-                    # will cause clipping.
-                    if might_clip:
-                        # Check the complement of the "x_pix_slice" for non-zero ie pixels
-                        if dx > 0:
-                            did_clip |= cp.any(ie[:, :dx] > 0)
-                        elif dx < 0:
-                            did_clip |= cp.any(ie[:, dx:] > 0)
-                        if dy > 0:
-                            did_clip |= cp.any(ie[:dy, :] > 0)
-                        elif dy < 0:
-                            did_clip |= cp.any(ie[dy:, :] > 0)
-
-                        if did_clip:
-                            logverb('Clipped (dx=%i, dy=%i).  Running try without image cache:' %
-                                    (dx, dy))
-                            ip = self.image_params
-                            self.image_params = None
-                            tr.setParams(p0)
-                            dlnp,a = self.gpu_one_source_try_updates(tr, X, alphas=alphas, **kwargs)
-                            self.image_params = ip
-                            return dlnp,a
-
-                        # model_overlaps = np.zeros(chi_work.shape, bool)
-                        # model_overlaps[y_pix_slice, x_pix_slice] = True
-                        # Nclipped = np.sum((cp.get(ie) > 0) * (model_overlaps == False))
-                        # if Nclipped:
-                        # print('try: %i pixels have ie>0 but model was clipped; dx,dy %i,%i' %
-                        #       (Nclipped, dx, dy))
-                        # did_clip = True
-
                 chi_work *= ie
                 if imod == 0:
                     mods[itim, imod, ...] = chi_work
@@ -473,17 +452,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 alpha_best = alpha
                 dlogprob_best = dlogprob
                 p_best = p
-
-        # if did_clip and self.image_params is not None:
-        #     print('Clipped.  Running without image cache:')
-        #     ip = self.image_params
-        #     self.image_params = None
-        #     tr.setParams(p0)
-        #     dlnp,a = self.gpu_one_source_try_updates(tr, X, alphas=alphas, **kwargs)
-        #     print('With image cache (clipped): dlnp %.6f, alpha %.3f' % (dlogprob_best, alpha_best))
-        #     print('Without image cache       : dlnp %.6f, alpha %.3f' % (dlnp, a))
-        #     self.image_params = ip
-        #     return dlnp,a
 
         tr.setParams(p_best)
         return dlogprob_best, alpha_best
@@ -541,24 +509,36 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         dx_vals = ix - img_params.ipx
         dy_vals = iy - img_params.ipy
 
-        if (np.any((dx_vals > 0) * (dx_vals > img_params.maxdx)) or
-            np.any((dx_vals < 0) * (dx_vals < img_params.mindx)) or
-            np.any((dy_vals > 0) * (dy_vals > img_params.maxdy)) or
-            np.any((dy_vals < 0) * (dy_vals < img_params.mindy))):
+        if ((self.image_params is not None) and (
+                np.any((dx_vals > 0) * (dx_vals > img_params.maxdx)) or
+                np.any((dx_vals < 0) * (dx_vals < img_params.mindx)) or
+                np.any((dy_vals > 0) * (dy_vals > img_params.maxdy)) or
+                np.any((dy_vals < 0) * (dy_vals < img_params.mindy)))):
+            # iclip = np.flatnonzero((dx_vals > 0) * (dx_vals > img_params.maxdx))
+            # if len(iclip):
+            #     print('Predict dx clipping: %s > %s' % (dx_vals[iclip], img_params.maxdx[iclip]))
+            # iclip = np.flatnonzero((dx_vals < 0) * (dx_vals < img_params.mindx))
+            # if len(iclip):
+            #     print('Predict dx clipping: %s < %s' % (dx_vals[iclip], img_params.mindx[iclip]))
+            # iclip = np.flatnonzero((dy_vals > 0) * (dy_vals > img_params.maxdy))
+            # if len(iclip):
+            #     print('Predict dy clipping: %s > %s' % (dy_vals[iclip], img_params.maxdy[iclip]))
+            # iclip = np.flatnonzero((dy_vals < 0) * (dy_vals < img_params.mindy))
+            # if len(iclip):
+            #     print('Predict dy clipping: %s < %s' % (dy_vals[iclip], img_params.mindy[iclip]))
+            i0, = np.nonzero(
+                ((dx_vals > 0) * (dx_vals > img_params.maxdx)) |
+                ((dx_vals < 0) * (dx_vals < img_params.mindx)) |
+                ((dy_vals > 0) * (dy_vals > img_params.maxdy)) |
+                ((dy_vals < 0) * (dy_vals < img_params.mindy)))
+            logverb('Clipped (dx=%s, dy=%s).  Running update without image cache:' %
+                    (dx_vals[i0], dy_vals[i0]))
+            ip = self.image_params
+            self.image_params = None
+            x = self.gpu_one_source_update(tr, priors=priors, **kwargs)
+            self.image_params = ip
+            return x
 
-            iclip = np.flatnonzero((dx_vals > 0) * (dx_vals > img_params.maxdx))
-            if len(iclip):
-                print('Predict dx clipping: %s > %s' % (dx_vals[iclip], img_params.maxdx[iclip]))
-            iclip = np.flatnonzero((dx_vals < 0) * (dx_vals < img_params.mindx))
-            if len(iclip):
-                print('Predict dx clipping: %s < %s' % (dx_vals[iclip], img_params.mindx[iclip]))
-            iclip = np.flatnonzero((dy_vals > 0) * (dy_vals > img_params.maxdy))
-            if len(iclip):
-                print('Predict dy clipping: %s > %s' % (dy_vals[iclip], img_params.maxdy[iclip]))
-            iclip = np.flatnonzero((dy_vals < 0) * (dy_vals < img_params.mindy))
-            if len(iclip):
-                print('Predict dy clipping: %s < %s' % (dy_vals[iclip], img_params.mindy[iclip]))
-        
         if is_galaxy:
             # Get galaxy profiles for shape derivatives.
             amixes = [[('current', src._getShearedProfile(tim,x,y), 0.)] +
@@ -576,9 +556,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         else:
             # SB only
             G = None
-
-        might_clip = (self.image_params is not None)
-        did_clip = False
 
         if G is not None:
             if np.any(dx_vals != 0) or np.any(dy_vals != 0):
@@ -603,34 +580,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                         y_out_slice = slice(dy)
                         y_in_slice = slice(-dy, None)
                     Gtmp[itim, :, y_out_slice, x_out_slice] = G[itim, :, y_in_slice, x_in_slice]
-
-                    if might_clip:
-                        ie = img_params.padie[itim, ...]
-                        # Check the complement of the "[xy]_out_slice" for non-zero ie pixels
-                        if dx > 0:
-                            did_clip |= cp.any(ie[:, :dx] > 0)
-                        elif dx < 0:
-                            did_clip |= cp.any(ie[:, dx:] > 0)
-                        if dy > 0:
-                            did_clip |= cp.any(ie[:dy, :] > 0)
-                        elif dy < 0:
-                            did_clip |= cp.any(ie[dy:, :] > 0)
-
-                        if did_clip:
-                            logverb('Clipped (dx=%i, dy=%i).  Running update without image cache:' %
-                                    (dx, dy))
-                            ip = self.image_params
-                            self.image_params = None
-                            x = self.gpu_one_source_update(tr, priors=priors, **kwargs)
-                            self.image_params = ip
-                            return x
-                        # model_overlaps = np.zeros((img_params.pH, img_params.pW), bool)
-                        # model_overlaps[y_out_slice, x_out_slice] = True
-                        # Nclipped = np.sum((cp.get(img_params.padie) > 0) * (model_overlaps == False))
-                        # if Nclipped:
-                        #     print('update: %i pixels have ie>0 but model was clipped; dx,dy %i,%i' %
-                        #           (Nclipped, dx, dy))
-                        #     did_clip = True
 
                 G = Gtmp
 
@@ -863,16 +812,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             sB[goodrows] = cp.get(B)
             return sA, sB, sX, s_scales, pH,pW, img_params.padslices
 
-        # if did_clip and self.image_params is not None:
-        #     print('Clipped.  Running update without image cache:')
-        #     ip = self.image_params
-        #     self.image_params = None
-        #     x = self.gpu_one_source_update(tr, priors=priors, **kwargs)
-        #     print('With image cache (clipped): x %s' % sX)
-        #     print('Without image cache       : x %s' % x)
-        #     self.image_params = ip
-        #     return x
-
         return sX
 
     def gpu_setup_image_params(self, tims, halfsize, ex0,ex1,ey0,ey1, ipx, ipy):
@@ -924,45 +863,20 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             # What are the largest/smallest dx/dy values we will be able to handle with
             # this padded image size?
             ix_hot = cp.get(cp.flatnonzero(cp.max(padie[i, ...] > 0, axis=0)))
-            maxdx[i] = ix_hot[0]
-            mindx[i] = ix_hot[-1] - pW + 1
-
-            # print('Computed maxdx:', maxdx[i])
-            # # HACK
-            # ie = padie[i, ...]
-            # for j in range(1, pW):
-            #     dx = j
-            #     clip = cp.any(ie[:, :dx] > 0)
-            #     if clip:
-            #         print('dx=%i clips' % dx)
-            #         break
-            # print('Computed mindx:', mindx[i])
-            # for j in range(1, pW):
-            #     dx = -j
-            #     clip = cp.any(ie[:, dx:] > 0)
-            #     if clip:
-            #         print('dx=%i clips' % dx)
-            #         break
-
+            if len(ix_hot) == 0:
+                #?? No non-zero ie pixels...
+                maxdx[i] = pW
+                mindx[i] = -pW
+            else:
+                maxdx[i] = ix_hot[0]
+                mindx[i] = ix_hot[-1] - pW + 1
             iy_hot = cp.get(cp.flatnonzero(cp.max(padie[i, ...] > 0, axis=1)))
-            maxdy[i] = iy_hot[0]
-            mindy[i] = iy_hot[-1] - pH + 1
-
-            # print('Computed maxdy:', maxdy[i])
-            # # HACK
-            # for j in range(1, pH):
-            #     dy = j
-            #     clip = cp.any(ie[:dy, :] > 0)
-            #     if clip:
-            #         print('dy=%i clips' % dy)
-            #         break
-            # print('Computed mindy:', mindy[i])
-            # for j in range(1, pH):
-            #     dy = -j
-            #     clip = cp.any(ie[dy:, :] > 0)
-            #     if clip:
-            #         print('dy=%i clips' % dy)
-            #         break
+            if len(iy_hot) == 0:
+                maxdy[i] = pH
+                mindy[i] = -pH
+            else:
+                maxdy[i] = iy_hot[0]
+                mindy[i] = iy_hot[-1] - pH + 1
 
         # GPU arrays:
         img_params.psf_pad = psf_pad
