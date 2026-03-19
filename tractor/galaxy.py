@@ -348,9 +348,10 @@ class ProfileGalaxy(object):
             halfsize = max(halfsize, max(psfw / 2., psfh / 2.))
             if force_halfsize is not None:
                 halfsize = force_halfsize
+            halfsize = int(np.ceil(halfsize))
+
             # is the source center outside the modelMask?
             sourceOut = (px < x0 or px > x1 - 1 or py < y0 or py > y1 - 1)
-
             if sourceOut:
                 # What is the closest point in the modelMask?
                 neardx, neardy = 0., 0.
