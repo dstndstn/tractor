@@ -13,6 +13,7 @@ from the SDSS /Photo/ software; we use multi-Gaussian approximations
 of these.
 """
 import numpy as np
+import warnings
 
 from tractor import mixture_profiles as mp
 from tractor.utils import ParamList, MultiParams, ScalarParam, BaseParams
@@ -368,12 +369,8 @@ class ProfileGalaxy(object):
                 else:
                     raise RuntimeError('sourceOut, not hybrid')
 
-        #print('Getting Fourier transform of PSF at', px,py, halfsize)
-        #print(type(psf))
-        #print (psf.getFourierTransform)
-        #print('Tim shape:', img.shape)
         if halfsize > 4096:
-            raise RuntimeError('Halfsize %i' % halfsize)
+            warnings.warn('Giant galaxy model (halfsize=%i); proceeding anyway' % halfsize)
         P, (cx, cy), (pH, pW), (v, w) = psf.getFourierTransform(px, py, halfsize)
 
         dx = px - cx
