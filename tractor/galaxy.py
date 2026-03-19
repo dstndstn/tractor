@@ -205,6 +205,7 @@ class Galaxy(MultiParams, SingleProfileSource):
                 oldval = self.shape.setParam(i, oldvals[i] + gstep)
                 patchx = self.getUnitFluxModelPatch(
                     img, px=px0, py=py0, minval=minval, modelMask=modelMask,
+                    force_sourceOut=True,
                     **kwargs)
                 self.shape.setParam(i, oldval)
                 if patchx is None:
@@ -266,6 +267,7 @@ class ProfileGalaxy(object):
                                    inner_real_nsigma = 3.,
                                    outer_real_nsigma = 4.,
                                    force_halfsize=None,
+                                   force_sourceOut=False,
                                    **kwargs):
         from astrometry.util.miscutils import get_overlapping_region
         if modelMask is not None:
@@ -361,7 +363,8 @@ class ProfileGalaxy(object):
                 if py > y1:
                     neardy = py - y1
                 nearest = np.hypot(neardx, neardy)
-                if nearest > self.getRadius():
+                pixscale = img.wcs.pixscale_at((x0+x1)/2., (y0+y1)/2.)
+                if nearest > (self.getRadius() / pixscale) and not force_sourceOut:
                     return None
 
                 if hybrid:
