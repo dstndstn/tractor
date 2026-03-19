@@ -114,6 +114,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         tims,masks = self._gpu_checks(tr)
         if tims is None:
             return False
+        if len(tims) == 0:
+            return False
         extents = [mm.extent for mm in masks]
         x0, x1, y0, y1 = np.asarray(extents).T
         src = tr.catalog[0]
@@ -217,21 +219,22 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             self.hit_limit = True
             return 0., 0.
 
-        counts_grid = np.zeros((len(tims), len(steps)), np.float32)
+        Nsteps = len(steps)
+        Nimages = len(tims)
+        counts_grid = np.zeros((Nimages, Nsteps), np.float32)
         if sb:
-            sb_counts_grid = np.zeros((len(tims), len(steps)), np.float32)
+            sb_counts_grid = np.zeros((Nimages, Nsteps), np.float32)
 
         # We need to transpose the mogs: need Nimages x Nprofiles(aka Nsteps)
         mogs = [[] for tim in tims]
 
-        idx_grid = np.zeros((len(tims), len(steps)), np.int32)
-        idy_grid = np.zeros((len(tims), len(steps)), np.int32)
+        idx_grid = np.zeros((Nimages, Nsteps), np.int32)
+        idy_grid = np.zeros((Nimages, Nsteps), np.int32)
 
-        mux_grid = np.zeros((len(tims), len(steps)), np.float32)
-        muy_grid = np.zeros((len(tims), len(steps)), np.float32)
+        mux_grid = np.zeros((Nimages, Nsteps), np.float32)
+        muy_grid = np.zeros((Nimages, Nsteps), np.float32)
 
-        Nmods = len(steps)
-        logpriors = np.zeros(Nmods, np.float32)
+        logpriors = np.zeros(Nsteps, np.float32)
         for istep, (_, p, _, _) in enumerate(steps):
             tr.setParams(p)
             logpriors[istep] = tr.getLogPrior()
@@ -241,9 +244,27 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
                        for tim in tims]
                 px, py = np.array(pxy, dtype=np.float32).T
+                # We can get extremely large proposed RA,Dec steps that make things go haywire...
+                if np.any(px < -1e6) or np.any(px > 1e6) or np.any(py < -1e6) or np.any(py > 1e6):
+                    logmsg('Warning: Bad pixel positions in gpu try_updates: (%s, %s); ignoring' % (px,py))
+                    steps = steps[:istep]
+                    Nsteps = len(steps)
+                    if Nsteps == 0:
+                        tr.setParams(p0)
+                        return 0., 0.
+                    counts_grid = counts_grid[:, :Nsteps]
+                    if sb:
+                        sb_counts_grid = sb_counts_grid[:, :Nsteps]
+                    idx_grid = idx_grid[:, :Nsteps]
+                    idy_grid = idy_grid[:, :Nsteps]
+                    mux_grid = mux_grid[:, :Nsteps]
+                    muy_grid = muy_grid[:, :Nsteps]
+                    logpriors = logpriors[:Nsteps]
+                    break
                 # Round source pixel position to nearest integer
                 ix = px.round().astype(np.int32)
                 iy = py.round().astype(np.int32)
+
                 # motion compared to the (perhaps cached) image center
                 idx_grid[:, istep] = ix - img_params.ipx
                 idy_grid[:, istep] = iy - img_params.ipy
@@ -290,7 +311,6 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             return dlnp,a
 
         pH, pW = img_params.pH, img_params.pW
-        Nimages = len(tims)
 
         if is_psf:
             mods = self.gpu_get_unitflux_psf(img_params, mux_grid, muy_grid)
@@ -299,7 +319,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                                                          mux_grid, muy_grid)
         elif is_none:
             # need this for working space
-            mods = cp.zeros((Nimages, Nmods, pH, pW), cp.float32)
+            mods = cp.zeros((Nimages, Nsteps, pH, pW), cp.float32)
 
         if is_psf or is_galaxy:
             mods *= cp.array(counts_grid)[..., nu, nu]
@@ -309,8 +329,8 @@ class GpuOptimizer(GpuFriendlyOptimizer):
         assert(img_params.padpix.shape == (Nimages, pH, pW))
         assert(img_params.padie.shape  == (Nimages, pH, pW))
         if is_psf or is_galaxy:
-            assert(mods.shape == (Nimages,Nmods,pH,pW))
-        dchisqs = cp.zeros(Nmods, np.float32)
+            assert(mods.shape == (Nimages,Nsteps,pH,pW))
+        dchisqs = cp.zeros(Nsteps, np.float32)
 
         if ps:
             import pylab as plt
@@ -318,7 +338,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
             #chia = dict(interpolation='nearest', origin='lower', vmin=-3, vmax=+3)
             chia = dict(interpolation='nearest', origin='lower')
         chi_work = cp.empty((pH, pW), np.float32)
-        for imod in range(Nmods):
+        for imod in range(Nsteps):
 
             if ps:
                 plt.clf()
@@ -328,7 +348,7 @@ class GpuOptimizer(GpuFriendlyOptimizer):
                 dy = idy_grid[itim, imod]
 
                 if ps:
-                    #plt.subplot(Nmods, Nimages, imod*Nimages + itim + 1)
+                    #plt.subplot(Nsteps, Nimages, imod*Nimages + itim + 1)
                     plt.subplot(1, Nimages, itim+1)
                     plt.title('dx,dy = %i,%i' % (dx, dy))
 
