@@ -680,9 +680,9 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
             return self.halfsize
         pixscale = img.wcs.pixscale_at(px, py)
         halfsize = max(1., self.getRadius() / pixscale)
-        # limit to image size
+        # limit to the max distance from the source to an image edge.
         h,w = img.shape
-        imsize = max(h, w)//2
+        imsize = max(px, w-1-px, py, h-1-py)+1
         halfsize = min(halfsize, imsize)
         # ... but then increase up to PSF size
         psfsize = img.psf.getRadius()
