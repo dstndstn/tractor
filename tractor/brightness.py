@@ -179,7 +179,7 @@ class NanoMaggies(Fluxes):
                 ss.append('%s=(flux %.3g)' % (b, f))
             else:
                 m = self.getMag(b)
-                ss.append('%s=%.3g' % (b, m))
+                ss.append('%s=%.3f' % (b, m))
         s += ', '.join(ss)
         return s
 

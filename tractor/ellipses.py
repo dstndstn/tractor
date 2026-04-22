@@ -226,7 +226,7 @@ class EllipseESoft(EllipseE):
     #    return [0.01] * 3
 
     def __repr__(self):
-        return 'log r_e=%g, ee1=%g, ee2=%g' % (self.logre, self.ee1, self.ee2)
+        return 'log r_e=%.3f, ee1=%.3f, ee2=%.3f' % (self.logre, self.ee1, self.ee2)
 
     @property
     def re(self):
