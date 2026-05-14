@@ -9,6 +9,43 @@ import gc
 # Late-load kernel to avoid CuPy dependency on CPU
 _mog_eval_kernel = None
 
+# In tractor/miscutils.py
+_splat_kernel = None
+
+def get_splat_kernel():
+    global _splat_kernel
+    if _splat_kernel is None:
+        _splat_kernel = cp.RawKernel(r'''
+        extern "C" __global__
+        void splat_patch(const float* patches, float* images,
+                        const int* x0, const int* y0, const float* counts,
+                        int Hp, int Wp, int Hi, int Wi) {
+            // blockIdx.z is the image index in the batch
+            int z = blockIdx.z;
+            // px, py are coordinates within the patch
+            int py = blockIdx.y * blockDim.y + threadIdx.y;
+            int px = blockIdx.x * blockDim.x + threadIdx.x;
+
+            if (py < Hp && px < Wp) {
+                int iy = y0[z] + py;
+                int ix = x0[z] + px;
+
+                // Safety check: Ensure we don't write outside the image bounds
+                if (iy >= 0 && iy < Hi && ix >= 0 && ix < Wi) {
+                    // patches shape: (Z, Hp, Wp)
+                    // images shape: (Z, Hi, Wi)
+                    int img_idx = z * (Hi * Wi) + iy * Wi + ix;
+                    int pat_idx = z * (Hp * Wp) + py * Wp + px;
+
+                    // atomicAdd is required for when we batch multiple sources
+                    // that might overlap on the same pixel.
+                    atomicAdd(&images[img_idx], patches[pat_idx] * counts[z]);
+                }
+            }
+        }
+        ''', 'splat_patch')
+    return _splat_kernel
+
 def get_mog_eval_kernel():
     global _mog_eval_kernel
     if _mog_eval_kernel is None:
@@ -111,18 +148,36 @@ def batch_correlate1d_cpu(a, b, axis=1, mode='constant'):
         nclip = r-n 
     if npad > 0:
         if npad % 2 == 0:
-            padded_b = np.pad(b, [0, npad//2])
+            #padded_b = cp.pad(b, [0, npad//2])
+            # BUG FIX: Specify (0,0) for the first axis to avoid padding the batch
+            padded_b = np.pad(b, [(0, 0), (0, npad // 2)])
         else:
             padded_b = np.pad(b, [(0,0), (npad//2+1, npad//2)])
     else:
         padded_b = b
-    f_a = np.fft.fft(a, r, axis=axis)
-    f_b = np.fft.fft(padded_b, r, axis=1)
+
+    # USE RFFT: This keeps the frequency domain half-sized (~3.25 GB instead of 6.5 GB)
+    f_a = np.fft.rfft(a, r, axis=axis)
+    f_b = np.fft.rfft(padded_b, r, axis=1)
+    print (f'{f_a.shape=} {f_b.shape=} {a.shape=} {b.shape=}')
+    print (f'{np.conj(f_b).shape=}')
+    del padded_b
+
+    # Correlation is f_a * conj(f_b)
+    # rfft output is Hermitian symmetric, so conj() works fine here
     if axis == 1:
         f_p = np.einsum("ijk,ij->ijk", f_a, np.conj(f_b))
     else:
         f_p = np.einsum("ijk,ik->ijk", f_a, np.conj(f_b))
-    c = np.real(np.fft.fftshift(np.fft.ifft(f_p, axis=axis), axes=(axis)))
+    del f_a, f_b
+
+    # irfft automatically knows the output is real and handles the symmetry
+    # Use the 'n' parameter to ensure the output length matches 'r'
+    c = np.fft.irfft(f_p, n=r, axis=axis)
+    del f_p
+    # Shift and Clip
+    c = np.fft.fftshift(c, axes=(axis))
+
     if mode == 'full':
         return c
     if axis == 1:
@@ -147,7 +202,9 @@ def batch_correlate1d_gpu(a, b, axis=1, mode='constant'):
         nclip = r-n
     if npad > 0:
         if npad % 2 == 0:
-            padded_b = cp.pad(b, [0, npad//2])
+            #padded_b = cp.pad(b, [0, npad//2])
+            # BUG FIX: Specify (0,0) for the first axis to avoid padding the batch
+            padded_b = cp.pad(b, [(0, 0), (0, npad // 2)])
         else:
             padded_b = cp.pad(b, [(0,0), (npad//2+1, npad//2)])
     else:
@@ -203,3 +260,77 @@ def batch_correlate1d_gpu(a, b, axis=1, mode='constant'):
     if axis == 1:
         return c[:,nclip//2:-nclip//2,:]
     return c[:,:,nclip//2:-nclip//2]
+
+def batch_correlate1d_cpu_fast(a, b, axis=1, mode='constant'):
+    import numpy as np
+    # a: (batch, height, width)
+    # b: (batch, filter_len)
+    z, m, n = a.shape
+    y, x = b.shape
+
+    # Calculate linear correlation length
+    r = (m + x - 1) if axis == 1 else (n + x - 1)
+
+    # 1. Align the Filter: Place the center of the filter at index 0
+    # This ensures no translation is introduced during correlation.
+    center = x // 2
+    b_padded = np.zeros((z, r), dtype=a.dtype)
+    b_padded[:, :x] = b
+    b_padded = np.roll(b_padded, -center, axis=1)
+
+    # 2. FFT Correlation (Frequency domain multiplication)
+    f_a = np.fft.rfft(a, n=r, axis=axis)
+    f_b = np.fft.rfft(b_padded, n=r, axis=1)
+
+    # Correlation = F(a) * conj(F(b))
+    if axis == 1:
+        f_p = f_a * np.conj(f_b[:, :, np.newaxis])
+    else:
+        f_p = f_a * np.conj(f_b[:, np.newaxis, :])
+
+    # 3. Inverse FFT
+    c = np.fft.irfft(f_p, n=r, axis=axis)
+
+    # 4. Slicing: The first m (or n) elements now correspond exactly
+    # to the centered correlation indices of the input image.
+    if axis == 1:
+        return c[:, :m, :]
+    else:
+        return c[:, :, :n]
+
+def batch_correlate1d_gpu_fast(a, b, axis=1, mode='constant'):
+    import cupy as cp
+    # a: (batch, height, width)
+    # b: (batch, filter_len)
+    z, m, n = a.shape
+    y, x = b.shape
+
+    # Calculate linear correlation length
+    r = (m + x - 1) if axis == 1 else (n + x - 1)
+
+    # 1. Align the Filter: Place the center of the filter at index 0
+    # This ensures no translation is introduced during correlation.
+    center = x // 2
+    b_padded = cp.zeros((z, r), dtype=a.dtype)
+    b_padded[:, :x] = b
+    b_padded = cp.roll(b_padded, -center, axis=1)
+
+    # 2. FFT Correlation (Frequency domain multiplication)
+    f_a = cp.fft.rfft(a, n=r, axis=axis)
+    f_b = cp.fft.rfft(b_padded, n=r, axis=1)
+
+    # Correlation = F(a) * conj(F(b))
+    if axis == 1:
+        f_p = f_a * cp.conj(f_b[:, :, cp.newaxis])
+    else:
+        f_p = f_a * cp.conj(f_b[:, np.newaxis, :])
+
+    # 3. Inverse FFT
+    c = cp.fft.irfft(f_p, n=r, axis=axis)
+
+    # 4. Slicing: The first m (or n) elements now correspond exactly
+    # to the centered correlation indices of the input image.
+    if axis == 1:
+        return c[:, :m, :]
+    else:
+        return c[:, :, :n]

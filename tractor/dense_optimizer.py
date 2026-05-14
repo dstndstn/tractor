@@ -4,6 +4,8 @@ from tractor.engine import logverb
 from tractor.constrained_optimizer import ConstrainedOptimizer
 
 from numpy.linalg import lstsq, LinAlgError
+import time
+td = np.zeros(2)
 
 # from astrometry.util.plotutils import PlotSequence
 # ps = PlotSequence('opt')
@@ -21,6 +23,7 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
                            shared_params=True,
                            get_A_matrix=False):
 
+        t = time.time()
         #print('ConstrainedDenseOptimizer.getUpdateDirection: shared_params=', shared_params,
         #      'scales_only=', scales_only, 'damp', damp, 'variance', variance)
         #print ("TIM - dense - ", tractor.images)
@@ -257,6 +260,8 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
             X /= colscales
 
         #print ("X DENSE:", X)
+        td[0] += time.time()-t
+        print (f'{td=}')
         if False:
             print('Returning:  ', X)
             Xold = super(ConstrainedDenseOptimizer, self).getUpdateDirection(

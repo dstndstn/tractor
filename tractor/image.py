@@ -177,7 +177,9 @@ class Image(MultiParams):
         self.inverr = inverr
         self.inverr_gpu = None #Clear GPU, will be copied again on demand
 
-    def getInvvar(self):
+    def getInvvar(self, use_gpu=False):
+        if use_gpu:
+            return self.getInvError(use_gpu=True)**2
         return self.inverr**2
 
     def setInvvar(self, iv):

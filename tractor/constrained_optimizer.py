@@ -6,7 +6,11 @@ import time
 logverb = print
 logmsg  = print
 
-tc =np.zeros(2)
+tc =np.zeros(4)
+tu = np.zeros(8)
+
+def printTiming():
+    print ("CTimes:", tc, "TU", tu)
 
 class ConstrainedOptimizer(LsqrOptimizer):
 
@@ -46,6 +50,7 @@ class ConstrainedOptimizer(LsqrOptimizer):
                 break
             if self.stepLimited and dlnp <= dchisq_limited:
                 break
+        tx = time.time()
         R.update(steps=step)
         R.update(hit_limit=self.last_step_hit_limit,
                  ever_hit_limit=self.hit_limit)
@@ -54,19 +59,31 @@ class ConstrainedOptimizer(LsqrOptimizer):
         return R
 
     def tryUpdates(self, tractor, X, alphas=None, check_step=None):
+        #print ("TRY UPDATES", X.shape)
+        t = time.time()
+        tx = time.time()
         p_best = tractor.getParams()
+        #print (f'{p_best=}')
+        tu[0] += time.time()-tx
+        tx = time.time()
         logprob_before = tractor.getLogProb()
+        #print (f'{logprob_before=}')
         logprob_best = logprob_before
         alpha_best = None
+        tu[1] += time.time()-tx
+        tx = time.time()
 
         # Get lists of alpha values and parameters to try
         steps = self.getParameterSteps(tractor, X, alphas)
+        #print (f'{steps=}')
+        tu[2] += time.time()-tx
 
         if len(steps) == 0:
             self.last_step_hit_limit = True
             self.hit_limit = True
 
         for alpha, p, step_limit, hit_limit in steps:
+            tx = time.time()
             if hit_limit:
                 self.hit_limit = True
 
@@ -94,11 +111,19 @@ class ConstrainedOptimizer(LsqrOptimizer):
                 alpha_best = alpha
                 logprob_best = logprob
                 p_best = p
+            tu[3] += time.time()-tx
 
+        tx = time.time()
         tractor.setParams(p_best)
         #print ("Pbest", p_best)
         #print ("LOGPROB", logprob_best, logprob_before)
         #print ("ALPHA", alpha_best, self.hit_limit, self.last_step_hit_limit)
+        tc[3] += time.time()-t
+        tu[4] += time.time()-tx
+        #print (f'{tc=}')
+        #print (f'{tu=}')
+        #import sys
+        #sys.exit(0)
         if alpha_best is None:
             return 0., 0.
 
@@ -179,4 +204,5 @@ class ConstrainedOptimizer(LsqrOptimizer):
 
             if do_break:
                 break
+        #print ("CONSTRAINED steps = ", results)
         return results

@@ -37,6 +37,7 @@ class SingleProfileSource(BasicSource):
     def getModelPatch(self, img, minsb=None, modelMask=None, **kwargs):
         ct1[0] += 1
         #print ("CT1:", ct1)
+        #print ("getModelPatch1")
         counts = img.getPhotoCal().brightnessToCounts(self.brightness)
         if counts == 0:
             return None
@@ -104,9 +105,11 @@ class PointSource(MultiParams, SingleProfileSource):
 
     def getUnitFluxModelPatch(self, img, minval=0., derivs=False,
                               modelMask=None, **kwargs):
+        #print ("getUnitFluxModelPatch1")
         ct1[1] += 1
         #print ("CT1:", ct1)
         (px, py) = img.getWcs().positionToPixel(self.getPosition(), self)
+        #print (f'CPU {px=} {py=} {img=} {self.getPosition()=}', self)
         H, W = img.shape
         psf = self._getPsf(img)
         # quit early if the requested position is way outside the image bounds

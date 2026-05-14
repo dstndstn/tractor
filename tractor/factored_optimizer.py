@@ -1,6 +1,6 @@
 import sys
 from tractor.dense_optimizer import ConstrainedDenseOptimizer
-from tractor import ProfileGalaxy, HybridPSF
+from tractor import ProfileGalaxy, HybridPSF, PointSource
 from tractor import mixture_profiles as mp
 from tractor.psf import lanczos_shift_image
 from tractor.sky import ConstantSky
@@ -16,14 +16,1031 @@ from tractor.patch import ModelMask
 import cupy as cp
 import time
 import os, gc
+from tractor.miscutils import get_splat_kernel, get_mog_eval_kernel
+from tractor.brightness import NanoMaggies
 
 tt = np.zeros(8)
 tct = np.zeros(9, np.int32)
 tt2 = np.zeros(1, np.int32)
+tps = np.zeros(20)
+cps = np.zeros(10)
+gps = np.zeros(10)
+tu = np.zeros(10)
+tuc = np.zeros(5, np.int32)
+t5 = np.zeros(2)
 
 image_counter = 0
 #from astrometry.util.plotutils import PlotSequence
 #ps = PlotSequence('fourier')
+
+class GPUFriendlyPointSourceFitter:
+    def __init__(self, tractor, source, images):
+        self.tractor = tractor
+        self.source = source
+        self.images = images
+        self.cpucomp = None
+        self.batch_psf = None
+        self.tiny_alpha = 1e-8
+        self.stepLimited = False
+        self.current_bounds = None
+        self.ie_batch = None
+
+    def add_comp(self, R_cpu):
+        self.cpucomp = R_cpu
+
+    def get_batch_psf(self):
+        psfs = [tim.getPsf() for tim in self.images]
+        #for i, psf in enumerate(psfs):
+        #    print ("Get Batch psf: ", i, psf.img.shape, psf.img.max())
+        self.batch_psf = BatchPixelizedPSF(psfs, True)
+
+    def compute_update_vec(self, allderivs):
+        """
+        Calculates the total Hessian (H) and Gradient (G) for the given derivatives
+        across all images. Returns (H, G) as CuPy arrays.
+        
+        allderivs: list of lists [ (param0) [ (patch, img), ... ], (param1) [...] ]
+        """
+        t = time.time()
+        num_params = len(allderivs)
+        #print (f'{allderivs=}')
+        #print (f'GPU {num_params=}')
+        if num_params == 0:
+            return None, None, 0
+
+        # 1. Pivot: Group patches by Image to minimize GPU overhead
+        # Structure: img -> {global_param_idx: PatchObject}
+        img_map = {}
+        for p_idx, patches in enumerate(allderivs):
+            for patch, img in patches:
+                if patch is None or patch.patch is None:
+                    print (f'{p_idx=} patch is none')
+                    continue
+                if img not in img_map:
+                    img_map[img] = {}
+                img_map[img][p_idx] = patch
+
+        # 2. CREATE THE ORDERED LIST OF ACTIVE IMAGES
+        # This ensures the i-th slice of our batch matches the i-th image in our loop
+        #psfs = []
+        #active_tims = []
+        #for i, (img, params) in enumerate(img_map.items()):
+        #    active_tims.append(img)
+        #    psfs.append(img.getPsf())
+        active_tims = list(img_map.keys())
+
+        ##2b update batch_psf
+        """
+        psfs = [tim.getPsf() for tim in active_tims]
+        self.batch_psf = BatchPixelizedPSF(psfs, True)
+        """
+
+        """
+        # 3. Determine the Global Super-Box across ALL images
+        all_x0, all_x1, all_y0, all_y1 = [], [], [], []
+        for patches in allderivs:
+            for patch, _ in patches:
+                if patch:
+                    all_x0.append(patch.extent[0])
+                    all_x1.append(patch.extent[1])
+                    all_y0.append(patch.extent[2])
+                    all_y1.append(patch.extent[3])
+
+        if len(all_x0) == 0:
+            return None, None, 0
+        ux0, ux1 = min(all_x0), max(all_x1)
+        uy0, uy1 = min(all_y0), max(all_y1)
+        """
+
+        # 3. Calculate the 'true' global union from patch extents
+        # This replaces the logic that relies on the (sometimes too tight) modelMasks
+        all_x0, all_x1, all_y0, all_y1 = [], [], [], []
+        for img, params in img_map.items():
+            for p_idx, patch in params.items():
+                px0, px1, py0, py1 = patch.extent
+                all_x0.append(px0); all_x1.append(px1)
+                all_y0.append(py0); all_y1.append(py1)
+
+        if len(all_x0) == 0:
+            return None, None, 0
+        ux0, ux1 = min(all_x0), max(all_x1)
+        uy0, uy1 = min(all_y0), max(all_y1)
+        ux0 = int(ux0)
+        uy0 = int(uy0)
+        ux1 = int(ux1)
+        uy1 = int(uy1)
+        #uH, uW = uy1 - uy0, ux1 - ux0
+        u_height, u_width = uy1 - uy0, ux1 - ux0
+        total_pixels = u_height * u_width
+        num_imgs = len(img_map)
+        num_params = len(allderivs)
+
+        # 4. Pre-allocate Tensors on GPU
+        # J: (N_images, N_params, Total_Pixels)
+        # Chi: (N_images, Total_Pixels)
+        #J_tensor = cp.zeros((num_imgs, num_params, total_pixels), dtype=cp.float64)
+        J_tensor = cp.zeros((num_imgs, num_params, u_height, u_width), dtype=cp.float64)
+        J_tensor2 = cp.zeros((num_imgs, num_params, u_height, u_width), dtype=cp.float64)
+        #cJ_tensor = np.zeros((num_imgs, num_params, total_pixels), dtype=np.float64)
+        cJ_tensor = np.zeros((num_imgs, num_params, u_height, u_width), dtype=np.float32)
+        Chi_tensor = cp.zeros((num_imgs, total_pixels), dtype=cp.float64)
+        #print ("ChiT", Chi_tensor.shape)
+        print (f'{ux0=} {ux1=} {uy0=} {uy1=}')
+        #print (f'{all_x0=} {all_x1=} {all_y0=} {all_y1=}')
+        print (f'{num_imgs=} {num_params=} {total_pixels=} {u_width=} {u_height=}')
+        tps[2] += time.time()-t
+
+        t = time.time()
+
+        masks = [self.tractor._getModelMaskFor(tim, self.source) for tim in active_tims]
+        #masks = [self.tractor._getModelMaskByIdx(i, self.source) for i in range(len(self.images))]
+        t1 = time.time()
+        ie_batch = self.tractor.getBatchInvErrors(ux0=ux0, ux1=ux1, uy0=uy0, uy1=uy1, use_gpu=True, tims=active_tims)
+        #Save params
+        
+        self.current_bounds = (ux0, ux1, uy0, uy1)
+        if len(active_tims) == len(self.tractor.images):
+            #If only a subset of images are "in frame" we can calculate this later
+            self.ie_batch = ie_batch
+
+        tps[5] += time.time()-t1 
+        t1 = time.time()
+        chi_batch = self.tractor.getBatchChiImages(ux0=ux0, ux1=ux1, uy0=uy0, uy1=uy1, use_gpu=True, batch_psf=self.batch_psf, tims=active_tims, ie_stack=ie_batch)
+        tps[4] += time.time()-t1
+        #model_batch = self.tractor.getBatchModelImage(ux0=ux0, ux1=ux1, uy0=uy0, uy1=uy1, use_gpu=True, batch_psf=self.batch_psf, tims=active_tims)
+        #tps[6] += time.time()-t1
+        #cp.savetxt('chi_batch.txt', chi_batch.ravel())
+        #cp.savetxt('ie_batch.txt', ie_batch.ravel())
+        #cp.savetxt('model_batch.txt', model_batch.ravel())
+        #for i, tim in enumerate(active_tims):
+        #    print (f'BATCH {i=} {tim.getImage().max()=} {tim.getPsf().img.max()=} {ie_batch[i].max()=} {model_batch.max()=}')
+        #    print (f'MASKS {masks[i]}')
+
+        print ("chi_batch", chi_batch.shape, ie_batch.shape)
+        Chi_tensor = chi_batch.reshape((num_imgs, total_pixels))
+        t = time.time()
+        """
+        for i, (img, params) in enumerate(img_map.items()):
+            ie_full = img.getInvError(use_gpu=True)
+            mod_full = cp.asarray(self.tractor.getModelImage(img=img))
+            mask = self.tractor._getModelMaskFor(img, self.source)
+            #print (f'FULL {i=} {img.getImage().max()=}  {tim.getPsf().img.max()=} {ie_full.max()=} {mod_full.max()=} {ie_full.shape=}')
+            #print (cp.where(ie_full == ie_full.max()))
+            #print (f'MASK2 {mask}')
+        """
+        for i, (img, params) in enumerate(img_map.items()):
+            #print ("I", i, "IMG MAX", img.getImage().max(), img.getPsf().img.max())
+            #if i >= 3:
+            #    continue
+            # Fetch and crop to global bounds
+            # (Ensure getChiImage/getInvError return CuPy arrays to avoid transfers)
+            """
+            t1 = time.time()
+            chi_full = self.tractor.getChiImage(img=img, use_gpu=True)
+            ie_full = img.getInvError(use_gpu=True)
+            mod_full = cp.asarray(self.tractor.getModelImage(img=img))
+            tps[7] += time.time()-t1
+            img_h, img_w = chi_full.shape
+            #print ("CHI FULL", i, chi_full.shape)
+            #print (f'{chi_batch[i].max()=} {chi_full.max()=}')
+            #from tractor.batch_psf import plot_comparison
+            #from tractor.batch_psf import plot_one
+            #plot_one(model_batch[i].get(), "Model "+str(i))
+            #plot_one(mod_full.get(), "Model F"+str(i))
+            #plot_comparison(model_batch[i].get(), mod_full.get(), "Model "+str(i))
+
+            # 2. Determine the intersection between this image and the Global Box
+            # These are indices in the IMAGE coordinate system
+            y_start = max(uy0, 0)
+            y_end   = min(uy1, img_h)
+            x_start = max(ux0, 0)
+            x_end   = min(ux1, img_w)
+
+            # 3. Determine where that intersection lands in the GLOBAL coordinate system
+            # These are indices relative to the top-left of the (u_height, u_width) tensor
+            d_y_start = y_start - uy0
+            d_y_end   = y_end   - uy0
+            d_x_start = x_start - ux0
+            d_x_end   = x_end   - ux0
+
+            for p_idx, patch in params.items():
+                px0, px1, py0, py1 = patch.extent
+
+            #print ("CHI FULL", i, chi_full.shape)
+            #print ("SHAPES ", y_start, y_end, x_start, x_end, d_y_start, d_y_end, d_x_start, d_x_end)
+            #print ("Ps:", py0, py1, px0, px1)
+            chi_sub = chi_full[y_start:y_end, x_start:x_end]
+            #print (f'{chi_batch[i].max()=} {chi_full.max()=} {chi_sub.max()=} {chi_sub.shape=}')
+            #print ("WHERE", cp.where(chi_batch[i] == chi_batch[i].max()), cp.where(chi_full == chi_full.max()), cp.where(chi_sub == chi_sub.max()))
+            
+            # Map global bounds to image coordinates
+            # Note: Handle images with different sizes/offsets via slicing
+            # For simplicity, assuming images contain the global box:
+            #chi_crop = chi_full[uy0:uy1, ux0:ux1].ravel()
+            #ie_crop = ie_full[uy0:uy1, ux0:ux1].ravel()
+            
+            #print ("SHAPES", Chi_tensor.shape, Chi_tensor[i].shape, chi_crop.shape, ie_crop.shape, chi_full.shape, ie_full.shape)
+            #ie_sub = ie_full[y_start:y_end, x_start:x_end]
+            ie_sub = ie_full[py0:py1, px0:px1]
+            #mod_sub = mod_full[y_start:y_end, x_start:x_end]
+            mod_sub = mod_full[py0:py1, px0:px1]
+            #print ("IE SUB", ie_sub.shape, ie_sub.max(), cp.where(ie_sub == ie_sub.max()))
+            #if i < 3:
+            #    from tractor.batch_psf import plot_comparison
+            #    plot_comparison(model_batch[i].get(), mod_sub.get(), "Mod "+str(i))
+            #    plot_comparison(ie_batch[i].get(), ie_sub.get(), "IE "+str(i))
+            #    plot_comparison(chi_batch[i].get(), chi_sub.get(), "Chi "+str(i))
+
+            #print (f'{uy0=} {uy1=} {ux0=} {ux1=}', chi_full[uy0:uy1, ux0:ux1].shape)
+            #print ("IE", ie_batch[i].max(), ie_full.max(), ie_sub.max(), "MOD", model_batch[i].max(), mod_full.max(), mod_sub.max())
+            #Chi_tensor[i] = chi_crop * ie_crop # Pre-weighted by inverse error
+
+            # 4. Fill Chi_tensor (Pre-weighted by inverse error)
+            # We reshape the row to 2D for easy slicing
+            t1 = time.time()
+            chi_row_2d = Chi_tensor[i].reshape(u_height, u_width)
+            
+            # Only update the region where the image actually exists
+            # The rest of the row remains zeroed out
+            #chi_row_2d[d_y_start:d_y_end, d_x_start:d_x_end] = chi_batch[i] 
+            #chi_row_2d = chi_batch[i]
+            chi_row_2d[d_y_start:d_y_end, d_x_start:d_x_end] = chi_batch[i][d_y_start:d_y_end, d_x_start:d_x_end]
+            """
+            iex = ie_batch[i]
+            #tps[8] += time.time()-t1
+
+            #print ("CHI ROW2d", chi_row_2d[d_y_start:d_y_end, d_x_start:d_x_end].shape, chi_row_2d.shape, chi_row_2d.max(), chi_batch[i].shape, chi_batch[i].max())
+            #print (f'{chi_row_2d.sum()=} {chi_batch[i].sum()=} {chi_sub.sum()=}')
+            #print ("IE", ie_batch[i].max(), ie_full.max(), "MOD", model_batch[i].max(), mod_full.max())
+            #print ("ChiT", Chi_tensor[i].sum(), Chi_tensor[i].max(), Chi_tensor[i].shape, chi_row_2d[d_y_start:d_y_end, d_x_start:d_x_end].shape)
+            #print ("START COORDS", y_start, y_end, x_start, x_end)
+            #cp.savetxt('chi_row_2d_'+str(i)+'.txt', chi_row_2d)
+            #cp.savetxt('ie_full_'+str(i)+'.txt', ie_full)
+            #cp.savetxt('mod_full_'+str(i)+'.txt', mod_full)
+            #cp.savetxt('chi_full_'+str(i)+'.txt', chi_full)
+            #print ("MATCHES: ", cp.allclose(chi_batch[i], chi_row_2d, atol=1.e-5))
+            #print ("CMATCHES: ", cp.allclose(chi_batch[i], chi_sub, atol=1.e-5))
+            #print ("IE", ie_batch[i].shape, ie_full[y_start:y_end, x_start:x_end].shape, ie_sub.shape, ie_batch[i].max(), ie_full[y_start:y_end, x_start:x_end].max(), ie_sub.max())
+            #if ie_full[y_start:y_end, x_start:x_end].shape == ie_batch[i].shape:
+                #print ("MATCHES: ", cp.allclose(chi_batch[i], chi_row_2d, atol=1.e-5))
+                #print ("IE MATCH", cp.allclose(ie_batch[i], ie_full[y_start:y_end, x_start:x_end], atol=1.e-5))
+                #print ("MOD MATCH", cp.allclose(model_batch[i], mod_full[y_start:y_end, x_start:x_end], atol=1.e-5))
+
+            for p_idx, patch in params.items():
+                t1 = time.time()
+                px0, px1, py0, py1 = patch.extent
+                #dx0, dx1 = px0 - ux0, px1 - ux0
+                #dy0, dy1 = py0 - uy0, py1 - uy0
+                # Patch is already relative to image coordinates, 
+                # but we need to place it relative to the Global Box
+                dx0 = px0 - ux0
+                dx1 = px1 - ux0
+                dy0 = py0 - uy0
+                dy1 = py1 - uy0
+                
+                # View into the specific image/parameter row as a 2D grid for insertion
+                """
+                J_view = J_tensor[i, p_idx].reshape((u_height, u_width))
+                tps[17] += time.time()-t1
+                t1 = time.time()
+                """
+                """
+                t1 = time.time()
+                J_tensor[i, p_idx, dy0:dy1, dx0:dx1] = patch.getPatch(use_gpu=True)
+                gps[0] += time.time()-t1
+                """
+
+                #cJ_view = cJ_tensor[i, p_idx].reshape((u_height, u_width))
+                #tps[14] += time.time()-t1
+                #t1 = time.time()
+
+                #d_cpu = patch.getPatch()
+                #tps[15] += time.time()-t1
+                #t1 = time.time()
+                
+                """
+                # Weighted derivative: (deriv * inv_error)
+                d_gpu = patch.getPatch(use_gpu=True)
+                tps[18] += time.time()-t1
+                t1 = time.time()
+
+                #ie_full = img.getInvError(use_gpu=True)
+                #print (f'{d_gpu.shape=} {J_view.shape=} {ie_batch.shape=} {iex[dy0:dy1, dx0:dx1].shape=}')
+                #print (f'{dx0=} {dy0=} {dx1=} {dy1=} {px0=} {px1=} {py0=} {py1=}')
+                """
+
+                t1 = time.time()
+                #cJ_view[dy0:dy1, dx0:dx1] = d_cpu * iec[dy0:dy1, dx0:dx1]
+                #cJ_view[dy0:dy1, dx0:dx1] = d_cpu
+                cJ_tensor[i, p_idx, dy0:dy1, dx0:dx1] = patch.getPatch()
+                #cps[0] += time.time()-t1
+                tps[3] += time.time()-t1
+
+
+                """
+                patch.patch_gpu = None
+                t1 = time.time()
+                J_tensor2[i, p_idx, dy0:dy1, dx0:dx1] = patch.getPatch(use_gpu=True)*iex[dy0:dy1, dx0:dx1]
+                gps[6] += time.time()-t1
+                """
+
+                """
+                #J_view[dy0:dy1, dx0:dx1] = d_gpu * ie_batch[i][dy0:dy1, dx0:dx1]
+                J_view[dy0:dy1, dx0:dx1] = d_gpu * iex[dy0:dy1, dx0:dx1]
+                #print ("JView", J_view.sum(), "IEX", iex.shape, iex[dy0:dy1, dx0:dx1].shape, iex.max(), iex[dy0:dy1, dx0:dx1].max())
+                tps[19] += time.time()-t1
+                #J_view[dy0:dy1, dx0:dx1] = d_gpu * ie_full[py0:py1, px0:px1]
+                #J_view[dy0:dy1, dx0:dx1] = d_gpu * ie_full[py0:py1, px0:px1].astype(cp.float64)
+                #print ("D GPU", d_gpu.shape, ie_full.shape)
+                """
+
+        tps[6] += time.time()-t
+        t = time.time()
+        # 4. The "Two-Dot" Solution (The Big Win)
+        # Reshape J to (N_params, N_images * Total_Pixels)
+        # This effectively flattens the image and pixel dimensions into one "measurement" space
+        t = time.time()
+        #cJ_tensor = cp.asarray(cJ_tensor)*ie_batch.reshape((num_imgs, 1, total_pixels))
+        cJ_tensor = cp.asarray(cJ_tensor)
+        cps[2] += time.time()-t
+        t = time.time()
+        cJ_tensor *= ie_batch[:, cp.newaxis, :,:]
+        cps[3] += time.time()-t
+        """
+        t = time.time()
+        J_tensor *= ie_batch[:, cp.newaxis, :,:]
+        gps[3] += time.time()-t
+        """
+        t = time.time()
+        #print ("ALLCLOSE", cp.allclose(J_tensor, cJ_tensor))
+        #J_flat = J_tensor.transpose(1, 0, 2).reshape(num_params, -1)
+        cJ_flat = cJ_tensor.transpose(1, 0, 2, 3).reshape(num_params, -1)
+        cJ_flat = cp.ascontiguousarray(cJ_flat) # Force BLAS-friendly layout
+        cps[9] += time.time()-t
+        Chi_flat = Chi_tensor.ravel()
+        #print ("J_flat", J_flat.shape, J_flat.sum(), J_flat.max())
+        #print ("Chi_flat", Chi_flat.sum(), Chi_flat.max())
+        #print ("Chi batch", chi_batch.sum(), chi_batch.max()) 
+
+        # Gradient: G = J_flat @ Chi_flat
+        # Result: (N_params,)
+        G_full = cJ_flat.dot(Chi_flat)
+
+        # Hessian: H = J_flat @ J_flat^T
+        # Result: (N_params, N_params)
+        H_full = cJ_flat.dot(cJ_flat.T)
+        tps[10] += time.time()-t
+        cps[4] += time.time()-t
+
+        """
+        t = time.time()
+        J_flat = J_tensor.transpose(1, 0, 2, 3).reshape(num_params, -1)
+        #J_flat = cp.ascontiguousarray(J_flat) # Force BLAS-friendly layout
+        Chi_flat = Chi_tensor.ravel()
+        print ("J_flat", J_flat.shape, J_flat.sum(), J_flat.max())
+        print ("Chi_flat", Chi_flat.sum(), Chi_flat.max())
+        print ("Chi batch", chi_batch.sum(), chi_batch.max())
+
+        # Gradient: G = J_flat @ Chi_flat
+        # Result: (N_params,)
+        G_full = J_flat.dot(Chi_flat)
+
+        # Hessian: H = J_flat @ J_flat^T
+        # Result: (N_params, N_params)
+        H_full = J_flat.dot(J_flat.T)
+        gps[4] += time.time()-t
+
+
+        t = time.time()
+        J_flat2 = J_tensor2.transpose(1, 0, 2, 3).reshape(num_params, -1)
+        #J_flat = cp.ascontiguousarray(J_flat) # Force BLAS-friendly layout
+        Chi_flat = Chi_tensor.ravel()
+
+        # Gradient: G = J_flat @ Chi_flat
+        # Result: (N_params,)
+        G_full = J_flat2.dot(Chi_flat)
+
+        # Hessian: H = J_flat @ J_flat^T
+        # Result: (N_params, N_params)
+        H_full = J_flat2.dot(J_flat2.T)
+        gps[7] += time.time()-t
+        """
+
+        return H_full, G_full, num_imgs
+
+
+    def compute_update(self, allderivs):
+        """
+        Calculates the total Hessian (H) and Gradient (G) for the given derivatives
+        across all images. Returns (H, G) as CuPy arrays.
+        
+        allderivs: list of lists [ (param0) [ (patch, img), ... ], (param1) [...] ]
+        """
+        t = time.time()
+        num_params = len(allderivs)
+        #print (f'{allderivs=}')
+        #print (f'GPU {num_params=}')
+        if num_params == 0:
+            return None, None, 0
+
+        # 1. Pivot: Group patches by Image to minimize GPU overhead
+        # Structure: img -> {global_param_idx: PatchObject}
+        img_map = {}
+        for p_idx, patches in enumerate(allderivs):
+            for patch, img in patches:
+                if patch is None or patch.patch is None:
+                    continue
+                if img not in img_map:
+                    img_map[img] = {}
+                img_map[img][p_idx] = patch
+
+        # 1. Determine the Global Super-Box across ALL images
+        all_x0, all_x1, all_y0, all_y1 = [], [], [], []
+        for patches in allderivs:
+            for patch, _ in patches:
+                if patch:
+                    all_x0.append(patch.extent[0])
+                    all_x1.append(patch.extent[1])
+                    all_y0.append(patch.extent[2])
+                    all_y1.append(patch.extent[3])
+
+        if len(all_x0) == 0:
+            return None, None, 0
+        ux0, ux1 = int(min(all_x0)), int(max(all_x1))
+        uy0, uy1 = int(min(all_y0)), int(max(all_y1))
+        u_height, u_width = uy1 - uy0, ux1 - ux0
+        total_pixels = u_height * u_width
+        num_imgs = len(img_map)
+        num_params = len(allderivs)
+
+        # 2. Pre-allocate Tensors on GPU
+        # J: (N_images, N_params, Total_Pixels)
+        # Chi: (N_images, Total_Pixels)
+        J_tensor = cp.zeros((num_imgs, num_params, total_pixels), dtype=cp.float64)
+        Chi_tensor = cp.zeros((num_imgs, total_pixels), dtype=cp.float64)
+        tps[11] += time.time()-t
+
+        t = time.time()
+        for i, (img, params) in enumerate(img_map.items()):
+            #print ("OG I", i, "IMG MAX", img.getImage().max())
+            #if i >= 3:
+            #    continue
+            # Fetch and crop to global bounds
+            # (Ensure getChiImage/getInvError return CuPy arrays to avoid transfers)
+            t1 = time.time()
+            chi_full = self.tractor.getChiImage(img=img, use_gpu=True)
+            ie_full = img.getInvError(use_gpu=True)
+            mod_full = cp.asarray(self.tractor.getModelImage(img=img))
+            tps[12] += time.time()-t1
+            img_h, img_w = chi_full.shape
+
+            # 2. Determine the intersection between this image and the Global Box
+            # These are indices in the IMAGE coordinate system
+            y_start = max(uy0, 0)
+            y_end   = min(uy1, img_h)
+            x_start = max(ux0, 0)
+            x_end   = min(ux1, img_w)
+
+            # 3. Determine where that intersection lands in the GLOBAL coordinate system
+            # These are indices relative to the top-left of the (u_height, u_width) tensor
+            d_y_start = y_start - uy0
+            d_y_end   = y_end   - uy0
+            d_x_start = x_start - ux0
+            d_x_end   = x_end   - ux0
+            
+            # Map global bounds to image coordinates
+            # Note: Handle images with different sizes/offsets via slicing
+            # For simplicity, assuming images contain the global box:
+            #chi_crop = chi_full[uy0:uy1, ux0:ux1].ravel()
+            #ie_crop = ie_full[uy0:uy1, ux0:ux1].ravel()
+            
+            # 4. Fill Chi_tensor (Pre-weighted by inverse error)
+            # We reshape the row to 2D for easy slicing
+            t1 = time.time()
+            chi_row_2d = Chi_tensor[i].reshape(u_height, u_width)
+            
+            # Only update the region where the image actually exists
+            # The rest of the row remains zeroed out
+            chi_row_2d[d_y_start:d_y_end, d_x_start:d_x_end] = (
+                chi_full[y_start:y_end, x_start:x_end].astype(cp.float64)
+            )
+            #print (f"OLD {i=} {y_start=} {y_end=} {x_start=} {x_end=} {d_y_start=} {d_y_end=} {d_x_start=} {d_x_end=}")
+            #print (f"IE {ie_full.max()=} {ie_full[y_start:y_end, x_start:x_end].max()=}")
+            #print ("ChiT", Chi_tensor[i].sum(), Chi_tensor[i].max(), Chi_tensor[i].shape, chi_row_2d[d_y_start:d_y_end, d_x_start:d_x_end].shape)
+
+            tps[13] += time.time()-t1
+
+            for p_idx, patch in params.items():
+                px0, px1, py0, py1 = patch.extent
+                #dx0, dx1 = px0 - ux0, px1 - ux0
+                #dy0, dy1 = py0 - uy0, py1 - uy0
+                # Patch is already relative to image coordinates, 
+                # but we need to place it relative to the Global Box
+                dx0 = px0 - ux0
+                dx1 = px1 - ux0
+                dy0 = py0 - uy0
+                dy1 = py1 - uy0
+                
+                # View into the specific image/parameter row as a 2D grid for insertion
+                J_view = J_tensor[i, p_idx].reshape((u_height, u_width))
+                
+                # Weighted derivative: (deriv * inv_error)
+                d_gpu = patch.getPatch(use_gpu=True)
+                J_view[dy0:dy1, dx0:dx1] = d_gpu * ie_full[py0:py1, px0:px1]
+                #print ("CPU IE Ps:",py0, py1, px0, px1, ie_full[py0:py1, px0:px1].max())
+                #print ("JView", J_view.sum(), "IE", ie_full[py0:py1, px0:px1].shape, ie_full[py0:py1, px0:px1].max())
+
+        tps[14] += time.time()-t
+        t = time.time()
+        # 4. The "Two-Dot" Solution (The Big Win)
+        # Reshape J to (N_params, N_images * Total_Pixels)
+        # This effectively flattens the image and pixel dimensions into one "measurement" space
+        J_flat = J_tensor.transpose(1, 0, 2).reshape(num_params, -1)
+        Chi_flat = Chi_tensor.ravel()
+        print ("J_flat", J_flat.shape, J_flat.sum(), J_flat.max())
+        print ("Chi_flat", Chi_flat.sum(), Chi_flat.max())
+
+        # Gradient: G = J_flat @ Chi_flat
+        # Result: (N_params,)
+        G_full = J_flat.dot(Chi_flat)
+
+        # Hessian: H = J_flat @ J_flat^T
+        # Result: (N_params, N_params)
+        H_full = J_flat.dot(J_flat.T)
+        tps[15] += time.time()-t
+        return H_full, G_full, num_imgs
+
+    def compute_update_old(self, allderivs):
+        """
+        Calculates the total Hessian (H) and Gradient (G) for the given derivatives
+        across all images. Returns (H, G) as CuPy arrays.
+        
+        allderivs: list of lists [ (param0) [ (patch, img), ... ], (param1) [...] ]
+        """
+        num_params = len(allderivs)
+        #print (f'{allderivs=}')
+        print (f'GPU {num_params=}')
+        if num_params == 0:
+            return None, None
+
+        # 1. Pivot: Group patches by Image to minimize GPU overhead
+        # Structure: img -> {global_param_idx: PatchObject}
+        img_map = {}
+        for p_idx, patches in enumerate(allderivs):
+            for patch, img in patches:
+                if patch is None or patch.patch is None:
+                    continue
+                if img not in img_map:
+                    img_map[img] = {}
+                img_map[img][p_idx] = patch
+
+        # 2. Initialize H and G on GPU
+        # We use float64 for the accumulation to match the precision of the CPU engine
+        H_full = cp.zeros((num_params, num_params), dtype=cp.float64)
+        G_full = cp.zeros(num_params, dtype=cp.float64)
+        #A = []
+        #B = []
+
+        xicsum = 0
+        icsum = 0
+
+        # 3. Process image by image
+        idx = 0
+        ni = 0
+        for img, params in img_map.items():
+            t = time.time()
+            H = cp.zeros((num_params, num_params), dtype=cp.float64)
+            G = cp.zeros(num_params, dtype=cp.float64)
+            R = None
+            if self.cpucomp is not None:
+                R = self.cpucomp[idx]
+                cx,cx_icov,cA,ccolscales,cB,cAo = R
+                print ("R", R)
+                idx+=1
+            #currA = [] 
+            # Calculate the "Super-Bounding Box" for all patches in this image
+            all_x0 = [p.extent[0] for p in params.values()]
+            all_x1 = [p.extent[1] for p in params.values()]
+            all_y0 = [p.extent[2] for p in params.values()]
+            all_y1 = [p.extent[3] for p in params.values()]
+
+            ux0, ux1 = min(all_x0), max(all_x1)
+            uy0, uy1 = min(all_y0), max(all_y1)
+            u_shape = (uy1 - uy0, ux1 - ux0)
+            tps[2] += time.time()-t
+            t = time.time()
+            
+            # Fetch residuals (chi) and inverse error for this image, cropped to the Super-Box
+            # chi = (data - model) * inverr
+            chi_full = self.tractor.getChiImage(img=img, use_gpu=True)
+            ie_full = img.getInvError(use_gpu=True)
+            tps[3] += time.time()-t
+            t = time.time()
+            
+            # Transfer to GPU (float32 is sufficient for individual pixel math)
+            chi_gpu = cp.array(chi_full[uy0:uy1, ux0:ux1].astype(np.float64))
+            ie_gpu = cp.array(ie_full[uy0:uy1, ux0:ux1].astype(np.float64))
+            tps[4] += time.time()-t
+            t = time.time()
+            #print ("chi", chi_gpu.shape, chi_gpu.max())
+            #cp.savetxt('gchi.txt', chi_gpu)
+            #B.append(chi_gpu.get())
+            """
+            if R is not None:
+                try:
+                    assert(np.allclose(cB, chi_gpu.get().ravel()))
+                    print (f'{self.tractor.catalog[0]=} {img=} B match')
+                except AssertionError as ex:
+                    print (f"{self.tractor.catalog[0]=} {img=} B does not match!")
+                    chi_gpu = cp.asarray(cB).rehsape(u_shape)
+            """
+
+            # Store padded Jacobians (J = deriv * inverr)
+            js_gpu = {}
+            for p_idx, patch in params.items():
+                J_full = cp.zeros(u_shape, dtype=cp.float64)
+
+                # Relative offsets within the Super-Box
+                px0, px1, py0, py1 = patch.extent
+                dx0, dx1 = px0 - ux0, px1 - ux0
+                dy0, dy1 = py0 - uy0, py1 - uy0
+
+                # Insert the derivative patch and weight by inverse error
+                d_gpu = cp.array(patch.getPatch(use_gpu=True).astype(cp.float64))
+                J_full[dy0:dy1, dx0:dx1] = d_gpu * ie_gpu[dy0:dy1, dx0:dx1]
+                """
+                if R is not None:
+                    try:
+                        assert(np.allclose(cA[:,p_idx], J_full.get().ravel()))
+                        print (f'{self.tractor.catalog[0]=} {img=} A match')
+                    except AssertionError as ex:
+                        print (f'{self.tractor.catalog[0]=} {img=} {p_idx=} A does not match')
+                        J_full = cp.asarray(cA[:,p_idx]).reshape(u_shape)
+                """
+
+                js_gpu[p_idx] = J_full
+
+                # Accumulate Gradient: G = J^T * chi
+                G[p_idx] += cp.sum((J_full * chi_gpu).astype(cp.float64))
+                #print ("J", J_full.shape, J_full.max())
+                #print ("G", G.shape, G.max())
+                #cp.savetxt('gj_'+str(p_idx)+'.txt', J_full)
+                #currA.append(J_full.get())
+            tps[5] += time.time()-t
+            t = time.time()
+
+            #A.append(currA)
+            # 4. Accumulate Hessian Cross-Terms (H = J^T * J)
+            p_indices = sorted(js_gpu.keys())
+            for i, p1 in enumerate(p_indices):
+                J1 = js_gpu[p1].astype(cp.float64)
+                for p2 in p_indices[i:]:
+                    val = cp.sum(J1 * js_gpu[p2].astype(cp.float64))
+                    H[p1, p2] += val
+                    if p1 != p2:
+                        H[p2, p1] += val
+            
+            # Clean up image-specific GPU memory
+            del js_gpu, chi_gpu, ie_gpu
+            #cp.savetxt("ggrad.txt", G)
+            #cp.savetxt("ghess.txt", H)
+            """
+            gpux = cp.linalg.lstsq(H, G)[0]
+            print (f'{idx=}')
+            print ("SHAPES", cx_icov.shape, cx.shape, G.shape, H.shape, gpux.shape)
+            print (f'{cx_icov=}')
+            print (f'{G=}')
+            print (f'{H=}')
+            print (f'{gpux=} {self.tractor.catalog[0]=} {img=}')
+            print (f'{cx=}')
+            """
+            H_full += H
+            G_full += G
+            ni += 1
+            tps[6] += time.time()-t
+            """
+            dp = np.dot(cx_icov, cx)
+            print (f'{dp=}')
+            ddp = np.dot(cx_icov.astype(np.float64), cx.astype(np.float64))
+            print (f'{ddp=}')
+
+            xicsum = xicsum + np.dot(cx_icov, cx)
+            icsum = icsum + cx_icov
+
+            print (f'{H_full=}')
+            print (f'{G_full=}')
+            print (f'{xicsum=}')
+            print (f'{icsum=}')
+            if R is not None:
+                try:
+                    assert(np.allclose(cx_icov, H.get()))
+                    print (f'{self.tractor.catalog[0]=} {img=} Hess match')
+                except AssertionError as ex:
+                    print (f'{self.tractor.catalog[0]=} {img=} Hess does not match')
+                try:
+                    assert(np.allclose(cx, gpux))
+                    print (f'{self.tractor.catalog[0]=} {img=} X match')
+                except AssertionError as ex:
+                    print (f'{self.tractor.catalog[0]=} {img=} X does not match')
+            """
+            #print (f'{gpux=} {self.tractor.catalog[0]=}')
+            #import sys
+            #sys.exit(-1)
+
+        """
+        A = np.asarray(A)
+        B = np.asarray(B)
+        A = cp.asarray(A)
+        B = cp.asarray(B)
+        print ("A", A.shape)
+        print ("B", B.shape)
+        cp.savetxt("ga.txt", A.ravel())
+        cp.savetxt("gb.txt", B.ravel())
+        Xicov = cp.matmul(A.swapaxes(-1,-2), A)
+        #print ("Xicov", Xicov)
+        # Pre-scale the columns of A
+        colscales = cp.sqrt(cp.diagonal(Xicov, axis1=1, axis2=2))
+        colscales[colscales == 0] = 1.
+        print ("COLSCALES", colscales.shape)
+        cp.savetxt("gcols.txt", colscales.ravel())
+        """
+        #print ("J", J_full.shape, "Hess", H.shape, "Grad", G.shape)
+        #cp.savetxt("gj.txt", J_full.ravel())
+        #cp.savetxt("ggrad.txt", G.ravel())
+        #cp.savetxt("ghess.txt", H.ravel())
+        #import sys
+        #sys.exit(-1)
+
+        return H_full, G_full, ni
+
+    
+    def tryUpdates_gpu_old(self, tractor, X, alphas=None, check_step=None):
+        """
+        GPU-accelerated version of the line search.
+        X: The update direction (numpy array)
+        """
+        # 1. Setup initial state
+        p0 = tractor.getParams()
+        logprob_before = tractor.getLogProb()
+        logprob_best = logprob_before
+        alpha_best = None
+        p_best = p0
+
+        # 2. Get the candidate steps (respecting bounds and max_step)
+        # This uses the CPU logic from ConstrainedOptimizer to ensure consistency
+        steps = self.optimizer.getParameterSteps(tractor, X, alphas)
+
+        if len(steps) == 0:
+            self.optimizer.last_step_hit_limit = True
+            self.optimizer.hit_limit = True
+            return 0., 0.
+
+        # 3. Line Search Loop
+        for alpha, p, step_limit, hit_limit in steps:
+            if hit_limit:
+                self.optimizer.hit_limit = True
+
+            # Update the tractor object's state (required for LogPrior and potential callbacks)
+            tractor.setParams(p)
+
+            if check_step is not None:
+                r = check_step(optimizer=self.optimizer, tractor=tractor, X=X, alpha=alpha)
+                if not r:
+                    break
+
+            # --- GPU Likelihood Calculation ---
+            total_chi2 = 0.0
+
+            # We iterate over the images, but the data stays on GPU
+            for i, img in enumerate(tractor.images):
+                # Render the source at the NEW parameters on the GPU
+                # This should return a CuPy array representing the patch
+                model_patch = self.render_source_gpu(img, tractor)
+
+                if model_patch is None:
+                    continue
+
+                # data_gpu and invvar_gpu should be pre-cached CuPy arrays
+                data = self.img_data_gpu[i]
+                invvar = self.img_invvar_gpu[i]
+
+                # Use float64 for the accumulation to prevent precision-driven divergence
+                diff = (data - model_patch)
+                chi2_img = cp.sum((diff**2) * invvar, dtype=cp.float64)
+                total_chi2 += float(chi2_img.get())
+
+            # Combine with Prior (CPU side)
+            log_prior = tractor.getLogPrior()
+            logprob = -0.5 * total_chi2 + log_prior
+
+            # --- Early Exit and Best-Track Logic ---
+            if not np.isfinite(logprob):
+                break
+
+            if logprob < (logprob_best - 1.0):
+                # Significant degradation; stop the line search
+                break
+
+            if logprob > logprob_best:
+                self.optimizer.last_step_hit_limit = hit_limit
+                alpha_best = alpha
+                logprob_best = logprob
+                p_best = p
+
+        # 4. Finalize state
+        tractor.setParams(p_best)
+
+        if alpha_best is None:
+            return 0., 0.
+
+        return logprob_best - logprob_before, alpha_best
+
+    def tryUpdates_gpu(self, X, alphas=None, check_step=None):
+        t_start = time.time()
+        (ux0, ux1, uy0, uy1) = self.current_bounds
+        if self.ie_batch is None:
+            self.ie_batch = self.tractor.getBatchInvErrors(ux0=ux0, ux1=ux1, uy0=uy0, uy1=uy1, use_gpu=True)
+
+        # 1. Prepare Alphas (inject 0.0 at the front)
+        if alphas is None:
+            alphas = np.append(0.0, np.append(2.**np.arange(-10, 1), [np.sqrt(2.), 2.]))
+        else:
+            alphas = np.unique(np.append(0.0, alphas))
+
+        # 2. Get Steps
+        #s2 = self.getParameterSteps_gpu(self.tractor, X, alphas)
+        #print (f'{s2=}')
+        steps = self.getParameterSteps(X, alphas, firstAlphaIsZero=True)
+        candidate_ps = [s['p'] for s in steps]
+        #print (f'{alphas=} {steps=} {candidate_ps=}')
+        #t1 = time.time()
+        #-#lp_global_before = self.tractor.getLogProb()
+        #tu[7] += time.time()-t1
+
+        # 3. The Big Batch Evaluation
+        # We pass the cached bounds and IE stack to avoid re-calculation
+        t1 = time.time()
+        logprobs = self.tractor.getLogProbBatch(
+            candidate_ps,
+            bounds=self.current_bounds,
+            ie_stack=self.ie_batch,
+            use_gpu=True
+        )
+        tu[8] += time.time()-t1
+
+        # logprobs[0] is our baseline (alpha=0)
+        # 3. Use the GPU's alpha=0 as the local baseline
+        #lp_before = float(logprobs[0])
+        lps_cpu = cp.asnumpy(logprobs)
+        lp_before = lps_cpu[0]
+        #print (f'{lps_cpu=}')
+        #-#lp_local_baseline = lp_global_before-lps_cpu[0] 
+        #-#lps_cpu += lp_local_baseline
+        #-#lp_before = lp_global_before
+        #-#print (f'{lp_global_before=} {lps_cpu=}')
+
+        lp_best = lp_before
+        alpha_best = 0.0
+        p_best = candidate_ps[0]
+        hit_limit_best = False
+
+        # 4. Standard Line Search logic (Identify best alpha)
+        for i, step in enumerate(steps[1:], start=1):
+            lp = lps_cpu[i]
+            
+            # Tractor exit conditions: significantly worse or non-finite
+            if lp < (lp_best - 1.0) or not np.isfinite(lp):
+                break
+                
+            if lp > lp_best:
+                lp_best = lp
+                alpha_best = step['alpha']
+                p_best = step['p']
+                hit_limit_best = step['hit_limit']
+
+        # 5. Finalize State
+        self.tractor.setParams(p_best)
+        self.last_step_hit_limit = hit_limit_best
+        #print ("Pbest", p_best)
+        #print ("LOGPROB", lp_best, lp_before)
+        #print ("ALPHA", alpha_best, hit_limit_best, self.last_step_hit_limit)
+        
+        return lp_best - lp_before, alpha_best
+
+
+    def getParameterSteps(self, X, alphas=None, firstAlphaIsZero=False):
+        t = time.time()
+        if alphas is None:
+            alphas = np.append(2.**np.arange(-10, 1), [np.sqrt(2.), 2.])
+
+        p0 = self.tractor.getParams()
+        max_step_size = self.tractor.getMaxStep()
+        lowers = self.tractor.getLowerBounds()
+        uppers = self.tractor.getUpperBounds()
+        #print (f'{p0=} {max_step_size=} {lowers=} {uppers=}')
+
+        X_np = cp.asnumpy(X) # Ensure we work on CPU for the logic
+        results = []
+
+        for i, alpha in enumerate(alphas):
+            do_break = False
+            step_limit = False
+            hit_limit = False
+
+            # Apply max_step_size
+            for i, mx in enumerate(max_step_size):
+                if mx is None or abs(X_np[j]) == 0: continue
+                step = alpha * abs(X_np[j])
+                if step > mx:
+                    step_limit = True
+                    do_break = True
+                    alpha = mx / abs(X_np[j])
+
+            # Apply bounds and compute p
+            p = []
+            for p_start, s, l, u in zip(p0, X_np, lowers, uppers):
+                px = p_start + alpha * s
+                if l is not None and px < l:
+                    px = l
+                    hit_limit = True
+                if u is not None and px > u:
+                    px = u
+                    hit_limit = True
+                p.append(px)
+
+            if alpha < self.tiny_alpha and alpha != 0:
+                #if i > 0 or not firstAlphaIsZero or alpha != 0:
+                break
+
+            results.append({
+                'alpha': alpha,
+                'p': np.array(p),
+                'step_limit': step_limit,
+                'hit_limit': hit_limit
+            })
+
+            if do_break:
+                break
+        #print (f'{results=}')
+        tu[9] += time.time()-t
+        return results
+
+    def getParameterSteps_gpu(self, tractor, step_direction, alphas=None):
+        if alphas is None:
+            # Default alphas: 1/1024 to 1, then sqrt(2) and 2
+            alphas = np.append(2.**np.arange(-10, 1), [np.sqrt(2.), 2.])
+
+        p0 = np.array(tractor.getParams())
+        lowers = np.array([x if x is not None else -np.inf for x in tractor.getLowerBounds()])
+        uppers = np.array([x if x is not None else  np.inf for x in tractor.getUpperBounds()])
+        max_steps = np.array([x if x is not None else np.inf for x in tractor.getMaxStep()])
+
+        step_direction = np.array(step_direction)
+        results = []
+
+        for alpha in alphas:
+            # 1. Check Max Step Size
+            # If alpha * |dir| > max_step, we cap alpha and then BREAK
+            step_magnitudes = alpha * np.abs(step_direction)
+            over_step = step_magnitudes > max_steps
+
+            do_break = False
+            step_limit = False
+            if np.any(over_step):
+                # Find the parameter that forces the smallest alpha
+                alpha = np.min(max_steps[over_step] / np.abs(step_direction[over_step]))
+                step_limit = True
+                do_break = True
+                self.stepLimited = True
+
+            # 2. Check Bounds
+            # px = p0 + alpha * s
+            px_trial = p0 + alpha * step_direction
+            hit_limit = False
+
+            # Check lower bounds
+            too_low = (lowers != -np.inf) & (px_trial < lowers)
+            if np.any(too_low):
+                alpha = np.min((lowers[too_low] - p0[too_low]) / step_direction[too_low])
+                hit_limit = True
+
+            # Check upper bounds
+            too_high = (uppers != np.inf) & (px_trial > uppers)
+            if np.any(too_high):
+                alpha = np.min((uppers[too_high] - p0[too_high]) / step_direction[too_high])
+                hit_limit = True
+
+            if alpha < self.tiny_alpha:
+                break
+
+            # Final param calculation (clamped for safety)
+            p_final = np.clip(p0 + alpha * step_direction, lowers, uppers)
+            results.append((alpha, p_final.tolist(), step_limit, hit_limit))
+
+            if do_break:
+                break
+
+        return results
 
 '''
 A mixin class for LsqrOptimizer that does the linear update direction step
@@ -36,9 +1053,53 @@ class FactoredOptimizer(object):
         self.ps = None
         super().__init__(*args, **kwargs)
 
-    def getSingleImageUpdateDirection(self, tr, max_size=0, **kwargs):
+    def gsud_comp(self, tr, **kwargs):
+        from tractor import Images
+        img_opts = []
+        imgs = tr.images
+        mm = tr.modelMasks
+
+        #Remove 'priors' from kwargs
+        orig_priors = kwargs.pop('priors', True)
+        max_size = 0
+        for i,img in enumerate(imgs):
+            tr.images = Images(img)
+            if mm is not None:
+                tr.modelMasks = [mm[i]]
+            #Run with PRIORS = FALSE
+            r = self.gsud1(tr, priors=False, max_size=max_size, **kwargs)
+            if r is None:
+                continue
+            x,x_icov,A,colscales,B,Ao = r
+            max_size = max(max_size, len(x))
+            #print('FO: X', x, 'x_icov', x_icov)
+            img_opts.append(r)
+        tr.images = imgs
+        tr.modelMasks = mm
+        return img_opts
+
+    def gsud1(self, tr, max_size=0, **kwargs):
+        t = time.time()
         allderivs = tr.getDerivs()
+        tt[7] += time.time()-t
+        print ("GSUD ALLDERIVS", len(allderivs), tt[7])
         r = self.getUpdateDirection(tr, allderivs, get_A_matrix=True, max_size=max_size, **kwargs)
+        if r is None:
+            return None
+        x,A,colscales,B,Ao = r
+        icov = np.matmul(A.T, A)
+        return x, icov, A, colscales, B, Ao
+
+
+    def getSingleImageUpdateDirection(self, tr, max_size=0, **kwargs):
+        t = time.time()
+        allderivs = tr.getDerivs()
+        tt[7] += time.time()-t
+        tps[0] += time.time()-t
+        t = time.time()
+        #print ("GSUD ALLDERIVS", len(allderivs), tt[7])
+        r = self.getUpdateDirection(tr, allderivs, get_A_matrix=True, max_size=max_size, **kwargs)
+        tps[1] += time.time()-t
         if r is None:
             return None
         x,A,colscales,B,Ao = r
@@ -83,7 +1144,9 @@ class FactoredOptimizer(object):
                     plt.title('dflux')
             self.ps.savefig()
 
+        t = time.time()
         icov = np.matmul(A.T, A)
+        tps[2] += time.time()-t
         del A
         return x, icov
 
@@ -118,6 +1181,11 @@ class FactoredOptimizer(object):
         # If image parameters are being fit, use the base code (eg in lsqr_optimizer.py)
         # to fit those, and prepend them to the results below.
         t = time.time()
+        tct[1] += 1
+        #tr.images = tr.images[:5]
+        #if tct[1] > 2:
+        #    import sys
+        #    sys.exit(0)
         x_imgs = None
         image_thawed = tr.isParamThawed('images')
         if image_thawed:
@@ -140,8 +1208,10 @@ class FactoredOptimizer(object):
             return None
         #Store original value of priors
         orig_priors = kwargs['priors']
+        print (f'{orig_priors=}')
         img_opts = self.getSingleImageUpdateDirections(tr, **kwargs)
         tt[5] += time.time()-t
+        t = time.time()
         if len(img_opts) == 0:
             if x_imgs is not None:
                 return x_imgs
@@ -149,9 +1219,13 @@ class FactoredOptimizer(object):
         # ~ inverse-covariance-weighted sum of img_opts...
         xicsum = 0
         icsum = 0
-        for x,ic in img_opts:
-            xicsum = xicsum + np.dot(ic, x)
-            icsum = icsum + ic
+        if len(img_opts) == 1 and len(img_opts[0]) == 3:
+            xicsum, icsum, _ = img_opts[0]
+        else:
+            for x,ic in img_opts:
+                #print(f'{x=} {ic=} {tr.catalog[0]=}')
+                xicsum = xicsum + np.dot(ic, x)
+                icsum = icsum + ic
         #C = np.linalg.inv(icsum)
         #x = np.dot(C, xicsum)
         #print (f'{icsum=} {xicsum=}')
@@ -171,8 +1245,17 @@ class FactoredOptimizer(object):
             else:
                 print (f"WARNING: Prior shape mismatch {icsum.shape=} {xicsum.shape=} {priors_ATA.shape=} {priors_ATB.shape=}; using CPU mode instead.")
                 return super().getLinearUpdateDirection(tr, **kwargs)
-        x,_,_,_ = np.linalg.lstsq(icsum, xicsum, rcond=None)
+        try:
+            x,_,_,_ = np.linalg.lstsq(icsum, xicsum, rcond=None)
+        except Exception as ex:
+            print ("WARNING: lstsq failed "+str(ex)+"; using CPU version")
+            return super().getLinearUpdateDirection(tr, **kwargs)
+        tt[6] += time.time()-t
         #print (f'{tt=}')
+        #print (f'{tps=}')
+        #print ("Final X: ",x, "Source", tr.catalog[0])
+        #import sys
+        #sys.exit(-1)
         if x_imgs is not None:
             x = np.append(x_imgs, x)
         #print (f'{icsum=} {xicsum=}')
@@ -204,12 +1287,36 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
     def printTiming(self):
         print ("Times:",tt,tct)
+        print ("PSTimes: ", tps)
+        print ("CPSTimes ", cps)
+        print ("GPSTimes:", gps)
+        print ("TU Times:", tu, tuc)
+
+    def printMemory(self, tag=""):
+        import cupy as cp
+        import datetime
+        free_mem, total_mem = cp.cuda.runtime.memGetInfo()
+        mempool = cp.get_default_memory_pool()
+        used_bytes = mempool.used_bytes()
+        tot_bytes = mempool.total_bytes()
+        print (f'{tag=} {free_mem=} {total_mem=}; This mempool {used_bytes=} {tot_bytes=} at ',datetime.datetime.now())
+        if free_mem/1.e+9 < 20:
+            import gc
+            print ("Freeing memory")
+            gc.collect()
+            print (f'{tag=} {free_mem=} {total_mem=}; This mempool {used_bytes=} {tot_bytes=} at ',datetime.datetime.now())
+            print ("GPU free all blocks")
+            mpool = cp.get_default_memory_pool()
+            mpool.free_all_blocks()
+            print (f'{tag=} {free_mem=} {total_mem=}; This mempool {used_bytes=} {tot_bytes=} at ',datetime.datetime.now())
+        sys.stdout.flush()
 
     def getSingleImageUpdateDirections(self, tr, **kwargs):
         #import traceback
         #traceback.print_stack()
         print ("GPU getSingleImageUpdateDirections")
-        #print ("profile galaxy", isinstance(tr.catalog[0], ProfileGalaxy))
+        print ("profile galaxy", isinstance(tr.catalog[0], ProfileGalaxy))
+        print ("len", len(tr.catalog), "Nimages", len(tr.images))
         R_gpu = None
         R_cpu = None
         R_gpuv = None
@@ -219,6 +1326,123 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             if self._gpumode >= 10:
                 print ("Skipping non-profile galaxy")
                 return []
+            if self._gpumode == 2 and isinstance(tr.catalog[0], PointSource):
+                tct[5] += 1
+                #print ("TCT5 PSCOUNT", tct[5])
+                #im = tr.images
+                #mm = tr.modelMasks
+                #tr.images = tr.images[:1]
+                #tr.modelMasks = tr.modelMasks[:1]
+                t = time.time()
+                # Initialize the GPU Fitter
+                print ("Running new GPU point source fitter...")
+                # Initialize and CACHE the fitter on self
+                self.current_fitter = GPUFriendlyPointSourceFitter(tr, tr.catalog[0], tr.images)
+                #R_cpu = super().gsud_comp(tr, **kwargs)
+                #self.current_fitter.add_comp(R_cpu)
+                tx1 = time.time()
+                allderivs = tr.getDerivs()
+                tt[7] += time.time()-tx1
+                #print ("GPUPS ALLDERIVS", len(allderivs), tt[7])
+                tps[0] += time.time()-t
+
+                # Get the update
+                # Solve A^T A x = A^T b
+                """
+                tx1 = time.time()
+                ohess, ograd, ni = self.current_fitter.compute_update(allderivs)
+                #ohess, ograd, ni = self.current_fitter.compute_update_old(allderivs) # Updated to use internal G
+                t5[0] += time.time()-tx1
+                ox,_,_,_ = np.linalg.lstsq(ohess.get(), ograd.get(), rcond=None)
+                print (f'OLD {ohess=} {ograd=} {ni=} {ox=}')
+                #self.current_fitter.get_batch_psf()
+                hess, grad, x = ohess, ograd, ox
+                """
+
+                tx1 = time.time()
+                hess, grad, ni = self.current_fitter.compute_update_vec(allderivs) # Updated to use internal G
+                t5[1] += time.time()-tx1
+                #x,_,_,_ = np.linalg.lstsq(hess.get(), grad.get(), rcond=None)
+
+                #print (f'NEW {hess=} {grad=} {ni=} {x=}')
+                #print (f'{t5=}')
+                if ni == 0 or np.all(grad == 0):
+                    print ("EMPTY SET")
+                    return []
+                """
+                if np.allclose(ohess, hess, atol=1.e-5) and np.allclose(ograd, grad, atol=1.e-4):
+                    print ("MATCH")
+                else:
+                    if np.allclose(ox, x, atol=1.e-5):
+                        print ("MATCHX")
+                    print ("NO MATCH")
+                """
+
+                #step = cp.linalg.solve(hess, grad)
+                # Replace step = cp.linalg.solve(hess, grad)
+                """
+                res = cp.linalg.lstsq(hess, grad, rcond=1e-7)
+                print (f'{res=}')
+                step = res[0]
+                """
+
+                #if len(R_cpu) == 0:
+                if ni == 0 or np.all(grad == 0):
+                    print ("EMPTY SET")
+                    return []
+
+                """
+                gopt = [(step.get(), hess.get())]
+                gxicsum = 0
+                gicsum = 0
+                for gx, gic in gopt:
+                    print(f'{gx=} {gic=} {tr.catalog[0]=}')
+                    gxicsum = gxicsum + np.dot(gic, gx)
+                    gicsum = gicsum + gic
+                gxicsum = grad.get()
+                gxf,_,_,_ = np.linalg.lstsq(gicsum, gxicsum, rcond=None)
+                print ("gpu X_full: ",gxf)
+
+
+                xicsum = 0
+                icsum = 0
+                for cx,cic,_,_,_,_ in R_cpu:
+                    xicsum = xicsum + np.dot(cic, cx)
+                    icsum = icsum + cic
+                    print(f'{cx=} {cic=} {xicsum=} {icsum=} {tr.catalog[0]=}')
+                print (f'{icsum=} {xicsum=}')
+                cxf,_,_,_ = np.linalg.lstsq(icsum, xicsum, rcond=None)
+                print ("cpu X full: ", cxf)
+
+                if R_cpu is not None:
+                    try:
+                        assert(np.allclose(gicsum, icsum))
+                        print (f'{tr.catalog[0]=} icsum full match')
+                    except AssertionError as ex:
+                        print (f'{tr.catalog[0]=} icsum full does not match {gicsum=} {icsum=} {hess=}')
+                    try:
+                        assert(np.allclose(gxicsum, xicsum))
+                        print (f'{tr.catalog[0]=} xicsum full match')
+                    except AssertionError as ex:
+                        print (f'{tr.catalog[0]=} xicsum full does not match {gxicsum=} {xicsum=} {grad=} {step=}')
+                    try:
+                        assert(np.allclose(cxf, gxf))
+                        print (f'{tr.catalog[0]=} X full match')
+                    except AssertionError as ex:
+                        print (f'{tr.catalog[0]=} X full does not match {gxf=} {cxf=}')
+
+                """
+                tt[0] += time.time()-t
+                #tr.images = im
+                #tr.modelMasks = mm
+
+                #return [(step.get(), hess.get())]
+                return [(grad.get(), hess.get(), 1)]
+            elif isinstance(tr.catalog[0], PointSource):
+                tct[6] += 1
+            else:
+                tct[4] += 1
+
             print ("Running CPU version, frozen = ", tr.isParamFrozen('images'), "len = ", len(tr.catalog), " profile = ", isinstance(tr.catalog[0], ProfileGalaxy))
             #p = self.ps
             #self.ps = None
@@ -273,22 +1497,34 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 if self._gpumode == 1 or self._gpumode == 11:
                     return R_gpu
 
-        if self._gpumode == 2 or self._gpumode == 3 or self._gpumode == 12 or self._gpumode == 13:
+        if self._gpumode == 2 or self._gpumode == 3 or self._gpumode == 12 or self._gpumode == 13 or self._gpumode == 4:
+            import cupy as cp
+            import datetime
+            #Get free memory
             mempool = cp.get_default_memory_pool()
             mempool.free_all_blocks()
             free_mem, total_mem = cp.cuda.runtime.memGetInfo()
+            #Estimate memory needed with new helper method based on padded image sizes and nd
             nimages = len(tr.images)
             imsize = tr.images[0].data.size
             nd = tr.numberOfParams()+2
-            kmax = 4 #Use kmax 4 because many algorithms are now able to chunk memory
-            #Double size of 16 bit (complex 128) array x nimage x
-            #n derivs x kmax x imsize.  5D array in batch_mixture_profiles.py
-            #Dustin less_mem version
-            est_mem = nimages*imsize*nd*kmax*8 / 1.e+9
+            src = tr.catalog[0]
+            masks = [tr._getModelMaskFor(tim, src) for tim in tr.images]
+            if any(m is None for m in masks):
+                print (f"WARNING: One or more modelMasks is None; running CPU version.")
+                xout = super().getSingleImageUpdateDirections(tr, **kwargs)
+                return xout
+
+            assert(all([m is not None for m in masks]))
+            # Pixel positions
+            pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
+                   for tim in tr.images]
+            #New helper method predicts memory needed
+            est_mem = self.predict_fft_memory(tr, masks, pxy, nd)
             free_mem /= 1.e+9
             # 3.2 factor: NGC 3585 example
-            print (f'Estimated memory {est_mem} GB free memory {free_mem}')
-            
+            print (f'Estimated memory {est_mem} GB free memory {free_mem} for {nimages=} {imsize=} {nd=} at ', datetime.datetime.now(), "src = ", tr.catalog[0])
+
             if free_mem < est_mem:
                 try:
                     import datetime
@@ -296,6 +1532,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                     #print("Warning: Estimated memory %.1f GB is greater than free memory %.1f GB; Running less-memory GPU mode instead!" % (est_mem / 1e9, free_mem / 1e9))
                     t = time.time()
                     R_gpu = self.gpuSingleImageUpdateDirectionsVectorized_less_mem(tr, **kwargs)
+                    mempool = cp.get_default_memory_pool()
+                    mempool.free_all_blocks()
                     tt[4] += time.time()-t
                     return R_gpu
                 except Exception as e:
@@ -304,22 +1542,10 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                     traceback.print_exc()
                     mempool = cp.get_default_memory_pool()
                     mempool.free_all_blocks()
-                    
+
                 print('Running CPU version instead')
                 R_cpu = super().getSingleImageUpdateDirections(tr, **kwargs)
                 return R_cpu
-
-            #est_mem = nimages*imsize*nd*kmax*16
-            #import datetime
-            #print (f"Running VECTORIZED GPU code...", datetime.datetime.now(), "src = ", tr.catalog[0], f'Estimated mem {est_mem=} {free_mem=}')
-
-            #if free_mem < est_mem:
-            #    print (f"Warning: Estimated memory {est_mem} is greater than free memory {free_mem}; Running CPU mode instead!")
-            #    print (f"\t{nimages=} {imsize=} {nd=}")
-            #    R_gpuv = super().getSingleImageUpdateDirections(tr, **kwargs)
-            #    return R_gpuv
-            #else:
-                #print (f"Estimated memory {est_mem} is less than free memory {free_mem}")
 
             try:
                 #import datetime
@@ -331,45 +1557,49 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 #print ("Finished VECTORIZED code")
                 tt[2] += time.time()-t
                 tct[2] += 1
-                print ("GPU Vectorized time:", time.time()-t)
-                if self._gpumode == 2 or self._gpumode == 12:
+                #print ("GPU Vectorized time:", time.time()-t)
+                if self._gpumode == 2 or self._gpumode == 12 or self._gpumode == 4:
                     return R_gpuv
-            except AssertionError:
-                import traceback
-                print ("AssertionError in VECTORIZED GPU code:")
-                traceback.print_exc()
-                print ("Running CPU version instead...")
-                t = time.time()
-                R_gpuv = super().getSingleImageUpdateDirections(tr, **kwargs)
-                if self._gpumode == 2 or self._gpumode == 12:
-                    return R_gpuv
-            except cp.cuda.memory.OutOfMemoryError:
-                import traceback
-                free_mem, total_mem = cp.cuda.runtime.memGetInfo()
-                mempool = cp.get_default_memory_pool()
-                used_bytes = mempool.used_bytes()
-                tot_bytes = mempool.total_bytes()
-                print (f"Out of Memory for source "+str(tr.catalog[0]))
-                traceback.print_exc()
-                print (f'OOM Device {free_mem=} {total_mem=}; This mempool {used_bytes=} {tot_bytes=}')
-                print ("Running CPU version instead...")
-                mempool.free_all_blocks()
-                t = time.time()
-                R_gpuv = super().getSingleImageUpdateDirections(tr, **kwargs)
-                if self._gpumode == 2 or self._gpumode == 12:
-                    return R_gpuv
-            except Exception as ex:
-                import traceback
-                print('Exception in GPU Vectorized code: ', ex)
-                traceback.print_exc()
+            except Exception as e:
+                #New consolidated except
+                import cupy as cp
+                # 1. Capture the error string
+                err_msg = str(e).lower()
+                is_oom = "outofmemory" in err_msg or "out of memory" in err_msg
 
-                src = tr.catalog[0]
-                print('Source:', src)
-                print(repr(src))
-                print ("Running CPU version instead...")
+                # 2. Print immediately to stderr (bypasses buffering)
+                import sys
+                sys.stderr.write(f"\nCaught Exception in GPU code: {type(e).__name__}\n")
+                if is_oom:
+                    free_mem, total_mem = cp.cuda.runtime.memGetInfo()
+                    mempool = cp.get_default_memory_pool()
+                    used_bytes = mempool.used_bytes()
+                    tot_bytes = mempool.total_bytes()
+                    sys.stderr.write(f"Confirmed OOM for source: {tr.catalog[0]}\n")
+                    print (f'OOM Device {free_mem=} {total_mem=}; This mempool {used_bytes=} {tot_bytes=}')
+
+                sys.stderr.write(f"\n----Traceback below----\n")
+                import traceback
+                traceback.print_exc()
+                sys.stderr.flush()
+
+                # 3. Emergency Memory Release
+                try:
+                    import cupy as cp
+                    # Force drop image caches if they exist
+                    for tim in tr.images:
+                        if hasattr(tim, 'data_gpu'): tim.data_gpu = None
+                        if hasattr(tim, 'inverr_gpu'): tim.inverr_gpu = None
+                    cp.get_default_memory_pool().free_all_blocks()
+                except:
+                    pass
+
+                # 4. Final Fallback
+                print("Running CPU version instead... for source: "+str(tr.catalog[0]))
+                sys.stdout.flush()
                 t = time.time()
                 R_gpuv = super().getSingleImageUpdateDirections(tr, **kwargs)
-                if self._gpumode == 2 or self._gpumode == 12:
+                if self._gpumode == 2 or self._gpumode == 12 or self._gpumode == 4:
                     return R_gpuv
 
         if self._gpumode == 0 or self._gpumode == 3 or self._gpumode == 10 or self._gpumode == 13:
@@ -378,10 +1608,14 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 if not (tr.isParamFrozen('images') and (len(tr.catalog) == 1) and isinstance(tr.catalog[0], ProfileGalaxy)):
                     print ("Running CPU version, frozen = ", tr.isParamFrozen('images'), "len = ", len(tr.catalog), " profile = ", isinstance(tr.catalog[0], ProfileGalaxy))
                     tct[0] += 1
+                    #print ("TCT0", tct[0])
+                #else:
+                #    return []
                 t = time.time()
                 R_cpu = super().getSingleImageUpdateDirections(tr, **kwargs)
                 tt[3] += time.time()-t
                 tct[3] += 1
+                #print ("TCT3", tct[3])
                 #print ("CPU time", time.time()-t)
                 if self._gpumode == 0 or self._gpumode == 10:
                     return R_cpu
@@ -1182,8 +2416,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #print ("FSUM", Fsum.shape, "P", P.shape, P.max())
         #cp.savetxt('gfsum.txt', Fsum.ravel())
         #cp.savetxt('gp.txt', P.ravel())
-        G = cp.fft.irfft2(Fsum*P).astype(cp.float32)
-        del Fsum, P
+        # Multiply P into Fsum in-place to save one massive array allocation
+        Fsum *= P
+        del P # Free P immediately
+        G = cp.fft.irfft2(Fsum).astype(cp.float32)
+        del Fsum
         #Do Lanczos shift
         G = lanczos_shift_image_batch_gpu(G, img_params.mux, img_params.muy)
         #cp.savetxt('gg.txt', G.ravel())
@@ -2010,6 +3247,43 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             cp.get_default_memory_pool().free_all_blocks()
         return G
 
+    def predict_fft_memory(self, tr, masks, pxy, max_nd):
+        # 1. Replicate the gpu_halfsize logic
+        # (Simplified version of your _getBatchImageParams logic)
+        px, py = np.array(pxy).T
+        extents = [mm.extent for mm in masks]
+        x0, x1, y0, y1 = np.asarray(extents).T
+        x0 = x0.astype(np.int32) 
+        x1 = x1.astype(np.int32) 
+        y0 = y0.astype(np.int32) 
+        y1 = y1.astype(np.int32)
+
+        # This is the "radius" that determines pH/pW
+        gpu_halfsize = np.max(([(x1-x0)/2, (y1-y0)/2,
+                                1+px-x0, 1+x1-px, 1+py-y0, 1+y1-py]), axis=0)
+
+        # 2. Calculate the Power-of-Two padding
+        radius_max = gpu_halfsize.max()
+        sz = 2**int(np.ceil(np.log2(radius_max * 2.)))
+
+        pH, pW = sz, sz
+        n_images = len(tr.images)
+
+        # 3. Calculate Actual Bytes
+        # Complex64 = 8 bytes, Float32 = 4 bytes
+        # Assume 8 arrays of complex64
+        # Assume 3 x arrays needed
+        est_mem = n_images * max_nd * pH * pW * 8. * 3 / (1024.**3)
+        print (f'{est_mem=} {n_images=} {max_nd=} {pH=} {pW=}')
+        #fsum_bytes = n_images * max_nd * pH * (pW // 2 + 1) * 8
+        #p_bytes = n_images * 1 * pH * (pW // 2 + 1) * 8
+        #g_bytes = n_images * max_nd * pH * pW * 4
+
+        # Total predicted for the FFT block (including a safety factor for IRFFT workspace)
+        #total_predicted_gb = (fsum_bytes + p_bytes + g_bytes * 2) / (1024**3)
+        #return total_predicted_gb, pH, pW
+        return est_mem
+
     def computeGalaxyModelsVectorized(self, img_params):
         # Note, this does *not* scale by *counts*, it produces unit-flux models
         t1 = time.time()
@@ -2028,8 +3302,12 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #P shape (Nimages, nw, nv)
         P = img_params.P[:,cp.newaxis,:,:]
         #print ("FSUM", Fsum.shape, "P", P.shape)
-        G = cp.fft.irfft2(Fsum*P).astype(cp.float32)
-        del Fsum, P
+        # Multiply P into Fsum in-place to save one massive array allocation
+        Fsum *= P
+        del P # Free P immediately
+        # Perform IRFFT on the modified Fsum
+        G = cp.fft.irfft2(Fsum).astype(cp.float32)
+        del Fsum
         #Do Lanczos shift
         G = lanczos_shift_image_batch_gpu(G, img_params.mux, img_params.muy)
         #cp.savetxt('vgg.txt', G.ravel())
@@ -2189,37 +3467,140 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         alphaBest : float
             The optimal alpha (step size) found.
         """
-        if self._gpumode == 0:
-            return super().tryUpdates(tractor, X, alphas=alphas)
 
+        # 1. Fallback if GPU is disabled
+        if self._gpumode == 0 or self._gpumode == 4:
+            return super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
+        #return super().tryUpdates(tractor, X, alphas=alphas)
+        #lp1 = super().tryUpdates(tractor, X, alphas=alphas)
+        #print (f'{lp1=}')
         t = time.time()
-        #mempool = cp.get_default_memory_pool()
-        #used_bytes = mempool.used_bytes()
-        #tot_bytes = mempool.total_bytes()
-        #print (f'{used_bytes=} {tot_bytes=}')
-        #mempool.free_all_blocks()
-        #used_bytes = mempool.used_bytes()
-        #tot_bytes = mempool.total_bytes()
-        #print (f'After free {used_bytes=} {tot_bytes=}')
-        #return super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
         print ("GPU FACTORED TRY UPDATES")
+        print ("X", X.shape)
 
-        # Dustin's FIXME improvement ideas
-        # - pass in / cache initial logprob / model?
-        # - pass in / cache BatchPixelizedPSF ??
+        # 2. Check if we can use the PointSource GPU path
+        is_ptsrc = (len(tractor.catalog) == 1 and 
+                    isinstance(tractor.catalog[0], PointSource))
+        
+        # 3. Check if we can use the Galaxy GPU path
+        is_galaxy = (len(tractor.catalog) == 1 and 
+                     isinstance(tractor.catalog[0], ProfileGalaxy))
+
+        if tractor.isParamFrozen('images'):
+            if is_ptsrc:
+                # Use the new GPU Point Source Engine
+                # Check if we have a cached fitter for this source
+                if hasattr(self, 'current_fitter'):
+                    # Pass the work to the engine
+                    print ("Using new GPU PointSource Engine")
+
+                    tuc[0] += 1
+                    p0 = tractor.getParams()
+                    #t = time.time()
+                    #s_d, s_a = super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
+                    #tu[1] += time.time()-t
+                    #tractor.setParams(p0)
+
+
+                    """
+                    #Estimate memory needed with new helper method based on padded image sizes and nd
+                    import cupy as cp
+                    import datetime
+                    # pixel position of the source in each image
+                    xy = [tim.getWcs().positionToPixel(src.pos) for tim in tractor.images]
+                    # pixel region to render
+                    masks = [tractor._getModelMaskFor(tim, src) for tim in tractor.images]
+
+                    #Get free memory
+                    mempool = cp.get_default_memory_pool()
+                    mempool.free_all_blocks()
+                    free_mem, total_mem = cp.cuda.runtime.memGetInfo()
+                    nd = tractor.numberOfParams()+2
+                    assert(all([m is not None for m in masks]))
+                    #New helper method predicts memory needed
+                    est_mem = self.predict_fft_memory(tractor, masks, xy, nd)
+                    free_mem /= 1.e+9
+                    print (f'TryUpdates PS: Estimated memory {est_mem} GB free memory {free_mem} for {Nimages=} {nd=} at ', datetime.datetime.now(), "src = ", tractor.catalog[0])
+                    use_less_mem = False
+                    if free_mem < est_mem:
+                        print(f"Warning: TryUpdates PS Estimated memory {est_mem} GB is greater than free memory {free_mem} GB; Running less-mem GPU mode instead!", datetime.datetime.now(), "src = ", tractor.catalog[0])
+                        #s_d, s_a = super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
+                        #tu[5] += time.time()-t
+                        #return s_d, s_a
+                        use_less_mem = True
+                    """
+
+                    t = time.time()
+                    try:
+                        best_dlnp, best_alpha = self.current_fitter.tryUpdates_gpu(X, alphas, check_step=check_step)
+                        tu[0] += time.time()-t
+                    except Exception as ex:
+                        print ("Exception in TRY UPDATES GPU - running CPU version instead: "+str(ex))
+                        tu[0] += time.time()-t
+                        t = time.time()
+                        tractor.setParams(p0)
+                        s_d, s_a = super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
+                        tu[1] += time.time()-t
+                        return s_d, s_a
+                    #import sys
+                    #sys.exit(0)
+                    # Clean up after the line search is done
+                    del self.current_fitter 
+                    #print (f'TU PS COMP {best_dlnp=} {s_d=} {best_alpha=} {s_a=}')
+                    #if s_a != best_alpha:
+                    #    print ("PS MISMATCH")
+                    #print (f'TU PS GPU {best_dlnp=} {best_alpha=}')
+                    #print (f'TU PS CPU {s_d=} {s_a=}')
+                    return best_dlnp, best_alpha
+                    #return s_d, s_a
+                t = time.time()
+                s_d, s_a = super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
+                #return super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step) 
+                tu[2] += time.time()-t
+                return s_d, s_a
+            
+        if not (is_galaxy and tractor.isParamFrozen('images')):
+            # 4. Fallback for everything else
+            print('Calling superclass tryUpdates')
+            t = time.time()
+            a = super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
+            tuc[1] += 1
+            tu[3] += time.time()-t
+            return a
+            #return super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
 
         if not ((len(tractor.catalog) == 1) and
                 isinstance(tractor.catalog[0], ProfileGalaxy) and
                 tractor.isParamFrozen('images')):
             print('Calling superclass tryUpdates')
-            return super().tryUpdates(tractor, X, alphas=alphas)
+            t = time.time()
+            #return super().tryUpdates(tractor, X, alphas=alphas)
+            s_d, s_a = super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
+            tuc[2] += 1
+            tu[4] += time.time()-t
+            return s_d, s_a
+ 
 
-        print('number of images:', len(tractor.images))
+        # Dustin's FIXME improvement ideas
+        # - pass in / cache initial logprob / model?
+        # - pass in / cache BatchPixelizedPSF ??
+
+        #t = time.time()
+        #return super().tryUpdates(tractor, X, alphas=alphas)
+        tuc[3] += 1
+        #p0 = tractor.getParams()
+        #s_d, s_a = super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
+        #tu[5] += time.time()-t
+        #return s_d, s_a
+        #tractor.setParams(p0)
+        t = time.time()
+
+        #print('number of images:', len(tractor.images))
         Nimages = len(tractor.images)
         src = tractor.catalog[0]
         steps = self.getParameterSteps(tractor, X, alphas)
-        print('number of steps (alphas) to try:', len(steps))
-        print ("Alphas", alphas)
+        #print('number of steps (alphas) to try:', len(steps))
+        #print ("Alphas", alphas, "STEPS", steps)
         if len(steps) == 0:
             self.last_step_hit_limit = True
             self.hit_limit = True
@@ -2237,6 +3618,33 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         px, py = np.array(xy).T
         # pixel region to render
         masks = [tractor._getModelMaskFor(tim, src) for tim in tractor.images]
+        if any(m is None for m in masks):
+            print (f"TryUpdates WARNING: One or more modelMasks is None; running CPU version.")
+            s_d, s_a = super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
+            tu[5] += time.time()-t
+            return s_d, s_a
+
+        #Estimate memory needed with new helper method based on padded image sizes and nd
+        import cupy as cp
+        import datetime
+        #Get free memory
+        mempool = cp.get_default_memory_pool()
+        mempool.free_all_blocks()
+        free_mem, total_mem = cp.cuda.runtime.memGetInfo()
+        nd = tractor.numberOfParams()+2
+        assert(all([m is not None for m in masks]))
+        #New helper method predicts memory needed
+        est_mem = self.predict_fft_memory(tractor, masks, xy, nd)
+        free_mem /= 1.e+9
+        print (f'TryUpdates: Estimated memory {est_mem} GB free memory {free_mem} for {Nimages=} {nd=} at ', datetime.datetime.now(), "src = ", tractor.catalog[0])
+        use_less_mem = False
+        if free_mem < est_mem:
+            print(f"Warning: TryUpdates Estimated memory {est_mem} GB is greater than free memory {free_mem} GB; Running less-mem GPU mode instead!", datetime.datetime.now(), "src = ", tractor.catalog[0])
+            #s_d, s_a = super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
+            #tu[5] += time.time()-t
+            #return s_d, s_a
+            use_less_mem = True
+
         img_sky = [tim.getSky().getConstant() for tim in tractor.images]
         img_pix = [tim.getImage(use_gpu=True) for tim in tractor.images]
         img_ie  = [tim.getInvError(use_gpu=True) for tim in tractor.images]
@@ -2286,29 +3694,105 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 padded[:oldsize,:] = pro.mean
                 pro.mean = padded
 
-        img_params, cx,cy,pW,pH = self._getBatchImageParams(tractor, masks, xy)
+        if use_less_mem:
+            # Initialize the accumulator for all alpha steps
+            # This stays on the GPU so we don't transfer back and forth in the loop
+            total_chisq = cp.zeros(len(steps), dtype=cp.float32)
+            
+            # Pre-convert fluxes to GPU once (it's a small array)
+            # Shape: (nsteps, Nimages)
+            fluxes_gpu = cp.asarray(fluxes, dtype=cp.float32)
 
-        gals = self._getBatchGalaxyProfiles(profiles, masks, px, py, cx, cy, pW, pH,
-                                            fluxes[0], img_sky, img_pix, img_ie)
-        img_params.addBatchGalaxyProfiles(gals)
-        G = self.computeGalaxyModelsVectorized(img_params)
-        t = time.time()
-        assert(G.shape == (Nimages, len(steps), pH, pW))
-        mmpix = gals.mmpix
-        mmie = gals.mmie
-        fluxes = cp.asarray(fluxes, dtype=cp.float32)
-        sky = cp.asarray(img_sky, dtype=cp.float32)
-        #print ("MMPIX", mmpix.shape, mmie.shape, mmpix.max(), mmpix.sum())
-        #print ("FLUXES", fluxes.shape, fluxes)
-        #print ("SKY", sky.shape, sky)
+            tims = tractor.images
+            modelmasks = tractor.modelMasks
 
-        #print ("G", G.shape)
-        #chisq = cp.sum([((G[i_image] * fluxes[i_step, i_image] - mmpix[i_image]) * mmie[i_image])**2 for i_image in range(Nimages)])
-        chisq = self.calculate_chi2_cupy(G, fluxes, mmpix, mmie, sky) 
-        del G, img_params
-        mpool = cp.get_default_memory_pool()
-        mpool.free_all_blocks()
-        #print ("CHISQ", chisq.shape)
+            try:
+                for i in range(Nimages):
+                    # 1. Extract single-image data
+                    # We wrap these in lists so your existing Batch methods still work
+                    s_masks = [masks[i]]
+                    s_xy = [xy[i]]
+                    s_sky = [img_sky[i]]
+                    s_pix = [img_pix[i]]
+                    s_ie = [img_ie[i]]
+                    
+
+                    # 1. Create single-image profile data
+                    s_profiles = []
+                    for name, amix, step in profiles:
+                        #print (f'{amix.mean.shape=} {amix.amp.shape=} {amix.var.shape=}')
+                        #print (f'{type(amix)=}')
+                        #s_mean = amix.mean[i:i+1] # (1, Nd, K, D)
+                        #s_amp  = amix.amp[i:i+1]  # (1, Nd, K)
+                        s_var  = amix.var[i:i+1]  # (1, Nd, K, D, D)
+                        # amix.amp and amix.mean are usually shared (ng, ...) 
+                        # but if they were per-image, you'd slice them here too.
+                        #s_amix = BatchMixtureOfGaussians(s_amp, s_mean, s_var)
+                        s_amix = BatchMixtureOfGaussians(amix.amp, amix.mean, s_var, unbalanced=True)
+                        s_profiles.append((name, s_amix, step))
+
+                    tractor.images = [tims[i]]
+                    tractor.modelMasks = [modelmasks[i]]
+                    # 2. Setup single-image parameters and profiles
+                    # This keeps pH/pW consistent with the single image's needs
+                    img_params_i, cx_i, cy_i, pW_i, pH_i = self._getBatchImageParams(tractor, s_masks, s_xy)
+                    
+                    # Slicing fluxes_gpu for just this image: fluxes_gpu[:, i]
+                    gals_i = self._getBatchGalaxyProfiles(s_profiles, s_masks, px[i:i+1], py[i:i+1], 
+                                                          cx_i, cy_i, pW_i, pH_i,
+                                                          fluxes_gpu[0, i:i+1], s_sky, s_pix, s_ie)
+                    
+                    img_params_i.addBatchGalaxyProfiles(gals_i)
+                    
+                    # 3. Render and Calculate Chi2 for this image
+                    # G_i shape: (1, nsteps, pH_i, pW_i)
+                    G_i = self.computeGalaxyModelsVectorized(img_params_i)
+                    
+                    # Call a modified version of your chi2 function or inline it:
+                    # We sum over the image axes (2 and 3) and the single image axis (0)
+                    # to get a (nsteps,) result to add to total_chisq.
+                    total_chisq += self.calculate_chi2_cupy(G_i, fluxes_gpu[:, [i]], 
+                                                            gals_i.mmpix, gals_i.mmie, 
+                                                            cp.asarray(s_sky))
+
+                    # 4. CRITICAL: Clear the deck for the next image
+                    del G_i, img_params_i, gals_i, s_pix, s_ie
+                    cp.get_default_memory_pool().free_all_blocks()
+
+            finally:
+                # Always restore state even if the loop fails
+                tractor.images = tims
+                tractor.modelMasks = modelmasks
+            # Move final result back to CPU for the logprob logic
+            chisq = total_chisq
+        else:
+            img_params, cx,cy,pW,pH = self._getBatchImageParams(tractor, masks, xy)
+
+            gals = self._getBatchGalaxyProfiles(profiles, masks, px, py, cx, cy, pW, pH,
+                                                fluxes[0], img_sky, img_pix, img_ie)
+            img_params.addBatchGalaxyProfiles(gals)
+            if img_params.ffts is None:
+                print ("Warning> img_params.ffts is None!  Calling superclass tryUpdates (on CPU)")
+                #print (f'TU Z2 0 {s_d=} 0 {s_a=}')
+                tu[6] += time.time()-t
+                return super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
+            G = self.computeGalaxyModelsVectorized(img_params)
+            assert(G.shape == (Nimages, len(steps), pH, pW))
+            mmpix = gals.mmpix
+            mmie = gals.mmie
+            fluxes = cp.asarray(fluxes, dtype=cp.float32)
+            sky = cp.asarray(img_sky, dtype=cp.float32)
+            #print ("MMPIX", mmpix.shape, mmie.shape, mmpix.max(), mmpix.sum())
+            #print ("FLUXES", fluxes.shape, fluxes)
+            #print ("SKY", sky.shape, sky)
+
+            #print ("G", G.shape)
+            #chisq = cp.sum([((G[i_image] * fluxes[i_step, i_image] - mmpix[i_image]) * mmie[i_image])**2 for i_image in range(Nimages)])
+            chisq = self.calculate_chi2_cupy(G, fluxes, mmpix, mmie, sky) 
+            del G, img_params
+            mpool = cp.get_default_memory_pool()
+            mpool.free_all_blocks()
+            #print ("CHISQ", chisq.shape)
 
         #print ("PRIOR", logpriors)
         logprob = np.array(logpriors)-0.5*chisq.get()
@@ -2356,14 +3840,22 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         tt[6] += time.time()-t
         if max_idx == len(logprob)-1:
             print ("Best is previous")
+            #print (f'TU Z1 0 {s_d=} 0 {s_a=}')
+            tu[6] += time.time()-t
             return (0., 0.)
 
         lp_best = logprob[max_idx]
         lp_last = logprob[-1]
+        alpha = steps[max_idx][0] #get alpha from steps not array of alphas!
         if lp_best > lp_last:
             # Best we've found so far -- accept this step!
             self.last_step_hit_limit = hit_limit
-        return (lp_best-lp_last, alphas[max_idx])
+        tu[6] += time.time()-t
+        #g_d = lp_best-lp_last
+        #print (f'TU G {g_d=} {s_d=} {alpha=} {s_a=}')
+        #if s_a != alpha:
+        #    print ("GAL MISMATCH")
+        return (lp_best-lp_last, alpha)
 
 
     def calculate_chi2_cupy(self, G, fluxes, mmpix, mmie, sky):
@@ -2443,6 +3935,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         imgH, imgW = np.array([tim.shape for tim in tr.images]).T
         psfH, psfW = np.array([psf.shape for psf in psfs]).T
         x0, x1, y0, y1 = np.asarray(extents).T
+        #print (f'{x0=} {x0.dtype=}')
         """
         if np.any(px < 0):
             print (f"Warning: {px=} is outside of image")
@@ -2472,6 +3965,51 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         img_params = BatchImageParams(P, v, w, batch_psf.psf_mogs)
         return img_params, cx,cy, pH,pW
+
+    def _getBatchPointSourceProfiles(self, derivs, masks, px, py, cx, cy, pW, pH,
+                                     img_counts, img_sky, img_pix, img_ie):
+        Nimages = len(img_counts)
+        mx0, mx1, my0, my1, mh, mw = np.array([(mm.x0, mm.x1, mm.y0, mm.y1)+mm.shape for mm in masks]).T
+        counts = cp.asarray(img_counts, dtype=cp.float32)
+
+        extents = [mm.extent for mm in masks]
+        x0, x1, y0, y1 = np.asarray(extents).T
+
+        # sub-pixel shift we have to do at the end...
+        dx = px - cx
+        dy = py - cy
+        mux = dx - x0
+        muy = dy - y0
+        sx = mux.round().astype(np.int32)
+        sy = muy.round().astype(np.int32)
+        # the subpixel portion will be handled with a Lanczos interpolation
+        mux -= sx
+        muy -= sy
+        dxi = cp.asarray(x0+sx)
+        dyi = cp.asarray(y0+sy)
+        assert(np.abs(mux).max() <= 0.5)
+        assert(np.abs(muy).max() <= 0.5)
+
+        # Embed pix and ie in images the same size as pW,pH.
+        padpix = cp.zeros((Nimages, pH,pW), cp.float32)
+        padie  = cp.zeros((Nimages, pH,pW), cp.float32)
+        assert(np.all(sy <= 0) and np.all(sx <= 0))
+
+        x_delta = np.ones(mx0.shape, np.int32)
+        y_delta = np.ones(my0.shape, np.int32)
+        x_delta[mx0 == 0] = 0
+        y_delta[my0 == 0] = 0
+        x_delta[sx == 0] = 0
+        y_delta[sy == 0] = 0
+        for i, pix in enumerate(img_pix):
+            padpix[i, -sy[i]-y_delta[i]:-sy[i]+mh[i], -sx[i]-x_delta[i]:-sx[i]+mw[i]] = pix[my0[i]-y_delta[i]:my1[i], mx0[i]-x_delta[i]:mx1[i]]
+        for i, ie in enumerate(img_ie):
+            padie[i, -sy[i]-y_delta[i]:-sy[i]+mh[i], -sx[i]-x_delta[i]:-sx[i]+mw[i]] = ie[my0[i]-y_delta[i]:my1[i], mx0[i]-x_delta[i]:mx1[i]]
+        roi = cp.asarray([-sx, -sy, mw, mh]).T
+        mmpix = cp.asarray(padpix)
+        mmie = cp.asarray(padie)
+        sky = cp.asarray(img_sky, dtype=cp.float32)
+
 
     def _getBatchGalaxyProfiles(self, amixes_gpu, masks, px, py, cx, cy, pW, pH,
                                 img_counts, img_sky, img_pix, img_ie):
