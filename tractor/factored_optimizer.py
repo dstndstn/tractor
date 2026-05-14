@@ -773,89 +773,7 @@ class GPUFriendlyPointSourceFitter:
 
         return H_full, G_full, ni
 
-    
-    def tryUpdates_gpu_old(self, tractor, X, alphas=None, check_step=None):
-        """
-        GPU-accelerated version of the line search.
-        X: The update direction (numpy array)
-        """
-        # 1. Setup initial state
-        p0 = tractor.getParams()
-        logprob_before = tractor.getLogProb()
-        logprob_best = logprob_before
-        alpha_best = None
-        p_best = p0
-
-        # 2. Get the candidate steps (respecting bounds and max_step)
-        # This uses the CPU logic from ConstrainedOptimizer to ensure consistency
-        steps = self.optimizer.getParameterSteps(tractor, X, alphas)
-
-        if len(steps) == 0:
-            self.optimizer.last_step_hit_limit = True
-            self.optimizer.hit_limit = True
-            return 0., 0.
-
-        # 3. Line Search Loop
-        for alpha, p, step_limit, hit_limit in steps:
-            if hit_limit:
-                self.optimizer.hit_limit = True
-
-            # Update the tractor object's state (required for LogPrior and potential callbacks)
-            tractor.setParams(p)
-
-            if check_step is not None:
-                r = check_step(optimizer=self.optimizer, tractor=tractor, X=X, alpha=alpha)
-                if not r:
-                    break
-
-            # --- GPU Likelihood Calculation ---
-            total_chi2 = 0.0
-
-            # We iterate over the images, but the data stays on GPU
-            for i, img in enumerate(tractor.images):
-                # Render the source at the NEW parameters on the GPU
-                # This should return a CuPy array representing the patch
-                model_patch = self.render_source_gpu(img, tractor)
-
-                if model_patch is None:
-                    continue
-
-                # data_gpu and invvar_gpu should be pre-cached CuPy arrays
-                data = self.img_data_gpu[i]
-                invvar = self.img_invvar_gpu[i]
-
-                # Use float64 for the accumulation to prevent precision-driven divergence
-                diff = (data - model_patch)
-                chi2_img = cp.sum((diff**2) * invvar, dtype=cp.float64)
-                total_chi2 += float(chi2_img.get())
-
-            # Combine with Prior (CPU side)
-            log_prior = tractor.getLogPrior()
-            logprob = -0.5 * total_chi2 + log_prior
-
-            # --- Early Exit and Best-Track Logic ---
-            if not np.isfinite(logprob):
-                break
-
-            if logprob < (logprob_best - 1.0):
-                # Significant degradation; stop the line search
-                break
-
-            if logprob > logprob_best:
-                self.optimizer.last_step_hit_limit = hit_limit
-                alpha_best = alpha
-                logprob_best = logprob
-                p_best = p
-
-        # 4. Finalize state
-        tractor.setParams(p_best)
-
-        if alpha_best is None:
-            return 0., 0.
-
-        return logprob_best - logprob_before, alpha_best
-
-    def tryUpdates_gpu(self, X, alphas=None, check_step=None):
+    def tryUpdates_gpu(self, X, alphas=None, check_step=None, use_less_mem=False):
         t_start = time.time()
         (ux0, ux1, uy0, uy1) = self.current_bounds
         if self.ie_batch is None:
@@ -1223,12 +1141,17 @@ class FactoredOptimizer(object):
             xicsum, icsum, _ = img_opts[0]
         else:
             for x,ic in img_opts:
-                #print(f'{x=} {ic=} {tr.catalog[0]=}')
+                print(f'{x=} {ic=} {tr.catalog[0]=}')
                 xicsum = xicsum + np.dot(ic, x)
                 icsum = icsum + ic
         #C = np.linalg.inv(icsum)
         #x = np.dot(C, xicsum)
-        #print (f'{icsum=} {xicsum=}')
+        print (f'{icsum=} {xicsum=}')
+        if np.any(np.isnan(xicsum)):
+            print (f"WARNING: np.dot failed with NAN {xicsum=}.  Running CPU version instead.")
+            x = super().getLinearUpdateDirection(tr, **kwargs) 
+            print ("SUPER x", x)
+            return x 
 
         #Add the priors if needed.
         if orig_priors:
@@ -1253,7 +1176,7 @@ class FactoredOptimizer(object):
         tt[6] += time.time()-t
         #print (f'{tt=}')
         #print (f'{tps=}')
-        #print ("Final X: ",x, "Source", tr.catalog[0])
+        print ("Final X: ",x, "Source", tr.catalog[0])
         #import sys
         #sys.exit(-1)
         if x_imgs is not None:
@@ -1519,6 +1442,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             # Pixel positions
             pxy = [tim.getWcs().positionToPixel(src.getPosition(), src)
                    for tim in tr.images]
+            px, py = np.array(pxy).T
+            if np.any(np.isnan(px)) or np.any(np.isnan(py)):
+                print ("WARNING: px, py contain NANs.  Running CPU version instead.")
+                xout = super().getSingleImageUpdateDirections(tr, **kwargs)
+                return xout
             #New helper method predicts memory needed
             est_mem = self.predict_fft_memory(tr, masks, pxy, nd)
             free_mem /= 1.e+9
@@ -2220,6 +2148,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             return xout
 
         Xic = self.computeUpdateDirectionsVectorized(img_params, priorVals)
+        print (f"{Xic=}")
 
         mpool = cp.get_default_memory_pool()
         del img_params
@@ -2244,6 +2173,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             (X, Xicov) = Xic
             X = X.get()
             Xicov = Xicov.get()
+            print (f"{fullN=} {npos=} {nbands=}")
             for iband,x,ic in zip(img_bands, X, Xicov):
                 #assert(fullN == len(x) + nbands - 1)
                 # the "x" here are from fitting on a single image, *assuming* 2 positions are being fit
@@ -2327,6 +2257,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #
         #print('Calling original version...')
         #sXic = super().getSingleImageUpdateDirections(tr, **kwargs)
+        print (f"Final {Xic=}")
         return Xic
 
     def computeUpdateDirections(self, img_params, priorVals):
@@ -3175,7 +3106,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # first two columns of A are all zero, the ATA ATB method fails with
         # NaNs.  But we can strip out those rows and zero-pad the output!
         if not np.any(fit_pos):
-            #print ("WARNING: fit_pos is False for all images, stripping off rows to prevent NaNs before fitting")
+            print ("WARNING: fit_pos is False for all images, stripping off rows to prevent NaNs before fitting")
             A_T_dot_A = cp.einsum("...ji,...jk", A[:,:,2:], A[:,:,2:])
             A_T_dot_B = cp.einsum("...ji,...j", A[:,:,2:], B)
             X = cp.zeros((Nimages, Nd+2), dtype=cp.float32)
@@ -3183,14 +3114,20 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         else:
             A_T_dot_A = cp.einsum("...ji,...jk", A, A)
             A_T_dot_B = cp.einsum("...ji,...j", A, B)
+            print (f"{A_T_dot_A=} {A_T_dot_B=}")
             X = cp.linalg.solve(A_T_dot_A, A_T_dot_B)
 
+        print (f"GPU {X=} {A.sum(axis=1)=} {B.sum()=}")
+        print (f"{X.shape=} {A.shape=} {B.shape=}")
         # Undo pre-scaling
         ###  TAG: ISSUE 1 4/9/25 - uncomment and move divide within block to get rid of NaNs 
         #if fit_pos[0] is True:
         X /= colscales
         #print ("NANs", cp.isnan(X).sum())
+        #if cp.any(cp.isinf(X)):
+        #    print ("NAN", X)
         X[cp.isnan(X)] = 0
+        #X[cp.isinf(X)] = 0
         #print ("X NORM", X.shape)
         #    print ("X norm", X)
         #else:
@@ -3264,7 +3201,11 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
 
         # 2. Calculate the Power-of-Two padding
         radius_max = gpu_halfsize.max()
-        sz = 2**int(np.ceil(np.log2(radius_max * 2.)))
+        try:
+            sz = 2**int(np.ceil(np.log2(radius_max * 2.)))
+        except Exception as ex:
+            print (f'predict_fft_memory> {gpu_halfsize=} {radius_max=} {x0=} {x1=} {y0=} {y1=} {px=} {py=} '+str(ex))
+            return 1.e+12
 
         pH, pW = sz, sz
         n_images = len(tr.images)
@@ -3471,6 +3412,8 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # 1. Fallback if GPU is disabled
         if self._gpumode == 0 or self._gpumode == 4:
             return super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
+        import cupy as cp
+        import datetime
         #return super().tryUpdates(tractor, X, alphas=alphas)
         #lp1 = super().tryUpdates(tractor, X, alphas=alphas)
         #print (f'{lp1=}')
@@ -3502,46 +3445,91 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                     #tractor.setParams(p0)
 
 
-                    """
                     #Estimate memory needed with new helper method based on padded image sizes and nd
-                    import cupy as cp
-                    import datetime
-                    # pixel position of the source in each image
-                    xy = [tim.getWcs().positionToPixel(src.pos) for tim in tractor.images]
-                    # pixel region to render
-                    masks = [tractor._getModelMaskFor(tim, src) for tim in tractor.images]
+                    src = tractor.catalog[0]
 
+                    # 1. Get masks and find which images actually overlap
+                    all_tims = tractor.images
+                    all_masks = tractor.modelMasks
+
+                    # Filter out the "None" masks
+                    # Store the original full list of dicts to restore later
+                    all_mask_dicts = tractor.modelMasks 
+                    
+                    valid_tims = []
+                    valid_mask_objects = []
+                    valid_mask_dicts = []
+
+                    for tim in all_tims:
+                        m = tractor._getModelMaskFor(tim, src)
+                        if m is not None:
+                            valid_tims.append(tim)
+                            valid_mask_objects.append(m)
+                            # Re-wrap the mask in a dict so tractor can still query it by source
+                            valid_mask_dicts.append({src: m})
+
+                    if len(valid_tims) == 0:
+                        print("Source has no overlap with any image; log-likelihood is 0.")
+                        # Handle edge case: no overlap at all
+                        return 0.0, 0.0 
+
+                    # 2. Update context with the expected data structures
+                    tractor.images = valid_tims
+                    # This is now a list of dicts, keeping tractor happy
+                    tractor.modelMasks = valid_mask_dicts
+                    if len(valid_tims) != len(all_tims):
+                        print (f'TryUpdates PS: Warning {len(valid_tims)=} {len(all_tims)=} - ONE OR MORE model masks are None.')
+                    Nimages = len(valid_tims) # The new, filtered count
                     #Get free memory
                     mempool = cp.get_default_memory_pool()
                     mempool.free_all_blocks()
                     free_mem, total_mem = cp.cuda.runtime.memGetInfo()
                     nd = tractor.numberOfParams()+2
-                    assert(all([m is not None for m in masks]))
-                    #New helper method predicts memory needed
-                    est_mem = self.predict_fft_memory(tractor, masks, xy, nd)
-                    free_mem /= 1.e+9
-                    print (f'TryUpdates PS: Estimated memory {est_mem} GB free memory {free_mem} for {Nimages=} {nd=} at ', datetime.datetime.now(), "src = ", tractor.catalog[0])
-                    use_less_mem = False
-                    if free_mem < est_mem:
-                        print(f"Warning: TryUpdates PS Estimated memory {est_mem} GB is greater than free memory {free_mem} GB; Running less-mem GPU mode instead!", datetime.datetime.now(), "src = ", tractor.catalog[0])
-                        #s_d, s_a = super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
-                        #tu[5] += time.time()-t
-                        #return s_d, s_a
-                        use_less_mem = True
-                    """
 
-                    t = time.time()
                     try:
-                        best_dlnp, best_alpha = self.current_fitter.tryUpdates_gpu(X, alphas, check_step=check_step)
+                        # Estimate memory using ONLY the images we will actually render
+                        # pixel position of the source in each image
+                        xy_valid = [tim.getWcs().positionToPixel(src.pos) for tim in valid_tims]
+                        px, py = np.array(xy_valid).T
+                        if np.any(np.isnan(px)):
+                            xy2 = [tim.getWcs().positionToPixel(src.pos) for tim in all_tims]
+                            px2, py2 = np.array(xy2).T
+                            print (f'NAN PS {px=} {py=} {px2=} {py2=}')
+
+                        est_mem = self.predict_fft_memory(tractor, valid_mask_objects, xy_valid, nd)
+                        free_mem /= 1.e+9
+                        print (f'TryUpdates PS: Estimated memory {est_mem} GB free memory {free_mem} for {Nimages=} {nd=} at ', datetime.datetime.now(), "src = ", tractor.catalog[0])
+                        use_less_mem = False
+                        if free_mem < est_mem:
+                            print(f"Warning: TryUpdates PS Estimated memory {est_mem} GB is greater than free memory {free_mem} GB; Running less-mem GPU mode instead!", datetime.datetime.now(), "src = ", tractor.catalog[0])
+                            use_less_mem = True
+
+                        t = time.time()
+                        self.current_fitter.ie_batch = None
+                        best_dlnp, best_alpha = self.current_fitter.tryUpdates_gpu(X, alphas, check_step=check_step, use_less_mem=use_less_mem)
                         tu[0] += time.time()-t
                     except Exception as ex:
-                        print ("Exception in TRY UPDATES GPU - running CPU version instead: "+str(ex))
+                        print ("Exception in TRY UPDATES PS GPU - running CPU version instead: "+str(ex))
+                        import sys
+                        sys.stderr.write(f"\n----Traceback below----\n")
+                        import traceback 
+                        traceback.print_exc()
+                        sys.stderr.flush()
+                        sys.exit(-1)
                         tu[0] += time.time()-t
                         t = time.time()
+                        tractor.images = all_tims
+                        tractor.modelMasks = all_masks
                         tractor.setParams(p0)
                         s_d, s_a = super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
                         tu[1] += time.time()-t
                         return s_d, s_a
+                    finally:
+                        # CRITICAL: Restore the original image list so Tractor doesn't
+                        # "forget" the other images for the rest of the brick
+                        tractor.images = all_tims
+                        tractor.modelMasks = all_masks
+
                     #import sys
                     #sys.exit(0)
                     # Clean up after the line search is done
@@ -3613,189 +3601,220 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # steps: list of (alpha, params, step_lim, param_lim)
         steps.append((0., p0, False, False))
 
-        # pixel position of the source in each image
-        xy = [tim.getWcs().positionToPixel(src.pos) for tim in tractor.images]
-        px, py = np.array(xy).T
-        # pixel region to render
-        masks = [tractor._getModelMaskFor(tim, src) for tim in tractor.images]
-        if any(m is None for m in masks):
-            print (f"TryUpdates WARNING: One or more modelMasks is None; running CPU version.")
-            s_d, s_a = super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
-            tu[5] += time.time()-t
-            return s_d, s_a
+        # Filter out the "None" masks
+        # Store the original full list of dicts to restore later
+        all_tims = tractor.images
+        all_masks = tractor.modelMasks
+        
+        valid_tims = [] 
+        valid_mask_objects = []
+        valid_mask_dicts = []
 
-        #Estimate memory needed with new helper method based on padded image sizes and nd
-        import cupy as cp
-        import datetime
-        #Get free memory
-        mempool = cp.get_default_memory_pool()
-        mempool.free_all_blocks()
-        free_mem, total_mem = cp.cuda.runtime.memGetInfo()
-        nd = tractor.numberOfParams()+2
-        assert(all([m is not None for m in masks]))
-        #New helper method predicts memory needed
-        est_mem = self.predict_fft_memory(tractor, masks, xy, nd)
-        free_mem /= 1.e+9
-        print (f'TryUpdates: Estimated memory {est_mem} GB free memory {free_mem} for {Nimages=} {nd=} at ', datetime.datetime.now(), "src = ", tractor.catalog[0])
-        use_less_mem = False
-        if free_mem < est_mem:
-            print(f"Warning: TryUpdates Estimated memory {est_mem} GB is greater than free memory {free_mem} GB; Running less-mem GPU mode instead!", datetime.datetime.now(), "src = ", tractor.catalog[0])
-            #s_d, s_a = super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
-            #tu[5] += time.time()-t
-            #return s_d, s_a
-            use_less_mem = True
+        for tim in all_tims:
+            m = tractor._getModelMaskFor(tim, src)
+            if m is not None:
+                valid_tims.append(tim)
+                valid_mask_objects.append(m)
+                # Re-wrap the mask in a dict so tractor can still query it by source
+                valid_mask_dicts.append({src: m})
 
-        img_sky = [tim.getSky().getConstant() for tim in tractor.images]
-        img_pix = [tim.getImage(use_gpu=True) for tim in tractor.images]
-        img_ie  = [tim.getInvError(use_gpu=True) for tim in tractor.images]
-        #print ("MAXES", img_pix[0].max(), img_ie[0].max())
-        #print ("SUMS", img_pix[0].sum(), img_ie[0].sum())
+        if len(valid_tims) == 0:
+            print("Source has no overlap with any image; log-likelihood is 0.")
+            # Handle edge case: no overlap at all
+            return 0.0, 0.0
 
-        profiles = []
-        fluxes = []
-        logpriors = []
-        for _,p,_,_ in steps:
-            #print ("P", p)
-            tractor.setParams(p)
-            # for _getBatchGalaxyProfiles we need tuples of (name, amix, step)...
-            profiles.append(('', getShearedProfileGPU(src, tractor.images, px, py), 0.))
-            # grab the brightnesses
-            fluxes.append([tim.getPhotoCal().brightnessToCounts(src.brightness) for tim in tractor.images])
-            # While we're stepping through the parameters, compute log-priors...
-            lp = tractor.getLogPrior()
-            logpriors.append(lp)
-        # Unfortunately, Sersic galaxies can get a different number of Gaussian mixture components
-        # as we step the Sersic index parameter, so in the "profiles" above, they can have different
-        # sizes; _getBatchGalaxyProfiles requires them to be the same sizes - so check and pad if
-        # necessary.
-        ng = np.unique([pro.var.shape[1] for _,pro,_ in profiles])
-        if len(ng) != 1:
-            # pad
-            padsize = max(ng)
-            for _,pro,_ in profiles:
-                shape = pro.var.shape
-                # needs padding?
-                oldsize = shape[1]
-                if shape[1] == padsize:
-                    continue
-                newshape = (shape[0], padsize, shape[2], shape[3])
-                # var: size (nimages, ng, 2, 2) - cupy
-                padded = cp.zeros(newshape)
-                padded[:,:oldsize,:,:] = pro.var
-                pro.var = padded
-                # amp: size (ng,) -- a numpy array (not cupy) for some reason
-                padded = np.zeros(padsize)
-                padded[:oldsize] = pro.amp
-                pro.amp = padded
-                # mean: size (ng,2) -- also a numpy array
-                shape = pro.mean.shape
-                newshape = (padsize, shape[1])
-                padded = np.zeros(newshape)
-                padded[:oldsize,:] = pro.mean
-                pro.mean = padded
+        # 2. Update context with the expected data structures
+        tractor.images = valid_tims
+        # This is now a list of dicts, keeping tractor happy
+        tractor.modelMasks = valid_mask_dicts
 
-        if use_less_mem:
-            # Initialize the accumulator for all alpha steps
-            # This stays on the GPU so we don't transfer back and forth in the loop
-            total_chisq = cp.zeros(len(steps), dtype=cp.float32)
-            
-            # Pre-convert fluxes to GPU once (it's a small array)
-            # Shape: (nsteps, Nimages)
-            fluxes_gpu = cp.asarray(fluxes, dtype=cp.float32)
+        if len(valid_tims) != len(all_tims):
+            print (f'TryUpdates Gal: Warning {len(valid_tims)=} {len(all_tims)=} - ONE OR MORE model masks are None.')
+        Nimages = len(valid_tims)
+        nd = tractor.numberOfParams() + 2
 
-            tims = tractor.images
-            modelmasks = tractor.modelMasks
+        try:
+            # Position in valid images only
+            xy = [tim.getWcs().positionToPixel(src.pos) for tim in valid_tims]
+            px, py = np.array(xy).T
+            if np.any(np.isnan(px)):
+                xy2 = [tim.getWcs().positionToPixel(src.pos) for tim in all_tims]
+                px2, py2 = np.array(xy2).T
+                print (f'NAN {px=} {py=} {px2=} {py2=}')
 
-            try:
-                for i in range(Nimages):
-                    # 1. Extract single-image data
-                    # We wrap these in lists so your existing Batch methods still work
-                    s_masks = [masks[i]]
-                    s_xy = [xy[i]]
-                    s_sky = [img_sky[i]]
-                    s_pix = [img_pix[i]]
-                    s_ie = [img_ie[i]]
-                    
+            #Get free memory
+            mempool = cp.get_default_memory_pool()
+            mempool.free_all_blocks()
+            free_mem, total_mem = cp.cuda.runtime.memGetInfo()
+            #New helper method predicts memory needed
+            est_mem = self.predict_fft_memory(tractor, valid_mask_objects, xy, nd)
+            free_mem /= 1.e+9
+            print (f'TryUpdates: Estimated memory {est_mem} GB free memory {free_mem} for {Nimages=} {nd=} at ', datetime.datetime.now(), "src = ", tractor.catalog[0])
+            use_less_mem = False
+            if free_mem < est_mem:
+                print(f"Warning: TryUpdates Estimated memory {est_mem} GB is greater than free memory {free_mem} GB; Running less-mem GPU mode instead!", datetime.datetime.now(), "src = ", tractor.catalog[0])
+                use_less_mem = True
+            img_sky = [tim.getSky().getConstant() for tim in tractor.images]
+            img_pix = [tim.getImage(use_gpu=True) for tim in tractor.images]
+            img_ie  = [tim.getInvError(use_gpu=True) for tim in tractor.images]
+            profiles = []
+            fluxes = []
+            logpriors = []
+            for _,p,_,_ in steps:
+                #print ("P", p)
+                tractor.setParams(p)
+                # for _getBatchGalaxyProfiles we need tuples of (name, amix, step)...
+                profiles.append(('', getShearedProfileGPU(src, tractor.images, px, py), 0.))
+                # grab the brightnesses
+                fluxes.append([tim.getPhotoCal().brightnessToCounts(src.brightness) for tim in tractor.images])
+                # While we're stepping through the parameters, compute log-priors...
+                lp = tractor.getLogPrior()
+                logpriors.append(lp)
 
-                    # 1. Create single-image profile data
-                    s_profiles = []
-                    for name, amix, step in profiles:
-                        #print (f'{amix.mean.shape=} {amix.amp.shape=} {amix.var.shape=}')
-                        #print (f'{type(amix)=}')
-                        #s_mean = amix.mean[i:i+1] # (1, Nd, K, D)
-                        #s_amp  = amix.amp[i:i+1]  # (1, Nd, K)
-                        s_var  = amix.var[i:i+1]  # (1, Nd, K, D, D)
-                        # amix.amp and amix.mean are usually shared (ng, ...) 
-                        # but if they were per-image, you'd slice them here too.
-                        #s_amix = BatchMixtureOfGaussians(s_amp, s_mean, s_var)
-                        s_amix = BatchMixtureOfGaussians(amix.amp, amix.mean, s_var, unbalanced=True)
-                        s_profiles.append((name, s_amix, step))
+            # Unfortunately, Sersic galaxies can get a different number of Gaussian mixture components
+            # as we step the Sersic index parameter, so in the "profiles" above, they can have different
+            # sizes; _getBatchGalaxyProfiles requires them to be the same sizes - so check and pad if
+            # necessary.
+            ng = np.unique([pro.var.shape[1] for _,pro,_ in profiles])
+            if len(ng) != 1:
+                # pad
+                padsize = max(ng)
+                for _,pro,_ in profiles:
+                    shape = pro.var.shape
+                    # needs padding?
+                    oldsize = shape[1]
+                    if shape[1] == padsize:
+                        continue
+                    newshape = (shape[0], padsize, shape[2], shape[3])
+                    # var: size (nimages, ng, 2, 2) - cupy
+                    padded = cp.zeros(newshape)
+                    padded[:,:oldsize,:,:] = pro.var
+                    pro.var = padded
+                    # amp: size (ng,) -- a numpy array (not cupy) for some reason
+                    padded = np.zeros(padsize)
+                    padded[:oldsize] = pro.amp
+                    pro.amp = padded
+                    # mean: size (ng,2) -- also a numpy array
+                    shape = pro.mean.shape
+                    newshape = (padsize, shape[1])
+                    padded = np.zeros(newshape)
+                    padded[:oldsize,:] = pro.mean
+                    pro.mean = padded
 
-                    tractor.images = [tims[i]]
-                    tractor.modelMasks = [modelmasks[i]]
-                    # 2. Setup single-image parameters and profiles
-                    # This keeps pH/pW consistent with the single image's needs
-                    img_params_i, cx_i, cy_i, pW_i, pH_i = self._getBatchImageParams(tractor, s_masks, s_xy)
-                    
-                    # Slicing fluxes_gpu for just this image: fluxes_gpu[:, i]
-                    gals_i = self._getBatchGalaxyProfiles(s_profiles, s_masks, px[i:i+1], py[i:i+1], 
-                                                          cx_i, cy_i, pW_i, pH_i,
-                                                          fluxes_gpu[0, i:i+1], s_sky, s_pix, s_ie)
-                    
-                    img_params_i.addBatchGalaxyProfiles(gals_i)
-                    
-                    # 3. Render and Calculate Chi2 for this image
-                    # G_i shape: (1, nsteps, pH_i, pW_i)
-                    G_i = self.computeGalaxyModelsVectorized(img_params_i)
-                    
-                    # Call a modified version of your chi2 function or inline it:
-                    # We sum over the image axes (2 and 3) and the single image axis (0)
-                    # to get a (nsteps,) result to add to total_chisq.
-                    total_chisq += self.calculate_chi2_cupy(G_i, fluxes_gpu[:, [i]], 
-                                                            gals_i.mmpix, gals_i.mmie, 
-                                                            cp.asarray(s_sky))
+            if use_less_mem:
+                # Initialize the accumulator for all alpha steps
+                # This stays on the GPU so we don't transfer back and forth in the loop
+                total_chisq = cp.zeros(len(steps), dtype=cp.float32)
 
-                    # 4. CRITICAL: Clear the deck for the next image
-                    del G_i, img_params_i, gals_i, s_pix, s_ie
-                    cp.get_default_memory_pool().free_all_blocks()
+                # Pre-convert fluxes to GPU once (it's a small array)
+                # Shape: (nsteps, Nimages)
+                fluxes_gpu = cp.asarray(fluxes, dtype=cp.float32)
 
-            finally:
-                # Always restore state even if the loop fails
-                tractor.images = tims
-                tractor.modelMasks = modelmasks
-            # Move final result back to CPU for the logprob logic
-            chisq = total_chisq
-        else:
-            img_params, cx,cy,pW,pH = self._getBatchImageParams(tractor, masks, xy)
+                tims = tractor.images
+                modelmasks = valid_mask_objects 
 
-            gals = self._getBatchGalaxyProfiles(profiles, masks, px, py, cx, cy, pW, pH,
-                                                fluxes[0], img_sky, img_pix, img_ie)
-            img_params.addBatchGalaxyProfiles(gals)
-            if img_params.ffts is None:
-                print ("Warning> img_params.ffts is None!  Calling superclass tryUpdates (on CPU)")
-                #print (f'TU Z2 0 {s_d=} 0 {s_a=}')
-                tu[6] += time.time()-t
-                return super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
-            G = self.computeGalaxyModelsVectorized(img_params)
-            assert(G.shape == (Nimages, len(steps), pH, pW))
-            mmpix = gals.mmpix
-            mmie = gals.mmie
-            fluxes = cp.asarray(fluxes, dtype=cp.float32)
-            sky = cp.asarray(img_sky, dtype=cp.float32)
-            #print ("MMPIX", mmpix.shape, mmie.shape, mmpix.max(), mmpix.sum())
-            #print ("FLUXES", fluxes.shape, fluxes)
-            #print ("SKY", sky.shape, sky)
+                try:
+                    for i in range(Nimages):
+                        # 1. Extract single-image data
+                        # We wrap these in lists so your existing Batch methods still work
+                        s_masks = [modelmasks[i]]
+                        s_xy = [xy[i]]
+                        s_sky = [img_sky[i]]
+                        s_pix = [img_pix[i]]
+                        s_ie = [img_ie[i]]
 
-            #print ("G", G.shape)
-            #chisq = cp.sum([((G[i_image] * fluxes[i_step, i_image] - mmpix[i_image]) * mmie[i_image])**2 for i_image in range(Nimages)])
-            chisq = self.calculate_chi2_cupy(G, fluxes, mmpix, mmie, sky) 
-            del G, img_params
-            mpool = cp.get_default_memory_pool()
-            mpool.free_all_blocks()
-            #print ("CHISQ", chisq.shape)
 
-        #print ("PRIOR", logpriors)
-        logprob = np.array(logpriors)-0.5*chisq.get()
+                        # 1. Create single-image profile data
+                        s_profiles = []
+                        for name, amix, step in profiles:
+                            #print (f'{amix.mean.shape=} {amix.amp.shape=} {amix.var.shape=}')
+                            #print (f'{type(amix)=}')
+                            #s_mean = amix.mean[i:i+1] # (1, Nd, K, D)
+                            #s_amp  = amix.amp[i:i+1]  # (1, Nd, K)
+                            s_var  = amix.var[i:i+1]  # (1, Nd, K, D, D)
+                            # amix.amp and amix.mean are usually shared (ng, ...) 
+                            # but if they were per-image, you'd slice them here too.
+                            #s_amix = BatchMixtureOfGaussians(s_amp, s_mean, s_var)
+                            s_amix = BatchMixtureOfGaussians(amix.amp, amix.mean, s_var, unbalanced=True)
+                            s_profiles.append((name, s_amix, step))
+
+                        tractor.images = [tims[i]]
+                        tractor.modelMasks = [valid_mask_dicts[i]]
+                        # 2. Setup single-image parameters and profiles
+                        # This keeps pH/pW consistent with the single image's needs
+                        img_params_i, cx_i, cy_i, pW_i, pH_i = self._getBatchImageParams(tractor, s_masks, s_xy)
+
+                        # Slicing fluxes_gpu for just this image: fluxes_gpu[:, i]
+                        gals_i = self._getBatchGalaxyProfiles(s_profiles, s_masks, px[i:i+1], py[i:i+1],
+                                                              cx_i, cy_i, pW_i, pH_i,
+                                                              fluxes_gpu[0, i:i+1], s_sky, s_pix, s_ie)
+
+                        img_params_i.addBatchGalaxyProfiles(gals_i)
+
+                        # 3. Render and Calculate Chi2 for this image
+                        # G_i shape: (1, nsteps, pH_i, pW_i)
+                        G_i = self.computeGalaxyModelsVectorized(img_params_i)
+
+                        # Call a modified version of your chi2 function or inline it:
+                        # We sum over the image axes (2 and 3) and the single image axis (0)
+                        # to get a (nsteps,) result to add to total_chisq.
+                        total_chisq += self.calculate_chi2_cupy(G_i, fluxes_gpu[:, [i]],
+                                                                gals_i.mmpix, gals_i.mmie,
+                                                                cp.asarray(s_sky))
+
+                        # 4. CRITICAL: Clear the deck for the next image
+                        del G_i, img_params_i, gals_i, s_pix, s_ie, s_amix, s_var
+                        cp.get_default_memory_pool().free_all_blocks()
+
+                finally:
+                    # Always restore state even if the loop fails
+                    tractor.images = tims
+                    tractor.modelMasks = modelmasks
+                # Move final result back to CPU for the logprob logic
+                chisq = total_chisq
+            else:
+                img_params, cx,cy,pW,pH = self._getBatchImageParams(tractor, valid_mask_objects, xy)
+                gals = self._getBatchGalaxyProfiles(profiles, valid_mask_objects, px, py, cx, cy, pW, pH,
+                                                    fluxes[0], img_sky, img_pix, img_ie)
+                img_params.addBatchGalaxyProfiles(gals)
+                if img_params.ffts is None:
+                    print ("Warning> img_params.ffts is None!  Calling superclass tryUpdates (on CPU)")
+                    #print (f'TU Z2 0 {s_d=} 0 {s_a=}')
+                    tu[6] += time.time()-t
+                    return super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
+                G = self.computeGalaxyModelsVectorized(img_params)
+                assert(G.shape == (Nimages, len(steps), pH, pW))
+                mmpix = gals.mmpix
+                mmie = gals.mmie
+                fluxes = cp.asarray(fluxes, dtype=cp.float32)
+                sky = cp.asarray(img_sky, dtype=cp.float32)
+                #print ("MMPIX", mmpix.shape, mmie.shape, mmpix.max(), mmpix.sum())
+                #print ("FLUXES", fluxes.shape, fluxes)
+                #print ("SKY", sky.shape, sky)
+
+                #print ("G", G.shape)
+                #chisq = cp.sum([((G[i_image] * fluxes[i_step, i_image] - mmpix[i_image]) * mmie[i_image])**2 for i_image in range(Nimages)])
+                chisq = self.calculate_chi2_cupy(G, fluxes, mmpix, mmie, sky)
+                del G, img_params
+                mpool = cp.get_default_memory_pool()
+                mpool.free_all_blocks()
+                #print ("CHISQ", chisq.shape)
+
+            #print ("PRIOR", logpriors)
+            logprob = np.array(logpriors)-0.5*chisq.get()
+        except Exception as ex:
+            print(f"Exception in Galaxy TRY UPDATES GPU: {ex}. Falling back to CPU.")
+            tractor.setParams(p0)
+            # Restore full image list for CPU fallback
+            tractor.images = all_tims
+            tractor.modelMasks = all_masks
+            return super().tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
+
+        finally:
+            # CRITICAL: Restore the full list
+            tractor.images = all_tims
+            tractor.modelMasks = all_masks
+
         #print ("LOGPROB", logprob.shape)
 
         # CRAIG -- at this point, we have rendered the galaxy models, in G.
@@ -3836,7 +3855,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         for i in range(len(steps)):
             if steps[i][2]:
                 self.hit_limit = True #set if any hits limit
-        
+
         tt[6] += time.time()-t
         if max_idx == len(logprob)-1:
             print ("Best is previous")
@@ -3856,7 +3875,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         #if s_a != alpha:
         #    print ("GAL MISMATCH")
         return (lp_best-lp_last, alpha)
-
 
     def calculate_chi2_cupy(self, G, fluxes, mmpix, mmie, sky):
         """

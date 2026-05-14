@@ -798,7 +798,7 @@ class Tractor(MultiParams):
             print('psf:', img.getPsf())
         return chi
 
-    def getLogLikelihoodBatch(self, candidate_params, bounds, use_gpu=True, **kwargs):
+    def getLogLikelihoodBatch(self, candidate_params, bounds, use_gpu=True, ie_stack=None, use_less_mem=False, **kwargs):
         """
         candidate_params: List of parameter arrays (one for each alpha)
         Returns: cp.array of shape (len(candidate_params),)
@@ -808,25 +808,64 @@ class Tractor(MultiParams):
         # Expected shape: (N_candidates, N_images, H, W) or (N_candidates, Total_Pixels)
         t = time.time()
         (ux0, ux1, uy0, uy1) = bounds 
-        chi_batch = self.getBatchChiImages(
-            ux0=ux0, uy0=uy0, ux1=ux1, uy1=uy1,
-            candidate_params=candidate_params, 
-            use_gpu=use_gpu, 
-            #batch_psf=self.batch_psf,
-            **kwargs
-        )
-        """
-        print (f'{chi_batch.shape=}')
-        for i in range(chi_batch.shape[0]):
-            print (f'{candidate_params[i]=}')
-            for j in range(chi_batch.shape[1]):
-                print (f'{i=} {j=} {chi_batch[i][j].max()=} {chi_batch[i][j].shape=}') 
-        """
-        
-        # 2. Compute -0.5 * sum(chi^2) across all images/pixels for EACH candidate
-        # We sum across all axes EXCEPT the first one (the candidate index)
-        axes_to_sum = tuple(range(1, chi_batch.ndim))
-        chisq = cp.sum(chi_batch**2, axis=axes_to_sum, dtype=cp.float64)
+
+        if use_less_mem:
+            n_cand = len(candidate_params)
+            # Accumulate on GPU to keep VRAM footprint low
+            total_chisq = cp.zeros(n_cand, dtype=cp.float64)
+            tims = self.images
+            
+            try:
+                for i in range(len(tims)):
+                    self.images = [tims[i]]
+                    
+                    # Slice the specific image's invError from the stack
+                    # We use i:i+1 to maintain the (1, H, W) 3D shape required by the engine
+                    s_ie = None
+                    if ie_stack is not None:
+                        s_ie = ie_stack[i:i+1]
+
+                    # getBatchChiImages sees Nimages=1, keeping FFT workspaces small
+                    chi_i = self.getBatchChiImages(
+                        ux0=ux0, uy0=uy0, ux1=ux1, uy1=uy1,
+                        candidate_params=candidate_params,
+                        use_gpu=use_gpu,
+                        ie_stack=s_ie,
+                        **kwargs
+                    )
+                    
+                    # Sum across (Image, H, W) axes
+                    total_chisq += cp.sum(chi_i**2, axis=(1, 2, 3), dtype=cp.float64)
+                    
+                    # Manual memory management is key for 4k images
+                    del chi_i
+                    cp.get_default_memory_pool().free_all_blocks()
+            finally:
+                self.images = tims
+            chisq = total_chisq
+            tlog[4] += time.time()-t
+            print (f'{tlog=}')
+        else:
+            chi_batch = self.getBatchChiImages(
+                ux0=ux0, uy0=uy0, ux1=ux1, uy1=uy1,
+                candidate_params=candidate_params, 
+                use_gpu=use_gpu, 
+                ie_stack=ie_stack,
+                #batch_psf=self.batch_psf,
+                **kwargs
+            )
+            """
+            print (f'{chi_batch.shape=}')
+            for i in range(chi_batch.shape[0]):
+                print (f'{candidate_params[i]=}')
+                for j in range(chi_batch.shape[1]):
+                    print (f'{i=} {j=} {chi_batch[i][j].max()=} {chi_batch[i][j].shape=}') 
+            """
+            
+            # 2. Compute -0.5 * sum(chi^2) across all images/pixels for EACH candidate
+            # We sum across all axes EXCEPT the first one (the candidate index)
+            axes_to_sum = tuple(range(1, chi_batch.ndim))
+            chisq = cp.sum(chi_batch**2, axis=axes_to_sum, dtype=cp.float64)
         #print ("LOGL", chisq.shape, chi_batch.shape)
         #print (f'{chisq=}')
         tlog[1] += time.time()-t
@@ -864,7 +903,7 @@ class Tractor(MultiParams):
             return -np.inf
         return lnp
 
-    def getLogProbBatch(self, candidate_params, bounds=None, use_gpu=True, ie_stack=None, **kwargs):
+    def getLogProbBatch(self, candidate_params, bounds=None, use_gpu=True, ie_stack=None, use_less_mem=False, **kwargs):
         '''
         Return the posterior log PDF for a batch of candidates.
         Evaluates LogPrior (CPU) + LogLikelihood (GPU).
@@ -892,13 +931,13 @@ class Tractor(MultiParams):
         # Identify candidates that are physically possible
         valid_mask = np.isfinite(priors)
         if not np.any(valid_mask):
-            print ("INVALID")
+            print ("getLogProbBatch> all candidates are INVALID")
             return cp.asarray(priors)
 
         # 2. Evaluate Likelihood for valid candidates only
         # (Optional: You could filter candidate_params here to save GPU time,
         # but for small N like 13, it's often faster to just run the batch)
-        lnl = self.getLogLikelihoodBatch(candidate_params, bounds=bounds, use_gpu=use_gpu, ie_stack=ie_stack, **kwargs)
+        lnl = self.getLogLikelihoodBatch(candidate_params, bounds=bounds, use_gpu=use_gpu, ie_stack=ie_stack, use_less_mem=use_less_mem, **kwargs)
         #print (f'{lnl=}')
         
         # 3. Combine
