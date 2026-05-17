@@ -3,8 +3,6 @@ from tractor.constrained_optimizer import ConstrainedOptimizer
 import numpy as np
 from numpy.linalg import lstsq, LinAlgError
 from tractor.utils import savetxt_cpu_append
-import time
-ts = np.zeros(7)
 
 class SmarterDenseOptimizer(ConstrainedOptimizer):
 
@@ -60,7 +58,6 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                            variance=False,
                            shared_params=True,
                            get_A_matrix=False, max_size=0):
-        t = time.time()
         #print ("Smarter dense")
         if shared_params or scales_only or damp>0 or variance:
             raise RuntimeError('Not implemented')
@@ -171,9 +168,6 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                 # to avoid overflow!
                 Npixels += (int(x1)-int(x0)) * (int(y1)-int(y0))
 
-        if isinstance(tractor.catalog[0], PointSource):
-            ts[0] += time.time()-t
-        t = time.time()
         Npriors = 0
         if priors:
             ''' getLogPriorDerivatives()
@@ -215,7 +209,6 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                 Ncols = len(live_params)
                 #print('new Ncols:', Ncols)
 
-        t = time.time()
         #print('DenseOptimizer.getUpdateDirection : N params (cols) %i, N pix %i, N priors %i' %
         #      (Ncols, Npixels, Npriors))
 
@@ -334,8 +327,8 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                 else:
                     # There are multiple modelMasks for this image
                     # (eg from multiple sources), so need to pad it out
-                    print('\tderiv extent', dx0,dx1, dy0,dy1)
-                    print('\timage bounds', x0,x1,y0,y1, img)
+                    #print('\tderiv extent', dx0,dx1, dy0,dy1)
+                    #print('\timage bounds', x0,x1,y0,y1, img)
                     return None
                     #assert(False)
                     #sys.exit(-1)
@@ -343,9 +336,6 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             if scale_columns:
                 colscales2[col] = scale2
 
-        if isinstance(tractor.catalog[0], PointSource):
-            ts[2] += time.time()-t
-        t = time.time()
         if Npriors > 0:
             rA, cA, vA, pb, mub = priorVals
             #print('Priors: pb', pb, 'mub', mub)
@@ -386,7 +376,6 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             h = y1-y0
             B[rowstart: rowstart + w*h] = chi.flat
             del chi
-        #print ("A", A.shape, "B", B.shape, "colscales2", colscales2.shape)
         #np.savetxt("ca1.txt", A)
         #np.savetxt("cb1.txt", B)
         #np.savetxt("cs2.txt", colscales2)
@@ -394,9 +383,6 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
         #print(f"DEBUG CPU: Flux = {tractor.catalog[0].getBrightness()}")
         #print(f"DEBUG CPU: Thawed Params = {tractor.getThawedParams()}")
         #print(f"DEBUG CPU: Param Names = {tractor.getParamNames()}")
-        if isinstance(tractor.catalog[0], PointSource):
-            ts[3] += time.time()-t
-        t = time.time()
 
         try:
             X,_,_,_ = lstsq(A, B, rcond=None)
@@ -410,10 +396,6 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             print('A finite:', Counter(np.isfinite(A.ravel())))
             print('B finite:', Counter(np.isfinite(B.ravel())))
             return None
-        #print ("OUTPUT SHAPES CPU1 ", A.shape, B.shape, X.shape)
-        if isinstance(tractor.catalog[0], PointSource):
-            ts[4] += time.time()-t
-        t = time.time()
 
         if A is not None:
             Aorig = A.copy()
@@ -437,7 +419,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
         #if max_size > 1+max(live_params):
         #    print ("Using max_size", max_size)
         if nd > 1+max(live_params):
-            print ("Re-sizing X array for n derivs = ", nd)
+            #print ("Re-sizing X array for n derivs = ", nd)
             max_size = nd
         else:
             max_size = 1+max(live_params)
@@ -447,9 +429,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             #print ("C", c, "I", i, X[i])
             X_full[c] = X[i]
         X = X_full
-        print('-> SMARTER X', X, X.shape)
-        #import sys
-        #sys.exit(-1)
+        #print('-> SMARTER X', X, X.shape)
 
         if get_A_matrix:
             if scale_columns:
@@ -468,13 +448,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                 A_full[:,c] = A[:,i]
             A = A_full
             #print (f'{A=} ', A.shape)
-            if isinstance(tractor.catalog[0], PointSource):
-                ts[5] += time.time()-t
-                print(f'{ts=}')
 
             return X,A,colscales,B,Aorig
 
-        if isinstance(tractor.catalog[0], PointSource):
-            ts[5] += time.time()-t
-            print(f'{ts=}')
         return X

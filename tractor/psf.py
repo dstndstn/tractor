@@ -18,11 +18,6 @@ from tractor import ducks
 from tractor.utils import savetxt_cpu_append
 import time
 
-tcps = np.zeros(6)
-
-def print_tcps():
-    print (f'{tcps=}')
-
 if sys.version_info[0] == 2:
     # Py2
     def round(x):
@@ -61,7 +56,6 @@ def lanczos_shift_image(img, dx, dy, inplace=False, force_python=False):
     # yuck!  (don't change this without ensuring the "restrict"
     # keyword still applies in lanczos_shift_3f!)
     if inplace:
-        #print ("INPLACE")
         img[:,:] = outimg
     return outimg
 
@@ -161,7 +155,6 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         '''
         # ensure float32 and align
         img = img.astype(np.float32)
-        #print ("INIT PSF", img.shape, img.max(), img.sum(), sampling)
         self.img = np.require(img, requirements=['A'])
         H,W = img.shape
         assert((H % 2) == 1)
@@ -216,10 +209,8 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
 
         from astrometry.util.miscutils import get_overlapping_region
 
-        t = time.time()
         # get PSF image at desired pixel location
         img = self.getImage(px, py)
-        #print ("PSF1A", img.shape, img.max(), img.sum())
         #print (f'{px=} {py=} {radius=} {minval=}')
 
         if radius is not None:
@@ -231,7 +222,7 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
                       max(cx-R, 0) : min(cx+R+1,W-1)]
             
         H, W = img.shape
-        #print (f'CPU {H=} {W=}')
+        #print (f'{H=} {W=}')
         # float() required because builtin round(np.float64(11.0)) returns 11.0 !!
         ix = round(float(px))
         iy = round(float(py))
@@ -239,14 +230,12 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         dy = py - iy
         x0 = ix - W // 2
         y0 = iy - H // 2
-        #print (f'CPU {ix=} {iy=} {dx=} {dy=} {x0=} {y0=}')
+        #print (f'{ix=} {iy=} {dx=} {dy=} {x0=} {y0=}')
 
         if modelMask is None:
             #print ("NO MM")
-            t1 = time.time()
             #outimg = lanczos_shift_image(img, dx, dy)
             outimg = img
-            tcps[0] += time.time()-t1
             return Patch(x0, y0, outimg)
 
         mh, mw = modelMask.shape
@@ -270,20 +259,13 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         padding = L
         # Create a modelMask + padding sized stamp and insert PSF image into it
         mm = np.zeros((mh+2*padding, mw+2*padding), np.float32)
-        #print (f'{mm.shape=} {img.shape=}')
         #print ("OVERLAPY", my0-y0-padding,my0-y0+mh-1+padding, 0, H-1)
         yi,yo = get_overlapping_region(my0-y0-padding, my0-y0+mh-1+padding, 0, H-1)
         #print ("YI", yi, "YO", yo)
         xi,xo = get_overlapping_region(mx0-x0-padding, mx0-x0+mw-1+padding, 0, W-1)
         mm[yo,xo] = img[yi,xi]
-        tcps[1] += time.time()-t
-        #print ("PSF IMAGE", img.max(), img.shape, np.where(img == img.max()))
-        #print (f'{mx0=} {my0=} {yo=} {xo=} {yi=} {xi=}')
-        #print (f'{x0=} {padding=} {mw=} {W=}')
         #print (mm[yo,xo].shape, img[yi,xi].shape)
-        t = time.time()
         mm = lanczos_shift_image(mm, dx, dy)
-        tcps[0] += time.time()-t
         mm = mm[padding:-padding, padding:-padding]
         assert(np.all(np.isfinite(mm)))
 
@@ -546,7 +528,6 @@ class GaussianMixturePSF(MogParams, ducks.ImageCalibration):
         # clipExtent: [xl,xh, yl,yh] to avoid rendering a model that extends
         # outside the image bounds.
         #
-        #print ("getPointSourcePatch2", self)
         if modelMask is not None:
             if modelMask.mask is None:
                 return self.mog.evaluate_grid(modelMask.x0, modelMask.x1,
@@ -982,7 +963,6 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
     # returns a Patch object.
     def getPointSourcePatch(self, px, py, minval=0., radius=None,
                             modelMask=None, clipExtent=None, **kwargs):
-        #print ("getPointSourcePatch3", self)
         if modelMask is not None:
             x0, x1, y0, y1 = modelMask.extent
         else:

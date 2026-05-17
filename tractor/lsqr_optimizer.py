@@ -7,16 +7,7 @@ from tractor.utils import listmax
 import time
 import os
 
-lt = np.zeros(7)
-lct = np.zeros(2, dtype=np.int32)
-
-def printTiming():
-    print ("LTimes [getLin tryUpdates optimize 0 getUpdateDir derivs]:", lt, "LCT", lct)
-
 class LsqrOptimizer(Optimizer):
-
-    def printLsqrTiming():
-        print ("LTimes [getLin tryUpdates optimize 0 getUpdateDir derivs]:", lt, "LCT", lct)
 
     def _optimize_forcedphot_core(
             self, tractor,
@@ -274,10 +265,7 @@ class LsqrOptimizer(Optimizer):
                                  variance=False):
         #logverb(tractor.getName() + ': Finding derivs...')
         #t0 = Time()
-        t = time.time()
         allderivs = tractor.getDerivs()
-        lt[5] += time.time()-t
-        lct[1] += 1
         #tderivs = Time() - t0
         #print(Time() - t0)
         #print('allderivs:', allderivs)
@@ -286,7 +274,6 @@ class LsqrOptimizer(Optimizer):
         #       print('patch mean', np.mean(p.patch))
         #logverb('Finding optimal update direction...')
         #t0 = Time()
-        t = time.time()
         X = self.getUpdateDirection(tractor, allderivs, damp=damp,
                                     priors=priors,
                                     scale_columns=scale_columns,
@@ -294,8 +281,6 @@ class LsqrOptimizer(Optimizer):
                                     variance=variance)
 
         #print (f"LSQR {X=}")
-        lt[6] += time.time()-t
-        #print ("LTimes2:",lt)
         return X
 
     def optimize(self, tractor, alphas=None, damp=0, priors=True,
@@ -305,9 +290,7 @@ class LsqrOptimizer(Optimizer):
                  **nil):
         kwa = dict(damp=damp, priors=priors,
                    scale_columns=scale_columns, shared_params=shared_params)
-        t = time.time()
         X = self.getLinearUpdateDirection(tractor, **kwa)
-        lt[0] += time.time()-t
         if X is None:
             # Failure
             return (0., None, 0.)
@@ -325,11 +308,8 @@ class LsqrOptimizer(Optimizer):
         #logverb('X: len', len(X), '; non-zero entries:', np.count_nonzero(X))
         logverb('Finding optimal step size...')
         #t0 = Time()
-        t = time.time()
-        lct[0] += 1
         (dlogprob, alpha) = self.tryUpdates(tractor, X, alphas=alphas, check_step=check_step)
         #print (f"LSQR TryUpdates Results: {dlogprob=}, {alpha=}")
-        lt[1] += time.time()-t
         #tstep = Time() - t0
         #logverb('Finished opt2.')
         #logverb('  alpha =', alpha)
@@ -337,29 +317,23 @@ class LsqrOptimizer(Optimizer):
         #logverb('  Topt  ', topt)
         #logverb('  Tstep ', tstep)
         # print('Stepped alpha=', alpha, 'for dlogprob', dlogprob)
-        #print ("LTimesz", lt)
         if variance:
             return dlogprob, X, alpha, var
         return dlogprob, X, alpha
 
     def optimize_loop(self, tractor, dchisq=0., steps=50, check_step=None, **kwargs):
         R = {}
-        print ("LSQR OPTIMIZE")
-        #print (self.optimize)
-        t = time.time()
         for step in range(steps):
             dlnp, X, alpha = self.optimize(tractor, check_step=check_step, **kwargs)
             if check_step is not None:
                 r = check_step(optimizer=self, tractor=tractor, dlnp=dlnp, X=X, alpha=alpha)
                 if not r:
                     break
-            print('Opt step: dlnp', dlnp,
-                  ', '.join([str(src) for src in tractor.getCatalog()]))
+            #print('Opt step: dlnp', dlnp,
+            #      ', '.join([str(src) for src in tractor.getCatalog()]))
             if dlnp <= dchisq:
                 break
-        lt[2] += time.time()-t
         R.update(steps=step)
-        #print ("LTimesx:",lt)
         return R
 
     def getUpdateDirection(self, tractor, allderivs, damp=0., priors=True,
@@ -367,7 +341,6 @@ class LsqrOptimizer(Optimizer):
                            chiImages=None, variance=False,
                            shared_params=True,
                            get_A_matrix=False):
-        t = time.time()
         #print ("LSQR GUD")
         #print ("CHI", chiImages)
         #import traceback
@@ -682,8 +655,6 @@ class LsqrOptimizer(Optimizer):
         del b
 
         if bail:
-            lt[4] += time.time()-t
-            #print ("LTimesy:",lt)
             if shared_params:
                 return np.zeros(len(paramindexmap))
             return np.zeros(len(allderivs))
@@ -718,8 +689,6 @@ class LsqrOptimizer(Optimizer):
         if scale_columns:
             X[colscales > 0] /= colscales[colscales > 0]
         logverb('  X=', X)
-        lt[4] += time.time()-t
-        #print ("LTimesy:",lt)
 
         if variance:
             if shared_params:

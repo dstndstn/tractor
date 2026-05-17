@@ -9,43 +9,6 @@ import gc
 # Late-load kernel to avoid CuPy dependency on CPU
 _mog_eval_kernel = None
 
-# In tractor/miscutils.py
-_splat_kernel = None
-
-def get_splat_kernel():
-    global _splat_kernel
-    if _splat_kernel is None:
-        _splat_kernel = cp.RawKernel(r'''
-        extern "C" __global__
-        void splat_patch(const float* patches, float* images,
-                        const int* x0, const int* y0, const float* counts,
-                        int Hp, int Wp, int Hi, int Wi) {
-            // blockIdx.z is the image index in the batch
-            int z = blockIdx.z;
-            // px, py are coordinates within the patch
-            int py = blockIdx.y * blockDim.y + threadIdx.y;
-            int px = blockIdx.x * blockDim.x + threadIdx.x;
-
-            if (py < Hp && px < Wp) {
-                int iy = y0[z] + py;
-                int ix = x0[z] + px;
-
-                // Safety check: Ensure we don't write outside the image bounds
-                if (iy >= 0 && iy < Hi && ix >= 0 && ix < Wi) {
-                    // patches shape: (Z, Hp, Wp)
-                    // images shape: (Z, Hi, Wi)
-                    int img_idx = z * (Hi * Wi) + iy * Wi + ix;
-                    int pat_idx = z * (Hp * Wp) + py * Wp + px;
-
-                    // atomicAdd is required for when we batch multiple sources
-                    // that might overlap on the same pixel.
-                    atomicAdd(&images[img_idx], patches[pat_idx] * counts[z]);
-                }
-            }
-        }
-        ''', 'splat_patch')
-    return _splat_kernel
-
 def get_mog_eval_kernel():
     global _mog_eval_kernel
     if _mog_eval_kernel is None:
