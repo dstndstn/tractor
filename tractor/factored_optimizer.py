@@ -17,6 +17,7 @@ import cupy as cp
 import os, gc
 from tractor.miscutils import get_mog_eval_kernel
 from tractor.brightness import NanoMaggies
+from tractor.engine import logverb, isverbose, logmsg
 
 tt = np.zeros(8)
 tct = np.zeros(9, np.int32)
@@ -468,9 +469,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
     def getSingleImageUpdateDirections(self, tr, **kwargs):
         #import traceback
         #traceback.print_stack()
-        print ("GPU getSingleImageUpdateDirections")
-        print ("profile galaxy", isinstance(tr.catalog[0], ProfileGalaxy))
-        print ("len", len(tr.catalog), "Nimages", len(tr.images))
+        logverb("GPU getSingleImageUpdateDirections")
+        #print ("profile galaxy", isinstance(tr.catalog[0], ProfileGalaxy))
+        #print ("len", len(tr.catalog), "Nimages", len(tr.images))
         R_gpu = None
         R_cpu = None
         R_gpuv = None
@@ -481,7 +482,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 tct[5] += 1
                 t = time.time()
                 # Initialize the GPU Fitter
-                print ("Running new GPU point source fitter...")
+                logverb("Running new GPU point source fitter...")
                 # Initialize and CACHE the fitter on self
                 self.current_fitter = GPUFriendlyPointSourceFitter(tr, tr.catalog[0], tr.images)
                 allderivs = tr.getDerivs()
@@ -809,7 +810,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             (X, Xicov) = Xic
             X = X.get()
             Xicov = Xicov.get()
-            print (f"{fullN=} {npos=} {nbands=}")
+            #print (f"{fullN=} {npos=} {nbands=}")
             for iband,x,ic in zip(img_bands, X, Xicov):
                 #assert(fullN == len(x) + nbands - 1)
                 # the "x" here are from fitting on a single image, *assuming* 2 positions are being fit
@@ -1273,7 +1274,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
                 # Check if we have a cached fitter for this source
                 if hasattr(self, 'current_fitter'):
                     # Pass the work to the engine
-                    print ("Using new GPU PointSource Engine")
+                    logverb("Using new GPU PointSource Engine")
 
                     p0 = tractor.getParams()
                     #Estimate memory needed with new helper method based on padded image sizes and nd
