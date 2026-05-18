@@ -413,6 +413,7 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
             return self.fftcache[sz]
         
         pad, cx, cy = self._padInImageBatchGPU(sz, sz)
+        nimages, pH, pW = pad.shape
         #print ("PAD", pad.shape)
         # cx,cy: coordinate of the PSF center in *pad*
         P = cp.fft.rfft2(pad)

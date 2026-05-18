@@ -538,7 +538,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             free_mem /= 1.e+9
             # 3.2 factor: NGC 3585 example
             #print (f'Estimated memory {est_mem} GB free memory {free_mem} for {nimages=} {imsize=} {nd=} at ', datetime.datetime.now(), "src = ", tr.catalog[0])
-
             if free_mem < est_mem:
                 try:
                     import datetime
@@ -792,7 +791,6 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         del amixes_gpu
         mpool.free_all_blocks()
         #print (f'{nbands=}')
-
         if nbands >= 1:
             full_xic = []
             fullN = tr.numberOfParams()
@@ -957,6 +955,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             Npriors = max(Npriors, max([1+max(r) for r in rA]))
 
         G = self.computeGalaxyModelsVectorized(img_params)
+        #self.printMemory(tag="post-G2")
 
         Npix = img_params.mh*img_params.mw
         #Npix is a scalar
@@ -999,6 +998,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         mod0 *= roimask
         #Need to reshape for G
         G *= roimask[:,None,:,:]
+        #self.printMemory(tag="post-dxy")
 
         # divide by 2 because we did +- 1 pixel
         # negative because we shifted the *image*, which is opposite
@@ -1010,6 +1010,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         stepsizes = img_params.steps
         A[:,:Npix, 3:] = img_params.counts[:,cp.newaxis, cp.newaxis] / stepsizes[:,cp.newaxis,1:] * cp.moveaxis((G[:,1:,:,:] - mod0[:,cp.newaxis,:,:]), 1, -1).reshape((img_params.Nimages, Npix, Nd-1))
         A[:,:Npix,:] *= img_params.ie.reshape((img_params.Nimages, Npix))[:,:,cp.newaxis]
+        #self.printMemory(tag="postA")
         del G
 
         B = cp.zeros((img_params.Nimages, Npix + Npriors), cp.float32)
@@ -1094,6 +1095,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         # Grid (1, 1, 1, H, W)
         XX = xx[None, None, None, None, :]
         YY = yy[None, None, None, :, None]
+        #self.printMemory(tag="eval_mog")
 
         for i in range(0, N, chunk_size):
             e = min(i + chunk_size, N)
@@ -1216,6 +1218,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             yy = cp.arange(img_params.mh)
 
             G = self.evaluate_mog_gpu(conv_mog, xx, yy, img_params, G)
+            #self.printMemory(tag="conv_mog")
 
         #Do no use roi since images are padded to be (mh, mw)
         use_roi = False
@@ -1733,6 +1736,7 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
         gpu_halfsize = np.max(([(x1-x0)/2, (y1-y0)/2,
                             1+px-x0, 1+x1-px, 1+py-y0, 1+y1-py,
                             psfH//2, psfW//2]), axis=0)
+        #print ("HALF", gpu_halfsize)
 
         # PSF Fourier transforms
         batch_psf = BatchPixelizedPSF(psfs)
@@ -1795,7 +1799,9 @@ class GPUFriendlyOptimizer(FactoredDenseOptimizer):
             #print ("IE",ie.max(), padie[i].max())
         roi = cp.asarray([-sx, -sy, mw, mh]).T
         mmpix = cp.asarray(padpix)
+        del padpix
         mmie = cp.asarray(padie)
+        del padie
         sky = cp.asarray(img_sky, dtype=cp.float32)
 
         # Split "amix" into terms that we will evaluate using MoG vs FFT.

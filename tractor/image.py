@@ -165,6 +165,10 @@ class Image(MultiParams):
         #return W * H
         return self.data.size
 
+    def drop_gpu_cache(self):
+        self.data_gpu = None
+        self.inverr_gpu = None
+
     def getInvError(self, use_gpu=False):
         if use_gpu:
             if self.inverr_gpu is None:
