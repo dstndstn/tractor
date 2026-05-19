@@ -430,18 +430,12 @@ class FactoredDenseOptimizer(FactoredOptimizer, SmarterDenseOptimizer):
 
 
 class GPUFriendlyOptimizer(FactoredDenseOptimizer):
-    _gpumode = 3
+    _gpumode = 2
 
     def setGPUMode(self, gpumode):
         print ("Setting GPUMODE = ",gpumode)
         #0 = run CPU only
-        #1 = run GPU only
-        #2 = run VECTORIZED only
-        #3 = run all
-        #10 = run CPU only - Profile only
-        #11 = run GPU only - Profile only
-        #12 = run VECTORIZED only - Profile only
-        #13 = run all - Profile only
+        #2 = run GPU VECTORIZED only
         self._gpumode = gpumode
 
     def printTiming(self):
