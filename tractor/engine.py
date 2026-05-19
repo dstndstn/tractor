@@ -39,6 +39,59 @@ def set_fp_err():
     '''
     return np.seterr(all='raise')
 
+def get_global_extent(tims, ux0, uy0, ux1, uy1):
+    """
+    Standardizes the image info based on a pre-calculated global box.
+    This ensures we don't 'shrink' our view based on masks.
+    """
+    image_info = []
+    for tim in tims:
+        img_h, img_w = tim.shape
+        # The intersection of the global box and this specific image
+        y_start = max(uy0, 0)
+        y_end   = min(uy1, img_h)
+        x_start = max(ux0, 0)
+        x_end   = min(ux1, img_w)
+
+        # We store the absolute image coords (ly) and the stack offsets (gy)
+        # th, tw here represent the 'actual' overlapping area
+        th = max(0, y_end - y_start)
+        tw = max(0, x_end - x_start)
+        image_info.append((x_start, y_start, th, tw))
+
+    return image_info
+
+def get_global_extent_mm(tims, modelMasks=None):
+    all_x0, all_x1, all_y0, all_y1 = [], [], [], []
+    image_info = []
+
+    if modelMasks is None:
+        modelMasks = [None] * len(tims)
+
+    for tim, mask in zip(tims, modelMasks):
+        if mask is not None:
+            tx0, ty0 = mask.x0, mask.y0
+            th, tw = mask.shape
+        else:
+            # Full image fallback: No x0/y0 on tim, so it's 0,0 relative to itself
+            tx0, ty0 = 0, 0
+            th, tw = tim.shape
+
+        all_x0.append(tx0)
+        all_x1.append(tx0 + tw)
+        all_y0.append(ty0)
+        all_y1.append(ty0 + th)
+        image_info.append((tx0, ty0, th, tw))
+
+    ux0, ux1 = min(all_x0), max(all_x1)
+    uy0, uy1 = min(all_y0), max(all_y1)
+    ux0 = int(ux0)
+    ux1 = int(ux1)
+    uy0 = int(uy0)
+    uy1 = int(uy1)
+
+    return (ux0, ux1, uy0, uy1), image_info
+
 
 class Catalog(MultiParams):
     '''
@@ -303,7 +356,6 @@ class Tractor(MultiParams):
         Where the *derivs* are *Patch* objects and *imgs* are *Image*
         objects.
         '''
-        t = time.time()
         allderivs = []
 
         if self.isParamFrozen('catalog'):
@@ -320,7 +372,7 @@ class Tractor(MultiParams):
         if not self.isParamFrozen('images'):
             for i in self.images.getThawedParamIndices():
                 img = self.images[i]
-                #print ("IMG", img)
+                #print ("IMG", i, img)
                 derivs = img.getParamDerivatives(self, allsrcs, **kw)
                 mod0 = None
                 for di, deriv in enumerate(derivs):
@@ -338,7 +390,6 @@ class Tractor(MultiParams):
                     allderivs.append([(deriv, img)])
                 del mod0
 
-        #print ("TEST2")
         for src in srcs:
             srcderivs = [[] for i in range(src.numberOfParams())]
             for img in self.images:
@@ -474,42 +525,122 @@ class Tractor(MultiParams):
         for img in self.images:
             yield self.getModelImage(img, **kwargs)
 
-    def getChiImagesGPU(self, **kwargs):
-        for img in self.images:
-            yield self.getChiImageGPU(img=img, **kwargs)
-
     def getChiImages(self, **kwargs):
         for img in self.images:
             yield self.getChiImage(img=img, **kwargs)
 
-    def getChiImageGPU(self, imgi=-1, img=None, srcs=None, minsb=0., **kwargs):
-        import cupy as cp
-        gi = cp.asarray(self.getChiImage(imgi, img, srcs, minsb, **kwargs))
-        """
-        TODO: In future use factored_optimizer helpers to get chi2
-        if img is None:
-            img = self.getImage(imgi)
-        gtl[0] += time.time()-t
-        t = time.time()
-        mod = self.getModelImage(img, srcs=srcs, minsb=minsb, **kwargs)
-        gtl[1] += time.time()-t
-        t = time.time()
-        chi = (img.getImage(use_gpu=True) - cp.asarray(mod)) * img.getInvError(use_gpu=True)
-        gtl[2] += time.time()-t
-        if not np.all(np.isfinite(chi)):
-            print('ERROR: Chi not finite')
-        return chi
-        """
-        return gi
+    def get_3d_stack_InvErrors(self, tims=None):
+        if tims is None:
+            tims = self.images
+        
+        # 1. Automatically find the canvas size needed
+        all_h = [t.shape[0] for t in tims]
+        all_w = [t.shape[1] for t in tims]
+        max_h, max_w = max(all_h), max(all_w)
+        
+        # 2. Call your existing method with the 'Full' bounds
+        # Since ux0, uy0 = 0, the stack offsets gy0, gx0 will just be ty0, tx0
+        stack = self.getBatchInvErrors(ux0=0, uy0=0, ux1=max_w, uy1=max_h, tims=tims)
+        return stack
 
-    def getChiImage(self, imgi=-1, img=None, srcs=None, minsb=0., **kwargs):
+    def get_3d_stack_Data(self, tims=None):
+        if tims is None:
+            tims = self.images
+
+        # 1. Automatically find the canvas size needed
+        all_h = [t.shape[0] for t in tims]
+        all_w = [t.shape[1] for t in tims]
+        max_h, max_w = max(all_h), max(all_w)
+            
+        # 2. Call your existing method with the 'Full' bounds
+        # Since ux0, uy0 = 0, the stack offsets gy0, gx0 will just be ty0, tx0
+        stack = self.getBatchData(ux0=0, uy0=0, ux1=max_w, uy1=max_h, tims=tims)
+        return stack 
+
+    def get_3d_stack_Model(self, tims=None, src=None, sky=True, minsb=None, **kwargs):
+        import cupy as cp
+        from tractor.sky import NullSky, ConstantSky
+        if tims is None:
+            tims = self.images
+        if src is None:
+            src = self.catalog[0]
+
+        # 1. Automatically find the canvas size needed
+        all_h = [t.shape[0] for t in tims]
+        all_w = [t.shape[1] for t in tims]
+        max_h, max_w = max(all_h), max(all_w)
+
+        stack = self.getBatchModel(ux0=0, uy0=0, ux1=max_w, uy1=max_h, tims=tims)
+        return cp.asarray(stack)
+
+    def get_3d_stack_Chi(self, tims=None, ie=None, im=None, mod=None):
+        import cupy as cp
+        if tims is None:
+            tims = self.images
+
+        if ie is None:
+            ie = self.get_3d_stack_InvErrors(tims)
+        if im is None:
+            im = self.get_3d_stack_Data(tims)
+        if mod is None:
+            mod = self.get_3d_stack_Model(tims)
+
+        stack = (im-mod)*ie
+        return stack
+
+    def getChiImageStack(self, use_gpu=True, modelMask=None):
+        """
+        Returns a 3D CuPy tensor (N_images, H_mask, W_mask) of chi values.
+        """
+        import cupy as cp
+        from tractor.batch_psf import BatchPixelizedPSF
+        
+        # 1. Gather metadata for the stack
+        tims = self.getImages()
+        psfs = [tim.getPsf() for tim in tims]
+        src = self.getCatalog()[0] # Focusing on the point source
+        
+        # 2. Initialize the Batch PSF with the stack of PSFs
+        batch_psf = BatchPixelizedPSF(psfs)
+        
+        # 3. Get positions and counts for all images
+        # We do this on CPU/NumPy and then move to GPU
+        pxs, pys, counts = [], [], []
+        for tim in tims:
+            px, py = tim.getWcs().positionToPixel(src.getPosition(), src)
+            cnt = tim.getPhotoCal().brightnessToCounts(src.getBrightness())
+            pxs.append(px)
+            pys.append(py)
+            counts.append(cnt)
+        
+        # 4. Get the 3D Model Patch Stack
+        # This calls your Lanczos-shifted batch logic
+        model_stack, mx0, my0 = batch_psf.getBatchPointSourcePatch(
+            cp.array(pxs), cp.array(pys), cp.array(counts), modelMask=modelMask
+        )
+        
+        # 5. Extract Data and InvErr stacks from the images
+        # We crop the global images to match the model_stack's footprint
+        mh, mw = model_stack.shape[1:]
+        
+        # Stack the crops: (N_images, H_mask, W_mask)
+        data_stack = cp.stack([tim.getImage(use_gpu=False)[my0:my0+mh, mx0:mx0+mw] for tim in tims])
+        ie_stack = cp.stack([tim.getInvError(use_gpu=True)[my0:my0+mh, mx0:mx0+mw] for tim in tims])
+        
+        # 6. Calculate Chi Stack: (Data - Model) * InvError
+        chi_stack = (data_stack - model_stack) * ie_stack
+        
+        return chi_stack
+
+    def getChiImage(self, imgi=-1, img=None, srcs=None, minsb=0., use_gpu=False, **kwargs):
         if img is None:
             img = self.getImage(imgi)
         mod = self.getModelImage(img, srcs=srcs, minsb=minsb, **kwargs)
+        if use_gpu:
+            import cupy as cp
+            chi = (img.getImage(use_gpu=True)-cp.asarray(mod))*img.getInvError(use_gpu=True)
+            return chi
         chi = (img.getImage() - mod) * img.getInvError()
-        #savetxt_cpu_append('cmod.txt', mod)
-        #savetxt_cpu_append('cie.txt', img.getInvError())
-        #savetxt_cpu_append('cpix.txt', img.getImage())
         if not np.all(np.isfinite(chi)):
             print('Chi not finite')
             print('Image finite?', np.all(np.isfinite(img.getImage())))
@@ -525,10 +656,64 @@ class Tractor(MultiParams):
             print('psf:', img.getPsf())
         return chi
 
-    def getLogLikelihoodGPU(self, **kwargs):
-        chisq = 0.
-        for i, chi in enumerate(self.getChiImagesGPU(**kwargs)):
-            chisq += (chi.astype(float) ** 2).sum()
+    def getLogLikelihoodBatch(self, candidate_params, bounds, use_gpu=True, ie_stack=None, use_less_mem=False, **kwargs):
+        """
+        candidate_params: List of parameter arrays (one for each alpha)
+        Returns: cp.array of shape (len(candidate_params),)
+        """
+        import cupy as cp
+        # 1. Get the 4D Chi tensor from your new batch engine
+        # Expected shape: (N_candidates, N_images, H, W) or (N_candidates, Total_Pixels)
+        (ux0, ux1, uy0, uy1) = bounds 
+
+        if use_less_mem:
+            n_cand = len(candidate_params)
+            # Accumulate on GPU to keep VRAM footprint low
+            total_chisq = cp.zeros(n_cand, dtype=cp.float64)
+            tims = self.images
+            
+            try:
+                for i in range(len(tims)):
+                    self.images = [tims[i]]
+                    
+                    # Slice the specific image's invError from the stack
+                    # We use i:i+1 to maintain the (1, H, W) 3D shape required by the engine
+                    s_ie = None
+                    if ie_stack is not None:
+                        s_ie = ie_stack[i:i+1]
+
+                    # getBatchChiImages sees Nimages=1, keeping FFT workspaces small
+                    chi_i = self.getBatchChiImages(
+                        ux0=ux0, uy0=uy0, ux1=ux1, uy1=uy1,
+                        candidate_params=candidate_params,
+                        use_gpu=use_gpu,
+                        ie_stack=s_ie,
+                        **kwargs
+                    )
+                    
+                    # Sum across (Image, H, W) axes
+                    total_chisq += cp.sum(chi_i**2, axis=(1, 2, 3), dtype=cp.float64)
+                    
+                    # Manual memory management is key for 4k images
+                    del chi_i
+                    cp.get_default_memory_pool().free_all_blocks()
+            finally:
+                self.images = tims
+            chisq = total_chisq
+        else:
+            chi_batch = self.getBatchChiImages(
+                ux0=ux0, uy0=uy0, ux1=ux1, uy1=uy1,
+                candidate_params=candidate_params, 
+                use_gpu=use_gpu, 
+                ie_stack=ie_stack,
+                #batch_psf=self.batch_psf,
+                **kwargs
+            )
+            
+            # 2. Compute -0.5 * sum(chi^2) across all images/pixels for EACH candidate
+            # We sum across all axes EXCEPT the first one (the candidate index)
+            axes_to_sum = tuple(range(1, chi_batch.ndim))
+            chisq = cp.sum(chi_batch**2, axis=axes_to_sum, dtype=cp.float64)
         return -0.5 * chisq
 
     def getLogLikelihood(self, **kwargs):
@@ -537,25 +722,44 @@ class Tractor(MultiParams):
             chisq += (chi.astype(float) ** 2).sum()
         return -0.5 * chisq
 
-    def getLogProbGPU(self, **kwargs):
+    def getLogProbBatch(self, candidate_params, bounds=None, use_gpu=True, ie_stack=None, use_less_mem=False, **kwargs):
         '''
-        Return the posterior log PDF, evaluated at the current parameters.
+        Return the posterior log PDF for a batch of candidates.
+        Evaluates LogPrior (CPU) + LogLikelihood (GPU).
         '''
         import cupy as cp
-        lnprior = self.getLogPrior()
-        if lnprior == -np.inf:
-            return lnprior
-        t = time.time()
-        lnl = self.getLogLikelihoodGPU(**kwargs)
-        #print ("GTL:", gtl, gcl, cl, "GI:", gi)
-        lnp = lnprior + lnl
-        if cp.isnan(lnp):
-            print('Tractor.getLogProb() returning NaN.')
-            print('Params:')
-            self.printThawedParams()
-            print('log likelihood:', lnl)
-            print('log prior:', lnprior)
-            return -np.inf
+        if bounds is None:
+            bounds = get_global_extent_mm(self.images)[0] 
+        if ie_stack is None:
+            (ux0, uy0, ux1, uy1) = bounds
+            tims = self.images
+            ie_stack = self.getBatchInvErrors(ux0, uy0, ux1, uy1, use_gpu=use_gpu, tims=tims)
+        n_cand = len(candidate_params)
+        #print (f'{candidate_params=}')
+        
+        # 1. Evaluate Priors (CPU-bound, usually very fast)
+        p0 = self.getParams()
+        priors = []
+        for p in candidate_params:
+            self.setParams(p)
+            priors.append(self.getLogPrior())
+        priors = np.array(priors)
+        self.setParams(p0) # Restore immediately
+        
+        # Identify candidates that are physically possible
+        valid_mask = np.isfinite(priors)
+        if not np.any(valid_mask):
+            print ("getLogProbBatch> all candidates are INVALID")
+            return cp.asarray(priors)
+
+        # 2. Evaluate Likelihood for valid candidates only
+        # (Optional: You could filter candidate_params here to save GPU time,
+        # but for small N like 13, it's often faster to just run the batch)
+        lnl = self.getLogLikelihoodBatch(candidate_params, bounds=bounds, use_gpu=use_gpu, ie_stack=ie_stack, use_less_mem=use_less_mem, **kwargs)
+        
+        # 3. Combine
+        lnp = cp.asarray(priors)
+        lnp[valid_mask] += lnl
         return lnp
 
     def getLogProb(self, **kwargs):
@@ -563,12 +767,12 @@ class Tractor(MultiParams):
         Return the posterior log PDF, evaluated at the current parameters.
         '''
         lnprior = self.getLogPrior()
+        #print (f'{lnprior=}')
         if lnprior == -np.inf:
             return lnprior
         lnl = self.getLogLikelihood(**kwargs)
-        #print ("TL:", tl, gcl, cl, "GI", gi)
+        #print (f'{lnl=}')
         lnp = lnprior + lnl
-        #print ("LP", lnprior, "LNL", lnl, "LNP", lnp)
         if np.isnan(lnp):
             print('Tractor.getLogProb() returning NaN.')
             print('Params:')
@@ -577,3 +781,220 @@ class Tractor(MultiParams):
             print('log prior:', lnprior)
             return -np.inf
         return lnp
+
+    def getBatchInvErrors(self, ux0, uy0, ux1, uy1, use_gpu=True, tims=None, modelMasks=None):
+        import cupy as cp
+        if tims is None:
+            tims = self.getImages()
+
+        #(ux0, ux1, uy0, uy1), img_info = get_global_extent(tims, modelMasks)
+        #mm_coords, mm_info = get_global_extent_mm(tims, modelMasks)
+        img_info = get_global_extent(tims, ux0, uy0, ux1, uy1)
+
+        uH, uW = uy1 - uy0, ux1 - ux0
+        stack = cp.zeros((len(tims), uH, uW), dtype=cp.float32)
+
+        for i, (tim, (tx0, ty0, th, tw)) in enumerate(zip(tims, img_info)):
+            ie = tim.getInvError(use_gpu=True)
+            if not isinstance(ie, cp.ndarray): ie = cp.asarray(ie)
+
+            # Local indices: since tim has no x0/y0, we pull from its (0,0)
+            # but if it's a mask, tx0/ty0 ARE the local offsets we need
+            # relative to the tim's internal buffer.
+            ly0, ly1 = ty0, ty0 + th
+            lx0, lx1 = tx0, tx0 + tw
+
+            # Global indices relative to the 3D stack
+            gy0, gy1 = ty0 - uy0, ty0 + th - uy0
+            gx0, gx1 = tx0 - ux0, tx0 + tw - ux0
+
+            stack[i, gy0:gy1, gx0:gx1] = ie[ly0:ly1, lx0:lx1]
+        return stack
+
+    def getBatchData(self, ux0, uy0, ux1, uy1, use_gpu=True, tims=None, modelMasks=None):
+        import cupy as cp
+        if tims is None:
+            tims = self.getImages()
+
+        #(ux0, ux1, uy0, uy1), img_info = get_global_extent(tims, modelMasks)
+        #mm_coords, mm_info = get_global_extent_mm(tims, modelMasks)
+        img_info = get_global_extent(tims, ux0, uy0, ux1, uy1)
+
+        uH, uW = uy1 - uy0, ux1 - ux0
+        stack = cp.zeros((len(tims), uH, uW), dtype=cp.float32)
+
+        for i, (tim, (tx0, ty0, th, tw)) in enumerate(zip(tims, img_info)):
+            im = tim.getImage(use_gpu=True)
+            if not isinstance(im, cp.ndarray): im = cp.asarray(im)
+
+            # Local indices: since tim has no x0/y0, we pull from its (0,0)
+            # but if it's a mask, tx0/ty0 ARE the local offsets we need
+            # relative to the tim's internal buffer.
+            ly0, ly1 = ty0, ty0 + th
+            lx0, lx1 = tx0, tx0 + tw
+
+            # Global indices relative to the 3D stack
+            gy0, gy1 = ty0 - uy0, ty0 + th - uy0
+            gx0, gx1 = tx0 - ux0, tx0 + tw - ux0
+
+            stack[i, gy0:gy1, gx0:gx1] = im[ly0:ly1, lx0:lx1]
+        return stack
+
+    def getBatchModel(self, ux0, uy0, ux1, uy1, use_gpu=True, tims=None, modelMasks=None):
+        import cupy as cp
+        if tims is None:
+            tims = self.getImages()
+                
+        #(ux0, ux1, uy0, uy1), img_info = get_global_extent(tims, modelMasks)
+        #mm_coords, mm_info = get_global_extent_mm(tims, modelMasks)
+        img_info = get_global_extent(tims, ux0, uy0, ux1, uy1)
+
+        uH, uW = uy1 - uy0, ux1 - ux0
+        stack = cp.zeros((len(tims), uH, uW), dtype=cp.float32)
+
+        for i, (tim, (tx0, ty0, th, tw)) in enumerate(zip(tims, img_info)):
+            cmodi = self.getModelImage(tim)
+            if not isinstance(cmodi, cp.ndarray): cmodi = cp.asarray(cmodi)
+
+            # Local indices: since tim has no x0/y0, we pull from its (0,0)
+            # but if it's a mask, tx0/ty0 ARE the local offsets we need
+            # relative to the tim's internal buffer.
+            ly0, ly1 = ty0, ty0 + th
+            lx0, lx1 = tx0, tx0 + tw
+            
+            # Global indices relative to the 3D stack
+            gy0, gy1 = ty0 - uy0, ty0 + th - uy0
+            gx0, gx1 = tx0 - ux0, tx0 + tw - ux0
+
+            stack[i, gy0:gy1, gx0:gx1] = cmodi[ly0:ly1, lx0:lx1]
+        return stack
+
+
+    def getBatchModelImage(self, ux0, uy0, ux1, uy1, use_gpu=True, batch_psf=None, tims=None):
+        import cupy as cp
+        import numpy as np
+        from tractor.sky import NullSky, ConstantSky
+
+        #(ux0, ux1, uy0, uy1), img_info = get_global_extent(tims, modelMasks)
+        img_info = get_global_extent(tims, ux0, uy0, ux1, uy1)
+        uH, uW = uy1 - uy0, ux1 - ux0
+        # Initialize 3D stack on GPU
+        model_stack = cp.zeros((len(tims), uH, uW), dtype=cp.float32)
+
+        # 1. Add Sky
+        for i, (tim, (tx0, ty0, th, tw)) in enumerate(zip(tims, img_info)):
+            sky = tim.getSky()
+            if isinstance(sky, NullSky):
+                continue
+
+            gy0, gy1 = ty0 - uy0, ty0 + th - uy0
+            gx0, gx1 = tx0 - ux0, tx0 + tw - ux0
+
+            if isinstance(sky, ConstantSky):
+                val = sky.getConstant()
+                if val != 0:
+                    model_stack[i, gy0:gy1, gx0:gx1] += val
+            else:
+                temp_sky = np.zeros(tim.shape, dtype=np.float32)
+                sky.addTo(temp_sky)
+                model_stack[i, gy0:gy1, gx0:gx1] += cp.asarray(temp_sky[ty0:ty0+th, tx0:tx0+tw])
+
+        # 2. Add Sources
+        for src in self.catalog:
+            gx_list, gy_list, counts = [], [], cp.zeros(len(tims), dtype=cp.float32)
+            for i, tim in enumerate(tims):
+                # Pixel position on the tim
+                px, py = tim.getWcs().positionToPixel(src.getPosition())
+
+                # Global coordinate is just px/py because tim starts at 0,0
+                gx_list.append(px)
+                gy_list.append(py)
+
+                if (0 <= px < tim.shape[1] and 0 <= py < tim.shape[0]):
+                    counts[i] = tim.getPhotoCal().brightnessToCounts(src.getBrightness())
+
+            if cp.all(counts == 0): continue
+
+            src_3d = batch_psf.getBatchPointSourcePatch(
+                cp.array(gx_list), cp.array(gy_list),
+                ux0, uy0, uW, uH
+            )
+            model_stack += src_3d * counts[:, cp.newaxis, cp.newaxis]
+        return model_stack
+
+    def getBatchChiImages(self, ux0, uy0, ux1, uy1, use_gpu=True, batch_psf=None, tims=None, ie_stack=None, candidate_params=None):
+        import cupy as cp
+        if tims is None:
+            tims = self.getImages()
+        Nimages = len(tims)
+
+        # 2. Get the global canvas bounds and the per-image offsets/shapes
+        #(ux0, ux1, uy0, uy1), img_info = get_global_extent(tims, modelMasks)
+        img_info = get_global_extent(tims, ux0, uy0, ux1, uy1)
+        uH, uW = uy1 - uy0, ux1 - ux0
+
+        # 3. Initialize stacks for Data and Inverse Variance
+        data_stack = cp.zeros((len(tims), uH, uW), dtype=cp.float64)
+        #ie_stack = cp.zeros((len(tims), uH, uW), dtype=cp.float32)
+
+        for i, (tim, (tx0, ty0, th, tw)) in enumerate(zip(tims, img_info)):
+            # Global indices relative to the 3D stack origin (ux0, uy0)
+            gy0, gy1 = ty0 - uy0, ty0 + th - uy0
+            gx0, gx1 = tx0 - ux0, tx0 + tw - ux0
+
+            # Local indices relative to the tim's internal buffer (starting at 0,0)
+            # If tx0/ty0 came from a mask, they represent the offset within the tim.
+            ly0, ly1 = ty0, ty0 + th
+            lx0, lx1 = tx0, tx0 + tw
+            # Populate the stacks
+            data_stack[i, gy0:gy1, gx0:gx1] = cp.asarray(tim.getImage(use_gpu=True)[ly0:ly1, lx0:lx1])
+
+        if ie_stack is None:
+            ie_stack = self.getBatchInvErrors(ux0, uy0, ux1, uy1, use_gpu=use_gpu, tims=tims)
+
+        # 2. Model Stack Generation
+        if candidate_params is not None:
+            # 4D PATH: (N_alphas, N_images, uH, uW)
+            n_alphas = len(candidate_params)
+            p_initial = self.getParams()
+            
+            # Pre-allocate 4D on CPU for the fast fill
+            cmod_stack_4d = np.zeros((n_alphas, Nimages, uH, uW), dtype=np.float64)
+            
+            for a_idx, p_trial in enumerate(candidate_params):
+                self.setParams(p_trial) # Temporary set to render
+                for i, (tim, (tx0, ty0, th, tw)) in enumerate(zip(tims, img_info)):
+                    gy0, gy1 = ty0 - uy0, ty0 + th - uy0
+                    gx0, gx1 = tx0 - ux0, tx0 + tw - ux0
+                    cmod_stack_4d[a_idx, i, gy0:gy1, gx0:gx1] = self.getModelImage(tim)[ty0:ty0+th, tx0:tx0+tw]
+            
+            self.setParams(p_initial) # Restore state
+            model_stack = cp.asarray(cmod_stack_4d)
+            
+            # Broadcoast Data and IE over the Alpha dimension
+            # (1, N_img, H, W) is broadcast against (N_alpha, N_img, H, W)
+            chi = (data_stack[cp.newaxis, ...] - model_stack) * ie_stack[cp.newaxis, ...]
+            return chi
+
+        cmod_stack = np.zeros((len(tims), uH, uW), dtype=np.float64)
+        for i, (tim, (tx0, ty0, th, tw)) in enumerate(zip(tims, img_info)):
+            gy0, gy1 = ty0 - uy0, ty0 + th - uy0
+            gx0, gx1 = tx0 - ux0, tx0 + tw - ux0
+
+            # Local indices relative to the tim's internal buffer (starting at 0,0)
+            # If tx0/ty0 came from a mask, they represent the offset within the tim.
+            ly0, ly1 = ty0, ty0 + th
+            lx0, lx1 = tx0, tx0 + tw
+
+            # Populate the stacks
+            cmodi = self.getModelImage(tim)
+            cmod_stack[i, gy0:gy1, gx0:gx1] = cmodi[ly0:ly1, lx0:lx1]
+        cmod_stack = cp.asarray(cmod_stack)
+
+        # 4. Generate the Model stack using the same extent
+        model_stack = cmod_stack
+
+        # 5. Final Chi calculation: (Data - Model) * Weight
+        # Weight is usually Inverse Error (1/sigma)
+        return (data_stack - model_stack) * ie_stack
+

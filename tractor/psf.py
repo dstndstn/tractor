@@ -16,6 +16,7 @@ from tractor.utils import BaseParams, ParamList, MultiParams, MogParams
 from tractor import mixture_profiles as mp
 from tractor import ducks
 from tractor.utils import savetxt_cpu_append
+import time
 
 if sys.version_info[0] == 2:
     # Py2
@@ -233,7 +234,8 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
 
         if modelMask is None:
             #print ("NO MM")
-            outimg = lanczos_shift_image(img, dx, dy)
+            #outimg = lanczos_shift_image(img, dx, dy)
+            outimg = img
             return Patch(x0, y0, outimg)
 
         mh, mw = modelMask.shape

@@ -16,6 +16,7 @@ from tractor.utils import BaseParams, ParamList, MultiParams, MogParams
 from tractor import mixture_profiles as mp
 from tractor import ducks
 import cupy as cp
+import time
 
 if sys.version_info[0] == 2:
     # Py2
@@ -23,36 +24,99 @@ if sys.version_info[0] == 2:
         import __builtin__
         return int(__builtin__.round(float(x)))
 
-#def lanczos_shift_image_batch_gpu(imgs, dxs, dys):
-#    """Translated from lanczos_shift_image python version to GPU using cupy
-#        and helper functions from tractor.miscutils"""
-"""
-    import cupy as cp
-    from tractor.miscutils import gpu_lanczos_filter,batch_correlate1d_gpu
-    do_reshape = False
-    if len(imgs.shape) == 4:
-        do_reshape = True
-        oldshape = imgs.shape
-        imgs = imgs.reshape((oldshape[0]*oldshape[1], oldshape[2], oldshape[3]))
+def lanczos_shift_image(img, dx, dy, inplace=False, force_python=False):
+    H,W = img.shape
+    # fallback to python:
+    from scipy.ndimage import correlate1d
+    from astrometry.util.miscutils import lanczos_filter
     L = 3
-    nimg = dxs.size 
-    print (f'{nimg=}')
-    lr = cp.tile(cp.arange(-L, L+1), (nimg, 1))
-    Lx = gpu_lanczos_filter(L, lr+dxs.reshape((nimg,1)))
-    Ly = gpu_lanczos_filter(L, lr+dys.reshape((nimg,1)))
+    Lx = lanczos_filter(L, np.arange(-L, L+1) + dx)
+    Ly = lanczos_filter(L, np.arange(-L, L+1) + dy)
     # Normalize the Lanczos interpolants (preserve flux)
-    del lr
-    Lx /= Lx.sum(1).reshape((nimg,1))
-    Ly /= Ly.sum(1).reshape((nimg,1))
-    sx = batch_correlate1d_gpu(imgs, Lx, axis=2, mode='constant')
-    del Lx
-    outimg = batch_correlate1d_gpu(sx, Ly, axis=1, mode='constant')
-    del Ly
-    del sx
-    if (do_reshape):
-        outimg = outimg.reshape(oldshape)
+    Lx /= Lx.sum()
+    Ly /= Ly.sum()
+    sx     = correlate1d(img, Lx, axis=1, mode='constant')
+    outimg = correlate1d(sx,  Ly, axis=0, mode='constant')
     return outimg
-"""
+
+def plot_comparison(data_gpu, data_cpu, title="Comparison"):
+    """
+    Plots GPU data, CPU data, and the Difference side-by-side.
+    """
+    import matplotlib.pyplot as plt
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+
+    # 1. Plot GPU Version
+    im0 = axes[0].imshow(data_gpu, origin='lower', cmap='viridis')
+    axes[0].set_title(f'GPU {title}')
+    plt.colorbar(im0, ax=axes[0], fraction=0.046, pad=0.04)
+
+    # 2. Plot CPU Version
+    im1 = axes[1].imshow(data_cpu, origin='lower', cmap='viridis')
+    axes[1].set_title(f'CPU {title}')
+    plt.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04)
+
+    # 3. Plot Difference (Residuals)
+    # Using 'seismic' or 'RdBu' helps visualize positive/negative offsets
+    diff = data_gpu - data_cpu
+    im2 = axes[2].imshow(diff, origin='lower', cmap='seismic')
+    axes[2].set_title('Difference (GPU - CPU)')
+    plt.colorbar(im2, ax=axes[2], fraction=0.046, pad=0.04)
+
+    plt.tight_layout()
+    plt.show()
+
+def plot_one(data, title="Plot", cmap='viridis'):
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(8, 6))
+
+    # origin='lower' puts (0,0) at bottom-left
+    # interpolation='nearest' prevents blurring of pixel boundaries
+    im = plt.imshow(data, origin='lower', cmap=cmap, interpolation='nearest')
+
+    plt.title(title)
+    plt.xlabel("X [pixels]")
+    plt.ylabel("Y [pixels]")
+
+    # Add a colorbar that scales to the image height
+    plt.colorbar(im, label='Value')
+
+    plt.tight_layout()
+    plt.show()
+
+def lanczos_shift_image_3d_gpu(imgs, dxs, dys):
+    """Translated from lanczos_shift_image python version to GPU using cupy
+        and helper functions from tractor.miscutils"""
+    import cupy as cp
+    from tractor.miscutils import gpu_lanczos_filter,batch_correlate1d_gpu_fast, batch_correlate1d_cpu_fast
+    from tractor.miscutils import batch_correlate1d_gpu, batch_correlate1d_cpu 
+    L = 3
+    # Ensure dxs/dys are 1D for the tile operation
+    dxs = cp.atleast_1d(dxs).ravel()
+    dys = cp.atleast_1d(dys).ravel()
+    nimg = dxs.size
+
+    # 1. Coordinate Grid
+    lr = cp.arange(-L, L+1).astype(cp.float32)
+    # Use broadcasting instead of tile for efficiency
+    # Note the MINUS sign: often needed if correlating to "pull" the image
+    grid_x = lr[cp.newaxis, :] + dxs[:, cp.newaxis]
+    grid_y = lr[cp.newaxis, :] + dys[:, cp.newaxis]
+
+    # 2. Generate Filters
+    Lx = gpu_lanczos_filter(L, grid_x)
+    Ly = gpu_lanczos_filter(L, grid_y)
+
+    # 3. Robust Normalization (avoid division by zero/epsilon)
+    Lx /= (cp.sum(Lx, axis=1, keepdims=True) + 1e-12)
+    Ly /= (cp.sum(Ly, axis=1, keepdims=True) + 1e-12)
+
+    # 4. Apply 1D Separable Correlations
+    # axis=2 is Width (X), axis=1 is Height (Y)
+    sx = batch_correlate1d_gpu_fast(imgs, Lx, axis=2, mode='constant')
+    outimg = batch_correlate1d_gpu_fast(sx, Ly, axis=1, mode='constant')
+
+    return outimg
 
 def lanczos_shift_image_batch_gpu(imgs, dxs, dys, chunk_size=None):
     import cupy as cp
@@ -129,7 +193,7 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
     FIXME -- currently this class claims to have no params.
     '''
 
-    def __init__(self, psfs):
+    def __init__(self, psfs, isPointSource=False):
         '''
         Creates a new PixelizedPSF object from the given *img* (numpy
         array) image of the PSF.
@@ -146,7 +210,7 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
         self.psfexs = []
         self.normalized = False
         for i,psf in enumerate(psfs):
-            if str(psf.pix) == 'NormalizedPixelizedPsfEx' or str(psf.pix) == 'NormalizedPixelizedPsf':
+            if hasattr(psf, 'pix') and (str(psf.pix) == 'NormalizedPixelizedPsfEx' or str(psf.pix) == 'NormalizedPixelizedPsf'):
                 self.normalized = True
             if hasattr(psf, 'psfex'):
                 self.psfexs.append(psf.psfex)
@@ -167,7 +231,9 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
         #Now loop over psfs and copy data into one 3-d zero-padded array
         for i, psf in enumerate(psfs):
             img[i,:iH[i],:iW[i]] = psf.img
+            #print ("BATCH1", i, psf.img.max(), np.where(psf.img == psf.img.max()))
         img = cp.asarray(img)
+        #print ("H,W", H, W)
         #self.img = cp.require(img, requirements=['A'])
         self.img = img
         assert((H % 2) == 1)
@@ -183,6 +249,9 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
             self.nativeW = int(np.ceil(self.W * self.sampling))
             self.nativeH = int(np.ceil(self.H * self.sampling))
 
+        if isPointSource:
+            print ("Point source")
+            return
         from tractor.psf import HybridPSF
         from tractor.batch_mixture_profiles import BatchMixtureOfGaussians
         psfmogs = []
@@ -348,8 +417,9 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
         #print ("PAD", pad.shape)
         # cx,cy: coordinate of the PSF center in *pad*
         P = cp.fft.rfft2(pad)
-        del pad
         P = P.astype(cp.complex64)
+        nimages, pH, pW = pad.shape
+        del pad
         v = cp.fft.rfftfreq(pW)
         w = cp.fft.fftfreq(pH)
         if (len(self.psfexs) > 0):
@@ -477,6 +547,107 @@ class BatchPixelizedPSF(BaseParams, ducks.ImageCalibration):
             #print('sum of inverse Fourier transform of PSF:', np.sum(np.fft.irfft2(sumfft, s=shape)))
         #cp.savetxt("gsumfft.txt", sumfft.ravel())
         return sumfft, (cx, cy), shape, (v, w)
+
+
+    def getBatchPointSourcePatch(self, pxs, pys, ux0, uy0, u_width, u_height):
+            """
+            Projects and shifts a point source into a 3D global canvas.
+            - pxs, pys: CuPy arrays of shape (N,) for sub-pixel positions.
+            - ux0, uy0: The top-left corner of the global canvas in pixel coordinates.
+            - u_width, u_height: Dimensions of the global canvas.
+            """
+            import cupy as cp
+
+            #N = self.N
+            N = len(pxs)
+            #print (f'{N=} {self.img.shape=}')
+            L = self.Lorder
+            padding = L
+
+            # 1. Allocate a padded 3D canvas on the GPU
+            ch, cw = u_height + 2 * padding, u_width + 2 * padding
+            canvas = cp.zeros((N, ch, cw), dtype=cp.float32)
+            psf_h, psf_w = self.H, self.W
+
+            # 2. Establish the coordinate system
+            # The CPU evaluates models at (px - x0, py - y0).
+            # To match, we must project our PSF into the patch using these coordinates.
+            # Calculate x0, y0 per star exactly as the CPU/Logs do
+            ixs_glob = cp.round(pxs).astype(cp.int32)
+            iys_glob = cp.round(pys).astype(cp.int32)
+            dxs = pxs - ixs_glob
+            dys = pys - iys_glob
+            x0s = ixs_glob - psf_w // 2
+            y0s = iys_glob - psf_h // 2
+
+            # However, our target canvas is still defined by (u_width, u_height).
+            # We need to account for the fact that the star at px_patch needs to be 
+            # placed in the canvas.
+            
+            #print ("CANVAS", canvas.shape)
+            for i in range(N):
+                #print ("BATCH IMG", i, self.img[i].max(), self.img[i].shape, cp.where(self.img[i] == self.img[i].max()))
+                # 1. Coordinate of the PSF's (0,0) pixel in the x0-relative system
+                # For a 63x63 PSF and ix=31, this is 0.
+                ix, iy = int(ixs_glob[i]), int(iys_glob[i])
+                x0_psf = ix - psf_w // 2
+                y0_psf = iy - psf_h // 2
+
+                # 2. Coordinate of our Canvas (0,0) pixel in the x0-relative system
+                # ux0 is the modelmask offset. padding is the Lanczos margin.
+                x0_canvas = ux0 - padding
+                y0_canvas = uy0 - padding
+
+                # 3. Calculate the overlap using the get_overlapping_region logic
+                # We want to place the PSF (img) into the Canvas (canvas)
+                # The CPU logic: yi, yo = get_overlapping_region(target_start, target_end, img_min, img_max)
+
+                # In CPU terms: xlo = x0_canvas - x0_psf
+                # This tells us where the canvas starts relative to the PSF's 0,0
+                rel_x = x0_canvas - x0_psf
+                rel_y = y0_canvas - y0_psf
+
+                # Calculate slices for the PSF (Source) and Canvas (Destination)
+                # We use the clamped intersection logic
+                src_x0 = max(0, rel_x)
+                src_y0 = max(0, rel_y)
+
+                dst_x0 = max(0, -rel_x)
+                dst_y0 = max(0, -rel_y)
+
+                # Determine width/height of the overlap
+                overlap_w = min(psf_w, rel_x + cw) - src_x0
+                overlap_h = min(psf_h, rel_y + ch) - src_y0
+                #print (f'GPU {i=} {ix=} {iy=} {x0_psf=} {y0_psf=} {x0_canvas=} {y0_canvas=} {psf_w=} {psf_h=} {ux0=} {uy0=} {padding=} {rel_x=} {rel_y=} {src_x0=} {src_y0=} {dst_x0=} {dst_y0=}') 
+
+                if overlap_w > 0 and overlap_h > 0:
+                    lx0, lx1 = src_x0, src_x0 + overlap_w
+                    ly0, ly1 = src_y0, src_y0 + overlap_h
+
+                    cx0, cx1 = dst_x0, dst_x0 + overlap_w
+                    cy0, cy1 = dst_y0, dst_y0 + overlap_h
+
+                    canvas[i, cy0:cy1, cx0:cx1] = self.img[i, ly0:ly1, lx0:lx1]
+                    #print(f'GPU {cx0=} {cx1=} {cy0=} {cy1=} {lx0=} {lx1=} {ly0=} {ly1=}')
+                    #bx = cp.where(self.img[i] == self.img[i].max())
+                    #print (f'{bx=} {self.img[i].shape=}')
+                #if i < 2:
+                #    plot_one(canvas[i].get(), "Canvas "+str(i))
+                #    plot_one(self.img[i].get(), "Img "+str(i))
+
+            # 4. Perform the 3D Batch Lanczos shift
+            shifted = lanczos_shift_image_3d_gpu(canvas, dxs, dys)
+            #shifted = lanczos_shift_image_batch_gpu(canvas, dxs, dys)
+            #cdx = dxs.get()
+            #cdy = dys.get()
+            #for j in range(2):
+                #sx = lanczos_shift_image(canvas[j].get(), cdx[j], cdy[j])
+                #plot_one(sx[padding:-padding, padding:-padding], "C SHIFT "+str(j))
+                #plot_one(shifted[j, padding:-padding, padding:-padding].get(), "GPU "+str(j))
+                #plot_comparison(shifted[j].get(), sx, "Lanczos comp")
+
+            # 5. Crop back to the unpadded global canvas
+            return shifted[:, padding:-padding, padding:-padding]
 
     def getPointSourcePatch(self, px, py, minval=0., modelMask=None,
                             radius=None, **kwargs):

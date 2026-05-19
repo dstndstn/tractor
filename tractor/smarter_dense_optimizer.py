@@ -1,9 +1,8 @@
+from tractor import ProfileGalaxy, HybridPSF, PointSource
 from tractor.constrained_optimizer import ConstrainedOptimizer
 import numpy as np
 from numpy.linalg import lstsq, LinAlgError
 from tractor.utils import savetxt_cpu_append
-import time
-ts = np.zeros(2)
 
 class SmarterDenseOptimizer(ConstrainedOptimizer):
 
@@ -49,6 +48,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                 # this is vij * bij. It goes in the `col` element of the vector.
                 ATB_prior[col] += vij * bij
 
+        #print (f'{ATA_prior=} {ATB_prior=}')
         return ATA_prior, ATB_prior
 
 
@@ -58,7 +58,6 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                            variance=False,
                            shared_params=True,
                            get_A_matrix=False, max_size=0):
-        t = time.time()
         #print ("Smarter dense")
         if shared_params or scales_only or damp>0 or variance:
             raise RuntimeError('Not implemented')
@@ -158,6 +157,8 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
         img_offsets = {}
         Npixels = 0
         for iparam,derivs in enumerate(allderivs):
+            if len(derivs) == 0:
+                continue
             for deriv, img in derivs:
                 if img in img_offsets:
                     continue
@@ -236,6 +237,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                 if deriv.patch is None:
                     continue
                 inverrs = img.getInvError()
+                #print ("INVERR", inverrs.sum())
 
                 dx0,dx1,dy0,dy1 = deriv.extent
                 x0,x1,y0,y1 = img_bounds[img]
@@ -325,8 +327,8 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
                 else:
                     # There are multiple modelMasks for this image
                     # (eg from multiple sources), so need to pad it out
-                    print('\tderiv extent', dx0,dx1, dy0,dy1)
-                    print('\timage bounds', x0,x1,y0,y1, img)
+                    #print('\tderiv extent', dx0,dx1, dy0,dy1)
+                    #print('\timage bounds', x0,x1,y0,y1, img)
                     return None
                     #assert(False)
                     #sys.exit(-1)
@@ -374,6 +376,13 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             h = y1-y0
             B[rowstart: rowstart + w*h] = chi.flat
             del chi
+        #np.savetxt("ca1.txt", A)
+        #np.savetxt("cb1.txt", B)
+        #np.savetxt("cs2.txt", colscales2)
+        # Check flux and which params are actually being optimized
+        #print(f"DEBUG CPU: Flux = {tractor.catalog[0].getBrightness()}")
+        #print(f"DEBUG CPU: Thawed Params = {tractor.getThawedParams()}")
+        #print(f"DEBUG CPU: Param Names = {tractor.getParamNames()}")
 
         try:
             X,_,_,_ = lstsq(A, B, rcond=None)
@@ -387,7 +396,6 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             print('A finite:', Counter(np.isfinite(A.ravel())))
             print('B finite:', Counter(np.isfinite(B.ravel())))
             return None
-        #print ("OUTPUT SHAPES CPU1 ", A.shape, B.shape, X.shape)
 
         if A is not None:
             Aorig = A.copy()
@@ -421,9 +429,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             #print ("C", c, "I", i, X[i])
             X_full[c] = X[i]
         X = X_full
-        #print('-> SMARTER X', X)
-        ts[0] += time.time()-t
-        #print(f'{ts=}')
+        #print('-> SMARTER X', X, X.shape)
 
         if get_A_matrix:
             if scale_columns:
@@ -441,6 +447,7 @@ class SmarterDenseOptimizer(ConstrainedOptimizer):
             for c,i in column_map.items():
                 A_full[:,c] = A[:,i]
             A = A_full
+            #print (f'{A=} ', A.shape)
 
             return X,A,colscales,B,Aorig
 

@@ -23,7 +23,6 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
 
         #print('ConstrainedDenseOptimizer.getUpdateDirection: shared_params=', shared_params,
         #      'scales_only=', scales_only, 'damp', damp, 'variance', variance)
-        #print ("TIM - dense - ", tractor.images)
         if shared_params or scales_only or damp>0 or variance:
             raise RuntimeError('Not implemented')
         # I don't want to deal with this right now!
@@ -256,7 +255,6 @@ class ConstrainedDenseOptimizer(ConstrainedOptimizer):
         if scale_columns:
             X /= colscales
 
-        #print ("X DENSE:", X)
         if False:
             print('Returning:  ', X)
             Xold = super(ConstrainedDenseOptimizer, self).getUpdateDirection(

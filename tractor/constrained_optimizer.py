@@ -6,8 +6,6 @@ import time
 logverb = print
 logmsg  = print
 
-tc =np.zeros(2)
-
 class ConstrainedOptimizer(LsqrOptimizer):
 
     def __init__(self, *args, **kwargs):
@@ -23,7 +21,6 @@ class ConstrainedOptimizer(LsqrOptimizer):
         # print()
         # print('Optimize_loop:')
         #print ("Constrained Optimize")
-        t = time.time()
         # for s in tractor.catalog:
         #     print(s)
         R = {}
@@ -49,8 +46,6 @@ class ConstrainedOptimizer(LsqrOptimizer):
         R.update(steps=step)
         R.update(hit_limit=self.last_step_hit_limit,
                  ever_hit_limit=self.hit_limit)
-        tc[0] += time.time()-t
-        #print (f'{tc=}')
         return R
 
     def tryUpdates(self, tractor, X, alphas=None, check_step=None):

@@ -5,8 +5,6 @@ from tractor.utils import MultiParams
 from tractor.patch import ModelMask
 from tractor import ducks
 
-ct1 = np.zeros(2,dtype=np.int32)
-
 class BasicSource(ducks.Source):
     def getPosition(self):
         return self.pos
@@ -35,8 +33,6 @@ class SingleProfileSource(BasicSource):
         return [self.getUnitFluxModelPatch(*args, **kwargs)]
 
     def getModelPatch(self, img, minsb=None, modelMask=None, **kwargs):
-        ct1[0] += 1
-        #print ("CT1:", ct1)
         counts = img.getPhotoCal().brightnessToCounts(self.brightness)
         if counts == 0:
             return None
@@ -104,8 +100,6 @@ class PointSource(MultiParams, SingleProfileSource):
 
     def getUnitFluxModelPatch(self, img, minval=0., derivs=False,
                               modelMask=None, **kwargs):
-        ct1[1] += 1
-        #print ("CT1:", ct1)
         (px, py) = img.getWcs().positionToPixel(self.getPosition(), self)
         H, W = img.shape
         psf = self._getPsf(img)
