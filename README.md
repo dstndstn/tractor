@@ -1,3 +1,17 @@
+> **Fork notice:** This is a fork of [dstndstn/tractor](https://github.com/dstndstn/tractor)
+> ("the Tractor"), created for the NASA SPHEREx mission's use by the SPHEREx Science Data
+> Center team at Caltech/IPAC.
+> It differs from the upstream -- see [`FORK.md`](FORK.md) for what changed and why.
+> Licensed under GPLv2, the same as the upstream.
+> 
+> Changes are copyright (C) 2023-2026, California Institute of Technology.
+> 
+> The automated build and coverage badges shown below report on the upstream's
+> CI on external services (CircleCI, Coveralls, Codecov) and do not reflect
+> the status of this fork.
+
+---
+
 # the Tractor
 
 Probabilistic astronomical source detection & measurement
